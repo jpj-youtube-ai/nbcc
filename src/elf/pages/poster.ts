@@ -1,6 +1,5 @@
-import type { ClaimRefusal } from "../claim";
+import type { WordRefusal } from "../claim";
 import { isOpen, type DoorState } from "../doors";
-import type { StampRefusal } from "../stamps";
 import { clockWords, listWords, longDayWords, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { elfPage, escapeHtml, sitePath } from "./shell";
@@ -42,7 +41,7 @@ const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
 
 /** What to tell a family whose claim was refused. `triesLeft` is how many wrong words they may
  *  still type at this place, when the server knows. */
-export function claimRefusalWords(reason: ClaimRefusal, triesLeft?: number): string {
+export function claimRefusalWords(reason: WordRefusal, triesLeft?: number): string {
   switch (reason) {
     case "wrong-word": {
       const left = typeof triesLeft === "number" && Number.isFinite(triesLeft) ? Math.max(0, Math.floor(triesLeft)) : null;
@@ -54,10 +53,10 @@ export function claimRefusalWords(reason: ClaimRefusal, triesLeft?: number): str
       return "That is too many wrong words here. If you are holding the elf, show it to the staff: they can phone NBCC and we will sort it out.";
     case "too-early":
       return "That is the right word, but this elf is not out yet. Come back once its clue is on the calendar to claim it.";
-    case "already-found":
-      return "This elf has already been found.";
-    case "already-won":
-      return "Well spotted! Your family has already won an elf this year, and it is one elf for each family. Please leave this one hiding for the next detective.";
+    case "gone-home":
+      return "This elf has gone home, so its word no longer gives a stamp. Thank you for calling in!";
+    case "nothing-new":
+      return "Everyone ticked already has this candy cane.";
     case "no-detectives":
       return "Tick who found the elf.";
     default:
@@ -65,24 +64,9 @@ export function claimRefusalWords(reason: ClaimRefusal, triesLeft?: number): str
   }
 }
 
-/** What to tell a family whose check in was refused. */
-export function stampRefusalWords(reason: StampRefusal): string {
-  switch (reason) {
-    case "door-not-open":
-      return "This place's door has not opened yet. Come back once it has.";
-    case "no-detectives":
-      return "Tick who is here.";
-    case "nothing-new":
-      return "Everyone ticked already has this candy cane.";
-    case "too-far":
-      return "Your phone looks too far from here. Move closer and try again, or take a photo here instead.";
-    case "place-unknown":
-      return "We cannot check locations at this place yet. Please take a photo here instead.";
-    case "no-proof":
-      return "We need your location or a photo taken here.";
-    default:
-      return UNKNOWN;
-  }
+/** What to tell a family whose check in was refused. Task 6 rewrites this with the poster page. */
+export function stampRefusalWords(reason: WordRefusal): string {
+  return reason === "no-detectives" ? "Tick who is here." : claimRefusalWords(reason);
 }
 
 const link = (url: string, words: string, cls = "elf-link"): string => `<a class="${cls}" href="${sitePath(url) ?? "/"}">${words}</a>`;

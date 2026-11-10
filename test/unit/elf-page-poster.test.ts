@@ -9,8 +9,7 @@ import {
   stampWinHtml,
 } from "../../src/elf/pages/poster";
 import type { PosterOutcome, PosterView } from "../../src/elf/pages/types";
-import type { ClaimRefusal } from "../../src/elf/claim";
-import type { StampRefusal } from "../../src/elf/stamps";
+import type { WordRefusal } from "../../src/elf/claim";
 import { claimWin, posterView, stampWin } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the page a poster's QR code opens. A family claims an elf here by
@@ -20,8 +19,7 @@ import { claimWin, posterView, stampWin } from "./elf-fixtures";
 const page = (v: PosterView = posterView(), outcome?: PosterOutcome) => new DOMParser().parseFromString(renderPosterPage(v, outcome), "text/html");
 const piece = (html: string) => new DOMParser().parseFromString(`<body>${html}</body>`, "text/html").body;
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
-const CLAIM_REASONS: ClaimRefusal[] = ["already-found", "no-detectives", "not-your-detective", "too-many-tries", "wrong-word", "too-early", "already-won"];
-const STAMP_REASONS: StampRefusal[] = ["door-not-open", "no-detectives", "not-your-detective", "nothing-new", "too-far", "place-unknown", "no-proof"];
+const REASONS: WordRefusal[] = ["no-detectives", "not-your-detective", "too-many-tries", "wrong-word", "too-early", "gone-home", "nothing-new"];
 
 describe("what the page is told about the door", () => {
   it("is the same for a door that is shut and one whose elf is being hunted", () => {
@@ -207,7 +205,7 @@ describe("checking in for a candy cane", () => {
 
 describe("the words for a claim that is refused", () => {
   it("has plain words for every reason", () => {
-    for (const reason of CLAIM_REASONS) {
+    for (const reason of REASONS.filter((r) => r !== "not-your-detective")) {
       const said = claimRefusalWords(reason);
       expect(said.length, reason).toBeGreaterThan(10);
       expect(said, reason).not.toMatch(/[–—]|[A-Za-z0-9]-[A-Za-z0-9]/);
@@ -229,10 +227,9 @@ describe("the words for a claim that is refused", () => {
     }
   });
 
-  it("tells only someone with the right word that it is too early, or that they have won before", () => {
+  it("tells only someone with the right word that it is too early or that the elf has gone home", () => {
     expect(claimRefusalWords("too-early")).toContain("the right word");
-    expect(claimRefusalWords("already-won")).toContain("already won an elf");
-    expect(claimRefusalWords("already-found")).toBe("This elf has already been found.");
+    expect(claimRefusalWords("gone-home")).toContain("gone home");
     expect(claimRefusalWords("no-detectives")).toBe("Tick who found the elf.");
   });
 
@@ -244,18 +241,17 @@ describe("the words for a claim that is refused", () => {
 
 describe("the words for a check in that is refused", () => {
   it("has plain words for every reason", () => {
-    for (const reason of STAMP_REASONS) {
+    for (const reason of REASONS.filter((r) => r !== "not-your-detective")) {
       const said = stampRefusalWords(reason);
       expect(said.length, reason).toBeGreaterThan(10);
       expect(said, reason).not.toMatch(/[–—]|[A-Za-z0-9]-[A-Za-z0-9]/);
     }
   });
 
-  it("points to the photo when the location will not do", () => {
-    expect(stampRefusalWords("too-far")).toContain("take a photo here instead");
-    expect(stampRefusalWords("place-unknown")).toContain("take a photo here instead");
+  it("has its own words for nothing new, nobody ticked and an elf gone home", () => {
     expect(stampRefusalWords("nothing-new")).toBe("Everyone ticked already has this candy cane.");
     expect(stampRefusalWords("no-detectives")).toBe("Tick who is here.");
+    expect(stampRefusalWords("gone-home")).toBe("This elf has gone home, so its word no longer gives a stamp. Thank you for calling in!");
   });
 });
 
@@ -381,8 +377,8 @@ describe("the page drawn again after a form was posted with no script", () => {
   });
 
   it("says why a check in was refused, in its own form", () => {
-    const doc = page(posterView({ open: true, claimable: false }), { form: "stamp", ok: false, reason: "no-proof" });
-    expect(words(doc.querySelector("form.elf-stamp .elf-form-status"))).toBe("We need your location or a photo taken here.");
+    const doc = page(posterView({ open: true, claimable: false }), { form: "stamp", ok: false, reason: "nothing-new" });
+    expect(words(doc.querySelector("form.elf-stamp .elf-form-status"))).toBe("Everyone ticked already has this candy cane.");
     expect(doc.querySelector("form.elf-stamp .elf-form-status")!.classList.contains("is-error")).toBe(true);
   });
 });

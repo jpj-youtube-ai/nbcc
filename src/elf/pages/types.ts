@@ -1,8 +1,8 @@
 import type { Door } from "../calendar";
-import type { ClaimRefusal } from "../claim";
+// Task 6 reshapes the poster page; until then both forms refuse with the one WordRefusal.
+import type { WordRefusal } from "../claim";
 import type { DoorState } from "../doors";
 import type { Rank } from "../progress";
-import type { StampRefusal } from "../stamps";
 import type { ElfLook, WardrobeState } from "../wardrobe";
 import type { ElfSettings } from "../settings";
 
@@ -199,9 +199,9 @@ export interface StampWin {
  *  answer in it. With the script, the same answers come back from the API instead. */
 export type PosterOutcome =
   | { form: "claim"; ok: true; win: ClaimWin }
-  | { form: "claim"; ok: false; reason: ClaimRefusal; triesLeft?: number }
+  | { form: "claim"; ok: false; reason: WordRefusal; triesLeft?: number }
   | { form: "stamp"; ok: true; win: StampWin }
-  | { form: "stamp"; ok: false; reason: StampRefusal };
+  | { form: "stamp"; ok: false; reason: WordRefusal };
 
 /** The enrol page (wave 1). `values` are what was typed, put back after a refusal, by form field name. */
 export interface JoinView {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MAX_WRONG_WORDS, decideClaim, isUsableSecretWord, normaliseWord, type ClaimContext } from "../../src/elf/claim";
+import { MAX_WRONG_WORDS, decideWord, isUsableSecretWord, normaliseWord, type WordContext } from "../../src/elf/claim";
 
 // NBCC Elf Detective School: claiming an elf with its secret word. Every id and word is invented.
 
@@ -45,86 +45,92 @@ describe("the secret word", () => {
   });
 });
 
-describe("claiming an elf", () => {
-  const ctx: ClaimContext = {
+describe("the word on the tag", () => {
+  const ctx: WordContext = {
     doorState: "hunting",
-    secretWord: "Snowball 472",
+    goneHome: false,
+    secretWord: "SNOWBALL 472",
     familyDetectiveIds: ["d1", "d2"],
     familyHasWon: false,
     wrongTries: 0,
+    alreadyStamped: [],
   };
-  const right = { detectiveIds: ["d1"], word: "snowball 472" };
-  const wrong = { detectiveIds: ["d1"], word: "snowman 12" };
+  const right = { detectiveIds: ["d1"], word: "snowball472" };
+  const wrong = { detectiveIds: ["d1"], word: "snowbal 472" };
 
-  it("accepts the right word from a family's own detectives, each named once", () => {
-    expect(decideClaim(ctx, right)).toEqual({ ok: true, detectiveIds: ["d1"] });
-    expect(decideClaim(ctx, { detectiveIds: ["d2", "d1", "d2"], word: " SNOW ball 472 " })).toEqual({
+  it("wins the elf for a family that has not won, while it is hunted or revealed", () => {
+    expect(decideWord(ctx, right)).toEqual({ ok: true, outcome: "won", detectiveIds: ["d1"] });
+    expect(decideWord({ ...ctx, doorState: "revealed" }, right)).toEqual({ ok: true, outcome: "won", detectiveIds: ["d1"] });
+    expect(decideWord(ctx, { detectiveIds: ["d2", "d1", "d2"], word: " SNOW ball 472 " })).toEqual({
       ok: true,
+      outcome: "won",
       detectiveIds: ["d2", "d1"],
     });
+    expect(decideWord(ctx, { detectiveIds: "d1", word: "snowball472" })).toEqual({ ok: true, outcome: "won", detectiveIds: ["d1"] });
   });
 
-  it("accepts a claim on a revealed door, because the elf is still waiting", () => {
-    expect(decideClaim({ ...ctx, doorState: "revealed" }, right)).toEqual({ ok: true, detectiveIds: ["d1"] });
-  });
-
-  it("refuses once the elf has been found, whatever is typed", () => {
-    expect(decideClaim({ ...ctx, doorState: "found" }, right)).toEqual({ ok: false, reason: "already-found" });
-    expect(decideClaim({ ...ctx, doorState: "found" }, wrong)).toEqual({ ok: false, reason: "already-found" });
-  });
-
-  it("takes one ticked box, which a form sends as a single value", () => {
-    expect(decideClaim(ctx, { detectiveIds: "d1", word: "snowball 472" })).toEqual({ ok: true, detectiveIds: ["d1"] });
-  });
-
-  it("refuses with no detective chosen, which a form sends as nothing at all", () => {
-    expect(decideClaim(ctx, { detectiveIds: [], word: "snowball 472" })).toEqual({ ok: false, reason: "no-detectives" });
-    expect(decideClaim(ctx, { detectiveIds: undefined, word: "snowball 472" })).toEqual({ ok: false, reason: "no-detectives" });
-  });
-
-  it("refuses a detective from another family", () => {
-    expect(decideClaim(ctx, { detectiveIds: ["d1", "d9"], word: "snowball 472" })).toEqual({
-      ok: false,
-      reason: "not-your-detective",
+  it("stamps a family that has already won, counting from the shown time", () => {
+    expect(decideWord({ ...ctx, familyHasWon: true }, right)).toEqual({ ok: true, outcome: "visited", detectiveIds: ["d1"], countsFromReveal: false });
+    expect(decideWord({ ...ctx, doorState: "revealed", familyHasWon: true }, right)).toEqual({
+      ok: true,
+      outcome: "visited",
+      detectiveIds: ["d1"],
+      countsFromReveal: false,
     });
   });
 
-  it("refuses the wrong word, and an elf with no word set", () => {
-    expect(decideClaim(ctx, wrong)).toEqual({ ok: false, reason: "wrong-word" });
-    expect(decideClaim(ctx, { detectiveIds: ["d1"], word: "" })).toEqual({ ok: false, reason: "wrong-word" });
-    expect(decideClaim({ ...ctx, secretWord: "" }, { detectiveIds: ["d1"], word: "" })).toEqual({
-      ok: false,
-      reason: "wrong-word",
+  it("stamps when the elf is found with its place hidden, counting from the reveal", () => {
+    expect(decideWord({ ...ctx, doorState: "found-hidden" }, right)).toEqual({ ok: true, outcome: "visited", detectiveIds: ["d1"], countsFromReveal: true });
+    expect(decideWord({ ...ctx, doorState: "found-hidden", familyHasWon: true }, right)).toEqual({
+      ok: true,
+      outcome: "visited",
+      detectiveIds: ["d1"],
+      countsFromReveal: true,
     });
   });
 
-  it("gives a wrong word the same answer whether or not an elf is hiding there today", () => {
-    expect(decideClaim({ ...ctx, doorState: "shut" }, wrong)).toEqual({ ok: false, reason: "wrong-word" });
-    expect(decideClaim({ ...ctx, doorState: "hunting" }, wrong)).toEqual({ ok: false, reason: "wrong-word" });
-    expect(decideClaim({ ...ctx, doorState: "revealed" }, wrong)).toEqual({ ok: false, reason: "wrong-word" });
+  it("stamps only the detectives not already stamped, and says when nobody is new", () => {
+    const found = { ...ctx, doorState: "found" as const, alreadyStamped: ["d1"] };
+    expect(decideWord(found, { detectiveIds: ["d1", "d2"], word: "snowball472" })).toEqual({
+      ok: true,
+      outcome: "visited",
+      detectiveIds: ["d2"],
+      countsFromReveal: false,
+    });
+    expect(decideWord(found, right)).toEqual({ ok: false, reason: "nothing-new" });
   });
 
-  it("tells only the right word that it is too early", () => {
-    expect(decideClaim({ ...ctx, doorState: "shut" }, right)).toEqual({ ok: false, reason: "too-early" });
-  });
-
-  it("allows six wrong words at a place and then refuses everything, even the right word", () => {
-    expect(MAX_WRONG_WORDS).toBe(6);
-    expect(decideClaim({ ...ctx, wrongTries: 5 }, right)).toEqual({ ok: true, detectiveIds: ["d1"] });
-    expect(decideClaim({ ...ctx, wrongTries: 6 }, right)).toEqual({ ok: false, reason: "too-many-tries" });
-    expect(decideClaim({ ...ctx, wrongTries: 6 }, wrong)).toEqual({ ok: false, reason: "too-many-tries" });
-    expect(decideClaim({ ...ctx, doorState: "shut", wrongTries: 9 }, wrong)).toEqual({ ok: false, reason: "too-many-tries" });
-  });
-
-  it("refuses when the count of wrong tries is missing, rather than allowing any number of tries", () => {
-    for (const missing of [undefined, null, Number.NaN, "2"]) {
-      const got = decideClaim({ ...ctx, wrongTries: missing as unknown as number }, right);
-      expect(got, String(missing)).toEqual({ ok: false, reason: "too-many-tries" });
+  it("is too early only for the right word, and gives a wrong word the same answer on any door", () => {
+    expect(decideWord({ ...ctx, doorState: "shut" }, right)).toEqual({ ok: false, reason: "too-early" });
+    for (const doorState of ["shut", "hunting", "found-hidden", "found", "revealed", "snow"] as const) {
+      expect(decideWord({ ...ctx, doorState }, wrong), doorState).toEqual({ ok: false, reason: "wrong-word" });
     }
   });
 
-  it("refuses a family that has already won an elf, but only once they show the right word", () => {
-    expect(decideClaim({ ...ctx, familyHasWon: true }, right)).toEqual({ ok: false, reason: "already-won" });
-    expect(decideClaim({ ...ctx, familyHasWon: true }, wrong)).toEqual({ ok: false, reason: "wrong-word" });
+  it("sends a family home from an elf that has gone home, even with the right word", () => {
+    expect(decideWord({ ...ctx, doorState: "found", goneHome: true }, right)).toEqual({ ok: false, reason: "gone-home" });
+    expect(decideWord({ ...ctx, doorState: "found", goneHome: true }, wrong)).toEqual({ ok: false, reason: "wrong-word" });
+  });
+
+  it("reads a snow day door like any other place, because its caller gives it no word", () => {
+    expect(decideWord({ ...ctx, doorState: "snow", secretWord: "" }, right)).toEqual({ ok: false, reason: "wrong-word" });
+    expect(decideWord({ ...ctx, secretWord: "" }, { detectiveIds: ["d1"], word: "" })).toEqual({ ok: false, reason: "wrong-word" });
+  });
+
+  it("allows six wrong words at a place and then refuses everything before reading the word", () => {
+    expect(MAX_WRONG_WORDS).toBe(6);
+    expect(decideWord({ ...ctx, wrongTries: 5 }, right).ok).toBe(true);
+    expect(decideWord({ ...ctx, wrongTries: 6 }, right)).toEqual({ ok: false, reason: "too-many-tries" });
+    expect(decideWord({ ...ctx, wrongTries: 6 }, wrong)).toEqual({ ok: false, reason: "too-many-tries" });
+    for (const missing of [undefined, null, Number.NaN, "2"]) {
+      expect(decideWord({ ...ctx, wrongTries: missing as unknown as number }, right), String(missing)).toEqual({ ok: false, reason: "too-many-tries" });
+    }
+  });
+
+  it("checks who is ticked first", () => {
+    expect(decideWord(ctx, { detectiveIds: [], word: "snowball472" })).toEqual({ ok: false, reason: "no-detectives" });
+    expect(decideWord(ctx, { detectiveIds: undefined, word: "snowball472" })).toEqual({ ok: false, reason: "no-detectives" });
+    expect(decideWord(ctx, { detectiveIds: ["d9"], word: "snowball472" })).toEqual({ ok: false, reason: "not-your-detective" });
+    expect(decideWord(ctx, { detectiveIds: ["d1", "d9"], word: "snowball472" })).toEqual({ ok: false, reason: "not-your-detective" });
   });
 });

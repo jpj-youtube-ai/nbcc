@@ -1,72 +1,62 @@
 import { describe, it, expect } from "vitest";
-import { cracked, decideGuess, guessOptions } from "../../src/elf/guess";
+import { GUESS_MAX, cracked, decideGuess, type GuessContext } from "../../src/elf/guess";
 
-// NBCC Elf Detective School: the daily guess. Every place here is invented.
+// NBCC Elf Detective School: the typed guess. Every place here is invented.
 
-const PLACES = ["toy-shop", "bakery", "cinema", "cafe"];
+const hunting: GuessContext = { doorState: "hunting", openPlaces: [] };
 
-describe("the places a family can guess from", () => {
-  it("offers every hiding place whose own door is not open", () => {
-    expect(guessOptions(PLACES, ["bakery"])).toEqual(["toy-shop", "cinema", "cafe"]);
-    expect(guessOptions(PLACES, [])).toEqual(PLACES);
+describe("saving a typed guess", () => {
+  it("trims the text and says how it will be matched", () => {
+    expect(decideGuess(hunting, "  The Corner Bakehouse ")).toEqual({ ok: true, text: "The Corner Bakehouse", norm: "cornerbakehouse" });
   });
 
-  it("offers nothing when every place is open", () => {
-    expect(guessOptions(PLACES, PLACES)).toEqual([]);
-  });
-});
-
-describe("locking in a guess", () => {
-  const ctx = { doorState: "hunting", placeIds: PLACES, openPlaceIds: ["bakery"] } as const;
-
-  it("takes a guess while the elf is being hunted", () => {
-    expect(decideGuess(ctx, "cinema")).toEqual({ ok: true });
+  it("refuses nothing, and too much", () => {
+    expect(GUESS_MAX).toBe(80);
+    expect(decideGuess(hunting, "")).toEqual({ ok: false, reason: "empty" });
+    expect(decideGuess(hunting, "   ")).toEqual({ ok: false, reason: "empty" });
+    expect(decideGuess(hunting, undefined)).toEqual({ ok: false, reason: "empty" });
+    expect(decideGuess(hunting, "a".repeat(81))).toEqual({ ok: false, reason: "too-long" });
+    expect(decideGuess(hunting, "a".repeat(80)).ok).toBe(true);
   });
 
-  it("refuses a guess before the clue is out", () => {
-    expect(decideGuess({ ...ctx, doorState: "shut" }, "cinema")).toEqual({ ok: false, reason: "not-hunting" });
+  it("takes guesses while hunting and while found with the place hidden, and no other time", () => {
+    expect(decideGuess({ ...hunting, doorState: "found" }, "Anywhere")).toEqual({ ok: false, reason: "not-hunting" });
+    expect(decideGuess({ ...hunting, doorState: "shut" }, "Anywhere")).toEqual({ ok: false, reason: "not-hunting" });
+    expect(decideGuess({ ...hunting, doorState: "found-hidden" }, "Anywhere").ok).toBe(true);
   });
 
-  it("refuses a guess once the door is open", () => {
-    expect(decideGuess({ ...ctx, doorState: "found" }, "cinema")).toEqual({ ok: false, reason: "not-hunting" });
-    expect(decideGuess({ ...ctx, doorState: "revealed" }, "cinema")).toEqual({ ok: false, reason: "not-hunting" });
+  it("kindly refuses a place that is already open, with that door's number", () => {
+    const ctx: GuessContext = { doorState: "hunting", openPlaces: [{ door: 3, names: ["Pine Cone Café"] }] };
+    expect(decideGuess(ctx, "pine cone cafe")).toEqual({ ok: false, reason: "place-already-open", door: 3 });
   });
 
-  it("refuses a place that is not on this year's list", () => {
-    expect(decideGuess(ctx, "swimming-pool")).toEqual({ ok: false, reason: "unknown-place" });
-  });
-
-  it("refuses a place whose own door is already open", () => {
-    expect(decideGuess(ctx, "bakery")).toEqual({ ok: false, reason: "place-already-open" });
+  it("checks in a fixed order, so every other text gets the same answer", () => {
+    const ctx: GuessContext = { doorState: "found", openPlaces: [{ door: 3, names: ["Pine Cone Café"] }] };
+    expect(decideGuess(ctx, "")).toEqual({ ok: false, reason: "empty" });
+    expect(decideGuess(ctx, "a".repeat(81))).toEqual({ ok: false, reason: "too-long" });
+    expect(decideGuess(ctx, "pine cone cafe")).toEqual({ ok: false, reason: "not-hunting" });
   });
 });
 
 describe("cracking the case", () => {
-  const OPENED = new Date("2026-12-07T17:47:00.000Z");
-  const BEFORE = new Date("2026-12-07T17:40:00.000Z");
-  const open = { state: "found", placeId: "cinema", openedAt: OPENED } as const;
+  const at = (hms: string) => new Date(`2026-12-07T${hms}.000Z`);
+  const door = { state: "found" as const, openedAt: at("19:00:00"), names: ["Corner Bakehouse", "The Bakehouse"] };
+  const guess = (when: string, norm = "bakehouse") => ({ text: "x", norm, at: at(when) });
 
-  it("counts a guess saved before the door opened that names the door's real place", () => {
-    expect(cracked(open, { placeId: "cinema", at: BEFORE })).toBe(true);
-    expect(cracked({ ...open, state: "revealed" }, { placeId: "cinema", at: BEFORE })).toBe(true);
+  it("is true for a guess saved strictly before the place was shown", () => {
+    expect(cracked(door, guess("18:59:59"))).toBe(true);
+    expect(cracked({ ...door, state: "revealed" }, guess("18:59:59"))).toBe(true);
   });
 
-  it("does not count a wrong guess, or no guess at all", () => {
-    expect(cracked(open, { placeId: "bakery", at: BEFORE })).toBe(false);
-    expect(cracked(open, null)).toBe(false);
+  it("is false at the moment it was shown, and after", () => {
+    expect(cracked(door, guess("19:00:00"))).toBe(false);
+    expect(cracked(door, guess("19:00:01"))).toBe(false);
   });
 
-  it("never says yes while the elf is still hidden, so a screen cannot confirm a guess early", () => {
-    expect(cracked({ state: "hunting", placeId: "cinema", openedAt: null }, { placeId: "cinema", at: BEFORE })).toBe(false);
-    expect(cracked({ state: "shut", placeId: "cinema", openedAt: null }, { placeId: "cinema", at: BEFORE })).toBe(false);
-  });
-
-  it("does not count a guess saved at or after the moment the door opened", () => {
-    expect(cracked(open, { placeId: "cinema", at: OPENED })).toBe(false);
-    expect(cracked(open, { placeId: "cinema", at: new Date("2026-12-07T17:50:00.000Z") })).toBe(false);
-  });
-
-  it("does not count anything for an open door with no opening moment", () => {
-    expect(cracked({ ...open, openedAt: null }, { placeId: "cinema", at: BEFORE })).toBe(false);
+  it("is false while the place is hidden, with no guess, no opening moment, or the wrong place", () => {
+    expect(cracked({ ...door, state: "found-hidden" }, guess("18:59:59"))).toBe(false);
+    expect(cracked(door, null)).toBe(false);
+    expect(cracked({ ...door, openedAt: null }, guess("18:59:59"))).toBe(false);
+    expect(cracked(door, guess("18:59:59", "bakery"))).toBe(false);
   });
 });

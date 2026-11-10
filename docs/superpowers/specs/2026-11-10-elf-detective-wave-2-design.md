@@ -335,7 +335,7 @@ Every one is listed in Admin > All emails with invented examples, like every oth
 
 ### The December's doors switch (C3)
 
-A switch in Head Elf HQ > Settings, for admins only, beside the school's own switch. While it is
+A switch in Head Elf HQ > Settings, for admins only, beside Elf Detective School's own switch. While it is
 off, nothing in this design reaches a family: every door stays shut with its countdown, and no
 clue, guess, word, stamp, picture or email goes anywhere. Head elves can still use Doors, Finds and
 the practice door.

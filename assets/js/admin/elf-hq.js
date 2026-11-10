@@ -1801,11 +1801,10 @@
 
       // The phone number that goes on every staff card.
       var phone = el("section", { class: "hq-panel hq-place-phone", "aria-label": "NBCC's phone number for places" });
+      phone.appendChild(el("h2", { class: "hq-h2", text: "Phone number for places" }));
       if (!admin) {
-        phone.appendChild(el("h2", { class: "hq-h2", text: "Phone number for places" }));
         phone.appendChild(el("p", { class: "hq-words", text: "NBCC's phone number for places: " + (s.placePhone || "not set yet") }));
       } else {
-        phone.appendChild(el("h2", { class: "hq-h2", text: "Phone number for places" }));
         var phoneBox = el("input", { id: "hqPlacePhone", class: "hq-find", type: "tel", autocomplete: "off", maxlength: 40 });
         phoneBox.value = s.placePhone || "";
         phone.appendChild(el("div", { class: "hq-field" }, [el("label", { for: "hqPlacePhone", text: "NBCC's phone number for places" }), phoneBox]));

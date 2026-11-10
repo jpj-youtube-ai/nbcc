@@ -145,7 +145,7 @@ describe("HQ in the admin", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body = res.body as any;
     expect(body.numbers).toEqual(NUMBERS);
-    expect(body.quests.map((q: { id: string }) => q.id)).toEqual(["names"]);
+    expect(body.quests.map((q: { id: string }) => q.id)).toEqual(["names", "doors"]);
     expect(body.recruits).toEqual([{ detectiveId: 7, familyId: 3, name: "Ruby Tinselfoot", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/reindeer-s3.webp" }]);
     expect(body.settings).toMatchObject({ schoolOn: true, previewOn: false });
     expect(body.settings.previewHash).toBeUndefined();
@@ -169,6 +169,48 @@ describe("HQ in the admin", () => {
       body = (await run(getAdminElfHq, req("admin"))).body as typeof body;
       expect(body.doorsNotReady).toBe(17);
       expect(body.quests.find((q) => q.id === "doors")!.words).toContain("Door 8 is next");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never writes doors, and counts a door with no row as an empty one", async () => {
+    dbDoors.listElfDoors.mockResolvedValue([]);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-30T12:00:00Z"));
+      const body = (await run(getAdminElfHq, req("admin"))).body as { doorsNotReady: number; quests: { id: string; words: string }[] };
+      expect(body.doorsNotReady).toBe(24);
+      expect(body.quests.find((q) => q.id === "doors")!.words).toBe("Door 1 is next: 6 to do.");
+      expect(dbDoors.ensureElfDoors).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still answers when the doors cannot be read", async () => {
+    dbDoors.listElfDoors.mockRejectedValue(new Error("no table"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await run(getAdminElfHq, req("admin"));
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { doorsNotReady: number; numbers: unknown; quests: { id: string }[] };
+    expect(body.doorsNotReady).toBe(0);
+    expect(body.numbers).toEqual(NUMBERS);
+    expect(body.quests.map((q) => q.id)).not.toContain("doors");
+    expect(spy.mock.calls[0][0]).toBe("admin elf doors failed:");
+    spy.mockRestore();
+  });
+
+  it("stops counting a door at exactly its clue 1 time", async () => {
+    dbDoors.listElfDoors.mockResolvedValue([]);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-12-08T17:29:59Z"));
+      let body = (await run(getAdminElfHq, req("admin"))).body as { doorsNotReady: number };
+      expect(body.doorsNotReady).toBe(17);
+      vi.setSystemTime(new Date("2026-12-08T17:30:00Z"));
+      body = (await run(getAdminElfHq, req("admin"))).body as typeof body;
+      expect(body.doorsNotReady).toBe(16);
     } finally {
       vi.useRealTimers();
     }

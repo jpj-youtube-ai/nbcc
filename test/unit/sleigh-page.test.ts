@@ -97,6 +97,16 @@ describe("the page, /sleigh", () => {
     expect(after).toContain('id="slGive"');
   });
 
+  // Jaimie, 10 November 2026: the sleigh is run with the Kilmarnock Santa Sleigh team, whose volunteers
+  // build it and give their time for free, and the page takes a moment to thank them, with their logo.
+  it("thanks the Kilmarnock Santa Sleigh team, with their logo", () => {
+    expect(page).toMatch(/<img[^>]+src="\/assets\/img\/kilmarnock-santa-sleigh-logo\.webp"[^>]+alt="Kilmarnock Santa Sleigh"/);
+    const w = words(page);
+    expect(w).toContain("Kilmarnock Santa Sleigh team");
+    expect(w).toContain("for free");
+    expect(w).toContain("Thank you");
+  });
+
   it("points other ways in at this site only", () => {
     const hrefs = [...page.matchAll(/href="([^"]+)"/g)].map((m) => m[1]).filter((h) => !h.startsWith("/assets/"));
     for (const h of hrefs) expect(h.startsWith("/") || h.startsWith("#")).toBe(true);

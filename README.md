@@ -12854,6 +12854,7 @@ Design: `docs/superpowers/specs/2026-11-10-santa-sleigh-design.md`; plan:
   Sleigh poster: every night", "Santa Sleigh poster: <areas>"), so Admin > QR codes counts each
   poster's scans; the printed address stays `nbcc.scot/sleigh`. "QR code for hand-outs" gives a counted
   code for the cards handed out on the night.
+- **The Kilmarnock Santa Sleigh team** run the sleigh with NBCC (their volunteers build it, plan the routes and walk the streets, for free): the page thanks them with their logo (`assets/img/kilmarnock-santa-sleigh-logo.webp`), and every poster's footer carries it.
 - **Later, not built:** route maps with the streets drawn on, and live tracking of the sleigh.
 
 ## A QR code encoder for fundraiser pages (TASK-493)

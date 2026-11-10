@@ -78,12 +78,15 @@ const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x
  *   Festive Ball     source = 'ball' (the Ball's own donate page, /ball/donate).
  *   Red bags at the Ball  source = 'ball_bags' (the table cards, /bag). Its own bucket, never in the Festive Ball's.
  *   Invoices         source = 'invoice' (a paid invoice from Admin > Giving > Invoices, card or bank transfer).
+ *   Santa Sleigh     source = 'santa_sleigh' (its page, /sleigh, and card machine taps on its nights,
+ *                    src/db/sleigh.ts). Bucket cash is in no figure here.
  *   Donate page      no source, paid online (not a card reader), and not on a fundraiser's page.
  *                    A gift started anywhere else that later gets a source of its own is in neither.
  *
  * Fundraiser pages and the card reader are a fourth read (TASK-598): a gift on a fundraiser's own page
  * (fundraiser_id), and a gift tapped on the card reader at an event (payment_channel 'in_person'),
- * counted as above. A tap is the card reader's even in the rare case it names a fundraiser.
+ * counted as above. A tap is the card reader's even in the rare case it names a fundraiser, but never
+ * when it was tapped on a Santa Sleigh night: that is the sleigh's, from the first read.
  *
  * Monthly gifts are a third read: every paid monthly payment, wherever it was set up, counted as above.
  * It is not a place, so each payment is in its place's figures as well (TASK-596).
@@ -101,7 +104,7 @@ export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
   const paidAt = "COALESCE(o.paid_at, o.created_at)";
   const [gifts, elf, monthly, others, uniform] = await Promise.all([
     pool.query<SourceTotalsRow>(
-      `SELECT CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' WHEN source = $6 THEN 'invoices' ELSE 'donatePage' END AS bucket,
+      `SELECT CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' WHEN source = $6 THEN 'invoices' WHEN source = $7 THEN 'sleigh' ELSE 'donatePage' END AS bucket,
               COALESCE(SUM(${kept}) FILTER (WHERE ${IN_MONTH("created_at")}), 0) AS month_pence,
               COUNT(*) FILTER (WHERE ${IN_MONTH("created_at")}) AS month_gifts,
               COALESCE(SUM(${kept}), 0) AS all_pence,
@@ -109,9 +112,9 @@ export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
          FROM donations
         WHERE payment_status = 'paid'
           AND amount_pence > refunded_amount_pence
-          AND (source IN ($3, $4, $5, $6) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))
+          AND (source IN ($3, $4, $5, $6, $7) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))
         GROUP BY 1`,
-      [month.from, month.until, bySource("red_bag"), bySource("ball"), bySource("ball_bags"), bySource("invoice")],
+      [month.from, month.until, bySource("red_bag"), bySource("ball"), bySource("ball_bags"), bySource("invoice"), bySource("santa_sleigh")],
     ),
     pool.query<SourceTotalsRow>(
       `SELECT 'elfSchool' AS bucket,
@@ -140,9 +143,9 @@ export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
               COALESCE(SUM(${kept}), 0) AS all_pence,
               COUNT(*) AS all_gifts
          FROM donations
-        WHERE payment_status = 'paid' AND amount_pence > refunded_amount_pence AND (payment_channel = 'in_person' OR fundraiser_id IS NOT NULL)
+        WHERE payment_status = 'paid' AND amount_pence > refunded_amount_pence AND (payment_channel = 'in_person' OR fundraiser_id IS NOT NULL) AND source IS DISTINCT FROM $3
         GROUP BY 1`,
-      [month.from, month.until],
+      [month.from, month.until, bySource("santa_sleigh")],
     ),
     pool.query<SourceTotalsRow>(
       `SELECT 'uniform' AS bucket,

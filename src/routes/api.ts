@@ -27,6 +27,7 @@ import { GIFT_MIN_PENCE, MESSAGE_MAX } from "../fundraising/model";
 import { RED_BAG_PATH, RED_BAG_THANKS_PATH } from "../red-bag/switch";
 import { redBagOpenTo } from "../red-bag/staff";
 import { BALL_BAGS_MAX, BALL_BAGS_PATH, BALL_BAGS_THANKS_PATH, ballBagsPence } from "../ball/bags";
+import { SLEIGH_MIN_PENCE, SLEIGH_PATH, SLEIGH_THANKS_PATH } from "../sleigh/model";
 import { giftArrival, type GiftArrival } from "../donations/arrival";
 import { ownSiteHosts } from "../email/tracked-links";
 
@@ -67,7 +68,14 @@ function priceBallBags(raw: unknown): unknown {
   return { ...raw, amount: ballBagsPence(bags), uiMode: "hosted" };
 }
 
-const checkoutBodySchema = z.preprocess(priceBallBags, z
+// The Santa Sleigh page (/sleigh): always Stripe's own page, whatever the browser asked for, as red
+// bags at the Ball. Every other body passes through untouched.
+function sleighOnStripesPage(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null || (raw as { sleigh?: unknown }).sleigh !== true) return raw;
+  return { ...raw, uiMode: "hosted" };
+}
+
+const checkoutBodySchema = z.preprocess((raw) => sleighOnStripesPage(priceBallBags(raw)), z
   .object({
     mode: z.enum(["once", "monthly"]),
     plan: z.enum(PLANS).nullable(),
@@ -151,6 +159,8 @@ const checkoutBodySchema = z.preprocess(priceBallBags, z
     // Red bags at the Festive Ball (/bag): the number of £50 bags. Absent, nothing below applies. Its
     // amount is set by priceBallBags above, never taken from the browser.
     ballBags: z.number().int().min(1).max(BALL_BAGS_MAX).optional(),
+    // The Santa Sleigh page (/sleigh): the same kind of optional marker. Absent, nothing below applies.
+    sleigh: z.boolean().optional(),
     // The Donations gift log: the page before the giving page (document.referrer), sent by the giving
     // pages so the checkout can note what brought the giver (src/donations/arrival.ts). Never kept as
     // sent, and never a reason to refuse a gift: anything not a string is dropped, and a long one cut.
@@ -200,6 +210,24 @@ const checkoutBodySchema = z.preprocess(priceBallBags, z
   .refine((b) => b.ballBags === undefined || (b.fundraiserId === undefined && b.redBag !== true && b.ball !== true), {
     message: "Red bags at the Ball are not a gift on a fundraising page, a Red Bag or a Ball donate gift",
     path: ["ballBags"],
+  })
+  // The Santa Sleigh: once only, £2 at least, from a person (the page asks only a person's name), and
+  // only ever a sleigh gift. Gift Aid is then exactly a person's one off gift's.
+  .refine((b) => b.sleigh !== true || b.mode === "once", {
+    message: "a Santa Sleigh gift is a one off gift",
+    path: ["mode"],
+  })
+  .refine((b) => b.sleigh !== true || (b.amount ?? 0) >= SLEIGH_MIN_PENCE, {
+    message: "the smallest Santa Sleigh gift is £2",
+    path: ["amount"],
+  })
+  .refine((b) => b.sleigh !== true || b.donorType === "individual", {
+    message: "a Santa Sleigh gift is a gift from a person",
+    path: ["donorType"],
+  })
+  .refine((b) => b.sleigh !== true || (b.fundraiserId === undefined && b.redBag !== true && b.ball !== true && b.ballBags === undefined), {
+    message: "a Santa Sleigh gift is not a gift on a fundraising page, a Red Bag, a Ball donate gift or red bags at the Ball",
+    path: ["sleigh"],
   })
   // TASK-493: giving on a fundraiser's page is one off only, and £2 at least, as the design asks.
   // Monthly gifts there are not built yet (they would need the wall and meter to follow renewals).
@@ -321,6 +349,8 @@ const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_typ
 // Red bags at the Ball: card only, and the name of the one line on Stripe's page.
 const BALL_BAGS_PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_types"] = ["card"];
 const BALL_BAGS_LINE_NAME = "Red bags at the Festive Ball";
+// The Santa Sleigh: card only too, as /bag (a gift on a doorstep is tap and pay), and its line's name.
+const SLEIGH_LINE_NAME = "Santa Sleigh gift to NBCC";
 
 // The on-site landing Stripe returns the donor to after checkout, built on config.STRIPE_SUCCESS_URL
 // (the shared config base). TASK-221 makes it TYPE-AWARE: it carries the gift's `mode` (once|monthly)
@@ -428,6 +458,9 @@ export function buildSessionParams(
   // Red bags at the Ball: one key, the number of bags, only for a gift made there. The webhook reads
   // it as the gift's source (ball_bags) and /bag/thank-you reads it back from the session.
   if (body.ballBags !== undefined) metadata.ballBags = String(body.ballBags);
+  // The Santa Sleigh page: one key, only for a gift made there. The webhook reads it as the gift's
+  // source (santa_sleigh).
+  if (body.sleigh === true) metadata.sleigh = "true";
   // What brought the giver: up to four short keys (each at most 100 characters, well inside Stripe's
   // 500), only those with something in them. The webhook copies them onto the donation after it is
   // saved (arrivalFromCheckoutSession); they play no part in the gift itself.
@@ -505,7 +538,8 @@ export function buildSessionParams(
   const base: StripeNS.Checkout.SessionCreateParams = {
     // Red bags at the Ball: card only (which brings Apple Pay and Google Pay), so a gift at the table
     // is tap and pay; Direct Debit would record as pending. Every other gift keeps both.
-    payment_method_types: body.ballBags !== undefined ? BALL_BAGS_PAYMENT_METHODS : PAYMENT_METHODS,
+    // The Santa Sleigh likewise.
+    payment_method_types: body.ballBags !== undefined || body.sleigh === true ? BALL_BAGS_PAYMENT_METHODS : PAYMENT_METHODS,
     metadata,
     // Pre-fill and lock the donor's email on the Stripe Checkout page (TASK-203) so they never
     // retype the address we already captured. Stripe still needs an email for its records, so it is
@@ -524,6 +558,8 @@ export function buildSessionParams(
     // supporter recognition lookup). cancel_url is unchanged (a cancel is not a thank-you).
     ...(body.ballBags !== undefined
       ? ballBagsReturnUrls()
+      : body.sleigh === true
+      ? sleighReturnUrls()
       : body.redBag === true
       ? redBagReturnUrls(embeddedRequested(body))
       : body.ball === true
@@ -574,6 +610,8 @@ export function buildSessionParams(
         // One line for the total (priceBallBags set the amount), rather than a quantity of bags.
         ...(body.ballBags !== undefined
           ? { product_data: { name: BALL_BAGS_LINE_NAME } }
+          : body.sleigh === true
+          ? { product_data: { name: SLEIGH_LINE_NAME } }
           : donationProduct
           ? { product: donationProduct }
           : { product_data: { name: "Donation to NBCC" } }),
@@ -653,6 +691,17 @@ function ballGiftReturnUrls(
 function ballBagsReturnUrls(): Pick<StripeNS.Checkout.SessionCreateParams, "success_url" | "cancel_url"> {
   const site = config.PORTAL_BASE_URL.replace(/\/+$/, "");
   return { success_url: `${site}${BALL_BAGS_THANKS_PATH}?session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${site}${BALL_BAGS_PATH}` };
+}
+
+/**
+ * The Santa Sleigh: always Stripe's own page (sleighOnStripesPage never lets our page be asked for).
+ * The thank you is /sleigh/thank-you with Stripe's {CHECKOUT_SESSION_ID} template (Stripe fills it in,
+ * so the braces must NOT be encoded); Back from Stripe's page returns to /sleigh. Worked out HERE, from
+ * the site's own address, never taken from the browser.
+ */
+function sleighReturnUrls(): Pick<StripeNS.Checkout.SessionCreateParams, "success_url" | "cancel_url"> {
+  const site = config.PORTAL_BASE_URL.replace(/\/+$/, "");
+  return { success_url: `${site}${SLEIGH_THANKS_PATH}?session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${site}${SLEIGH_PATH}` };
 }
 
 /**

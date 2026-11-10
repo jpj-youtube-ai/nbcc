@@ -43,6 +43,7 @@ import {
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
 import { payDetailsLater, type PayDetailsSource } from "./donation-pay-details";
+import { TAG_CARD_SLEIGH_SQL } from "./sleigh";
 import { recalculateClaimOnRefund } from "../claims/refund";
 import { linkFundraiserGift } from "./fundraisers";
 import { guardPledgePaymentSafely, pledgeFromSession, settlePledgeSafely } from "./pledges";
@@ -310,6 +311,14 @@ export async function tagDonationSource(event: Stripe.Event, query: SourceQuery)
         () => query(TAG_RENEWAL_SOURCE_SQL, [charge.subscriptionId, RENEWAL_SOURCE]),
         SOURCE_TAG_TIMEOUT_MS,
       );
+    } else if (event.type === "charge.succeeded") {
+      // A card machine tap (Stripe Terminal, card_present) on a Santa Sleigh night: tagged santa_sleigh
+      // when it fell inside a night's window (src/db/sleigh.ts). An online card charge is never one.
+      const charge = event.data.object;
+      if (charge?.payment_method_details?.type !== "card_present") return false;
+      if (typeof charge.id !== "string" || charge.id === "") return false;
+      const chargeId = charge.id;
+      await withinSourceLimit(() => query(TAG_CARD_SLEIGH_SQL, [chargeId]), SOURCE_TAG_TIMEOUT_MS);
     }
     return false;
   } catch (err) {

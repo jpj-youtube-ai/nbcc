@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { giftsWords, paymentsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, ELF_PAYMENTS_NOTE, MONTHLY_NOTE, RED_BAG_COUNTED_FROM_NOTE, UNIFORM_NOTE } from "../../src/admin/gift-sources";
+import { giftsWords, paymentsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, ELF_PAYMENTS_NOTE, MONTHLY_NOTE, RED_BAG_COUNTED_FROM_NOTE, SLEIGH_NOTE, UNIFORM_NOTE } from "../../src/admin/gift-sources";
 import { numbersLines } from "../../src/admin/overview-numbers";
 
 // Fill a Red Bag against the Donate page: the pure rules that turn the one grouped read into the
@@ -26,6 +26,7 @@ describe("the two buckets", () => {
       donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
       fundraiser: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       cardReader: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      sleigh: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       uniform: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
@@ -79,6 +80,7 @@ describe("the words", () => {
       ["donatePage", "Donate page"],
       ["fundraiser", "Fundraiser pages"],
       ["cardReader", "Card reader"],
+      ["sleigh", "Santa Sleigh"],
       ["monthly", "Monthly gifts"],
       ["uniform", "Uniform"],
     ]);
@@ -96,6 +98,7 @@ describe("the words", () => {
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
       { key: "fundraiser", name: "Fundraiser pages", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "cardReader", name: "Card reader", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
+      { key: "sleigh", name: "Santa Sleigh", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "monthly", name: "Monthly gifts", month: "£0 from 0 payments", all: "£0 from 0 payments" },
       { key: "uniform", name: "Uniform", month: "£0 from 0 payments", all: "£0 from 0 payments" },
     ]);
@@ -119,7 +122,7 @@ describe("the words", () => {
   it("counts every monthly payment on a line of its own, last, as payments, and says they are in their place's figures too", () => {
     const t = sourceTotalsFrom([row("monthly", [12_000, 8], [96_000, 64])]);
     expect(t.monthly).toEqual({ month: { pence: 12_000, gifts: 8 }, all: { pence: 96_000, gifts: 64 } });
-    expect(sourceLines(t)[8]).toEqual({ key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" });
+    expect(sourceLines(t)[9]).toEqual({ key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" });
     expect(MONTHLY_NOTE).toBe("Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.");
     expect(MONTHLY_NOTE).not.toMatch(/[–—]/);
   });
@@ -134,10 +137,19 @@ describe("the words", () => {
   it("counts uniform payments on a line of their own, last of all, as payments, and says they are not donations", () => {
     const t = sourceTotalsFrom([row("uniform", [8_000, 2], [24_000, 6])]);
     expect(t.uniform).toEqual({ month: { pence: 8_000, gifts: 2 }, all: { pence: 24_000, gifts: 6 } });
-    expect(sourceLines(t)[9]).toEqual({ key: "uniform", name: "Uniform", month: "£80 from 2 payments", all: "£240 from 6 payments" });
+    expect(sourceLines(t)[10]).toEqual({ key: "uniform", name: "Uniform", month: "£80 from 2 payments", all: "£240 from 6 payments" });
     expect(t.donatePage.all.gifts).toBe(0);
     expect(UNIFORM_NOTE).toBe("Uniform is payments for school uniforms. They are not donations, so they are in no other figure.");
     expect(UNIFORM_NOTE).not.toMatch(/[–—]/);
+  });
+
+  it("counts the Santa Sleigh on a line of its own, straight after the card reader, and says bucket cash is not in it", () => {
+    const t = sourceTotalsFrom([row("sleigh", [12_500, 9], [12_500, 9]), row("cardReader", [3_000, 2], [3_000, 2])]);
+    expect(t.sleigh).toEqual({ month: { pence: 12_500, gifts: 9 }, all: { pence: 12_500, gifts: 9 } });
+    expect(sourceLines(t)[8]).toEqual({ key: "sleigh", name: "Santa Sleigh", month: "£125 from 9 gifts", all: "£125 from 9 gifts" });
+    expect(sourceLines(t)[7]).toMatchObject({ key: "cardReader", month: "£30 from 2 gifts" });
+    expect(SLEIGH_NOTE).toBe("Santa Sleigh is gifts on the sleigh page and card machine taps on sleigh nights. Bucket cash is in the Santa Sleigh section only.");
+    expect(SLEIGH_NOTE).not.toMatch(/[–—-]/);
   });
 
   it("words the table bags line from its own figures, and explains where they come from", () => {

@@ -35,7 +35,9 @@ export function giftAidFromMetadata(metadata: Stripe.Metadata | null | undefined
 // ordinary one (the Donate page and every other route), or one recorded before sources were kept.
 // src/db/overview-numbers.ts picks each one out by its value, so the order here carries no meaning.
 // ball_bags is red bags at the Festive Ball (/bag), a line of its own, never added into the Ball's.
-export const DONATION_SOURCES = ["red_bag", "ball", "ball_bags", "invoice"] as const;
+// santa_sleigh is the Santa Sleigh: a gift on its page (/sleigh), or a card machine tap on a sleigh
+// night (tagged by the window in src/db/sleigh.ts, never by a checkout).
+export const DONATION_SOURCES = ["red_bag", "ball", "ball_bags", "invoice", "santa_sleigh"] as const;
 export type DonationSource = (typeof DONATION_SOURCES)[number];
 
 // A red bags mark as the checkout stamps it: the number of bags, 1 to 20, written the way String()
@@ -49,7 +51,8 @@ function isBallBagsMark(mark: unknown): boolean {
 // checkout.session.completed → where the gift was started, or null. The checkout stamps
 // metadata.redBag as the string "true" on a Fill a Red Bag session, metadata.ball on a gift from
 // the Festive Ball's donate page, and metadata.ballBags (the number of bags, "1" to "20" as
-// isBallBagsMark checks) on red bags at the Ball, which is ball_bags, and on no other (src/routes/api.ts). The checkout never stamps two. The bags are read before the
+// isBallBagsMark checks) on red bags at the Ball, which is ball_bags, and metadata.sleigh "true" on a
+// gift from the Santa Sleigh page, which is santa_sleigh, and on no other (src/routes/api.ts). The checkout never stamps two. The bags are read before the
 // Ball's mark all the same, so they could never be counted as Festive Ball money. Anything else at
 // all is null. Never throws, whatever it is handed.
 export function sourceFromCheckoutSession(
@@ -61,6 +64,7 @@ export function sourceFromCheckoutSession(
   if (isBallBagsMark(marks.ballBags)) return "ball_bags";
   if (marks.redBag === "true") return "red_bag";
   if (marks.ball === "true") return "ball";
+  if (marks.sleigh === "true") return "santa_sleigh";
   return null;
 }
 

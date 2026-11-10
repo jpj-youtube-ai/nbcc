@@ -77,6 +77,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "invoices",
       // Fill a Red Bag: the list's editor, under Giving after Donations.
       "red-bag",
+      // The Santa Sleigh's own section, gated on Donations (10 November 2026).
+      "sleigh",
       "claims",
       "gasds",
       "subscriptions",

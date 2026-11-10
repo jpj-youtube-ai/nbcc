@@ -58,6 +58,9 @@ export const SITE_PAGES: SitePage[] = [
   // for letters home from schools. "/elf" stays reserved below: no spare address may take it or
   // anything under it, but a spare address may point to it.
   { path: "/elf", title: "Elf Detective School", listedByDefault: true, elfGated: true },
+  // The Kilmarnock Santa Sleigh (src/sleigh/page.ts): the page on every poster and QR card. Being here
+  // puts it in Admin > QR codes, so a named code can count each poster's scans.
+  { path: "/sleigh", title: "Kilmarnock Santa Sleigh", listedByDefault: true },
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
@@ -163,6 +166,12 @@ export const PRIVATE_PAGES: PrivatePage[] = [
     note: "Where a donor lands after giving on Fill a Red Bag. Nothing links to it and search engines are told to skip it.",
   },
   {
+    path: "/sleigh/thank-you",
+    title: "Kilmarnock Santa Sleigh: thank you",
+    reach: "link-only",
+    note: "Where a giver lands after giving on the Santa Sleigh page. Nothing links to it and search engines are told to skip it.",
+  },
+  {
     path: "/bag",
     title: "Red bags at the Festive Ball",
     reach: "unlisted",
@@ -236,6 +245,9 @@ export const RESERVED_PREFIXES: string[] = [
   "/fill-a-bag",
   // Red bags at the Festive Ball: the table cards' QR code page and its thank you (src/ball/bags-page.ts).
   "/bag",
+  // The Kilmarnock Santa Sleigh, its thank you, and the long address that forwards to it.
+  "/sleigh",
+  "/santa-sleigh",
   "/festive-ball",
   "/a-night-to-remember",
   "/set-password",

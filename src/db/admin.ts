@@ -815,7 +815,8 @@ const PLACE_WHERE: Record<(typeof PLACE_FILTERS)[number], string> = {
   // As the Donate page's line in the totals (sumGiftsBySource), and never an invoice.
   donate_page: "d.source IS NULL AND d.payment_channel = 'online' AND d.fundraiser_id IS NULL AND d.invoice_id IS NULL",
   fundraiser: "d.fundraiser_id IS NOT NULL",
-  card_reader: "d.payment_channel = 'in_person'",
+  // A Santa Sleigh card machine tap is the sleigh's (its own tile), never the card reader's too.
+  card_reader: "d.payment_channel = 'in_person' AND d.source IS DISTINCT FROM 'santa_sleigh'",
 };
 const SEARCH_MAX = 100;
 

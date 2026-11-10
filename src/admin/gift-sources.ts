@@ -25,6 +25,8 @@ export type SourceTotals = {
   /** Gifts on a fundraiser's own page, and gifts tapped on the card reader at events (TASK-598). */
   fundraiser: SourceSums;
   cardReader: SourceSums;
+  /** The Santa Sleigh: gifts on its page and card machine taps on its nights. Bucket cash is never here. */
+  sleigh: SourceSums;
   /** Every monthly payment, wherever it was set up (TASK-596): not a place, so each is in its place's too. */
   monthly: SourceSums;
   /** School uniforms bought through the uniform payment link (TASK-604): purchases, never donations. */
@@ -52,15 +54,18 @@ export const BALL_BAGS_NOTE = "Red bags at the Ball are gifts from the table car
 export const MONTHLY_NOTE = "Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.";
 // Uniforms are bought, not given (TASK-604): their own table, in no other figure.
 export const UNIFORM_NOTE = "Uniform is payments for school uniforms. They are not donations, so they are in no other figure.";
+// The Santa Sleigh (/sleigh): its page's gifts and its nights' card machine taps; its bucket cash is
+// counted in its own admin section only, as it is not individual donations.
+export const SLEIGH_NOTE = "Santa Sleigh is gifts on the sleigh page and card machine taps on sleigh nights. Bucket cash is in the Santa Sleigh section only.";
 export const ELF_PAYMENTS_NOTE = "Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid.";
 
 const none = (): SourceSums => ({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
-const BUCKETS = ["redBag", "ball", "ballBags", "invoices", "elfSchool", "donatePage", "fundraiser", "cardReader", "monthly", "uniform"] as const;
+const BUCKETS = ["redBag", "ball", "ballBags", "invoices", "elfSchool", "donatePage", "fundraiser", "cardReader", "sleigh", "monthly", "uniform"] as const;
 const isBucket = (b: string): b is keyof SourceTotals => (BUCKETS as readonly string[]).includes(b);
 
 /** Every bucket, whatever came back: one with no gifts has no row, and is a real zero. */
 export function sourceTotalsFrom(rows: readonly SourceTotalsRow[]): SourceTotals {
-  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), invoices: none(), elfSchool: none(), donatePage: none(), fundraiser: none(), cardReader: none(), monthly: none(), uniform: none() };
+  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), invoices: none(), elfSchool: none(), donatePage: none(), fundraiser: none(), cardReader: none(), sleigh: none(), monthly: none(), uniform: none() };
   for (const r of rows) {
     if (!isBucket(r.bucket)) continue;
     out[r.bucket] = {
@@ -79,8 +84,8 @@ export interface SourceLine {
 }
 
 /** The lines at the top of the Donations screen: Fill a Red Bag, the Festive Ball, the Ball's red bags,
- *  invoices, the Elf Detective School, the Donate page, fundraiser pages, the card reader, every
- *  monthly payment, and last the uniform payments, which are not donations. */
+ *  invoices, the Elf Detective School, the Donate page, fundraiser pages, the card reader, the Santa
+ *  Sleigh, every monthly payment, and last the uniform payments, which are not donations. */
 export function sourceLines(t: SourceTotals): SourceLine[] {
   const line = (key: keyof SourceTotals, name: string, words: (s: GiftSum) => string = giftsWords): SourceLine => ({
     key,
@@ -100,6 +105,8 @@ export function sourceLines(t: SourceTotals): SourceLine[] {
     // Gifts on a fundraiser's own page, and gifts taken in person on the card reader (TASK-598).
     line("fundraiser", "Fundraiser pages"),
     line("cardReader", "Card reader"),
+    // The Santa Sleigh: its page's gifts and its nights' card machine taps, never in the card reader's too.
+    line("sleigh", "Santa Sleigh"),
     // Every monthly payment, wherever it was set up, counted as payments (TASK-596).
     line("monthly", "Monthly gifts", paymentsWords),
     // School uniforms bought through the uniform payment link, counted as payments (TASK-604).

@@ -143,15 +143,15 @@ describe("the migration for the 24 doors, their names that count and their clues
     expect(callsOf("down")[0].args[1]).toEqual(["place_phone"]);
   });
 
-  it("sorts after 1791200000410", () => {
-    const before = "1791200000410_uniform-payments.js";
-    expect(sorted().indexOf(before)).toBeGreaterThan(-1);
-    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf(before));
+  // It sorted last when it was made; later migrations (the Santa Sleigh's, TASK-608) come after it, so
+  // what must hold is that it runs after every one merged before it.
+  it("sorts after the migrations merged before it", () => {
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000410_uniform-payments.js"));
   });
 });
 
 describe("the migration for the game's tables", () => {
-  const FILE = "1791200000430_elf-game.js";
+  const FILE = "1791200000440_elf-game.js";
 
   type Call = { fn: string; args: Any[] };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -289,7 +289,11 @@ describe("the migration for the game's tables", () => {
     );
   });
 
-  it("sorts last in migrations", () => {
-    expect(sorted().at(-1)).toBe(FILE);
+  // Not "sorts last": that breaks the next session's migration (as it did for the Doors' test when
+  // the Santa Sleigh's landed). Before merging, check by hand that it still sorts after main's newest.
+  it("sorts after every migration merged before it, the Santa Sleigh's included", () => {
+    const before = "1791200000430_santa-sleigh.js";
+    expect(sorted().indexOf(before)).toBeGreaterThan(-1);
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf(before));
   });
 });

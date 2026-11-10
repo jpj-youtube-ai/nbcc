@@ -30,7 +30,7 @@ describe("the totals: one grouped read", () => {
     // The second read is the Elf Detective School's payments, the third every monthly payment, the
     // fourth fundraiser pages and the card reader, the fifth uniform payments (below).
     expect(queryMock).toHaveBeenCalledTimes(5);
-    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags", "invoice"]);
+    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags", "invoice", "santa_sleigh"]);
     expect(call().sql).toMatch(/GROUP BY 1/);
     // The source is a parameter, never written into the SQL itself.
     expect(call().sql).not.toMatch(/red_bag/);
@@ -59,8 +59,8 @@ describe("the totals: one grouped read", () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     const { sql } = call();
-    expect(sql).toContain("CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' WHEN source = $6 THEN 'invoices' ELSE 'donatePage' END");
-    expect(sql).toContain("(source IN ($3, $4, $5, $6) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))");
+    expect(sql).toContain("CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' WHEN source = $6 THEN 'invoices' WHEN source = $7 THEN 'sleigh' ELSE 'donatePage' END");
+    expect(sql).toContain("(source IN ($3, $4, $5, $6, $7) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))");
   });
 
   it("counts a table bag gift in its own bucket, not the Festive Ball's or the Donate page's", async () => {
@@ -76,6 +76,7 @@ describe("the totals: one grouped read", () => {
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       fundraiser: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       cardReader: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      sleigh: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       uniform: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
@@ -100,6 +101,7 @@ describe("the totals: one grouped read", () => {
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       fundraiser: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       cardReader: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      sleigh: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       uniform: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
@@ -158,10 +160,11 @@ describe("the totals: one grouped read", () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     const { sql, params } = call(3);
-    expect(params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z"]);
+    // The Santa Sleigh's card machine taps are the sleigh's, so they are not counted again here.
+    expect(params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "santa_sleigh"]);
     expect(sql).toContain("CASE WHEN payment_channel = 'in_person' THEN 'cardReader' ELSE 'fundraiser' END AS bucket");
     expect(sql).toContain("SUM(GREATEST(amount_pence - refunded_amount_pence, 0)) FILTER (WHERE (created_at AT TIME ZONE 'Europe/London')::date >= $1::date AND created_at <= $2::timestamptz)");
-    expect(sql).toContain("WHERE payment_status = 'paid' AND amount_pence > refunded_amount_pence AND (payment_channel = 'in_person' OR fundraiser_id IS NOT NULL)");
+    expect(sql).toContain("WHERE payment_status = 'paid' AND amount_pence > refunded_amount_pence AND (payment_channel = 'in_person' OR fundraiser_id IS NOT NULL) AND source IS DISTINCT FROM $3");
     expect(sql).toContain("GROUP BY 1");
   });
 
@@ -186,6 +189,17 @@ describe("the totals: one grouped read", () => {
     const t = await sumGiftsBySource(MONTH);
     expect(t.uniform).toEqual({ month: { pence: 8000, gifts: 2 }, all: { pence: 24000, gifts: 6 } });
     expect(t.donatePage).toEqual({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
+  });
+
+  it("puts Santa Sleigh gifts, online and card machine taps, in a bucket of their own from the first read", async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ bucket: "sleigh", month_pence: "12500", month_gifts: "9", all_pence: "12500", all_gifts: "9" }] })
+      .mockResolvedValue({ rows: [] });
+    const t = await sumGiftsBySource(MONTH);
+    expect(t.sleigh).toEqual({ month: { pence: 12_500, gifts: 9 }, all: { pence: 12_500, gifts: 9 } });
+    expect(t.cardReader).toEqual({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
+    // a sleigh card tap has a source, so the first read takes it whatever its channel
+    expect(call().sql).toContain("source IN ($3, $4, $5, $6, $7)");
   });
 
   it("puts card reader gifts in a bucket of their own", async () => {

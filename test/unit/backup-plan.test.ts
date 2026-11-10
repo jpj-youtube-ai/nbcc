@@ -78,10 +78,12 @@ describe("knowing how many tables to expect", () => {
   // the bank details printed on them; 102 since Fill a Red Bag added companies' own Workshops; 103
   // since TASK-596 kept aside the monthly renewals that were recorded twice; 105 since TASK-604 kept
   // uniform payments apart from donations, and the donations moved out to them; 108 since Elf
-  // Detective School's Doors added the hiding places, the other names that count for each, and their clues; 114 since the
-  // game added guesses, word tries, visits, photos, photo files and the practice door.
-  it("counts 114 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(114);
+  // Detective School's Doors added the hiding places, the other names that count for each, and their
+  // clues; 110 since the Santa Sleigh added its nights (with the bucket cash) and its settings; 116
+  // since Elf Detective School's game added guesses, word tries, visits, photos, photo files and the
+  // practice door.
+  it("counts 116 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(116);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -196,12 +198,15 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("elf_doors");
     expect(main).toContain("elf_door_names");
     expect(main).toContain("elf_clues");
+    // The Santa Sleigh: its nights, with the bucket cash counted for each, and its settings.
+    expect(main).toContain("sleigh_nights");
+    expect(main).toContain("sleigh_settings");
     // Elf Detective School's game: guesses, word tries, visits, photos (their bytes stay out of the
     // dump), photo files and the practice door.
     for (const t of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos", "elf_photo_files", "elf_practice"]) {
       expect(main).toContain(t);
     }
-    expect(main.length).toBe(111);
+    expect(main.length).toBe(113);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

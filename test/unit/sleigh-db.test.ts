@@ -20,6 +20,7 @@ import {
   sleighTotals,
   readSleighTotalsNow,
   forgetSleighTotals,
+  findOrCreateSleighCode,
 } from "../../src/db/sleigh";
 import type { SleighNight } from "../../src/sleigh/model";
 
@@ -275,5 +276,45 @@ describe("the year's total", () => {
     expect((await sleighTotals())?.totalPence).toBe(100);
     query.mockRejectedValueOnce(new Error("the database is away"));
     await expect(readSleighTotalsNow()).rejects.toThrow();
+  });
+});
+
+// The named QR codes the sleigh hands out and prints (Admin > QR codes counts their scans). One code per
+// name, found again each time, so a code printed once keeps working and keeps counting.
+describe("the sleigh's named QR codes", () => {
+  beforeEach(() => {
+    query.mockReset();
+    connect.mockReset();
+  });
+  const record = (id: number, name: string) => ({ id, name, target: "/sleigh", hidden: false, created_at: "2026-11-10T20:00:00Z", updated_by: "admin:staff@example.com", updated_at: "2026-11-10T20:00:00Z" });
+
+  it("finds the code by its name and the page, and makes nothing new", async () => {
+    query.mockResolvedValueOnce({ rows: [record(42, "Santa Sleigh hand-outs")] });
+    expect(await findOrCreateSleighCode("Santa Sleigh hand-outs", "admin:staff@example.com")).toBe(42);
+    const [sql, params] = query.mock.calls[0];
+    expect(flat(String(sql))).toContain("FROM qr_codes WHERE name = $1 AND target = $2 ORDER BY id ASC LIMIT 1");
+    expect(params).toEqual(["Santa Sleigh hand-outs", "/sleigh"]);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it("makes it, going to /sleigh, with who asked, when there is none yet", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    const said: Array<[string, unknown[] | undefined]> = [];
+    const client = {
+      query: vi.fn(async (sql: string, params?: unknown[]) => (said.push([sql, params]), /INSERT INTO qr_codes/.test(sql) ? { rows: [record(43, String(params?.[0]))] } : { rows: [] })),
+      release: vi.fn(),
+    };
+    connect.mockResolvedValue(client);
+    expect(await findOrCreateSleighCode("Santa Sleigh poster: every night", "admin:staff@example.com")).toBe(43);
+    expect(said.find(([sql]) => /INSERT INTO qr_codes/.test(sql))?.[1]).toEqual(["Santa Sleigh poster: every night", "/sleigh", "admin:staff@example.com"]);
+  });
+
+  it("cuts a long name to what a code's name may hold, tidied", async () => {
+    query.mockResolvedValueOnce({ rows: [record(44, "x")] });
+    await findOrCreateSleighCode(`  Santa Sleigh poster:   ${"Wardneuk, Onthank & Altonhill ".repeat(4)}`, "admin:staff@example.com");
+    const name = String(query.mock.calls[0][1][0]);
+    expect(name.length).toBeLessThanOrEqual(80);
+    expect(name.startsWith("Santa Sleigh poster: Wardneuk")).toBe(true);
+    expect(name).not.toMatch(/\s{2}|\s$/);
   });
 });

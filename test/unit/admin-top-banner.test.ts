@@ -32,6 +32,8 @@ const BEFORE: ReadonlyArray<readonly [string, string, string]> = [
   // Invoices for donations: a screen added since the banner, gated on Donations like Monthly givers.
   ["invoices", "view:donations", "Invoices"],
   ["red-bag", "", "Fill a Red Bag"],
+  // The Santa Sleigh: added since the banner, gated on Donations like Invoices.
+  ["sleigh", "view:donations", "Santa Sleigh"],
   ["claims", "", "Claims"],
   ["gasds", "", "GASDS"],
   ["subscriptions", "", "Subscriptions"],
@@ -55,7 +57,7 @@ const BEFORE: ReadonlyArray<readonly [string, string, string]> = [
 ];
 const GROUPS: ReadonlyArray<readonly [string, string, string, readonly string[]]> = [
   ["monitor", "Monitor", "adminNavMonitor", ["overview", "search"]],
-  ["giving", "Giving", "adminNavGiving", ["donations", "invoices", "red-bag", "claims", "gasds", "subscriptions", "fulfilments", "monthly"]],
+  ["giving", "Giving", "adminNavGiving", ["donations", "invoices", "red-bag", "sleigh", "claims", "gasds", "subscriptions", "fulfilments", "monthly"]],
   ["content", "Content", "adminNavContent", ["stories", "ticker", "get-involved", "ball", "elf", "contact", "newsletter", "thank-you", "outreach"]],
   ["governance", "Governance", "adminNavGovernance", ["audit", "email-audit"]],
   ["admin", "Admin", "adminNavAdmin", ["analytics", "site", "qr", "team"]],
@@ -378,10 +380,14 @@ describe("the drop downs", () => {
     expect(document.activeElement).toBe(link("donations"));
     key(link("donations"), "ArrowDown");
     expect(document.activeElement).toBe(link("invoices"));
-    // Fill a Red Bag is hidden for this person, so after Invoices comes Claims.
+    // Fill a Red Bag is hidden for this person, so after Invoices comes the Santa Sleigh, then Claims.
     key(link("invoices"), "ArrowDown");
+    expect(document.activeElement).toBe(link("sleigh"));
+    key(link("sleigh"), "ArrowDown");
     expect(document.activeElement).toBe(link("claims"));
     key(link("claims"), "ArrowUp");
+    expect(document.activeElement).toBe(link("sleigh"));
+    key(link("sleigh"), "ArrowUp");
     expect(document.activeElement).toBe(link("invoices"));
     key(link("invoices"), "ArrowUp");
     expect(document.activeElement).toBe(link("donations"));

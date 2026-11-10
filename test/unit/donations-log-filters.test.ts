@@ -267,7 +267,8 @@ describe("the new places a gift can be given", () => {
   it.each([
     ["donate_page", "d.source IS NULL AND d.payment_channel = 'online' AND d.fundraiser_id IS NULL AND d.invoice_id IS NULL"],
     ["fundraiser", "d.fundraiser_id IS NOT NULL"],
-    ["card_reader", "d.payment_channel = 'in_person'"],
+    // a Santa Sleigh card machine tap is the sleigh's, never the card reader's too
+    ["card_reader", "d.payment_channel = 'in_person' AND d.source IS DISTINCT FROM 'santa_sleigh'"],
   ])("narrows to %s, and leaves elf payments out", async (source, where) => {
     await listDonations({ source });
     for (const q of [count(), page()]) {

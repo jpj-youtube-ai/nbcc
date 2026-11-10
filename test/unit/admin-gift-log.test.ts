@@ -364,6 +364,7 @@ describe("the scoreboard", () => {
       elfSchool: { month: { pence: 148600, gifts: 1 }, all: { pence: 148600, gifts: 128 } },
       fundraiser: { month: { pence: 5000, gifts: 2 }, all: { pence: 60000, gifts: 30 } },
       cardReader: { month: { pence: 30000, gifts: 12 }, all: { pence: 1774420, gifts: 27 } },
+      sleigh: { month: { pence: 12500, gifts: 9 }, all: { pence: 12500, gifts: 9 } },
       monthly: { month: { pence: 12000, gifts: 8 }, all: { pence: 96000, gifts: 64 } },
     },
     lines: [
@@ -372,6 +373,7 @@ describe("the scoreboard", () => {
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
       { key: "fundraiser", name: "Fundraiser pages", month: "£50 from 2 gifts", all: "£600 from 30 gifts" },
       { key: "cardReader", name: "Card reader", month: "£300 from 12 gifts", all: "£17,744 from 27 gifts" },
+      { key: "sleigh", name: "Santa Sleigh", month: "£125 from 9 gifts", all: "£125 from 9 gifts" },
       { key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" },
       { key: "nothing", name: "Not a tile", month: "£1 from 1 gift", all: "£1 from 1 gift" },
     ],
@@ -381,11 +383,11 @@ describe("the scoreboard", () => {
   it("is one tile per place, each the place's own tick box", () => {
     const tiles = Array.from(document.querySelectorAll<HTMLLabelElement>("#donationsSources .gl-tile"));
     expect(tiles.map((t) => t.querySelector(".gl-tile__name")?.textContent)).toEqual([
-      "Fill a Red Bag", "Festive Ball", "Red bags at the Ball", "Invoices", "Elf Detective School", "Donate page", "Fundraiser pages", "Card reader",
+      "Fill a Red Bag", "Festive Ball", "Red bags at the Ball", "Invoices", "Elf Detective School", "Donate page", "Fundraiser pages", "Card reader", "Santa Sleigh",
     ]);
     expect(tiles.map((t) => t.querySelector("input")?.id)).toEqual([
       "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter",
-      "donationsDonatePageFilter", "donationsFundraiserFilter", "donationsCardReaderFilter",
+      "donationsDonatePageFilter", "donationsFundraiserFilter", "donationsCardReaderFilter", "donationsSleighFilter",
     ]);
     for (const t of tiles) expect(t.querySelector("input")?.type).toBe("checkbox");
   });
@@ -400,6 +402,8 @@ describe("the scoreboard", () => {
     expect(score("cardReader").querySelector(".gl-tile__count")?.textContent).toBe("12 gifts this month");
     expect(score("cardReader").querySelector(".gl-tile__all")?.textContent).toBe("£17,744 from 27 gifts in all");
     expect(score("fundraiser").querySelector(".gl-tile__sum")?.textContent).toBe("£50");
+    expect(score("sleigh").querySelector(".gl-tile__sum")?.textContent).toBe("£125");
+    expect(score("sleigh").querySelector(".gl-tile__count")?.textContent).toBe("9 gifts this month");
     expect(score("monthly").querySelector(".gl-tile__sum")?.textContent).toBe("£120");
     expect(score("monthly").querySelector(".gl-tile__count")?.textContent).toBe("8 payments this month");
     expect(score("monthly").querySelector(".gl-tile__all")?.textContent).toBe("£960 from 64 payments in all");

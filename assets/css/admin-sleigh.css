@@ -1,0 +1,58 @@
+/* NBCC Santa Sleigh: its own admin section (Admin > Giving > Santa Sleigh, #view-sleigh in admin.html,
+ * drawn by assets/js/admin/sleigh.js). Design: docs/superpowers/specs/2026-11-10-santa-sleigh-design.md.
+ *
+ * Plain admin look in NBCC's colours (the tokens styles.css sets). Every selector starts .sl- so
+ * nothing leaks into the rest of the admin. Nothing scrolls inside a box: on a narrow screen each night
+ * becomes a labelled card and the page grows instead. */
+
+.sl-root { display: grid; gap: 14px; max-width: 1100px; }
+.sl-lede { margin: 0; color: var(--slate); }
+.sl-h3 { font-family: var(--font-head); color: var(--maroon); font-size: 1.15rem; margin: 10px 0 0; }
+.sl-status { margin: 0; min-height: 1.4em; font-weight: 600; }
+.sl-status.is-ok { color: var(--holly-dark, #123C12); }
+.sl-status.is-error { color: var(--crimson); }
+.sl-hint { margin: 6px 0 0; font-size: .88rem; color: var(--slate); }
+
+/* The year's total in its parts, the grand total last and strongest. */
+.sl-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.sl-total { display: grid; gap: 2px; background: var(--cream); border: 1.6px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.sl-total__name { font-size: .85rem; color: var(--slate); }
+.sl-total__sum { font-family: var(--font-head); font-size: 1.5rem; font-weight: 700; color: var(--maroon); overflow-wrap: anywhere; }
+.sl-total--grand { background: var(--crimson); border-color: var(--crimson); }
+.sl-total--grand .sl-total__name,
+.sl-total--grand .sl-total__sum { color: var(--cream); }
+
+/* One row per night. */
+.sl-table { width: 100%; border-collapse: collapse; }
+.sl-table th { text-align: left; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--slate); padding: 6px 8px; border-bottom: 1.6px solid var(--line); }
+.sl-table td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.sl-date { font-weight: 700; color: var(--maroon); white-space: nowrap; }
+.sl-input { width: 100%; min-width: 0; box-sizing: border-box; font-family: var(--font-body); font-size: .95rem; color: var(--slate); background: #fff; border: 1.6px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.sl-input:focus { outline: 2px solid var(--crimson); outline-offset: 1px; }
+.sl-input:disabled { background: var(--cream); color: var(--slate); }
+.sl-card { display: block; font-weight: 600; }
+.sl-window { display: block; font-size: .8rem; color: var(--slate); }
+.sl-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sl-actions .admin-btn { min-height: 40px; }
+.sl-btn--ghost { background: transparent; color: var(--maroon); border: 1.6px solid var(--line); }
+.sl-btn--ghost:hover { background: var(--cream); color: var(--maroon); border-color: var(--crimson); }
+.sl-root .admin-btn:disabled { opacity: .6; cursor: default; }
+
+.sl-poster-row,
+.sl-settings-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.sl-poster-row .admin-btn,
+.sl-settings-row .admin-btn { min-height: 44px; }
+.sl-settings-row .sl-input { width: auto; }
+.sl-label { font-weight: 600; color: var(--slate); }
+
+/* A phone: each night a labelled card, the page grows, nothing scrolls sideways. */
+@media (max-width: 860px) {
+  .sl-table thead { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .sl-table,
+  .sl-table tbody,
+  .sl-table tr,
+  .sl-table td { display: block; width: 100%; box-sizing: border-box; }
+  .sl-table tr { border: 1.6px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; background: #fff; }
+  .sl-table td { border: none; padding: 5px 0; }
+  .sl-table td[data-label]::before { content: attr(data-label); display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--slate); margin: 0 0 3px; }
+}

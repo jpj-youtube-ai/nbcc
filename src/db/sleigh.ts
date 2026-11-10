@@ -1,6 +1,8 @@
 import { pool } from "./pool";
 import { writeWithAudit } from "./donations";
-import type { SleighNight, SleighSettings } from "../sleigh/model";
+import { createQrCode, findQrCodeByName } from "./qr-codes";
+import { NAME_MAX } from "../site/qr-named";
+import { SLEIGH_PATH, type SleighNight, type SleighSettings } from "../sleigh/model";
 
 // The Kilmarnock Santa Sleigh's data (docs/superpowers/specs/2026-11-10-santa-sleigh-design.md): the
 // nights and the one row of settings (migrations/1791200000430_santa-sleigh.js), and the year's total.
@@ -207,6 +209,20 @@ export async function saveSleighSettings(changes: { offOn: string }, actor: stri
   );
   forgetSleighTotals();
   return settings;
+}
+
+// ------------------------------------------------------------------------------------------------
+// The sleigh's named QR codes (Admin > QR codes counts their scans): one per name, going to /sleigh,
+// found again each time so a code printed once keeps working and keeps counting. The hand-outs use
+// "Santa Sleigh hand-outs"; the posters "Santa Sleigh poster: every night" and one per night's areas.
+// ------------------------------------------------------------------------------------------------
+
+/** The id of the named code going to /sleigh, made (with an audit row) the first time it is asked for. */
+export async function findOrCreateSleighCode(name: string, actor: string): Promise<number> {
+  const tidy = String(name).replace(/\s+/g, " ").trim().slice(0, NAME_MAX).trim();
+  const found = await findQrCodeByName(tidy, SLEIGH_PATH);
+  if (found) return found.id;
+  return (await createQrCode(tidy, SLEIGH_PATH, actor)).id;
 }
 
 // ------------------------------------------------------------------------------------------------

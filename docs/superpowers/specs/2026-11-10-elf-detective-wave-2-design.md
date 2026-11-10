@@ -81,8 +81,10 @@ with families' pictures through December; and none of the anti-goals below ever 
 10. **On a door's evening, head elves see who found it and when** (10 November).
 11. **Photos in their own row** (10 November, after the builder check; replaces decision 2's choice
     of a photo or the elves). Every visiting detective's elf goes on the door with its name, the
-    finder first. Photos go in a separate row with no names, in the order they were approved, so
-    nobody can match a face to a name. A family can add a photo as well as their elves. The mockup
+    finder first. Photos go in a separate row with no names, so nobody can match a face to a name.
+    The photo row is in a fixed shuffled order, not the order photos were approved, because the
+    finder's photo is often approved first and would give itself away (Jaimie, 10 November: "keep
+    the shuffled order"). A family can add a photo as well as their elves. The mockup
     `door-scrapbook-v2.html` still shows the earlier choice, with photos mixed in among the elves:
     build to these words instead.
 
@@ -229,8 +231,8 @@ with families' pictures through December; and none of the anti-goals below ever 
 - One photo per family per door at a time: a new photo replaces one that is still waiting.
 - **The scrapbook** has two parts. First the elves, each with its name: the finder's first with the
   "Found first!" rosette, then everyone else's in the order they visited. Then the photos, with no
-  names, in the order they were approved. An open door on the calendar shows the first few pictures
-  behind it and how many there are.
+  names, in a fixed shuffled order (decision 11). An open door on the calendar shows the first few
+  elves behind it and how many pictures there are.
 
 ### Head Elf HQ: the photo check (in Finds)
 

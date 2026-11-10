@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { giftsWords, paymentsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, ELF_PAYMENTS_NOTE, MONTHLY_NOTE, RED_BAG_COUNTED_FROM_NOTE } from "../../src/admin/gift-sources";
+import { giftsWords, paymentsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, ELF_PAYMENTS_NOTE, MONTHLY_NOTE, RED_BAG_COUNTED_FROM_NOTE, UNIFORM_NOTE } from "../../src/admin/gift-sources";
 import { numbersLines } from "../../src/admin/overview-numbers";
 
 // Fill a Red Bag against the Donate page: the pure rules that turn the one grouped read into the
@@ -27,6 +27,7 @@ describe("the two buckets", () => {
       fundraiser: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       cardReader: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      uniform: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
 
@@ -79,6 +80,7 @@ describe("the words", () => {
       ["fundraiser", "Fundraiser pages"],
       ["cardReader", "Card reader"],
       ["monthly", "Monthly gifts"],
+      ["uniform", "Uniform"],
     ]);
     expect(sourceLines(t)[1]).toMatchObject({ month: "£75 from 3 gifts", all: "£120 from 5 gifts" });
   });
@@ -95,6 +97,7 @@ describe("the words", () => {
       { key: "fundraiser", name: "Fundraiser pages", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "cardReader", name: "Card reader", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "monthly", name: "Monthly gifts", month: "£0 from 0 payments", all: "£0 from 0 payments" },
+      { key: "uniform", name: "Uniform", month: "£0 from 0 payments", all: "£0 from 0 payments" },
     ]);
   });
 
@@ -126,6 +129,15 @@ describe("the words", () => {
     expect(t.cardReader).toEqual({ month: { pence: 17_744_20, gifts: 27 }, all: { pence: 17_744_20, gifts: 27 } });
     expect(sourceLines(t)[6]).toEqual({ key: "fundraiser", name: "Fundraiser pages", month: "£50 from 2 gifts", all: "£600 from 30 gifts" });
     expect(sourceLines(t)[7]).toEqual({ key: "cardReader", name: "Card reader", month: "£17,744 from 27 gifts", all: "£17,744 from 27 gifts" });
+  });
+
+  it("counts uniform payments on a line of their own, last of all, as payments, and says they are not donations", () => {
+    const t = sourceTotalsFrom([row("uniform", [8_000, 2], [24_000, 6])]);
+    expect(t.uniform).toEqual({ month: { pence: 8_000, gifts: 2 }, all: { pence: 24_000, gifts: 6 } });
+    expect(sourceLines(t)[9]).toEqual({ key: "uniform", name: "Uniform", month: "£80 from 2 payments", all: "£240 from 6 payments" });
+    expect(t.donatePage.all.gifts).toBe(0);
+    expect(UNIFORM_NOTE).toBe("Uniform is payments for school uniforms. They are not donations, so they are in no other figure.");
+    expect(UNIFORM_NOTE).not.toMatch(/[–—]/);
   });
 
   it("words the table bags line from its own figures, and explains where they come from", () => {

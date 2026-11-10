@@ -1712,7 +1712,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/queues/awaiting-declaration` | **implemented** | REQ-049 (awaiting-declaration queue) |
 | `GET /api/admin/queues/gasds-pool` | **implemented** | REQ-050 (annual GASDS pool report) |
 | `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated; with the Elf Detective School's payments beside the gifts, and `?source=elf_school` for only them: see **Head Elf HQ**) |
-| `GET /api/admin/donations/source-totals` | **implemented** | Fill a Red Bag against the Donate page, this month and in all (Donations: view) |
+| `GET /api/admin/donations/source-totals` | **implemented** | Fill a Red Bag against the Donate page, this month and in all, and Uniform payments (TASK-604) (Donations: view) |
 | `GET /api/admin/red-bag-list` | **implemented** | Fill a Red Bag: the list editor's state: the website's list, the shared draft, what differs, the history (Fill a Red Bag: view). See **Fill a Red Bag: staff edit the list** |
 | `GET /api/admin/red-bag-list/versions/:id` | **implemented** | one published list, or `original` for the built-in one (Fill a Red Bag: view) |
 | `PUT /api/admin/red-bag-list/draft` | **implemented** | save the shared draft, against its stamp (Fill a Red Bag: edit) |
@@ -7172,6 +7172,42 @@ and the checkout in `src/routes/api.ts`. Unit tests: `test/unit/donation-arrival
 `donation-labels.test.ts` and `admin-gift-log.test.ts`. Behaviour: `features/admin-donations-log.feature`
 (a QR code gift noted and found by Came from, Do Not Track noting nothing, the details and who may
 open them, a bank transfer found by Paid by, and filters it does not know ignored).
+
+## Uniform payments (TASK-604)
+
+School uniforms the charity supplies are bought through a Stripe payment link whose metadata says
+`product` = `uniform` (Stripe copies a payment link's metadata onto every checkout it makes). A uniform
+is a purchase, never a gift, so it is kept apart from donations entirely.
+
+- **The webhook.** `src/uniform/webhook.ts` runs first on the one Stripe webhook (before invoices,
+  elf, tickets and donations). A paid uniform checkout (`checkout.session.completed`, or
+  `checkout.session.async_payment_succeeded` when the money comes later) is kept once, by its checkout
+  session, in `uniform_payments` with an audit line (`uniform.paid`). It never writes a donor, donation
+  or declaration, and the site sends no email (Stripe's own receipt goes if switched on in Stripe).
+  `charge.refunded` on a uniform's payment sets its `refunded_amount_pence` to Stripe's total, and a
+  dispute (`charge.dispute.*`) counts the disputed amount as gone, as a donation's does.
+  The rules that read a session are pure, in `src/uniform/model.ts`.
+- **Admin > Donations.** A wide **Uniform** tile below Monthly gifts shows this month and all time,
+  counted as payments, less refunds (`uniform` in `GET /api/admin/donations/source-totals`, the fifth
+  read in `sumGiftsBySource`, with a sentence in the note). Pressing it lists uniform payments alone
+  (`?source=uniform`, `listUniformPayments` in `src/db/admin.ts`): the buyer, Stripe's reference, and
+  what they filled in on the payment link. A card opens in place from the row, asking for nothing more,
+  with a link to the payment in Stripe. Uniform payments are never in the plain list, any other tile,
+  the Overview, Gift Aid or small donations claims, or the supporters lists.
+- **Data** (`migrations/1791200000410_uniform-payments.js`, additive): `uniform_payments` (session,
+  payment, link, amount, refunds, buyer, `details` as `[{label, value}]`, `paid_at`,
+  `moved_from_donation_id`) and `donations_moved_to_uniform` (a donation moved out, its whole row kept).
+- **Earlier uniform payments.** Those that came in before this were recorded as donations.
+  `node dist/scripts/move-uniform-payments.js` (dry run; `--apply` to do it), run through
+  `scripts/run-oneoff.sh`, asks Stripe for every uniform payment link and every paid checkout each made,
+  and moves each such donation to `uniform_payments` (`moveUniformSale` in `src/db/uniform-payments.ts`).
+  A donation in a Gift Aid claim or linked to anything else is left for staff, named by its checkout
+  session. It prints counts and money only, and is safe to run again.
+- **Tests.** Unit: `uniform-model.test.ts`, `stripe-webhook-uniform.test.ts`,
+  `admin-donations-uniform.test.ts`, `uniform-move.test.ts`, and the Uniform cases in
+  `gift-sources.test.ts`, `gift-sources-db.test.ts`, `admin-donation-sources-route.test.ts`,
+  `admin-gift-log.test.ts` and `admin-app.test.ts`. Behaviour: `features/uniform-payments.feature`
+  (counted under Uniform and never as a donation, once when sent twice, and a refund coming off).
 
 ## Monthly or one off, on the donations list (TASK-446)
 

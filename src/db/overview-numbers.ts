@@ -88,6 +88,10 @@ const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x
  * Monthly gifts are a third read: every paid monthly payment, wherever it was set up, counted as above.
  * It is not a place, so each payment is in its place's figures as well (TASK-596).
  *
+ * Uniform payments are a fifth read, of uniform_payments (TASK-604): school uniforms bought through the
+ * uniform payment link, which are purchases, never donations, so they are in no other figure. This
+ * month by when each was paid, less refunds, each one payment.
+ *
  * The Elf Detective School is a second read, of elf_orders (they are not donations): paid orders of
  * families a head elf has not removed, entry plus gift (the card fee top up is not added in), this
  * month by when each was paid, each order one payment. Head Elf HQ's Raised so far counts the same.
@@ -95,7 +99,7 @@ const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x
 export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
   const kept = "GREATEST(amount_pence - refunded_amount_pence, 0)";
   const paidAt = "COALESCE(o.paid_at, o.created_at)";
-  const [gifts, elf, monthly, others] = await Promise.all([
+  const [gifts, elf, monthly, others, uniform] = await Promise.all([
     pool.query<SourceTotalsRow>(
       `SELECT CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' WHEN source = $6 THEN 'invoices' ELSE 'donatePage' END AS bucket,
               COALESCE(SUM(${kept}) FILTER (WHERE ${IN_MONTH("created_at")}), 0) AS month_pence,
@@ -140,6 +144,16 @@ export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
         GROUP BY 1`,
       [month.from, month.until],
     ),
+    pool.query<SourceTotalsRow>(
+      `SELECT 'uniform' AS bucket,
+              COALESCE(SUM(${kept}) FILTER (WHERE ${IN_MONTH("paid_at")}), 0) AS month_pence,
+              COUNT(*) FILTER (WHERE ${IN_MONTH("paid_at")}) AS month_gifts,
+              COALESCE(SUM(${kept}), 0) AS all_pence,
+              COUNT(*) AS all_gifts
+         FROM uniform_payments
+        WHERE amount_pence > refunded_amount_pence`,
+      [month.from, month.until],
+    ),
   ]);
-  return sourceTotalsFrom([...gifts.rows, ...elf.rows, ...monthly.rows, ...others.rows]);
+  return sourceTotalsFrom([...gifts.rows, ...elf.rows, ...monthly.rows, ...others.rows, ...uniform.rows]);
 }

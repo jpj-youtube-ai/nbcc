@@ -48,6 +48,7 @@ const TOTALS = {
   fundraiser: { month: { pence: 5_000, gifts: 2 }, all: { pence: 60_000, gifts: 30 } },
   cardReader: { month: { pence: 30_000, gifts: 12 }, all: { pence: 1_774_420, gifts: 27 } },
   monthly: { month: { pence: 12_000, gifts: 8 }, all: { pence: 96_000, gifts: 64 } },
+  uniform: { month: { pence: 8_000, gifts: 2 }, all: { pence: 24_000, gifts: 6 } },
 };
 
 beforeEach(() => {
@@ -89,8 +90,9 @@ describe("what the totals answer", () => {
         { key: "fundraiser", name: "Fundraiser pages", month: "£50 from 2 gifts", all: "£600 from 30 gifts" },
         { key: "cardReader", name: "Card reader", month: "£300 from 12 gifts", all: "£17,744 from 27 gifts" },
         { key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" },
+        { key: "uniform", name: "Uniform", month: "£80 from 2 payments", all: "£240 from 6 payments" },
       ],
-      note: "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball. Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid. Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.",
+      note: "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball. Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid. Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too. Uniform is payments for school uniforms. They are not donations, so they are in no other figure.",
     });
   });
 

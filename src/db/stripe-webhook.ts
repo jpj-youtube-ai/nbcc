@@ -16,6 +16,7 @@ import { buildBallConfirmationEmail } from "../ball/confirmation-email";
 import { sendBallConfirmation } from "../clients/email";
 import { markBookingExpired, markBookingPaid } from "./ball";
 import { handleTicketEvent } from "../tickets/webhook";
+import { handleUniformEvent } from "../uniform/webhook";
 import { handleElfEvent } from "../elf/webhook";
 import { handleInvoiceEvent } from "../invoices/webhook";
 import { ensureFulfilmentRecord, markFulfilmentInvited } from "./fulfilment";
@@ -668,6 +669,10 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<Dispat
   // first too (src/elf/webhook.ts). Only sessions tagged product "elf_school" are its.
   // Invoices for donations: an invoice paid by card is settled against its invoice (src/invoices/webhook.ts)
   // before anything else sees it, so it becomes exactly one donation, labelled with its invoice.
+  // Uniforms (TASK-604): a payment from the uniform payment link (product "uniform") is a purchase,
+  // never a gift, so it is taken first of all and kept in uniform_payments (src/uniform/webhook.ts).
+  const uniform = await handleUniformEvent(client, event);
+  if (uniform) return { action: uniform.action, email: null };
   const invoice = await handleInvoiceEvent(client, event);
   if (invoice) return { action: invoice.action, email: null, afterCommit: invoice.afterCommit };
   const elf = await handleElfEvent(client, event);

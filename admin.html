@@ -298,6 +298,10 @@
                   <div class="gl-tiles gl-tiles--monthly">
                     <label class="gl-tile gl-tile--wide" for="donationsMonthlyFilter"><input class="gl-tile__box" type="checkbox" id="donationsMonthlyFilter"><span class="gl-tile__name">Monthly gifts</span><span class="gl-tile__score" data-gl-score="monthly"></span></label>
                   </div>
+                  <!-- School uniforms bought through the uniform payment link (TASK-604): purchases, not donations, so in no other figure. -->
+                  <div class="gl-tiles gl-tiles--uniform">
+                    <label class="gl-tile gl-tile--wide" for="donationsUniformFilter"><input class="gl-tile__box" type="checkbox" id="donationsUniformFilter"><span class="gl-tile__name">Uniform</span><span class="gl-tile__score" data-gl-score="uniform"></span></label>
+                  </div>
                   <div class="gl-board__status" id="donationsSourcesStatus" aria-live="polite"></div>
                   <p class="gl-board__note" id="donationsSourcesNote"></p>
                 </section>

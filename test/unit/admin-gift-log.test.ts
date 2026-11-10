@@ -421,6 +421,89 @@ describe("the scoreboard", () => {
   });
 });
 
+describe("uniform payments (TASK-604)", () => {
+  const uniformRow = (over: Row = {}): Row => ({
+    ...gift(), kind: "uniform", id: 3, donor_id: null, donor_name: "Robin Testperson", donor_email: "robin.uniform@example.com",
+    amount_pence: 4000, source: "uniform", stripe_ref: "pi_test_uniform_1", given_on_label: "Uniform", paid_by_label: null,
+    uniform_details: [{ label: "Child's name", value: "Sam" }, { label: "Size", value: "Age 7 to 8" }], ...over,
+  });
+
+  it("has a Uniform tile of its own, below the gifts, its own tick box", () => {
+    const box = el("donationsUniformFilter") as HTMLInputElement;
+    expect(box.type).toBe("checkbox");
+    const tile = box.closest(".gl-tile") as HTMLElement;
+    expect(tile.querySelector(".gl-tile__name")?.textContent).toBe("Uniform");
+    expect(tile.querySelector("[data-gl-score]")?.getAttribute("data-gl-score")).toBe("uniform");
+    expect(tile.closest("#donationsSources")).toBeNull();
+    expect(tile.closest(".gl-tiles--uniform")).not.toBeNull();
+  });
+
+  it("counts its figures as payments", () => {
+    log.drawScores({
+      totals: { uniform: { month: { pence: 8000, gifts: 2 }, all: { pence: 24000, gifts: 6 } } },
+      lines: [{ key: "uniform", name: "Uniform", month: "£80 from 2 payments", all: "£240 from 6 payments" }],
+    });
+    const s = document.querySelector('[data-gl-score="uniform"]') as HTMLElement;
+    expect(s.querySelector(".gl-tile__sum")?.textContent).toBe("£80");
+    expect(s.querySelector(".gl-tile__count")?.textContent).toBe("2 payments this month");
+    expect(s.querySelector(".gl-tile__all")?.textContent).toBe("£240 from 6 payments in all");
+  });
+
+  it("draws each as a card: the buyer, Stripe's reference, Uniform, and what they filled in", () => {
+    log.drawLog(wrap(), [uniformRow()], { now: NOW });
+    const c = cards()[0];
+    expect(c.getAttribute("data-kind")).toBe("uniform");
+    expect(c.classList.contains("gl-gift--uniform")).toBe(true);
+    expect(c.querySelector(".gl-gift__amount")?.textContent).toBe("£40");
+    expect(c.querySelector(".gl-gift__name")?.textContent).toBe("Robin Testperson");
+    expect(c.querySelector(".gl-gift__ref")?.textContent).toBe("pi_test_uniform_1");
+    expect(c.querySelector(".gl-badge--place")?.textContent).toBe("Uniform");
+    expect(c.querySelector(".gl-badge--pay")).toBeNull();
+    expect(c.querySelector(".gl-note")?.textContent).toBe("Child's name: Sam, Size: Age 7 to 8");
+  });
+
+  it("opens in place with what it holds, asking for nothing more, and never offers a donor", async () => {
+    const ask = vi.fn();
+    log.drawLog(wrap(), [uniformRow({ refunded_amount_pence: 1500 })], { now: NOW, details: ask });
+    face(cards()[0]).click();
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+    const more = cards()[0].querySelector(".gl-more") as HTMLElement;
+    expect(Array.from(more.querySelectorAll(".gl-group__head")).map((h) => h.textContent)).toEqual(["The payment", "What they filled in", "Refunds", "The buyer"]);
+    expect(more.textContent).toContain("Amount£40");
+    expect(more.textContent).toContain("Stripe referencepi_test_uniform_1");
+    expect(more.textContent).toContain("Gift AidNever: a uniform is bought, not given");
+    expect(more.textContent).toContain("Child's nameSam");
+    expect(more.textContent).toContain("Refunded£15 of £40");
+    expect(more.textContent).toContain("Emailrobin.uniform@example.com");
+    expect(more.querySelector("[data-donor]")).toBeNull();
+    const stripe = more.querySelector("a.gl-btn") as HTMLAnchorElement;
+    expect(stripe.textContent).toBe("See it in Stripe");
+    expect(stripe.getAttribute("href")).toBe("https://dashboard.stripe.com/payments/pi_test_uniform_1");
+  });
+
+  it("copes with a payment that has no details and no Stripe payment yet", async () => {
+    log.drawLog(wrap(), [uniformRow({ uniform_details: null, stripe_ref: "cs_test_1" })], { now: NOW });
+    expect(cards()[0].querySelector(".gl-note")).toBeNull();
+    face(cards()[0]).click();
+    await settle();
+    const more = cards()[0].querySelector(".gl-more") as HTMLElement;
+    expect(Array.from(more.querySelectorAll(".gl-group__head")).map((h) => h.textContent)).toEqual(["The payment", "The buyer"]);
+    expect(more.querySelector("a.gl-btn")).toBeNull();
+  });
+
+  it("puts what the buyer typed on the page as text, never as markup", () => {
+    log.drawLog(wrap(), [uniformRow({ uniform_details: [{ label: "<b>x</b>", value: "<img src=x>" }] })], { now: NOW });
+    expect(wrap().querySelector("img, b")).toBeNull();
+  });
+
+  it("says Uniform payments only on its chip", () => {
+    (el("donationsUniformFilter") as HTMLInputElement).checked = true;
+    log.drawChips(el("donationsChips"));
+    expect(el("donationsChips").querySelector(".gl-chip__words")?.textContent).toBe("Uniform payments only");
+  });
+});
+
 describe("the filter chips", () => {
   const box = () => el("donationsChips");
   const chips = () => Array.from(box().querySelectorAll(".gl-chip")).map((c) => c.querySelector(".gl-chip__words")?.textContent);

@@ -2891,6 +2891,25 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect((el("donationsElfFilter") as HTMLInputElement).checked).toBe(false);
     });
 
+    // School uniforms (TASK-604): a tile of their own, listed only under it, counted as payments.
+    it("ticking Uniform only asks for source=uniform, unticks the places, and counts payments", async () => {
+      loginToken = tokenFor("admin");
+      invoiceDonations = [{ ...ELF_ROW, kind: "uniform", id: 3, source: "uniform", elf_reference: null, elf_family_id: null, given_on_label: "Uniform" }];
+      await openDonations();
+      tick("donationsCardReaderFilter");
+      await settle();
+      const before = fetched().length;
+      tick("donationsUniformFilter");
+      await settle();
+      expect((el("donationsCardReaderFilter") as HTMLInputElement).checked).toBe(false);
+      const asked = fetched().slice(before).filter((u) => u.includes("/api/admin/donations?"));
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.every((u) => u.includes("&source=uniform")), asked.join(" ")).toBe(true);
+      expect(el("donationsCount").textContent).toMatch(/^\d+ payments? listed$/);
+      tick("donationsRedBagFilter");
+      expect((el("donationsUniformFilter") as HTMLInputElement).checked).toBe(false);
+    });
+
     // A card in the gift log now: its reference, place badge and entry and gift on its face, and
     // Open in Head Elf HQ in its click down.
     it("draws an elf payment with its reference, pill, entry and gift, no donor link, and Open in Head Elf HQ on that family", async () => {

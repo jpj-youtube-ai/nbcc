@@ -124,6 +124,7 @@ export async function postAdminElfPhotoTakeDown(req: Request, res: Response): Pr
   if (!parsed.success) return res.status(400).json(SAY_WHY);
   try {
     const done = await takeDownPhoto(id, actorOf(claims), parsed.data.reason ?? null);
+    if (done === null) return res.status(404).json(NO_PHOTO);
     if (!done) return res.status(409).json({ error: "That photo is not up, so there is nothing to take down.", step: await photoStep(id) });
     return res.status(200).json({ ok: true });
   } catch (err) {

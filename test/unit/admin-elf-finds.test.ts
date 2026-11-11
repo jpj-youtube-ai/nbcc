@@ -197,6 +197,8 @@ describe("approving, declining and taking down", () => {
     expect(photos.takeDownPhoto).toHaveBeenLastCalledWith(41, ACTOR, "the family asked by phone");
     photos.takeDownPhoto.mockResolvedValue(false);
     expect((await run(routes.postAdminElfPhotoTakeDown, ask("viewer", { permissions: EDIT }))).statusCode).toBe(409);
+    photos.takeDownPhoto.mockResolvedValue(null);
+    expect((await run(routes.postAdminElfPhotoTakeDown, ask("viewer", { permissions: EDIT }))).statusCode).toBe(404);
     const long = await run(routes.postAdminElfPhotoTakeDown, ask("viewer", { permissions: EDIT, body: { reason: "x".repeat(201) } }));
     expect(long.statusCode).toBe(400);
   });

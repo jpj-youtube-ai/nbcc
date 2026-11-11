@@ -5,6 +5,7 @@ import { loadDoorRun, loadPractice, type DoorRun } from "./elf-game";
 import { headElfName } from "../elf/alerts";
 import { isDoor, type Door } from "../elf/calendar";
 import { openedAt, shownAt } from "../elf/doors";
+import { approvedFamiliesSql } from "./elf-photo-sql";
 
 // NBCC Elf Detective School wave 2: the photo check and the photo log in Head Elf HQ's Finds tab. The
 // tables are Plan 2a's (elf_photos, elf_photo_files in migrations/1791200000440_elf-game.js). A photo
@@ -53,11 +54,7 @@ export async function photosWaiting(now: Date): Promise<PhotoCheck[]> {
   const res = await pool.query<WaitingSql>(
     `SELECT p.id, p.token, p.year, p.door, p.sent_at, f.id AS family_id, f.grown_up_name,
             (SELECT count(*)::int FROM elf_detectives d WHERE d.family_id = f.id AND d.active) AS detectives,
-            NOT EXISTS (
-              SELECT 1 FROM elf_photos o JOIN elf_families fo ON fo.id = o.family_id
-               WHERE o.year = p.year AND o.door = p.door AND o.status = 'approved' AND o.deleted_at IS NULL
-                 AND fo.removed_at IS NULL AND o.family_id <> p.family_id
-            ) AS first_family
+            ${approvedFamiliesSql("p", true)} = 0 AS first_family
        FROM elf_photos p JOIN elf_families f ON f.id = p.family_id
       WHERE p.status = 'waiting' AND f.removed_at IS NULL
       ORDER BY p.sent_at, p.id`,
@@ -158,11 +155,12 @@ export async function decidePhoto(
 }
 
 /** A head elf takes a photo down (from approved or waiting): gone from the page at once and its bytes
- *  deleted. The reason, if given, is kept for head elves in the log; the audit note holds none. */
-export async function takeDownPhoto(id: number, actor: string, reason: string | null): Promise<boolean> {
+ *  deleted. The reason, if given, is kept for head elves in the log; the audit note holds none. True when it
+ *  was taken down, false when it was not up, null when there is no such photo. */
+export async function takeDownPhoto(id: number, actor: string, reason: string | null): Promise<boolean | null> {
   return inTransaction(async (client) => {
     const who = await client.query<{ family_id: number }>("SELECT family_id FROM elf_photos WHERE id = $1", [id]);
-    if (who.rows.length === 0) return false;
+    if (who.rows.length === 0) return null;
     await client.query("SELECT id FROM elf_families WHERE id = $1 FOR UPDATE", [who.rows[0].family_id]);
     const up = await client.query<{ id: number }>(
       // The reason is kept in decline_reason: a photo that was taken down was not declined, so the
@@ -186,6 +184,8 @@ export interface PhotoLogRow {
   practice: boolean;
   family: { grownUpName: string };
   status: string;
+  /** An approved photo that no one sees yet because no second family's photo is approved on its door. */
+  held: boolean;
   steps: { at: Date; words: string }[];
 }
 
@@ -202,10 +202,12 @@ interface LogSql {
   taken_down_at: Date | null;
   taken_down_by: string | null;
   deleted_at: Date | null;
+  held?: boolean;
 }
 
 const LOG_SELECT = `SELECT p.id, p.year, p.door, f.grown_up_name, p.status, p.sent_at, p.decided_at, p.decided_by,
-            p.decline_reason, p.taken_down_at, p.taken_down_by, p.deleted_at
+            p.decline_reason, p.taken_down_at, p.taken_down_by, p.deleted_at,
+            (p.status = 'approved' AND ${approvedFamiliesSql("p")} < 2) AS held
        FROM elf_photos p JOIN elf_families f ON f.id = p.family_id`;
 
 /** Who an actor string ("admin:<email>") is: the head elf's name, or the email when there is no row. */
@@ -232,7 +234,11 @@ async function namesOf(rows: LogSql[]): Promise<(actor: string | null) => string
 
 function stepsOf(r: LogSql, name: (actor: string | null) => string): { at: Date; words: string }[] {
   const steps = [{ at: r.sent_at, words: "Sent" }];
-  if (r.status === "declined" && r.decided_at) {
+  // The decision is read from the columns, never from the status: from 31 January every expired row reads
+  // 'deleted', and the log keeps its lines. A decline has decided_at and a reason and no taken_down_at; an
+  // approval that was later taken down has taken_down_at, and that take down's reason shares decline_reason.
+  const declined = !!r.decided_at && (r.status === "declined" || (!!r.decline_reason && !r.taken_down_at));
+  if (declined && r.decided_at) {
     steps.push({ at: r.decided_at, words: `Declined by ${name(r.decided_by)}${r.decline_reason ? `: ${r.decline_reason}` : ""}` });
   } else if (r.decided_at) {
     steps.push({ at: r.decided_at, words: `Approved by ${name(r.decided_by)}` });
@@ -255,6 +261,7 @@ export async function photoLog(limit: number): Promise<PhotoLogRow[]> {
     practice: r.door === 0,
     family: { grownUpName: r.grown_up_name },
     status: r.status,
+    held: r.held === true,
     steps: stepsOf(r, name),
   }));
 }
@@ -267,9 +274,12 @@ export async function photoStep(id: number): Promise<string | null> {
   const res = await pool.query<LogSql>(`${LOG_SELECT} WHERE p.id = $1`, [id]);
   const r = res.rows[0];
   if (!r) return null;
+  // A photo the family replaced while it waited has no time of its own: say so in words.
+  if (r.status === "replaced") return "Replaced by a newer photo from the family";
   const name = await namesOf([r]);
   const last = stepsOf(r, name).at(-1)!;
-  return `${last.words.replace(/: [\s\S]*$/, "")} at ${clock.format(last.at).replace(/\s/g, "").toLowerCase()}`;
+  const time = clock.format(last.at).replace(/\s/g, "").toLowerCase().replace(/:00(?=[ap]m)/, "");
+  return `${last.words.replace(/: [\s\S]*$/, "")} at ${time}`;
 }
 
 // ---- the end of the season ----------------------------------------------------------------------------
@@ -297,11 +307,13 @@ export async function deleteExpiredPhotoFiles(now: Date): Promise<number> {
     );
     const ids = found.rows.filter((r) => Date.UTC(seasonOf(r.year, r.sent_at) + 1, 0, 31) <= now.getTime()).map((r) => r.id);
     if (ids.length === 0) return 0;
-    await client.query("DELETE FROM elf_photo_files WHERE photo_id = ANY($1::int[])", [ids]);
-    const up = await client.query(
-      "UPDATE elf_photos SET status = 'deleted', deleted_at = $2 WHERE id = ANY($1::int[]) AND status <> 'deleted'",
+    // The photo rows first and then their bytes, the order every other photo writer takes.
+    const up = await client.query<{ id: number }>(
+      "UPDATE elf_photos SET status = 'deleted', deleted_at = $2 WHERE id = ANY($1::int[]) AND status <> 'deleted' RETURNING id",
       [ids, now],
     );
-    return up.rowCount ?? 0;
+    if (up.rows.length === 0) return 0;
+    await client.query("DELETE FROM elf_photo_files WHERE photo_id = ANY($1::int[])", [up.rows.map((r) => r.id)]);
+    return up.rows.length;
   });
 }

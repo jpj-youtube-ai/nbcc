@@ -862,6 +862,25 @@ describe("photos", () => {
     expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.photo.taken_down");
   });
 
+  it("takes the family row first, as every photo writer does, so it cannot deadlock with an approval", async () => {
+    clientQuery.mockImplementation(async (sql: string) => {
+      if (/UPDATE elf_photos/.test(String(sql))) return { rows: [{ id: 42 }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    await takeDownOwnPhoto(2026, 7, 3, FIVE_31);
+    const s = sqls();
+    const lock = s.findIndex((q) => /FROM elf_families WHERE id = \$1 FOR UPDATE/.test(q));
+    expect(lock).toBeGreaterThan(s.indexOf("BEGIN"));
+    expect(lock).toBeLessThan(s.findIndex((q) => /UPDATE elf_photos/.test(q)));
+    expect(call(/FROM elf_families WHERE id = \$1 FOR UPDATE/)![1]).toEqual([3]);
+  });
+
+  it("offers the approved photo that is up before a newer one that is waiting or declined", async () => {
+    query.mockResolvedValue({ rows: [{ token: "aaaaaaaaaaaa", status: "approved", shown: true }] });
+    await familyPhoto(2026, 7, 3, true);
+    expect(String(query.mock.calls[0][0])).toMatch(/ORDER BY \(p\.status = 'approved'\) DESC, p\.sent_at DESC, p\.id DESC/);
+  });
+
   it("answers false and deletes nothing when the family has no photo to take down", async () => {
     clientQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     expect(await takeDownOwnPhoto(2026, 7, 3, FIVE_31)).toBe(false);

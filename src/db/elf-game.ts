@@ -1,4 +1,5 @@
 import { pool } from "./pool";
+import { approvedFamiliesSql } from "./elf-photo-sql";
 import { insertAudit, writeWithAudit } from "./donations";
 import { ensureElfDoors, findElfDoorByPosterCode, getElfDoor, listElfDoors } from "./elf-doors";
 import { getPractice, markPracticeFound, clearPractice, inTransaction } from "./elf-practice";
@@ -473,10 +474,7 @@ const SHOWN_PHOTO_SQL = `p.status = 'approved' AND p.deleted_at IS NULL AND f.re
     SELECT 1 FROM elf_photos n
      WHERE n.year = p.year AND n.door = p.door AND n.family_id = p.family_id
        AND n.status = 'approved' AND n.deleted_at IS NULL AND n.id > p.id)
-  AND (
-    SELECT count(DISTINCT a.family_id) FROM elf_photos a JOIN elf_families fa ON fa.id = a.family_id
-     WHERE a.year = p.year AND a.door = p.door AND a.status = 'approved' AND a.deleted_at IS NULL
-       AND fa.removed_at IS NULL) >= 2`;
+  AND ${approvedFamiliesSql("p")} >= 2`;
 
 /** A door's scrapbook: the elves that count by `now` and the approved photos, in the scrapbook's order. */
 export async function doorScrapbook(year: number, door: number, now: Date): Promise<Scrapbook> {
@@ -550,7 +548,9 @@ export async function sendElfPhoto(o: {
   });
 }
 
-/** The family's current photo for a door (not replaced, taken down or deleted). An approved photo reads
+/** The family's current photo for a door (not replaced, taken down or deleted): the approved photo that is
+ *  up when there is one (so a newer photo that is waiting or declined never hides the one still up, and
+ *  the family can always take that down), otherwise the newest. An approved photo reads
  *  as waiting while the place is still hidden, and while no second family's photo is approved on the
  *  door (it is not shown to anyone until then). A decline's reason is never given to the family. */
 export async function familyPhoto(
@@ -561,12 +561,10 @@ export async function familyPhoto(
 ): Promise<{ token: string; status: "waiting" | "approved" | "declined" } | null> {
   const r = await pool.query<{ token: string; status: "waiting" | "approved" | "declined"; shown: boolean }>(
     `SELECT p.token, p.status,
-            (SELECT count(DISTINCT a.family_id) FROM elf_photos a JOIN elf_families fa ON fa.id = a.family_id
-              WHERE a.year = p.year AND a.door = p.door AND a.status = 'approved' AND a.deleted_at IS NULL
-                AND fa.removed_at IS NULL) >= 2 AS shown
+            ${approvedFamiliesSql("p")} >= 2 AS shown
        FROM elf_photos p
       WHERE p.year = $1 AND p.door = $2 AND p.family_id = $3 AND p.status NOT IN ('replaced', 'taken-down', 'deleted')
-      ORDER BY p.sent_at DESC, p.id DESC LIMIT 1`,
+      ORDER BY (p.status = 'approved') DESC, p.sent_at DESC, p.id DESC LIMIT 1`,
     [year, door, familyId],
   );
   const row = r.rows[0];
@@ -577,6 +575,8 @@ export async function familyPhoto(
 /** A family takes its own photo down: gone from the page at once, and its bytes deleted. */
 export async function takeDownOwnPhoto(year: number, door: number, familyId: number, at: Date): Promise<boolean> {
   return inTransaction(async (client) => {
+    // The family row first, as every photo writer does, so this cannot deadlock with a head elf's approval.
+    await client.query("SELECT id FROM elf_families WHERE id = $1 FOR UPDATE", [familyId]);
     const r = await client.query<{ id: number }>(
       `UPDATE elf_photos SET status = 'taken-down', taken_down_at = $4, taken_down_by = 'family'
         WHERE year = $1 AND door = $2 AND family_id = $3 AND status IN ('waiting', 'approved') RETURNING id`,

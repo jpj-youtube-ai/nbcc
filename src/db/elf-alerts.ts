@@ -78,6 +78,7 @@ export async function recordAlert(o: {
 
 /** When the oldest photo still waiting for a head elf was sent, or null when none is waiting. */
 export async function oldestWaitingPhotoAt(): Promise<Date | null> {
-  const res = await pool.query<{ at: Date | null }>("SELECT min(sent_at) AS at FROM elf_photos WHERE status = 'waiting'");
+  const res = await pool.query<{ at: Date | null }>(`SELECT min(p.sent_at) AS at FROM elf_photos p JOIN elf_families f ON f.id = p.family_id
+      WHERE p.status = 'waiting' AND f.removed_at IS NULL`);
   return res.rows[0]?.at ?? null;
 }

@@ -2638,6 +2638,11 @@
           return loadFinds();
         })
         .catch(function (e) {
+          if (e.status === 404) {
+            // Someone has taken it away since: read the queue again rather than offer buttons that cannot work.
+            finds.notice = "That photo is no longer there.";
+            return loadFinds();
+          }
           if (e.status === 409 && e.step) {
             decideBox.textContent = "";
             decideBox.appendChild(el("p", { class: "hq-words hq-stepnote", role: "status", text: e.step }));
@@ -2709,7 +2714,7 @@
           ]),
           el("ul", { class: "hq-meta" }, [
             el("li", { text: "Sent at " + timeShort(p.sentAt) }),
-            el("li", { text: "From the " + p.family.grownUpName + " family, " + n + " " + plural(n, "detective", "detectives") + ". Only head elves see who sent it." }),
+            el("li", { text: "From " + p.family.grownUpName + "'s family, " + n + " " + plural(n, "detective", "detectives") + ". Only head elves see who sent it." }),
           ]),
           shown,
           first,
@@ -2822,8 +2827,10 @@
       var list = el("ul", { class: "hq-rows" });
       (d.log || []).forEach(function (r) {
         var row = el("li", { class: "hq-row" });
-        row.appendChild(el("p", { class: "hq-what" }, [el("b", { text: doorName(r) }), " · the " + r.family.grownUpName + " family"]));
-        row.appendChild(el("span", { class: "hq-chip " + (CHIP_CLASS[r.status] || "hq-chip--plain"), text: CHIP_WORDS[r.status] || r.status }));
+        row.appendChild(el("p", { class: "hq-what" }, [el("b", { text: doorName(r) }), " (" + r.family.grownUpName + "'s family)"]));
+        // An approved photo that no one sees yet (no second family's photo is approved on its door) says so.
+        var held = r.status === "approved" && r.held === true;
+        row.appendChild(el("span", { class: "hq-chip " + (held ? "hq-chip--long" : CHIP_CLASS[r.status] || "hq-chip--plain"), text: held ? "Up when a second family's photo is approved" : CHIP_WORDS[r.status] || r.status }));
         row.appendChild(
           el(
             "ul",

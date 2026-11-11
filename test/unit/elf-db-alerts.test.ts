@@ -88,7 +88,10 @@ describe("the oldest waiting photo", () => {
   it("is the earliest sent time among waiting photos, or null", async () => {
     query.mockResolvedValueOnce({ rows: [{ at: new Date("2026-12-07T18:00:00Z") }] });
     expect(await oldestWaitingPhotoAt()).toEqual(new Date("2026-12-07T18:00:00Z"));
-    expect(String(query.mock.calls[0][0])).toMatch(/min\(sent_at\)[\s\S]*status = 'waiting'/i);
+    expect(String(query.mock.calls[0][0])).toMatch(/min\(p\.sent_at\)[\s\S]*status = 'waiting'/i);
+    // A removed family's waiting photo is never counted, or it would hold the alerts off for the season.
+    expect(String(query.mock.calls[0][0])).toContain("JOIN elf_families");
+    expect(String(query.mock.calls[0][0])).toContain("removed_at IS NULL");
     query.mockResolvedValueOnce({ rows: [{ at: null }] });
     expect(await oldestWaitingPhotoAt()).toBeNull();
   });

@@ -129,7 +129,7 @@ describe("the photo to check", () => {
     expect(t).toContain("Door 7 · Monday 7 December");
     expect(t).toContain("Pine Cone Café, Snowford");
     expect(t).toContain("Sent at 6:04pm");
-    expect(t).toContain("From the Alex Example family, 2 detectives. Only head elves see who sent it.");
+    expect(t).toContain("From Alex Example's family, 2 detectives. Only head elves see who sent it.");
     expect(t).toContain("Door 7's place is shown at 7pm, so this photo waits until then, even once it is approved.");
     expect(t).toContain("Before you approve");
     expect([...check.querySelectorAll(".hq-look li")].map((l) => l.textContent)).toEqual([
@@ -160,7 +160,7 @@ describe("the photo to check", () => {
 
   it("says one detective for a family of one", async () => {
     await openFinds({ "GET /api/admin/elf/photos": { ...PHOTOS, waiting: [SECOND] } });
-    expect(part().querySelector(".hq-check")!.textContent).toContain("From the Sam Example family, 1 detective. Only");
+    expect(part().querySelector(".hq-check")!.textContent).toContain("From Sam Example's family, 1 detective. Only");
   });
 
   it("calls the practice door the practice door, with a Practice chip", async () => {
@@ -271,6 +271,14 @@ describe("approving and declining", () => {
     expect(env.calls.filter((c) => c.method === "GET" && c.url === "/api/admin/elf/photos")).toHaveLength(2);
   });
 
+  it("reads the queue again, rather than re enabling the buttons, when the photo has gone (404)", async () => {
+    const env = await openFinds({ "POST /api/admin/elf/photos/41/approve": { error: "That photo is not there." } }, { "POST /api/admin/elf/photos/41/approve": 404 });
+    buttonIn(part().querySelector(".hq-check")!, "Approve")!.click();
+    await flush();
+    expect(env.calls.filter((c) => c.method === "GET" && c.url === "/api/admin/elf/photos")).toHaveLength(2);
+    expect(part().querySelector(".hq-queue")!.textContent).toContain("That photo is no longer there.");
+  });
+
   it("says in words when something else goes wrong, with is-error, and keeps the buttons", async () => {
     await openFinds({ "POST /api/admin/elf/photos/41/approve": { error: "Admin is temporarily unavailable" } }, { "POST /api/admin/elf/photos/41/approve": 500 });
     const check = part().querySelector<HTMLElement>(".hq-check")!;
@@ -297,11 +305,20 @@ describe("the photo log", () => {
     expect(log.querySelector("h2")!.textContent).toBe("The photo log");
     const rows = [...log.querySelectorAll<HTMLElement>(".hq-row")];
     expect(rows).toHaveLength(2);
-    expect(rows[0].querySelector(".hq-what")!.textContent).toBe("Door 6 · the Sam Example family");
+    expect(rows[0].querySelector(".hq-what")!.textContent).toBe("Door 6 (Sam Example's family)");
     expect(rows[0].querySelector(".hq-chip")!.textContent).toBe("Up");
     expect([...rows[0].querySelectorAll(".hq-steps li")].map((l) => l.textContent)).toEqual(["Mon 5:20pmSent", "Mon 5:31pmApproved by Alex Example"]);
     expect(rows[1].querySelector(".hq-chip")!.textContent).toBe("Declined");
     expect(rows[1].textContent).toContain("Declined by Alex Example: someone else in it");
+  });
+
+  it("says in plain words when an approved photo is still hidden for want of a second family's photo", async () => {
+    const held = { ...LOG[0], held: true };
+    await openFinds({ "GET /api/admin/elf/photos": { ...PHOTOS, log: [held, LOG[1]] } });
+    const rows = [...part().querySelectorAll<HTMLElement>(".hq-log .hq-row")];
+    expect(rows[0].querySelector(".hq-chip")!.textContent).toBe("Up when a second family's photo is approved");
+    expect(rows[0].querySelector(".hq-chip")!.className).toContain("hq-chip--long");
+    expect(buttonIn(rows[0], "Take it down")).toBeTruthy();
   });
 
   it("ends with the day every photo is deleted", async () => {

@@ -94,6 +94,19 @@ describe("Head Elf HQ's stylesheet", () => {
     expect(all.some((r) => r.at.startsWith("@container") && r.at.includes("min-width: 1040px") && r.selector === ".hq-finds")).toBe(true);
   });
 
+  it("lets a pressed thumbnail move, though its tilt rules are more specific", () => {
+    const tilt = all.find((r) => r.selector === ".hq-thumbs li:nth-child(odd) .hq-thumb");
+    const press = all.find((r) => r.selector.includes(".hq-thumbs li:nth-child(odd) .hq-thumb:active"));
+    expect(tilt && press).toBeTruthy();
+    expect(all.indexOf(press!)).toBeGreaterThan(all.indexOf(tilt!));
+  });
+
+  it("puts the check's picture beside its details once there is room, from a container query", () => {
+    const wide = all.find((r) => r.selector === ".hq-check" && r.at.startsWith("@container"));
+    expect(wide).toBeTruthy();
+    expect(wide!.body).toContain("grid-template-columns: minmax(180px, 40%)");
+  });
+
   it("draws in NBCC's own colours, with a deep maroon ink rather than black", () => {
     expect(CSS).toContain("--hq-ink: #3A0B0B");
     expect(CSS).toContain("--hq-maroon: #800000");

@@ -163,6 +163,12 @@ describe("takeDownPhoto", () => {
     expect(find(/INSERT INTO audit_log/)).toBeUndefined();
   });
 
+  it("answers null for a photo that is not there", async () => {
+    tx(null);
+    expect(await takeDownPhoto(41, ACTOR, null)).toBeNull();
+    expect(find(/UPDATE elf_photos/)).toBeUndefined();
+  });
+
   it("takes the family row before the photo row", async () => {
     tx("approved");
     await takeDownPhoto(41, ACTOR, null);
@@ -297,6 +303,7 @@ describe("photoLog", () => {
         practice: false,
         family: { grownUpName: "Sam Example" },
         status: "declined",
+        held: false,
         steps: [
           { at: at("2026-12-07T17:20:00Z"), words: "Sent" },
           { at: at("2026-12-07T17:31:00Z"), words: "Declined by Alex Example: someone else in it" },
@@ -337,6 +344,35 @@ describe("photoLog", () => {
     expect(log[3].steps.map((s) => s.words)).toEqual(["Sent"]);
   });
 
+  it("keeps a declined photo's lines after the January clear out, when its status reads deleted", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM users/.test(String(sql))) return { rows: [{ full_name: "Alex Example", email: "alex@example.org" }] };
+      return { rows: [{ ...base, status: "deleted", deleted_at: at("2027-01-31T00:05:00Z") }] };
+    });
+    const log = await photoLog(200);
+    expect(log[0].steps.map((s) => s.words)).toEqual(["Sent", "Declined by Alex Example: someone else in it", "Deleted"]);
+  });
+
+  it("keeps an approved then taken down photo as approved, though a take down's reason shares decline_reason", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM users/.test(String(sql))) return { rows: [{ full_name: "Alex Example", email: "alex@example.org" }] };
+      return { rows: [{ ...base, status: "deleted", decline_reason: "the family asked by phone", taken_down_at: at("2026-12-08T09:00:00Z"), taken_down_by: ACTOR, deleted_at: at("2027-01-31T00:05:00Z") }] };
+    });
+    const log = await photoLog(200);
+    expect(log[0].steps.map((s) => s.words)).toEqual(["Sent", "Approved by Alex Example", "Taken down by Alex Example: the family asked by phone", "Deleted"]);
+  });
+
+  it("says an approved photo is held while no second family's photo is approved on its door", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM users/.test(String(sql))) return { rows: [] };
+      return { rows: [{ ...base, status: "approved", decline_reason: null, held: true }, { ...base, id: 2, status: "approved", decline_reason: null, held: false }] };
+    });
+    const log = await photoLog(200);
+    expect(log.map((r) => r.held)).toEqual([true, false]);
+    const sql = String(query.mock.calls.find((c) => /FROM elf_photos/.test(String(c[0])))![0]);
+    expect(sql).toContain("count(DISTINCT");
+  });
+
   it("marks the practice door and never needs a users row when nobody decided", async () => {
     query.mockResolvedValue({ rows: [{ ...base, year: 0, door: 0, status: "waiting", decided_at: null, decided_by: null, decline_reason: null }] });
     const log = await photoLog(200);
@@ -354,6 +390,27 @@ describe("photoLog", () => {
     query.mockResolvedValue({ rows: [] });
     expect(await photoStep(99)).toBeNull();
   });
+
+  it("says in words that a photo the family replaced was replaced, and writes a time on the hour as 7pm", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM users/.test(String(sql))) return { rows: [{ full_name: "Alex Example", email: "alex@example.org" }] };
+      return { rows: [{ ...base, status: "replaced", decided_at: null, decided_by: null, decline_reason: null }] };
+    });
+    expect(await photoStep(41)).toBe("Replaced by a newer photo from the family");
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM users/.test(String(sql))) return { rows: [{ full_name: "Alex Example", email: "alex@example.org" }] };
+      return { rows: [{ ...base, status: "approved", decline_reason: null, decided_at: at("2026-12-07T19:00:00Z") }] };
+    });
+    expect(await photoStep(41)).toBe("Approved by Alex Example at 7pm");
+  });
+
+  it("counts the other families already up on a door from the same shared SQL as the family side", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await photosWaiting(NOW);
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("count(DISTINCT a.family_id)");
+    expect(sql).toContain("a.family_id <> p.family_id");
+  });
 });
 
 describe("deleteExpiredPhotoFiles", () => {
@@ -361,7 +418,7 @@ describe("deleteExpiredPhotoFiles", () => {
     clientQuery.mockImplementation(async (sql: string) => {
       const s = String(sql);
       if (/SELECT id, year, sent_at FROM elf_photos/.test(s)) return { rows, rowCount: rows.length };
-      if (/UPDATE elf_photos/.test(s)) return { rows: [], rowCount: (clientQuery.mock.calls.at(-1)?.[1] as unknown[][])[0].length };
+      if (/UPDATE elf_photos/.test(s)) return { rows: (clientQuery.mock.calls.at(-1)?.[1] as number[][])[0].map((id) => ({ id })), rowCount: 0 };
       return { rows: [], rowCount: 0 };
     });
   const ROWS = [
@@ -376,6 +433,10 @@ describe("deleteExpiredPhotoFiles", () => {
     expect(n).toBe(2);
     const del = find(/DELETE FROM elf_photo_files/)!;
     expect(del[1]).toEqual([[1, 2]]);
+    // The photo rows first and then their bytes, as every other photo writer does.
+    const s = sqls();
+    expect(s.findIndex((q) => /UPDATE elf_photos/.test(q))).toBeLessThan(s.findIndex((q) => /DELETE FROM elf_photo_files/.test(q)));
+    expect(find(/UPDATE elf_photos/)![0]).toContain("RETURNING id");
     const up = find(/UPDATE elf_photos/)!;
     expect(up[0]).toContain("status = 'deleted'");
     expect(up[0]).toContain("deleted_at");

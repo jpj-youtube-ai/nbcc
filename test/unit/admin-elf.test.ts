@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
 // numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
   db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), setElfPreview: vi.fn() },
   dbAdmin: {
@@ -22,6 +22,8 @@ const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice } = vi.hois
   signIn: { sendSignInCodeTo: vi.fn() },
   dbDoors: { ensureElfDoors: vi.fn(), listElfDoors: vi.fn() },
   dbPractice: { startPractice: vi.fn(), getPractice: vi.fn(), clearPractice: vi.fn() },
+  dbGame: { onDoorsSwitchedOn: vi.fn(), familyWordTries: vi.fn(), clearWordTries: vi.fn() },
+  pictureOf: vi.fn(),
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf", () => db);
@@ -29,6 +31,9 @@ vi.mock("../../src/db/elf-admin", () => dbAdmin);
 vi.mock("../../src/elf/sign-in-code", () => signIn);
 vi.mock("../../src/db/elf-doors", () => dbDoors);
 vi.mock("../../src/db/elf-practice", () => dbPractice);
+vi.mock("../../src/db/elf-game", () => dbGame);
+// No door has a picture on disk in a test; one test gives door 1 its picture.
+vi.mock("../../src/elf/door-setup", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../src/elf/door-setup")>()), doorPicture: pictureOf }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
   config: {
@@ -54,6 +59,7 @@ import {
   postAdminElfFamilyRestore,
   postAdminElfPractice,
   postAdminElfSignInCode,
+  postAdminElfWordTriesClear,
 } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
@@ -97,7 +103,10 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice)]) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame)]) f.mockReset();
+  pictureOf.mockReset();
+  pictureOf.mockReturnValue(null);
+  dbGame.familyWordTries.mockResolvedValue([]);
   db.getElfSettings.mockResolvedValue(ON);
   dbDoors.ensureElfDoors.mockResolvedValue(undefined);
   dbDoors.listElfDoors.mockResolvedValue([]);
@@ -370,6 +379,7 @@ describe("the families in the admin", () => {
         detectives: [{ id: 7, firstName: "Ruby", surname: "Tinselfoot", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/detective-s1.webp" }],
         payments: [{ reference: "EDS-K4F9Q2", status: "paid", paidAt: PAID_AT.toISOString(), entryPence: 1000, giftPence: 500, giftAid: true }],
       },
+      wordTries: [],
       // The festive surnames, for the rename form.
       surnames: [...FESTIVE_SURNAMES],
     });
@@ -653,5 +663,156 @@ describe("the practice door in the admin", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+// ---- December's doors, the doors soon, and wrong tries (wave 2, Task 10) ----
+
+describe("December's doors switch", () => {
+  const NOT_READY = "Door 1 is not ready yet, so December's doors cannot be switched on.";
+  const NUMBERS_NONE = { families: 0, detectives: 0, namesToCheck: 0, waitingPayments: 0, entryPence: 0, giftPence: 0, giftAidPence: 0 };
+  async function readyDoor1() {
+    const { emptyDoor } = await import("../../src/elf/door-setup");
+    pictureOf.mockImplementation((_year: number, door: number) => (door === 1 ? "door-1.webp" : null));
+    return {
+      ...emptyDoor(1, "abcdefghjkmn"),
+      placeName: "Pine Cone Cafe",
+      placeTown: "Exampleton",
+      placeAddress: "1 Example Street",
+      prize: "A cake",
+      elfName: "Pip",
+      tagWord: "SNOWBALL 472",
+      droppedOffAt: new Date("2026-11-20T10:00:00Z"),
+      clues: [1, 2, 3].map((n) => ({ n: n as 1 | 2 | 3, words: "Practice clue", hasPicture: false, pictureAlt: null })),
+    };
+  }
+
+  it("is refused, with the sentence, when door 1 is not ready, and nothing is saved", async () => {
+    const res = await run(patchAdminElfSettings, req("admin", { doorsOn: true }));
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: NOT_READY });
+    expect(db.setElfSettings).not.toHaveBeenCalled();
+    expect(dbGame.onDoorsSwitchedOn).not.toHaveBeenCalled();
+  });
+
+  it("switches on once door 1 is ready, makes the doors for the year, and saves through the settings", async () => {
+    dbDoors.listElfDoors.mockResolvedValue([await readyDoor1()]);
+    const res = await run(patchAdminElfSettings, req("admin", { doorsOn: true }));
+    expect(res.statusCode).toBe(200);
+    expect(db.setElfSettings).toHaveBeenCalledWith({ doorsOn: true }, "admin:staff@example.org");
+    expect(dbGame.onDoorsSwitchedOn).toHaveBeenCalledTimes(1);
+    expect(dbGame.onDoorsSwitchedOn).toHaveBeenCalledWith(2026);
+  });
+
+  it("switches off without asking about door 1, and without the switch on work", async () => {
+    const res = await run(patchAdminElfSettings, req("admin", { doorsOn: false }));
+    expect(res.statusCode).toBe(200);
+    expect(db.setElfSettings).toHaveBeenCalledWith({ doorsOn: false }, "admin:staff@example.org");
+    expect(dbGame.onDoorsSwitchedOn).not.toHaveBeenCalled();
+  });
+
+  it("is for admins only: an editor with Elf edit is forbidden", async () => {
+    const res = await run(patchAdminElfSettings, req("editor", { doorsOn: true }, { elf: "edit" }));
+    expect(res.statusCode).toBe(403);
+    expect(db.setElfSettings).not.toHaveBeenCalled();
+    expect(dbGame.onDoorsSwitchedOn).not.toHaveBeenCalled();
+  });
+
+  it("says in words when door 1 cannot be read", async () => {
+    dbDoors.listElfDoors.mockRejectedValue(new Error("no table"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await run(patchAdminElfSettings, req("admin", { doorsOn: true }));
+    spy.mockRestore();
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
+    expect(db.setElfSettings).not.toHaveBeenCalled();
+  });
+
+  it("is told to HQ, with the doors whose first clue is within three days and that are not ready", async () => {
+    db.getElfSettings.mockResolvedValue({ ...ON, doorsOn: true });
+    dbAdmin.elfHqNumbers.mockResolvedValue(NUMBERS_NONE);
+    dbAdmin.elfRecruits.mockResolvedValue([]);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-12-07T12:00:00Z")); // door 7's clue 1 is at 5:30pm today
+      const body = (await run(getAdminElfHq, req("admin"))).body as { doorsOn: boolean; doorsSoonNotReady: unknown[]; quests: { id: string; title: string; words: string; go: string; button: string }[] };
+      expect(body.doorsOn).toBe(true);
+      expect(body.doorsSoonNotReady).toEqual([
+        { door: 7, day: "Monday", toDo: 6 },
+        { door: 8, day: "Tuesday", toDo: 6 },
+        { door: 9, day: "Wednesday", toDo: 6 },
+      ]);
+      expect(body.quests[0]).toMatchObject({ id: "doors-soon", title: "Door 7 is on Monday and is not ready", words: "6 to do.", go: "doors", button: "Open Doors" });
+      expect(body.quests.map((q) => q.id)).toEqual(["doors-soon", "doors-soon", "doors-soon", "doors"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("has no doors soon when HQ is looked at long before December", async () => {
+    dbAdmin.elfHqNumbers.mockResolvedValue(NUMBERS_NONE);
+    dbAdmin.elfRecruits.mockResolvedValue([]);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-20T12:00:00Z"));
+      const body = (await run(getAdminElfHq, req("admin"))).body as { doorsOn: boolean; doorsSoonNotReady: unknown[] };
+      expect(body.doorsOn).toBe(false);
+      expect(body.doorsSoonNotReady).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("a family's wrong tries in the admin", () => {
+  const SHEET = {
+    id: 42,
+    grownUpName: "Sam Example",
+    email: "sam@example.org",
+    newsletter: false,
+    enrolledAt: new Date("2026-11-01T10:00:00Z"),
+    removedAt: null,
+    removedBy: null,
+    detectives: [],
+    payments: [],
+  };
+  const EDIT = { elf: "edit" };
+  beforeEach(() => {
+    dbAdmin.elfFamilySheet.mockResolvedValue(SHEET);
+  });
+
+  it("are on the family's sheet, door by door", async () => {
+    dbGame.familyWordTries.mockResolvedValue([{ door: 7, wrong: 6 }, { door: 9, wrong: 0 }]);
+    const res = await run(getAdminElfFamily, ask("viewer", { permissions: HEAD_ELF, params: { id: "42" } }));
+    expect(res.statusCode).toBe(200);
+    // A door whose tries were cleared (wrong back to 0) is not listed.
+    expect((res.body as { wordTries: unknown }).wordTries).toEqual([{ door: 7, wrong: 6 }]);
+    expect(dbGame.familyWordTries).toHaveBeenCalledWith(2026, 42);
+  });
+
+  it("are cleared by a head elf who may edit, as the person who did it", async () => {
+    dbGame.clearWordTries.mockResolvedValue(undefined);
+    const res = await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "42" }, body: { door: 7 } }));
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+    expect(dbGame.clearWordTries).toHaveBeenCalledWith(2026, 7, 42, "admin:staff@example.org");
+    expect((res.body as { family: { id: number } }).family.id).toBe(42);
+  });
+
+  it("are not cleared by a head elf who may only look", async () => {
+    const res = await run(postAdminElfWordTriesClear, ask("viewer", { permissions: HEAD_ELF, params: { id: "42" }, body: { door: 7 } }));
+    expect(res.statusCode).toBe(403);
+    expect(dbGame.clearWordTries).not.toHaveBeenCalled();
+  });
+
+  it("are not cleared for a door that is not one, a family that is not there, or an id that is not a number", async () => {
+    for (const door of [0, 25, 1.5, "7", null]) {
+      const res = await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "42" }, body: { door } }));
+      expect(res.statusCode, String(door)).toBe(400);
+    }
+    expect((await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "abc" }, body: { door: 7 } }))).statusCode).toBe(400);
+    dbAdmin.elfFamilySheet.mockResolvedValue(null);
+    expect((await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "99" }, body: { door: 7 } }))).statusCode).toBe(404);
+    expect(dbGame.clearWordTries).not.toHaveBeenCalled();
   });
 });

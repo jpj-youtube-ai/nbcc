@@ -8,13 +8,13 @@ const TILES = "/assets/img/elf/paper/tiles/costumes/";
 
 describe("Needs you", () => {
   it("lists only the quests that apply, in order", () => {
-    expect(questsFor({ ...NONE, namesToCheck: 6, waitingPayments: 2 }, true, []).map((q) => q.id)).toEqual(["names", "preview", "waiting"]);
-    expect(questsFor({ ...NONE, waitingPayments: 2 }, false, []).map((q) => q.id)).toEqual(["waiting"]);
-    expect(questsFor(NONE, false, [])).toEqual([]);
+    expect(questsFor({ ...NONE, namesToCheck: 6, waitingPayments: 2 }, true, [], []).map((q) => q.id)).toEqual(["names", "preview", "waiting"]);
+    expect(questsFor({ ...NONE, waitingPayments: 2 }, false, [], []).map((q) => q.id)).toEqual(["waiting"]);
+    expect(questsFor(NONE, false, [], [])).toEqual([]);
   });
 
   it("gives the names quest its count and the Families filter", () => {
-    expect(questsFor({ ...NONE, namesToCheck: 6 }, false, [])[0]).toEqual({
+    expect(questsFor({ ...NONE, namesToCheck: 6 }, false, [], [])[0]).toEqual({
       id: "names",
       count: 6,
       title: "First names to check",
@@ -26,7 +26,7 @@ describe("Needs you", () => {
   });
 
   it("sends the preview quest to Settings, and gives the waiting one nothing to press", () => {
-    const [preview, waiting] = questsFor({ ...NONE, waitingPayments: 3 }, true, []);
+    const [preview, waiting] = questsFor({ ...NONE, waitingPayments: 3 }, true, [], []);
     expect(preview).toMatchObject({ id: "preview", count: null, title: "Your preview link is open", go: "settings", button: "End it", filter: null });
     expect(preview.words).toBe("Anyone holding it can see Elf Detective School. End it when you have finished looking.");
     expect(waiting).toMatchObject({ id: "waiting", count: 3, title: "Payments not finished", go: null, button: null, filter: null });
@@ -76,13 +76,36 @@ describe("what Gift Aid could add", () => {
 
 describe("the doors quest", () => {
   it("comes straight after the names quest, naming the next door", () => {
-    const quests = questsFor({ ...NONE, namesToCheck: 1, waitingPayments: 2 }, true, [{ door: 1, toDo: 2 }, { door: 2, toDo: 6 }]);
+    const quests = questsFor({ ...NONE, namesToCheck: 1, waitingPayments: 2 }, true, [{ door: 1, toDo: 2 }, { door: 2, toDo: 6 }], []);
     expect(quests.map((q) => q.id)).toEqual(["names", "doors", "preview", "waiting"]);
     expect(quests[1]).toMatchObject({ id: "doors", title: "2 doors to get ready", words: "Door 1 is next: 2 to do.", go: "doors", button: "Open Doors" });
   });
 
   it("says 1 door for one, and is absent for none", () => {
-    expect(questsFor(NONE, false, [{ door: 9, toDo: 1 }])[0].title).toBe("1 door to get ready");
-    expect(questsFor(NONE, false, []).map((q) => q.id)).not.toContain("doors");
+    expect(questsFor(NONE, false, [{ door: 9, toDo: 1 }], [])[0].title).toBe("1 door to get ready");
+    expect(questsFor(NONE, false, [], []).map((q) => q.id)).not.toContain("doors");
+  });
+});
+
+describe("Needs you: doors soon", () => {
+  const soon = [{ door: 7 as const, day: "Monday", toDo: 2 }];
+
+  it("puts a quest for each door that is soon and not ready before every other", () => {
+    const quests = questsFor({ ...NONE, namesToCheck: 6, waitingPayments: 2 }, true, [{ door: 7, toDo: 2 }], soon);
+    expect(quests.map((q) => q.id)).toEqual(["doors-soon", "names", "doors", "preview", "waiting"]);
+    expect(quests[0]).toEqual({
+      id: "doors-soon",
+      count: null,
+      title: "Door 7 is on Monday and is not ready",
+      words: "2 to do.",
+      go: "doors",
+      button: "Open Doors",
+      filter: null,
+    });
+  });
+
+  it("is first even when nothing else applies, and leaves nothing out when none are soon", () => {
+    expect(questsFor(NONE, false, [], soon).map((q) => q.id)).toEqual(["doors-soon"]);
+    expect(questsFor(NONE, false, [], [])).toEqual([]);
   });
 });

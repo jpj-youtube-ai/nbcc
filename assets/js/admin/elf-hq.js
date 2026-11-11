@@ -175,6 +175,7 @@
       remember(TAB_KEY, id);
       if (id === "families" && data) loadFamilies();
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
+      if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
       if (id === "settings" && data) loadPractice();
     }
 
@@ -224,7 +225,7 @@
     }
 
     // ---- HQ ----
-    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", doors: PAPER + "icons/icon-frame.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
+    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", doors: PAPER + "icons/icon-frame.webp", "doors-soon": PAPER + "icons/icon-frame.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
     var familyFilter = "all";
     var confirming = null; // the lever's second ask, while it is showing
 
@@ -243,40 +244,90 @@
       box.appendChild(words);
       if (!data.canSwitch) box.appendChild(el("p", { class: "hq-words hq-soft hq-switchbox__who", text: "Only an admin can switch Elf Detective School on or off." }));
       lever.addEventListener("click", function () {
-        if (confirming) return;
-        var turnOn = !on;
-        var yes = el("button", { class: "hq-btn hq-btn--small " + (turnOn ? "hq-btn--go" : "hq-btn--danger"), type: "button", text: turnOn ? "Yes, switch it on" : "Yes, switch it off" });
-        var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: turnOn ? "Not yet" : "Keep it on" });
-        confirming = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
-          el("p", { class: "hq-words", text: turnOn ? "Switch it on for everyone? Sign ups open straight away and anyone can find Elf Detective School." : "Switch it off? Families cannot see Elf Detective School or sign in while it is off." }),
-          yes,
-          no,
-        ]);
-        box.appendChild(confirming);
-        yes.focus();
-        no.addEventListener("click", function () {
-          confirming.remove();
-          confirming = null;
-          lever.focus();
+        pullLever(box, lever, {
+          turnOn: !on,
+          field: "schoolOn",
+          question: [
+            "Switch it on for everyone? Sign ups open straight away and anyone can find Elf Detective School.",
+            "Switch it off? Families cannot see Elf Detective School or sign in while it is off.",
+          ],
+          yes: ["Yes, switch it on", "Yes, switch it off"],
+          no: ["Not yet", "Keep it on"],
+          done: ["Elf Detective School is live.", "Elf Detective School is switched off."],
+          id: "hqLever",
         });
-        yes.addEventListener("click", function () {
-          yes.disabled = true;
-          no.disabled = true;
-          ask("PATCH", "/api/admin/elf/settings", { schoolOn: turnOn })
-            .then(function (d) {
-              data.settings = d.settings;
-              confirming = null;
-              draw();
-              say(status, turnOn ? "Elf Detective School is live." : "Elf Detective School is switched off.", true);
-              var again = doc.getElementById("hqLever");
-              if (again) again.focus();
-            })
-            .catch(function (e) {
-              if (confirming) confirming.remove();
-              confirming = null;
-              say(status, e.message, false);
-            });
+      });
+    }
+
+    /** December's doors: a second lever, on the same panel, for admins; words for anyone else. */
+    function drawDoorsSwitch(box) {
+      var on = !!(data.settings && data.settings.doorsOn);
+      var line = "Switched on, every door runs by itself from its first clue. Switched off, the doors stay shut with their countdowns.";
+      if (!data.canSwitch) {
+        box.appendChild(el("div", { class: "hq-switchbox__who" }, [el("p", { class: "hq-words", text: "December's doors: " + (on ? "On" : "Off") }), el("p", { class: "hq-words hq-soft", text: line })]));
+        return;
+      }
+      var lever = el("button", { class: "hq-lever hq-lever--doors", type: "button", role: "switch", id: "hqDoorsLever", "aria-checked": String(on), "aria-label": "December's doors switch" }, [
+        el("span", { class: "hq-lever__words", "aria-hidden": "true", text: on ? "ON" : "OFF" }),
+        el("span", { class: "hq-lever__knob" }, [el("img", { src: PAPER + "deco/bauble.webp", alt: "", width: 52, height: 52 })]),
+      ]);
+      box.appendChild(lever);
+      box.appendChild(
+        el("div", {}, [
+          el("h2", { class: "hq-h2", text: on ? "December's doors are switched on" : "December's doors are switched off" }),
+          el("p", { class: "hq-words hq-soft", text: line }),
+        ]),
+      );
+      lever.addEventListener("click", function () {
+        pullLever(box, lever, {
+          turnOn: !on,
+          field: "doorsOn",
+          question: [
+            "Switch December's doors on? Families will see the clues, guess, type the word and send photos from door 1's first clue.",
+            "Switch December's doors off? The doors go back to being shut, with their countdowns.",
+          ],
+          yes: ["Yes, switch them on", "Yes, switch them off"],
+          no: ["Not yet", "Keep them on"],
+          done: ["December's doors are switched on.", "December's doors are switched off."],
+          id: "hqDoorsLever",
         });
+      });
+    }
+
+    /** A lever pulled: the second ask, then the change. `o` holds the words for on (0) and off (1). */
+    function pullLever(box, lever, o) {
+      if (confirming) return;
+      var turnOn = o.turnOn;
+      var at = turnOn ? 0 : 1;
+      var yes = el("button", { class: "hq-btn hq-btn--small " + (turnOn ? "hq-btn--go" : "hq-btn--danger"), type: "button", text: o.yes[at] });
+      var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: o.no[at] });
+      confirming = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [el("p", { class: "hq-words", text: o.question[at] }), yes, no]);
+      box.appendChild(confirming);
+      yes.focus();
+      no.addEventListener("click", function () {
+        confirming.remove();
+        confirming = null;
+        lever.focus();
+      });
+      yes.addEventListener("click", function () {
+        yes.disabled = true;
+        no.disabled = true;
+        var sent = {};
+        sent[o.field] = turnOn;
+        ask("PATCH", "/api/admin/elf/settings", sent)
+          .then(function (d) {
+            data.settings = d.settings;
+            confirming = null;
+            draw();
+            say(status, o.done[at], true);
+            var again = doc.getElementById(o.id);
+            if (again) again.focus();
+          })
+          .catch(function (e) {
+            if (confirming) confirming.remove();
+            confirming = null;
+            say(status, e.message, false);
+          });
       });
     }
 
@@ -389,6 +440,7 @@
       var row = el("div", { class: "hq-status-row" });
       var switchBox = el("div", { class: "hq-panel hq-switchbox" });
       drawSwitch(switchBox);
+      drawDoorsSwitch(switchBox);
       row.appendChild(switchBox);
       drawClocks(row);
       part.appendChild(row);
@@ -408,7 +460,7 @@
     // ---- Families: pick a family from the list, and its sheet opens beside it ----
     var FAMILY_KEY = "nbcc_elf_hq_family";
     var FILTER_NAMES = [["all", "All"], ["check", "Names to check"], ["week", "This week"], ["removed", "Removed"]];
-    var fam = { list: null, total: 0, counts: null, sheet: null, surnames: [], q: "", timer: null, built: false, asked: 0 };
+    var fam = { list: null, total: 0, counts: null, sheet: null, tries: [], surnames: [], q: "", timer: null, built: false, asked: 0 };
     var famBox, famSearch, famChips, famList, famMore, famSheet;
 
     function shortDay(iso) {
@@ -523,6 +575,7 @@
       return ask("GET", "/api/admin/elf/families/" + id)
         .then(function (d) {
           fam.sheet = d.family;
+          fam.tries = d.wordTries || [];
           if (d.surnames) fam.surnames = d.surnames;
           drawSheet();
           if (fam.list) drawList();
@@ -710,6 +763,48 @@
         paid.appendChild(el("li", {}, bits));
       });
       famSheet.appendChild(paid);
+      famSheet.appendChild(triesBox(f, mayChange));
+    }
+
+    /** The doors this family has typed wrong words at, each with Clear them (for someone who may edit). */
+    function triesBox(f, mayChange) {
+      var box = el("section", { class: "hq-tries", "aria-label": "Wrong words typed" }, [el("h3", { class: "hq-h3", text: "Wrong words typed" })]);
+      var said = el("p", { class: "hq-status", role: "status" });
+      var tries = (fam.tries || []).filter(function (t) {
+        return t && t.wrong > 0;
+      });
+      if (!tries.length) {
+        box.appendChild(el("p", { class: "hq-words hq-soft", text: "No wrong words typed." }));
+      } else {
+        var list = el("ul", { class: "hq-tries__list" });
+        tries.forEach(function (t) {
+          var item = el("li", {}, [el("span", { text: "Door " + t.door + ": " + t.wrong + (t.wrong === 1 ? " wrong try" : " wrong tries") })]);
+          if (mayChange) {
+            var clear = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Clear them", "aria-label": "Clear door " + t.door + "'s wrong tries" });
+            clear.addEventListener("click", function () {
+              clear.disabled = true;
+              ask("POST", "/api/admin/elf/families/" + f.id + "/word-tries/clear", { door: t.door })
+                .then(function (d) {
+                  if (!fam.sheet || fam.sheet.id !== f.id) return; // another family has been opened since
+                  fam.tries = d.wordTries || fam.tries.filter(function (x) { return x.door !== t.door; });
+                  if (d.family) fam.sheet = d.family;
+                  drawSheet();
+                  var now = famSheet.querySelector(".hq-tries .hq-status");
+                  if (now) say(now, "Cleared. They can try again.", true);
+                })
+                .catch(function (e) {
+                  say(said, e.message, false);
+                  clear.disabled = false;
+                });
+            });
+            item.appendChild(clear);
+          }
+          list.appendChild(item);
+        });
+        box.appendChild(list);
+      }
+      box.appendChild(said);
+      return box;
     }
 
     function detectiveCard(f, d, mayChange) {
@@ -1064,10 +1159,12 @@
             say(said, "Nothing has changed.", null);
             return;
           }
+          // Focus goes to the new Save button only if it was in this part when Save was pressed.
+          var held = !!(part && doc.activeElement && part.contains(doc.activeElement));
           save.disabled = true;
           ask("PATCH", "/api/admin/elf/doors/" + d.door, sent)
             .then(function (r) {
-              takeDoor(r.door, { rebuild: [key], say: [key, "Saved."], focus: key });
+              takeDoor(r.door, { rebuild: [key], say: [key, "Saved."], focus: held ? key : null });
             })
             .catch(function (e) {
               say(said, e.message, false);
@@ -1077,12 +1174,13 @@
         kids.push(el("div", { class: "hq-actions" }, [save]));
       }
       kids.push(said);
-      return el("section", { class: "hq-dpart", "data-part": key }, kids);
+      var part = el("section", { class: "hq-dpart", "data-part": key }, kids);
+      return part;
     }
 
     function buildPart(key) {
       if (/^clue[123]$/.test(key)) return clueItem(Number(key.slice(4)));
-      return { place: placePart, evening: eveningPart, prize: prizePart, elf: elfPart, clues: cluesPart, prints: printsPart }[key]();
+      return { place: placePart, evening: eveningPart, prize: prizePart, elf: elfPart, clues: cluesPart, prints: printsPart, snow: snowPart }[key]();
     }
 
     // ---- the three clues ----
@@ -1276,6 +1374,103 @@
         ]),
         said,
       ]);
+    }
+
+    /** If the door cannot run: a snow day (before its first clue) and, after its day, gone home. */
+    function snowPart() {
+      var d = doors.sheet;
+      var n = d.door;
+      var edit = doors.canEdit;
+      var said = el("p", { class: "hq-status", role: "status", tabindex: "-1" });
+      var kids = [el("header", {}, [el("h3", { class: "hq-h3", text: "If the door cannot run" })])];
+      var rebuilt = function (r, words) {
+        takeDoor(r.door, { rebuild: ["snow"], say: ["snow", words], focusId: "hqDoor-snowAction" });
+      };
+      if (d.snowDay) {
+        var automatic = d.snowDay.by === "automatic";
+        kids.push(
+          el("p", {
+            class: "hq-words",
+            text: automatic ? "Snow day: the door was not ready at its first clue" : "Snow day called by " + who(d.snowDay.by) + " on " + dayWords(d.snowDay.at),
+          }),
+        );
+        if (edit && !d.started) {
+          var cancel = el("button", { class: "hq-btn hq-btn--small", type: "button", id: "hqDoor-snowAction", text: "Cancel the snow day" });
+          cancel.addEventListener("click", function () {
+            cancel.disabled = true;
+            ask("DELETE", "/api/admin/elf/doors/" + n + "/snow-day")
+              .then(function (r) {
+                rebuilt(r, "The snow day is cancelled.");
+              })
+              .catch(function (e) {
+                say(said, e.message, false);
+                cancel.disabled = false;
+              });
+          });
+          kids.push(el("div", { class: "hq-actions" }, [cancel]));
+        }
+      } else {
+        kids.push(el("p", { class: "hq-words hq-soft", text: d.started ? "No snow day was called." : "A snow day can be called until the first clue is out." }));
+        if (edit && !d.started) {
+          var call = el("button", { class: "hq-btn hq-btn--small", type: "button", id: "hqDoor-snowAction", text: "Call a snow day" });
+          var slot = el("div", {});
+          call.addEventListener("click", function () {
+            if (slot.querySelector(".hq-confirm")) return;
+            var yes = el("button", { class: "hq-btn hq-btn--small hq-btn--danger", type: "button", text: "Yes, call a snow day" });
+            var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Not yet" });
+            var sure = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
+              el("p", { class: "hq-words", text: "Call a snow day for door " + n + "? Its elf will be snowed in, and every detective gets the door done." }),
+              yes,
+              no,
+            ]);
+            no.addEventListener("click", function () {
+              sure.remove();
+              call.focus();
+            });
+            yes.addEventListener("click", function () {
+              yes.disabled = true;
+              no.disabled = true;
+              ask("POST", "/api/admin/elf/doors/" + n + "/snow-day")
+                .then(function (r) {
+                  rebuilt(r, "Snow day called.");
+                })
+                .catch(function (e) {
+                  sure.remove();
+                  say(said, e.message, false);
+                });
+            });
+            slot.appendChild(sure);
+            yes.focus();
+          });
+          kids.push(el("div", { class: "hq-actions" }, [call]));
+          kids.push(slot);
+        }
+      }
+      if (d.dayOver) {
+        var box = el("input", { type: "checkbox", id: "hqDoor-goneHome", name: "goneHome", disabled: !edit });
+        box.checked = !!d.goneHome;
+        box.addEventListener("change", function () {
+          var on = box.checked;
+          box.disabled = true;
+          ask(on ? "POST" : "DELETE", "/api/admin/elf/doors/" + n + "/gone-home")
+            .then(function (r) {
+              takeDoor(r.door, { rebuild: ["snow"], say: ["snow", "Saved."], focusId: "hqDoor-goneHome" });
+            })
+            .catch(function (e) {
+              box.checked = !on;
+              box.disabled = false;
+              say(said, e.message, false);
+            });
+        });
+        kids.push(
+          el("div", { class: "hq-dtick" }, [
+            el("label", { class: "hq-tickbox", for: "hqDoor-goneHome" }, [box, el("span", { text: "Gone home: the place has stopped hosting the elf" })]),
+            d.goneHome ? el("span", { class: "hq-hint", text: "Ticked by " + (who(d.goneHome.by) || "staff") + " on " + dayWords(d.goneHome.at) }) : null,
+          ]),
+        );
+      }
+      kids.push(said);
+      return el("section", { class: "hq-dpart hq-snow", "data-part": "snow" }, kids);
     }
 
     // ---- the tools under the level select: the list of places, the prize list, paste all the clues ----
@@ -1498,7 +1693,7 @@
       var d = doors.sheet;
       var edit = doors.canEdit;
       var placeIn = {
-        placeName: doorInput("placeName", d.placeName, 80),
+        placeName: doorInput("placeName", d.placeName, 80, "area"),
         placeTown: doorInput("placeTown", d.placeTown, 60),
         placeAddress: doorInput("placeAddress", d.placeAddress, 200, "area"),
         contactName: doorInput("contactName", d.contactName, 80),
@@ -1507,6 +1702,16 @@
         elfSpot: doorInput("elfSpot", d.elfSpot, 200, "area"),
         agreedBy: doorInput("agreedBy", d.agreedBy, 80),
       };
+      // One name, however long: it wraps instead of running past its box, and never holds a line break.
+      placeIn.placeName.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") e.preventDefault();
+      });
+      placeIn.placeName.addEventListener("input", function () {
+        if (/[\r\n]/.test(placeIn.placeName.value)) {
+          placeIn.placeName.value = placeIn.placeName.value.replace(/\s*[\r\n]+\s*/g, " ");
+          fitField(placeIn.placeName);
+        }
+      });
       var names = el("div", { class: "hq-names" });
       fillNames(names);
       var newName = doorInput("newName", "", 80);
@@ -1710,6 +1915,7 @@
       });
       doorsSheet.appendChild(buildPart("clues"));
       doorsSheet.appendChild(buildPart("prints"));
+      doorsSheet.appendChild(buildPart("snow"));
       updateCloseHint();
       fitFields();
     }
@@ -1899,8 +2105,10 @@
     }
 
     // ---- Settings: the practice door, a pretend evening played through the preview link ----
-    // Door 0 of year 0 (src/db/elf-practice.ts), read afresh each time Settings opens. Each request takes
-    // a number, and an answer that comes back after a newer request was sent is ignored.
+    // Door 0 of year 0 (src/db/elf-practice.ts), read afresh each time Settings opens. A reading takes a
+    // number, and a reading that comes back after anything newer was sent (or came back) is ignored. A start
+    // or a clear is not a reading: its answer is always applied, and it bumps the number so that no older
+    // reading can land on top of it.
     var NO_PREVIEW_WORDS = "Make a preview link in Settings first: the practice door is played through it.";
     var practice = { loaded: false, answer: null, error: null, asking: false, seq: 0 };
 
@@ -1986,16 +2194,17 @@
         if (elf.value.trim()) sent.elfName = elf.value.trim();
         if (gap.value.trim()) sent.minutesApart = Number(gap.value);
         start.disabled = true;
-        var mine = ++practice.seq;
+        practice.seq++;
         ask("POST", "/api/admin/elf/practice", sent)
           .then(function (d) {
-            if (mine !== practice.seq) return;
+            practice.seq++;
             redrawPractice(takePractice(d));
             practiceSay("Started. Clue 1 comes out in a minute.", true);
           })
           .catch(function (err) {
             practiceSay(err.message, false);
             start.disabled = false;
+            if (!practice.loaded) loadPractice();
           });
       });
       return form;
@@ -2022,16 +2231,17 @@
         clear.addEventListener("click", function () {
           if (clear.disabled) return;
           clear.disabled = true;
-          var mine = ++practice.seq;
+          practice.seq++;
           ask("DELETE", "/api/admin/elf/practice")
             .then(function (d) {
-              if (mine !== practice.seq) return;
+              practice.seq++;
               redrawPractice(takePractice(d));
               practiceSay("The practice is cleared.", true);
             })
             .catch(function (err) {
               practiceSay(err.message, false);
               clear.disabled = false;
+              if (!practice.loaded) loadPractice();
             });
         });
         actions.appendChild(clear);

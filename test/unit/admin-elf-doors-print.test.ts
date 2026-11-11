@@ -146,6 +146,13 @@ describe("the print routes", () => {
     expect(page(res)).toMatch(/Door 7 needs its place and its elf(&#39;|')s name before its staff card can be printed\./);
   });
 
+  it("the staff card reads the settings once, using the ones the print already has", async () => {
+    settingsDb.getElfSettings.mockClear();
+    const res = await run(routes.getAdminElfDoorStaffCard, seeing(params7));
+    expect(res.statusCode).toBe(200);
+    expect(settingsDb.getElfSettings).toHaveBeenCalledTimes(1);
+  });
+
   it("the staff card without the place phone says to add it in Settings", async () => {
     settingsDb.getElfSettings.mockResolvedValue({ ...ON, placePhone: null });
     const res = await run(routes.getAdminElfDoorStaffCard, seeing(params7));

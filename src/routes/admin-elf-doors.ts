@@ -8,7 +8,7 @@ import { config } from "../config";
 import { isUsableSecretWord } from "../elf/claim";
 import { renderElfPoster, renderElfTag, renderPlacesList, renderStaffCard } from "../elf/print";
 import { materialsMessagePage } from "../fundraising/materials";
-import { getElfSettings } from "../db/elf";
+import { getElfSettings, type ElfSettings } from "../db/elf";
 import {
   addElfDoorName,
   changeElfDoor,
@@ -51,6 +51,8 @@ import { longDayWords } from "../elf/words";
 //   DELETE /api/admin/elf/doors/:door/names/:id           take one off (edit)
 //   POST   /api/admin/elf/doors/:door/word                a new tag word (edit)
 //   POST|DELETE  .../dropped-off and .../thanked          the ticks (edit)
+//   POST|DELETE  .../snow-day                             call a door off, or take that back, before its clue 1 (edit)
+//   POST|DELETE  .../gone-home                            the place has stopped hosting the elf, once the door's day is over (edit)
 //   PUT    /api/admin/elf/doors/:door/clues/:n            one clue (edit)
 //   POST   /api/admin/elf/clues/check and /save           every clue pasted at once (edit)
 //   GET    /api/admin/elf/doors/:door/poster|staff-card|tag, and /api/admin/elf/places-list
@@ -87,12 +89,18 @@ export interface DoorSheet extends DoorSetup {
   posterUrl: string;
   clueOut: Evening3;
   started: boolean;
+  /** Who called the door off and when (the by is "automatic" when the door was not ready); null if not. */
+  snowDay: { at: string; by: string } | null;
+  goneHome: { at: string; by: string } | null;
+  /** Has the door's day (midnight at the end of it) passed? Gone home can be ticked only then. */
+  dayOver: boolean;
 }
 
 interface Ctx {
   req: Request;
   res: Response;
   actor: string;
+  settings: ElfSettings;
   year: number;
   now: Date;
   door: Door;
@@ -123,7 +131,16 @@ function sheetOf(year: number, d: DoorSetup, now: Date): DoorSheet {
     posterUrl: `${String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "")}/elf/p/${d.posterCode}`,
     clueOut,
     started: clueOut[0],
+    snowDay: d.snowDayAt ? { at: new Date(d.snowDayAt).toISOString(), by: d.snowDayBy ?? "" } : null,
+    goneHome: d.goneHomeAt ? { at: new Date(d.goneHomeAt).toISOString(), by: d.goneHomeBy ?? "" } : null,
+    dayOver: dayIsOver(year, d.door, now),
   };
+}
+
+/** Midnight at the end of the door's day: when gone home can first be ticked. */
+function dayIsOver(year: number, door: Door, now: Date): boolean {
+  const last = doorInstant(doorSeason(year), door, "23:59");
+  return !last || now.getTime() >= last.getTime() + 60_000;
 }
 
 /** The sentence for a zod failure: our own message, never zod's ("Required", "Unrecognized key(s) ..."). */
@@ -146,7 +163,7 @@ function guarded(what: string, level: "view" | "edit", work: (c: Ctx) => Promise
     }
     try {
       const settings = await getElfSettings();
-      return await work({ req, res, actor: actorOf(claims), year: settings.year, now: new Date(), door });
+      return await work({ req, res, actor: actorOf(claims), settings, year: settings.year, now: new Date(), door });
     } catch (err) {
       console.error(`admin elf doors ${what} failed:`, err instanceof Error ? err.message : err);
       return res.status(500).json(UNAVAILABLE);
@@ -255,6 +272,11 @@ export const patchAdminElfDoor = guarded("change", "edit", async ({ req, res, ac
   }
   const stored = await getElfDoor(year, door);
   if (!stored) return noDoor(res, door);
+  // Nothing to change: write nothing, audit nothing, and answer the door as it is.
+  if (Object.keys(change).length === 0) return res.status(200).json({ door: sheetOf(year, stored, now) });
+  if ("placeName" in change && change.placeName === null && eveningState(year, stored, now).clueOut[0]) {
+    return res.status(409).json({ error: `Door ${door}'s evening has started, so its place must keep a name.` });
+  }
   const timeChanged = TIME_KEYS.some((k) => k in change && clock5(change[k]) !== clock5(stored[k]));
   if (timeChanged && eveningState(year, stored, now).clueOut[0]) {
     return res.status(409).json({ error: `Door ${door}'s evening has started, so its times cannot change.` });
@@ -292,6 +314,7 @@ export const deleteAdminElfDoorName = guarded("name remove", "edit", async ({ re
   if (eveningState(year, stored, now).clueOut[0]) {
     return res.status(409).json({ error: `Door ${door}'s evening has started, so names that count can only be added now.` });
   }
+  if (!stored.names.some((x) => x.id === Number(raw))) return res.status(404).json({ error: `There is no name like that on door ${door}.` });
   const d = await removeElfDoorName(year, door, Number(raw), actor);
   return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
 });
@@ -327,6 +350,38 @@ export const postAdminElfDoorDroppedOff = tick("droppedOff", true);
 export const deleteAdminElfDoorDroppedOff = tick("droppedOff", false);
 export const postAdminElfDoorThanked = tick("thanked", true);
 export const deleteAdminElfDoorThanked = tick("thanked", false);
+
+// ---- a snow day, and gone home ------------------------------------------------------------------------
+
+/** Calling a door off (a snow day) is only before its clue 1; the stored automatic one reads the same. */
+function snowDay(on: boolean) {
+  return guarded(`snow day ${on ? "call" : "cancel"}`, "edit", async ({ res, actor, year, now, door }) => {
+    const stored = await getElfDoor(year, door);
+    if (!stored) return noDoor(res, door);
+    if (eveningState(year, stored, now).clueOut[0]) {
+      return res.status(409).json({
+        error: on ? `Door ${door}'s evening has started, so it cannot be called off now.` : `Door ${door}'s evening has started, so its snow day cannot be cancelled now.`,
+      });
+    }
+    // Already as asked: nothing to write, and the first caller stays on record.
+    if (on === (stored.snowDayAt !== null)) return res.status(200).json({ door: sheetOf(year, stored, now) });
+    const d = await tickElfDoor(year, door, "snowDay", on, actor);
+    return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  });
+}
+export const postAdminElfDoorSnowDay = snowDay(true);
+export const deleteAdminElfDoorSnowDay = snowDay(false);
+
+/** Gone home is for after the door's day: the place has stopped hosting the elf. */
+function goneHome(on: boolean) {
+  return guarded(`gone home ${on ? "tick" : "untick"}`, "edit", async ({ res, actor, year, now, door }) => {
+    if (!dayIsOver(year, door, now)) return res.status(409).json({ error: `Gone home is for after door ${door}'s day.` });
+    const d = await tickElfDoor(year, door, "goneHome", on, actor);
+    return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  });
+}
+export const postAdminElfDoorGoneHome = goneHome(true);
+export const deleteAdminElfDoorGoneHome = goneHome(false);
 
 // ---- one clue --------------------------------------------------------------------------------------
 
@@ -412,7 +467,7 @@ function printing(what: string, work: (c: Ctx) => Promise<Response>, needsDoor =
       const settings = await getElfSettings();
       // The year's door rows may not exist yet (Doors not opened): make them, so a print says what to add.
       await ensureElfDoors(settings.year);
-      return await work({ req, res, actor: actorOf(claims), year: settings.year, now: new Date(), door });
+      return await work({ req, res, actor: actorOf(claims), settings, year: settings.year, now: new Date(), door });
     } catch (err) {
       console.error(`admin elf doors ${what} failed:`, err instanceof Error ? err.message : err);
       return sendPage(res, 500, materialsMessagePage("Something went wrong", "That could not be printed just now. Try again in a minute."));
@@ -440,11 +495,11 @@ export const getAdminElfDoorPoster = printing("poster", async ({ res, year, door
   return sendPage(res, 200, page);
 });
 
-export const getAdminElfDoorStaffCard = printing("staff card", async ({ res, year, door }) => {
+export const getAdminElfDoorStaffCard = printing("staff card", async ({ res, settings, year, door }) => {
   const d = await getElfDoor(year, door);
   if (!d) return noSuchDoorPage(res, door);
   if (!has(d.placeName) || !has(d.elfName)) return notReady(res, `Door ${door} needs its place and its elf's name before its staff card can be printed.`);
-  const { placePhone } = await getElfSettings();
+  const { placePhone } = settings;
   if (!has(placePhone)) return notReady(res, "Add NBCC's phone number for places in Settings before printing a staff card.");
   const clueAt = firstClueAt(year, d);
   if (!clueAt) throw new Error("no time for clue 1");
@@ -490,6 +545,10 @@ adminElfDoorsRouter.post("/api/admin/elf/doors/:door/dropped-off", postAdminElfD
 adminElfDoorsRouter.delete("/api/admin/elf/doors/:door/dropped-off", deleteAdminElfDoorDroppedOff);
 adminElfDoorsRouter.post("/api/admin/elf/doors/:door/thanked", postAdminElfDoorThanked);
 adminElfDoorsRouter.delete("/api/admin/elf/doors/:door/thanked", deleteAdminElfDoorThanked);
+adminElfDoorsRouter.post("/api/admin/elf/doors/:door/snow-day", postAdminElfDoorSnowDay);
+adminElfDoorsRouter.delete("/api/admin/elf/doors/:door/snow-day", deleteAdminElfDoorSnowDay);
+adminElfDoorsRouter.post("/api/admin/elf/doors/:door/gone-home", postAdminElfDoorGoneHome);
+adminElfDoorsRouter.delete("/api/admin/elf/doors/:door/gone-home", deleteAdminElfDoorGoneHome);
 adminElfDoorsRouter.put("/api/admin/elf/doors/:door/clues/:n", putAdminElfDoorClue);
 adminElfDoorsRouter.post("/api/admin/elf/clues/check", postAdminElfCluesCheck);
 adminElfDoorsRouter.post("/api/admin/elf/clues/save", postAdminElfCluesSave);

@@ -67,6 +67,26 @@ describe("Head Elf HQ's stylesheet", () => {
     }
   });
 
+  it("draws a hint as a hint, even inside a field whose own words are bold", () => {
+    const fieldWords = all.find((r) => r.selector === ".hq-field > span");
+    expect(fieldWords).toBeTruthy();
+    const hint = all.find((r) => r.selector === ".hq-field > .hq-hint");
+    expect(hint, "a rule as specific as the field's own words").toBeTruthy();
+    expect(hint!.body).toContain("font-weight: 400");
+    expect(hint!.body).toContain("font-size:");
+    // Its states keep their colour and weight at the same specificity.
+    expect(all.find((r) => r.selector === ".hq-field > .hq-hint.is-ok")).toBeTruthy();
+    expect(all.find((r) => r.selector === ".hq-field > .hq-hint.is-error")).toBeTruthy();
+    // And it comes after the field's words, so it wins.
+    expect(all.indexOf(hint!)).toBeGreaterThan(all.indexOf(fieldWords!));
+  });
+
+  it("has pieces for December's doors lever, the snow day part and the wrong tries", () => {
+    for (const s of [".hq-lever--doors", ".hq-snow", ".hq-tries"]) {
+      expect(all.some((r) => r.selector.split(",").some((x) => x.trim().startsWith(s))), s).toBe(true);
+    }
+  });
+
   it("draws in NBCC's own colours, with a deep maroon ink rather than black", () => {
     expect(CSS).toContain("--hq-ink: #3A0B0B");
     expect(CSS).toContain("--hq-maroon: #800000");

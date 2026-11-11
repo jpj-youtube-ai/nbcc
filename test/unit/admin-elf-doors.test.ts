@@ -23,6 +23,7 @@ const { getUserAuthRowMock, doors, settingsDb } = vi.hoisted(() => ({
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf-doors", () => doors);
 vi.mock("../../src/db/elf", () => settingsDb);
+vi.mock("../../src/db/elf-game", () => ({ onDoorsSwitchedOn: vi.fn(), familyWordTries: vi.fn(), clearWordTries: vi.fn() }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
   config: {
@@ -261,6 +262,7 @@ describe("names", () => {
   });
 
   it("removes a name before the evening starts, and not after", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { names: [{ id: 3, name: "The Pine Cone" }, { id: 123456789, name: "Another" }] }));
     expect((await remove("8", "3")).statusCode).toBe(200);
     expect(doors.removeElfDoorName).toHaveBeenCalledWith(2026, 8, 3, ACTOR);
     const res = await remove("7", "3");
@@ -269,8 +271,17 @@ describe("names", () => {
   });
 
   it("holds the id to a whole number inside the database's range", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { names: [{ id: 123456789, name: "Another" }] }));
     for (const id of ["0", "01", "x", "1234567890", "-1"]) expect((await remove("8", id)).statusCode, id).toBe(400);
     expect((await remove("8", "123456789")).statusCode).toBe(200);
+  });
+
+  it("answers 404, with no change and no audit, for a name the door does not have", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { names: [{ id: 3, name: "The Pine Cone" }] }));
+    const res = await remove("8", "4");
+    expect(res.statusCode).toBe(404);
+    expect(body(res)).toEqual({ error: "There is no name like that on door 8." });
+    expect(doors.removeElfDoorName).not.toHaveBeenCalled();
   });
 });
 
@@ -399,5 +410,135 @@ describe("the place phone in the settings", () => {
     expect((await run(patchAdminElfSettings, ask("admin", { body: { placePhone: "call me" } }))).statusCode).toBe(400);
     expect((await run(patchAdminElfSettings, ask("admin", { body: { placePhone: null } }))).statusCode).toBe(200);
     expect(settingsDb.setElfSettings).toHaveBeenLastCalledWith({ placePhone: null }, ACTOR);
+  });
+});
+
+// ---- Task 10: the blank place rule, an empty change, snow days and gone home ----
+
+describe("a change that does nothing, and a place that keeps its name", () => {
+  const patch = (door: string, b: unknown) => run(routes.patchAdminElfDoor, ask("viewer", { permissions: EDIT, params: { door }, body: b }));
+
+  it("writes nothing and audits nothing for an empty change, and answers the door as it is", async () => {
+    for (const b of [{}, { prize: undefined }]) {
+      const res = await patch("8", b);
+      expect(res.statusCode).toBe(200);
+      expect(body(res).door.door).toBe(8);
+    }
+    expect(doors.changeElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("with clue 1 out, will not blank the place's name, but takes a new one", async () => {
+    const blank = await patch("7", { placeName: "" });
+    expect(blank.statusCode).toBe(409);
+    expect(body(blank)).toEqual({ error: "Door 7's evening has started, so its place must keep a name." });
+    expect((await patch("7", { placeName: "   " })).statusCode).toBe(409);
+    expect(doors.changeElfDoor).not.toHaveBeenCalled();
+    expect((await patch("7", { placeName: "Pine Cone Café" })).statusCode).toBe(200);
+    expect(doors.changeElfDoor).toHaveBeenCalledTimes(1);
+  });
+
+  it("before clue 1, still lets the place's name be blanked", async () => {
+    expect((await patch("8", { placeName: "" })).statusCode).toBe(200);
+    expect(doors.changeElfDoor).toHaveBeenCalledWith(2026, 8, { placeName: null }, ACTOR);
+  });
+});
+
+describe("a snow day", () => {
+  const call = (h: Handler, door: string, permissions: object = EDIT) => run(h, ask("viewer", { permissions, params: { door } }));
+
+  it("is called before clue 1, by a head elf who may edit", async () => {
+    const res = await call(routes.postAdminElfDoorSnowDay, "8");
+    expect(res.statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 8, "snowDay", true, ACTOR);
+  });
+
+  it("cannot be called once clue 1 is out", async () => {
+    const res = await call(routes.postAdminElfDoorSnowDay, "7");
+    expect(res.statusCode).toBe(409);
+    expect(body(res)).toEqual({ error: "Door 7's evening has started, so it cannot be called off now." });
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("calling it again changes nothing and keeps who called it", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: "admin:other@example.org" }));
+    const res = await call(routes.postAdminElfDoorSnowDay, "8");
+    expect(res.statusCode).toBe(200);
+    expect(body(res).door.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "admin:other@example.org" });
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("is cancelled before clue 1 only", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: ACTOR }));
+    expect((await call(routes.deleteAdminElfDoorSnowDay, "8")).statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 8, "snowDay", false, ACTOR);
+    doors.tickElfDoor.mockClear();
+    const late = await call(routes.deleteAdminElfDoorSnowDay, "7");
+    expect(late.statusCode).toBe(409);
+    expect(body(late)).toEqual({ error: "Door 7's evening has started, so its snow day cannot be cancelled now." });
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("is not for a head elf who may only look, and a door with no row is 404", async () => {
+    expect((await call(routes.postAdminElfDoorSnowDay, "8", VIEW)).statusCode).toBe(403);
+    expect((await call(routes.deleteAdminElfDoorSnowDay, "8", VIEW)).statusCode).toBe(403);
+    doors.getElfDoor.mockResolvedValue(null);
+    expect((await call(routes.postAdminElfDoorSnowDay, "8")).statusCode).toBe(404);
+  });
+
+  it("says whether the door's day is over on the sheet", async () => {
+    const day = async (door: string) => body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door } }))).door.dayOver;
+    expect(await day("6")).toBe(true);
+    expect(await day("7")).toBe(false);
+    expect(await day("8")).toBe(false);
+  });
+
+  it("is on the door's sheet, with who and when", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: "automatic", goneHomeAt: new Date("2026-12-09T09:00:00Z"), goneHomeBy: "admin:staff@example.org" }));
+    const d = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }))).door;
+    expect(d.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "automatic" });
+    expect(d.goneHome).toEqual({ at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org" });
+    doors.getElfDoor.mockResolvedValue(doorOf(8));
+    const none = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }))).door;
+    expect(none.snowDay).toBeNull();
+    expect(none.goneHome).toBeNull();
+  });
+});
+
+describe("gone home", () => {
+  const call = (h: Handler, door: string, permissions: object = EDIT) => run(h, ask("viewer", { permissions, params: { door } }));
+
+  it("is ticked once the door's day has passed", async () => {
+    const res = await call(routes.postAdminElfDoorGoneHome, "6");
+    expect(res.statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 6, "goneHome", true, ACTOR);
+  });
+
+  it("is unticked once the door's day has passed", async () => {
+    const res = await call(routes.deleteAdminElfDoorGoneHome, "6");
+    expect(res.statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 6, "goneHome", false, ACTOR);
+  });
+
+  it("is not for the door's own day, nor a day to come", async () => {
+    for (const door of ["7", "8"]) {
+      const res = await call(routes.postAdminElfDoorGoneHome, door);
+      expect(res.statusCode, door).toBe(409);
+      expect(body(res)).toEqual({ error: `Gone home is for after door ${door}'s day.` });
+    }
+    expect((await call(routes.deleteAdminElfDoorGoneHome, "7")).statusCode).toBe(409);
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("starts at midnight at the end of the door's day", async () => {
+    vi.setSystemTime(new Date("2026-12-07T23:59:59Z"));
+    expect((await call(routes.postAdminElfDoorGoneHome, "7")).statusCode).toBe(409);
+    vi.setSystemTime(new Date("2026-12-08T00:00:00Z"));
+    expect((await call(routes.postAdminElfDoorGoneHome, "7")).statusCode).toBe(200);
+  });
+
+  it("is not for a head elf who may only look", async () => {
+    expect((await call(routes.postAdminElfDoorGoneHome, "6", VIEW)).statusCode).toBe(403);
+    expect((await call(routes.deleteAdminElfDoorGoneHome, "6", VIEW)).statusCode).toBe(403);
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
   });
 });

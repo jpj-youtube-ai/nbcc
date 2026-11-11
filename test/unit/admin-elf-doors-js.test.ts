@@ -482,6 +482,7 @@ describe("keeping what was typed, and the focus", () => {
     expect(document.activeElement).toBe(tile(7));
     expect(tile(7).getAttribute("aria-pressed")).toBe("true");
     type(field("prize"), "Another prize");
+    field("prize").focus();
     button(partOf("prize"), "Save")!.click();
     await flush();
     expect(document.activeElement).toBe(button(partOf("prize"), "Save"));
@@ -570,5 +571,206 @@ describe("Make a new word, one question at a time", () => {
     yes.click();
     expect(yes.disabled).toBe(true);
     await flush();
+  });
+});
+
+// ---- Task 10: the place's name that wraps, the focus, hidden fields, the snow day and gone home ----
+
+/** Makes every textarea's scrollHeight answer `height`, until the returned function puts it back. */
+function stubScrollHeight(height: (box: HTMLElement) => number): () => void {
+  const proto = HTMLTextAreaElement.prototype;
+  Object.defineProperty(proto, "scrollHeight", { configurable: true, get() { return height(this as HTMLElement); } });
+  return () => {
+    delete (proto as unknown as Record<string, unknown>).scrollHeight;
+  };
+}
+
+describe("the name of the place", () => {
+  it("is a box that wraps and grows to fit its words, like the other long fields", async () => {
+    await openSeven();
+    const name = field("placeName");
+    expect(name.tagName).toBe("TEXTAREA");
+    expect(name.classList.contains("hq-grow")).toBe(true);
+    const restore = stubScrollHeight(() => 96);
+    try {
+      type(name, "x".repeat(80));
+      expect(name.style.height).toBe("96px");
+      expect(name.value).toHaveLength(80);
+    } finally {
+      restore();
+    }
+  });
+
+  it("stays one name: Enter does not add a line, and a pasted line break is a space", async () => {
+    await openSeven();
+    const name = field("placeName");
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    name.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    type(name, "Corner\nBakehouse");
+    expect(name.value).toBe("Corner Bakehouse");
+  });
+});
+
+describe("the focus after a save", () => {
+  it("does not move to the Save button when focus was somewhere else", async () => {
+    await openSeven({ "PATCH /api/admin/elf/doors/7": { body: { door: sheet() } } });
+    type(field("prize"), "Another prize");
+    tile(7).focus();
+    button(partOf("prize"), "Save")!.click();
+    await flush();
+    expect(document.activeElement).toBe(tile(7));
+  });
+
+  it("moves to the Save button when focus was in the part being saved", async () => {
+    await openSeven({ "PATCH /api/admin/elf/doors/7": { body: { door: sheet() } } });
+    type(field("prize"), "Another prize");
+    field("prize").focus();
+    button(partOf("prize"), "Save")!.click();
+    await flush();
+    expect(document.activeElement).toBe(button(partOf("prize"), "Save"));
+  });
+});
+
+describe("fields drawn while their tab was hidden", () => {
+  it("are fitted to their words when the Doors tab is shown", async () => {
+    // A hidden box has no height to measure, as in a browser.
+    const restore = stubScrollHeight((box) => (box.closest("[hidden]") ? 0 : 90));
+    try {
+      page();
+      document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+      await flush();
+      tile(7).click();
+      document.querySelector<HTMLButtonElement>("#hqTab-hq")!.click(); // away before the sheet arrives
+      await flush();
+      expect(field("placeAddress").style.height).not.toBe("90px");
+      document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+      expect(field("placeAddress").style.height).toBe("90px");
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("if the door cannot run", () => {
+  const WHEN = "2026-12-06T09:00:00.000Z";
+  const eight = (over: Record<string, unknown> = {}) => sheet({ door: 8, day: "Tuesday 8 December", ...over });
+  const withEight = (over: Record<string, unknown> = {}, more: Record<string, Answer | Answer[]> = {}, canEdit = true) =>
+    page({ "GET /api/admin/elf/doors/8": { body: { door: eight(over), canEdit } }, ...more });
+  async function openEight() {
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    tile(8).click();
+    await flush();
+  }
+
+  it("has a part with Call a snow day, which asks first and then posts", async () => {
+    const { calls } = withEight({}, { "POST /api/admin/elf/doors/8/snow-day": { body: { door: eight({ snowDay: { at: WHEN, by: "admin:staff@example.org" } }) } } });
+    await openEight();
+    expect(partOf("snow").querySelector("h3")!.textContent).toBe("If the door cannot run");
+    button(partOf("snow"), "Call a snow day")!.click();
+    expect(partOf("snow").textContent).toContain("Call a snow day for door 8? Its elf will be snowed in, and every detective gets the door done.");
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    button(partOf("snow"), "Yes, call a snow day")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "POST")).toEqual([{ method: "POST", url: "/api/admin/elf/doors/8/snow-day", body: null }]);
+    expect(partOf("snow").textContent).toContain("Snow day called by staff@example.org on 6 December");
+    expect(button(partOf("snow"), "Cancel the snow day")).toBeTruthy();
+    expect(button(partOf("snow"), "Call a snow day")).toBeFalsy();
+  });
+
+  it("changes nothing when the question is answered No", async () => {
+    const { calls } = withEight();
+    await openEight();
+    button(partOf("snow"), "Call a snow day")!.click();
+    button(partOf("snow"), "Not yet")!.click();
+    expect(partOf("snow").textContent).not.toContain("Call a snow day for door 8?");
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
+  it("cancels the snow day", async () => {
+    const { calls } = withEight({ snowDay: { at: WHEN, by: "admin:staff@example.org" } }, { "DELETE /api/admin/elf/doors/8/snow-day": { body: { door: eight() } } });
+    await openEight();
+    button(partOf("snow"), "Cancel the snow day")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "DELETE")).toEqual([{ method: "DELETE", url: "/api/admin/elf/doors/8/snow-day", body: null }]);
+    expect(button(partOf("snow"), "Call a snow day")).toBeTruthy();
+    expect(partOf("snow").textContent).not.toContain("Snow day called by");
+  });
+
+  it("says an automatic snow day in its own words", async () => {
+    withEight({ snowDay: { at: WHEN, by: "automatic" } });
+    await openEight();
+    expect(partOf("snow").textContent).toContain("Snow day: the door was not ready at its first clue");
+    expect(partOf("snow").textContent).not.toContain("called by");
+  });
+
+  it("shows a refusal as an error, and lets the head elf ask again", async () => {
+    const { calls } = withEight({}, { "POST /api/admin/elf/doors/8/snow-day": { status: 409, body: { error: "Door 8's evening has started, so it cannot be called off now." } } });
+    await openEight();
+    button(partOf("snow"), "Call a snow day")!.click();
+    button(partOf("snow"), "Yes, call a snow day")!.click();
+    await flush();
+    const said = partOf("snow").querySelector(".hq-status")!;
+    expect(said.textContent).toBe("Door 8's evening has started, so it cannot be called off now.");
+    expect(said.classList.contains("is-error")).toBe(true);
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    expect(button(partOf("snow"), "Call a snow day")).toBeTruthy();
+  });
+
+  it("offers neither the call nor the cancel once the first clue is out", async () => {
+    withEight({ started: true, clueOut: [true, false, false], snowDay: { at: WHEN, by: "automatic" } });
+    await openEight();
+    expect(partOf("snow").textContent).toContain("Snow day: the door was not ready at its first clue");
+    expect(partOf("snow").querySelectorAll("button")).toHaveLength(0);
+    withEight({ started: true, clueOut: [true, false, false] });
+    await openEight();
+    expect(button(partOf("snow"), "Call a snow day")).toBeFalsy();
+  });
+
+  it("is words only for a head elf who may only look", async () => {
+    withEight({ snowDay: { at: WHEN, by: "admin:staff@example.org" } }, {}, false);
+    await openEight();
+    expect(partOf("snow").textContent).toContain("Snow day called by staff@example.org on 6 December");
+    expect(partOf("snow").querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("ticks gone home once the door's day is over, and shows who and when", async () => {
+    const done = eight({ dayOver: true, goneHome: { at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org" } });
+    const { calls } = withEight({ dayOver: true }, { "POST /api/admin/elf/doors/8/gone-home": { body: { door: done } } });
+    await openEight();
+    const tick = sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!;
+    expect(sheetEl().querySelector('label[for="hqDoor-goneHome"]')!.textContent).toBe("Gone home: the place has stopped hosting the elf");
+    expect(tick.checked).toBe(false);
+    tick.checked = true;
+    tick.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(calls.filter((c) => c.method === "POST")).toEqual([{ method: "POST", url: "/api/admin/elf/doors/8/gone-home", body: null }]);
+    expect(partOf("snow").textContent).toContain("Ticked by staff@example.org on 9 December");
+    expect(sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!.checked).toBe(true);
+  });
+
+  it("unticks gone home with DELETE", async () => {
+    const { calls } = withEight(
+      { dayOver: true, goneHome: { at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org" } },
+      { "DELETE /api/admin/elf/doors/8/gone-home": { body: { door: eight({ dayOver: true }) } } },
+    );
+    await openEight();
+    const tick = sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!;
+    expect(tick.checked).toBe(true);
+    tick.checked = false;
+    tick.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(calls.filter((c) => c.method === "DELETE")).toEqual([{ method: "DELETE", url: "/api/admin/elf/doors/8/gone-home", body: null }]);
+    expect(sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!.checked).toBe(false);
+  });
+
+  it("has no gone home tick before the door's day is over, and the tick is disabled for someone who may only look", async () => {
+    withEight({ dayOver: false });
+    await openEight();
+    expect(sheetEl().querySelector("#hqDoor-goneHome")).toBeNull();
+    withEight({ dayOver: true }, {}, false);
+    await openEight();
+    expect(sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!.disabled).toBe(true);
   });
 });

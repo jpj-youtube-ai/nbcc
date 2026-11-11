@@ -602,6 +602,33 @@ describe("the photo alert", () => {
     expect(deps.recordAlert).toHaveBeenCalledWith(expect.objectContaining({ door: 0 }));
   });
 
+  // An alert that would reach nobody is neither claimed nor recorded: a record would read in Finds as "One
+  // alert went", and would hold back the alert for these photos once someone turns alerts on.
+  it("claims and records nothing while no head elf has alerts on, and alerts once someone turns them on", async () => {
+    const { deps, sent, tick } = waiting({ listHeadElves: vi.fn(async () => [QUIET]) });
+    await tick(SIX_05);
+    expect(claimsOf(deps, "photo-alert")).toEqual([]);
+    expect(deps.recordAlert).not.toHaveBeenCalled();
+    expect(sentOf(sent, "photo")).toEqual([]);
+    expect(deps.sendText).not.toHaveBeenCalled();
+    // Kim turns alerts on: the photos still waiting alert on the next tick, once.
+    (deps.listHeadElves as Mock).mockResolvedValue([{ ...QUIET, alertsOn: true }]);
+    await tick(at("2026-12-07T18:05:30Z"));
+    expect(claimsOf(deps, "photo-alert")).toEqual(["first:2026-12-07"]);
+    expect(sentOf(sent, "photo").map((m) => m.to)).toEqual(["kim@example.org"]);
+    expect(deps.sendText).toHaveBeenCalledWith({ to: "+447700900124", text: ELF_PHOTO_TEXT, senderId: "NBCC" });
+    expect(deps.recordAlert).toHaveBeenCalledWith({ kind: "photo", year: 2026, door: 7, emails: 1, texts: 1, textsFailed: [] });
+    expect(deps.markSent).toHaveBeenCalledWith("photo-alert", "first:2026-12-07");
+  });
+
+  it("claims and records nothing when there are no head elves at all", async () => {
+    const { deps, tick } = waiting({ listHeadElves: vi.fn(async () => []) });
+    await tick(SIX_05);
+    expect(deps.claimSend).not.toHaveBeenCalledWith("photo-alert", expect.anything());
+    expect(deps.recordAlert).not.toHaveBeenCalled();
+    expect(deps.markSent).not.toHaveBeenCalled();
+  });
+
   it("sends nothing when claimSend answers false for the alert", async () => {
     const { deps, sent, tick } = waiting({ claimSend: vi.fn(async () => false) });
     await tick(SIX_05);

@@ -520,16 +520,22 @@ export async function sendProudMoments(m: WordMoment, deps: ElfWorkerDeps): Prom
  *
  *  Its claim is keyed by the last alert's time and the London date. The date changes at midnight, inside
  *  quiet hours, so an alert given up after three failed tries is tried again from 8am the next day rather
- *  than never. */
+ *  than never.
+ *
+ *  An alert that would reach nobody (no head elf has alerts on) is neither claimed nor recorded: a record
+ *  would read in Finds as an alert that went, and would hold back the alert for these photos. So the photos
+ *  waiting alert on the first tick after someone turns alerts on. */
 async function photoAlert(at: Date, year: number, deps: ElfWorkerDeps): Promise<void> {
   const [oldestWaitingAt, last] = await Promise.all([deps.oldestWaitingPhotoAt(), deps.lastAlert("photo")]);
   if (!photoAlertDue({ oldestWaitingAt, lastAlertAt: last?.at ?? null }, at)) return;
   const door = await deps.oldestWaitingPhotoDoor();
   // Checked while this tick was looking: nothing waits, so nothing is claimed.
   if (door === null) return;
+  // Everyone with alerts on has an email, and those of them with a mobile a text: none of them, nobody to tell.
+  const { emails, texts } = alertRecipients(await deps.listHeadElves());
+  if (emails.length === 0) return;
   const key = `${last ? last.at.toISOString() : "first"}:${londonDateAndHour(at).date}`;
   await claimed(deps, "photo-alert", key, async () => {
-    const { emails, texts } = alertRecipients(await deps.listHeadElves());
     const mail = buildElfPhotoAlertEmail({ door, adminUrl: `${deps.siteOrigin}/admin` });
     let emailed = 0;
     let lastError: unknown = null;

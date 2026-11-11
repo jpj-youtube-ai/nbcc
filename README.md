@@ -12114,6 +12114,8 @@ only, never the number). The rules (`photoAlertDue`):
 - never sooner than 30 minutes after the last alert, so a quick head elf who clears each photo as it
   comes is not texted for every one (C13);
 - nothing between 9pm and 8am, London time; at 8am, one alert if any photo is waiting;
+- an alert that would reach nobody (no head elf has alerts on) is neither claimed nor recorded, so Finds
+  never says one went, and the photos waiting alert on the first tick after someone turns alerts on;
 - a find is told by email only, to the same people (C7);
 - neither alert shows the photo or the family's name, and following a link changes nothing;
 - a text that Amazon refuses never stops the email, and Settings > Alerts names whose text did not go.

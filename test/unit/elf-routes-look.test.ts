@@ -11,6 +11,7 @@ vi.mock("../../src/db/pool", () => ({
 import { saveLook } from "../../src/db/elf";
 import { defaultLook } from "../../src/elf/wardrobe";
 
+const NO_DOORS = { cracked: [], visited: [] };
 const STORED = [{ ...defaultLook(), scene: "loch" }];
 const ROW = { id: 100, fresh: ["tree", "polarbear"], favourites: STORED };
 
@@ -33,7 +34,7 @@ describe("saving a look", () => {
   it("stores a locked costume as none: the doors done are the server's, never the page's", async () => {
     const saved = db(ROW);
     // The Christmas tree comes with door 2, and in wave 1 no door is done.
-    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: { ...defaultLook(), costume: "tree", scene: "ayr" }, tried: [] });
+    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: { ...defaultLook(), costume: "tree", scene: "ayr" }, tried: [], doors: NO_DOORS });
     expect(kept).not.toBe("not-found");
     if (kept !== "not-found") expect(kept.look).toEqual({ ...defaultLook(), scene: "ayr" });
     expect(saved.length).toBe(1);
@@ -42,7 +43,7 @@ describe("saving a look", () => {
 
   it("refuses another family's detective, and saves nothing", async () => {
     const saved = db(null);
-    expect(await saveLook({ detectiveId: 100, familyId: 99, look: defaultLook(), tried: [] })).toBe("not-found");
+    expect(await saveLook({ detectiveId: 100, familyId: 99, look: defaultLook(), tried: [], doors: NO_DOORS })).toBe("not-found");
     expect(saved.length).toBe(0);
     const select = clientQuery.mock.calls.find((c) => /FROM elf_detectives/.test(String(c[0])))!;
     expect(select[1]).toEqual([100, 99]);
@@ -50,7 +51,7 @@ describe("saving a look", () => {
 
   it("takes off fresh only the presents it had, once, however many times they are sent", async () => {
     const saved = db(ROW);
-    await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: ["tree", "nessie", 7, "tree"] });
+    await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: ["tree", "nessie", 7, "tree"], doors: NO_DOORS });
     expect(saved[0].params[2]).toEqual(["polarbear"]);
   });
 
@@ -60,7 +61,7 @@ describe("saving a look", () => {
     const b = { ...defaultLook(), costume: "tree", friend: "robin" };
     const c = { ...defaultLook(), glasses: "specs-gold" };
     const d = { ...defaultLook(), bow: "bow-red" };
-    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: [], favourites: [a, 7, a, b, c, d] });
+    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: [], favourites: [a, 7, a, b, c, d], doors: NO_DOORS });
     const want = [a, { ...defaultLook(), friend: "robin" }, c];
     if (kept !== "not-found") expect(kept.favourites).toEqual(want);
     expect(saved[0].sql).toMatch(/favourites = \$4/);
@@ -69,7 +70,7 @@ describe("saving a look", () => {
 
   it("leaves favourites alone when a save does not send them", async () => {
     const saved = db(ROW);
-    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: [] });
+    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: [], doors: NO_DOORS });
     expect(saved[0].sql).not.toMatch(/favourites/);
     expect(saved[0].params.length).toBe(3);
     if (kept !== "not-found") expect(kept.favourites).toEqual(STORED);

@@ -24,7 +24,24 @@ beforeEach(() => {
 describe("the school's settings", () => {
   it("reads the row", async () => {
     query.mockResolvedValueOnce({ rows: [ROW] });
-    expect(await getElfSettings()).toEqual({ schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null });
+    expect(await getElfSettings()).toEqual({ schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null, doorsOn: false });
+  });
+
+  it("reads the doors switch, off when the column is missing", async () => {
+    query.mockResolvedValueOnce({ rows: [{ ...ROW, doors_on: true }] });
+    expect((await getElfSettings()).doorsOn).toBe(true);
+    expect(String(query.mock.calls[0][0])).toContain("doors_on");
+    query.mockResolvedValueOnce({ rows: [ROW] });
+    expect((await getElfSettings()).doorsOn).toBe(false);
+    expect(ELF_DEFAULTS.doorsOn).toBe(false);
+  });
+
+  it("writes the doors switch through the same map", async () => {
+    clientQuery.mockImplementation(async () => ({ rows: [ROW] }));
+    await setElfSettings({ doorsOn: true }, "staff@example.org");
+    const update = clientQuery.mock.calls.find((c) => /UPDATE elf_settings/.test(String(c[0])))!;
+    expect(String(update[0])).toContain("doors_on = $1");
+    expect(update[1]).toEqual([true, "staff@example.org"]);
   });
 
   it("reads the place phone", async () => {
@@ -43,7 +60,7 @@ describe("the school's settings", () => {
 
   it("reads as switched off, at £1 and £5, when anything goes wrong", async () => {
     query.mockRejectedValueOnce(new Error("no database"));
-    expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null });
+    expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null, doorsOn: false });
     query.mockResolvedValueOnce({ rows: [] });
     expect(await getElfSettings()).toEqual(ELF_DEFAULTS);
     expect(ELF_DEFAULTS.schoolOn).toBe(false);

@@ -13,6 +13,8 @@ export interface ElfSettings {
   previewHash?: string | null;
   /** The number shown on the staff card for a place to ring, or null when none is set. */
   placePhone: string | null;
+  /** The December doors' switch. Off: every family route reads as wave 1 (shut doors, no clues). */
+  doorsOn: boolean;
 }
 
 /** What the school reads as when its row cannot be read: switched off, from £1, £5 suggested. */
@@ -23,4 +25,5 @@ export const ELF_DEFAULTS: Readonly<ElfSettings> = Object.freeze({
   entrySuggestedPence: 500,
   previewHash: null,
   placePhone: null,
+  doorsOn: false,
 });

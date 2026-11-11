@@ -466,7 +466,9 @@ export async function postLook(req: Request, res: Response): Promise<Response | 
   const tried = json && Array.isArray(body.tried) ? body.tried.slice(0, 200) : [];
   // Favourite looks come only from the script, and only as a list; anything else leaves them as they are.
   const favourites = json && Array.isArray(body.favourites) ? (body.favourites as unknown[]) : undefined;
-  const kept = detectiveId === null ? "not-found" : await saveLook({ detectiveId, familyId: s.familyId, look, tried, favourites });
+  // Wave 1's doors done (none). Task 7 passes the detective's real doors from the game's loader.
+  const doors = { cracked: [], visited: [] };
+  const kept = detectiveId === null ? "not-found" : await saveLook({ detectiveId, familyId: s.familyId, look, tried, favourites, doors });
   if (kept === "not-found") return json ? res.status(404).json({ error: "Not found" }) : res.status(404).type("text/plain").send("Not found");
   return json ? res.status(200).json({ ok: true, look: kept.look, favourites: kept.favourites }) : res.redirect(303, `/elf/hq/wardrobe/${detectiveId}`);
 }

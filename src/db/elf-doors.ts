@@ -83,6 +83,12 @@ interface DoorRow {
   dropped_off_by: string | null;
   thanked_at: Date | null;
   thanked_by: string | null;
+  found_at?: Date | null;
+  found_family_id?: number | null;
+  snow_day_at?: Date | null;
+  snow_day_by?: string | null;
+  gone_home_at?: Date | null;
+  gone_home_by?: string | null;
 }
 
 interface NameRow {
@@ -94,13 +100,18 @@ interface NameRow {
 interface ClueRow {
   door?: number;
   n: number;
-  words: string;
+  words: string | null;
+  has_picture?: boolean;
+  picture_alt?: string | null;
 }
 
 const DOOR_COLUMN_LIST =
   `door, place_name, place_town, place_address, contact_name, contact_phone, contact_email, closes_at, elf_spot,
    agreed_by, prize, prize_show_off, elf_name, tag_word, tag_printed_at, clue1_time, clue2_time, clue3_time,
-   reveal_time, poster_code, dropped_off_at, dropped_off_by, thanked_at, thanked_by`;
+   reveal_time, poster_code, dropped_off_at, dropped_off_by, thanked_at, thanked_by,
+   found_at, found_family_id, snow_day_at, snow_day_by, gone_home_at, gone_home_by`;
+
+const CLUE_COLUMN_LIST = "n, words, picture IS NOT NULL AS has_picture, picture_alt";
 
 function doorFrom(row: DoorRow, names: NameRow[], clues: ClueRow[]): DoorSetup {
   const d = emptyDoor(row.door as Door, row.poster_code);
@@ -128,8 +139,17 @@ function doorFrom(row: DoorRow, names: NameRow[], clues: ClueRow[]): DoorSetup {
     droppedOffBy: row.dropped_off_by,
     thankedAt: row.thanked_at,
     thankedBy: row.thanked_by,
+    foundAt: row.found_at ?? null,
+    foundFamilyId: row.found_family_id ?? null,
+    snowDayAt: row.snow_day_at ?? null,
+    snowDayBy: row.snow_day_by ?? null,
+    goneHomeAt: row.gone_home_at ?? null,
+    goneHomeBy: row.gone_home_by ?? null,
     names: [...names].sort((a, b) => a.id - b.id).map((x) => ({ id: x.id, name: x.name })),
-    clues: ([1, 2, 3] as const).map((n) => ({ n, words: clues.find((c) => c.n === n)?.words ?? null })),
+    clues: ([1, 2, 3] as const).map((n) => {
+      const c = clues.find((x) => x.n === n);
+      return { n, words: c?.words ?? null, hasPicture: c?.has_picture === true, pictureAlt: c?.picture_alt ?? null };
+    }),
   };
 }
 
@@ -143,7 +163,7 @@ async function readDoor(q: Querier, year: number, door: Door, lock = false): Pro
   const row = r.rows[0];
   if (!row) return null;
   const names = await q.query<NameRow>("SELECT id, name FROM elf_door_names WHERE year = $1 AND door = $2 ORDER BY id", [year, door]);
-  const clues = await q.query<ClueRow>("SELECT n, words FROM elf_clues WHERE year = $1 AND door = $2 ORDER BY n", [year, door]);
+  const clues = await q.query<ClueRow>(`SELECT ${CLUE_COLUMN_LIST} FROM elf_clues WHERE year = $1 AND door = $2 ORDER BY n`, [year, door]);
   return doorFrom(row, names.rows, clues.rows);
 }
 
@@ -203,7 +223,7 @@ export async function ensureElfDoors(year: number): Promise<void> {
 export async function listElfDoors(year: number): Promise<DoorSetup[]> {
   const doors = await pool.query<DoorRow>(`SELECT ${DOOR_COLUMN_LIST} FROM elf_doors WHERE year = $1 ORDER BY door`, [year]);
   const names = await pool.query<NameRow>("SELECT door, id, name FROM elf_door_names WHERE year = $1 ORDER BY door, id", [year]);
-  const clues = await pool.query<ClueRow>("SELECT door, n, words FROM elf_clues WHERE year = $1 ORDER BY door, n", [year]);
+  const clues = await pool.query<ClueRow>(`SELECT door, ${CLUE_COLUMN_LIST} FROM elf_clues WHERE year = $1 ORDER BY door, n`, [year]);
   return doors.rows.map((row) =>
     doorFrom(
       row,
@@ -216,6 +236,21 @@ export async function listElfDoors(year: number): Promise<DoorSetup[]> {
 /** One door, or null when it has no row. */
 export async function getElfDoor(year: number, door: Door): Promise<DoorSetup | null> {
   return readDoor(pool, year, door);
+}
+
+/** A door found by its poster code, with the year it belongs to; null when no door has that code. */
+export async function findElfDoorByPosterCode(code: string): Promise<{ year: number; setup: DoorSetup } | null> {
+  const r = await pool.query<DoorRow & { year: number }>(`SELECT year, ${DOOR_COLUMN_LIST} FROM elf_doors WHERE poster_code = $1`, [code]);
+  const row = r.rows[0];
+  if (!row) return null;
+  const names = await pool.query<NameRow>("SELECT id, name FROM elf_door_names WHERE year = $1 AND door = $2 ORDER BY id", [row.year, row.door]);
+  const clues = await pool.query<ClueRow>(`SELECT ${CLUE_COLUMN_LIST} FROM elf_clues WHERE year = $1 AND door = $2 ORDER BY n`, [row.year, row.door]);
+  return { year: row.year, setup: doorFrom(row, names.rows, clues.rows) };
+}
+
+/** One door by its poster code, or null. */
+export async function getElfDoorByPosterCode(code: string): Promise<DoorSetup | null> {
+  return (await findElfDoorByPosterCode(code))?.setup ?? null;
 }
 
 // ---- changing --------------------------------------------------------------------------------------
@@ -302,15 +337,30 @@ export async function markElfTagPrinted(year: number, door: Door, actor: string)
   );
 }
 
-/** Ticks "dropped off" or "thanked" on or off. On records the time and who; off clears both. */
+const TICK_COLUMNS = {
+  droppedOff: ["dropped_off_at", "dropped_off_by"],
+  thanked: ["thanked_at", "thanked_by"],
+  snowDay: ["snow_day_at", "snow_day_by"],
+  goneHome: ["gone_home_at", "gone_home_by"],
+} as const;
+
+/** The audit action each tick is recorded as. */
+const TICK_ACTIONS = {
+  droppedOff: "elf.door.tick",
+  thanked: "elf.door.tick",
+  snowDay: "elf.door.snow_day",
+  goneHome: "elf.door.gone_home",
+} as const;
+
+/** Ticks "dropped off", "thanked", "snow day" or "gone home" on or off. On records the time and who; off clears both. */
 export async function tickElfDoor(
   year: number,
   door: Door,
-  which: "droppedOff" | "thanked",
+  which: "droppedOff" | "thanked" | "snowDay" | "goneHome",
   on: boolean,
   actor: string,
 ): Promise<DoorSetup | null> {
-  const [atColumn, byColumn] = which === "droppedOff" ? ["dropped_off_at", "dropped_off_by"] : ["thanked_at", "thanked_by"];
+  const [atColumn, byColumn] = TICK_COLUMNS[which];
   return audited(
     async (client) => {
       await lockedDoor(client, year, door);
@@ -329,7 +379,7 @@ export async function tickElfDoor(
       }
       return (await readDoor(client, year, door)) as DoorSetup;
     },
-    () => ({ actor, action: "elf.door.tick", entity: "elf_door", entityId: door, data: { year, which, on } }),
+    () => ({ actor, action: TICK_ACTIONS[which], entity: "elf_door", entityId: door, data: { year, which, on } }),
   );
 }
 
@@ -338,13 +388,18 @@ export async function tickElfDoor(
 const UPSERT_CLUE_SQL = `INSERT INTO elf_clues (year, door, n, words, updated_by) VALUES ($1, $2, $3, $4, $5)
   ON CONFLICT (year, door, n) DO UPDATE SET words = EXCLUDED.words, updated_at = now(), updated_by = EXCLUDED.updated_by`;
 
-/** Saves one clue's words; null words removes the clue. */
+/** Saves one clue's words. Null clears the words, and removes the clue only when it has no picture. */
 export async function saveElfClue(year: number, door: Door, n: ClueN, words: string | null, actor: string): Promise<DoorSetup | null> {
   return audited(
     async (client) => {
       await lockedDoor(client, year, door);
       if (words === null) {
-        await client.query("DELETE FROM elf_clues WHERE year = $1 AND door = $2 AND n = $3", [year, door, n]);
+        await client.query(
+          `UPDATE elf_clues SET words = NULL, updated_at = now(), updated_by = $4
+            WHERE year = $1 AND door = $2 AND n = $3 AND picture IS NOT NULL`,
+          [year, door, n, actor],
+        );
+        await client.query("DELETE FROM elf_clues WHERE year = $1 AND door = $2 AND n = $3 AND picture IS NULL", [year, door, n]);
       } else {
         await client.query(UPSERT_CLUE_SQL, [year, door, n, words, actor]);
       }
@@ -358,6 +413,9 @@ export async function saveElfClue(year: number, door: Door, n: ClueN, words: str
 export async function savePastedClues(year: number, doors: PastedDoor[], actor: string): Promise<{ doors: number; clues: number }> {
   return writeWithAudit(
     async (client) => {
+      // Lock the doors' rows in door order first, so two pastes (or a paste and a single clue save) cannot deadlock.
+      const order = [...new Set(doors.map((d) => d.door))].sort((a, b) => a - b);
+      await client.query("SELECT door FROM elf_doors WHERE year = $1 AND door = ANY($2::int[]) ORDER BY door FOR UPDATE", [year, order]);
       let clues = 0;
       for (const d of doors) {
         for (const c of d.clues) {

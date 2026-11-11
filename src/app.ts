@@ -60,7 +60,7 @@ import { adminOverviewRouter } from "./routes/admin-overview";
 import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
 import { createSiteRouter } from "./routes/site";
-import { elfRouter } from "./routes/elf";
+import { elfPhotoBodyGuard, elfRouter, ELF_PHOTO_POST_PATH } from "./routes/elf";
 import { adminElfRouter } from "./routes/admin-elf";
 import { adminElfDoorsRouter } from "./routes/admin-elf-doors";
 
@@ -103,6 +103,9 @@ export function createApp() {
   app.use(NEWS_POST_PATH, newsBodyGuard, express.json({ limit: NEWS_JSON_BODY_LIMIT }));
   // Profile pictures: the page photo and round profile photo an organiser sends, the same way.
   app.use(PICTURE_POST_PATH, newsBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
+  // Elf Detective School: a family's photo for a door (shrunk in the browser first), the same way, read
+  // only with a cookie the shape of a signed in family's (elfPhotoBodyGuard).
+  app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
   // Hosted-document uploads (TASK-265): same problem, bigger files — the 10 MB document cap is
   // ~13.7 MB base64-encoded, so without this the parser 413s a real certificate BEFORE auth runs
   // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the

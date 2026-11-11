@@ -580,15 +580,17 @@ export async function approvedPhoto(year: number, door: number, token: string): 
 
 // ---- elves, clue pictures, the switch -----------------------------------------------------------------
 
-/** The elf a visit left on a door: its look and whose it is. */
-export async function visitElf(year: number, door: number, visitId: number): Promise<{ look: unknown; detectiveId: number } | null> {
-  const r = await pool.query<{ look: unknown; detective_id: number }>(
-    `SELECT v.look, v.detective_id FROM elf_visits v
+/** The elf a visit left on a door: its look, whose it is, and when the visit counts from (the route
+ *  serves the elf only from then). */
+export async function visitElf(year: number, door: number, visitId: number): Promise<{ look: unknown; detectiveId: number; countsFrom: Date } | null> {
+  const r = await pool.query<{ look: unknown; detective_id: number; counts_from: Date }>(
+    `SELECT v.look, v.detective_id, v.counts_from FROM elf_visits v
        JOIN elf_families f ON f.id = v.family_id
       WHERE v.id = $1 AND v.year = $2 AND v.door = $3 AND f.removed_at IS NULL`,
     [visitId, year, door],
   );
-  return r.rows[0] ? { look: r.rows[0].look, detectiveId: Number(r.rows[0].detective_id) } : null;
+  const row = r.rows[0];
+  return row ? { look: row.look, detectiveId: Number(row.detective_id), countsFrom: row.counts_from } : null;
 }
 
 /** A clue's picture, or null. */

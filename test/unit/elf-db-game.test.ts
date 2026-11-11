@@ -813,9 +813,12 @@ describe("photos", () => {
 });
 
 describe("visitElf, cluePicture and the switch", () => {
-  it("reads a visit's elf, or null", async () => {
-    query.mockResolvedValueOnce({ rows: [{ look: { costume: "tree" }, detective_id: 10 }] });
-    expect(await visitElf(2026, 7, 5)).toEqual({ look: { costume: "tree" }, detectiveId: 10 });
+  it("reads a visit's elf and when it counts from, or null", async () => {
+    // The elf picture route serves an elf only once its visit counts, so the time comes with it.
+    query.mockResolvedValueOnce({ rows: [{ look: { costume: "tree" }, detective_id: 10, counts_from: at("2026-12-07T19:00:00Z") }] });
+    expect(await visitElf(2026, 7, 5)).toEqual({ look: { costume: "tree" }, detectiveId: 10, countsFrom: at("2026-12-07T19:00:00Z") });
+    expect(String(query.mock.calls[0][0])).toContain("v.counts_from");
+    expect(query.mock.calls[0][1]).toEqual([5, 2026, 7]);
     query.mockResolvedValueOnce({ rows: [] });
     expect(await visitElf(2026, 7, 6)).toBeNull();
   });

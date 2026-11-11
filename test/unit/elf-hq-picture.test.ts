@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Every family is invented.
 
 const { elfPng, elfPngKey } = vi.hoisted(() => ({ elfPng: vi.fn(), elfPngKey: vi.fn(() => "k1") }));
+// The doors the detective has done, from the game's data layer: the server's own, never the page's.
+const { detectiveDoorsDone } = vi.hoisted(() => ({ detectiveDoorsDone: vi.fn() }));
 
 vi.mock("../../src/db/elf", async (orig) => ({
   ...(await orig<typeof import("../../src/db/elf")>()),
@@ -15,6 +17,7 @@ vi.mock("../../src/db/elf", async (orig) => ({
     id === 3 ? { id: 3, grownUpName: "Sam Example", email: "sam.example@example.com", detectives: [{ id: 100, firstName: "Ruby", surname: "Tinselfoot", look: null }] } : null,
 }));
 vi.mock("../../src/elf/elf-png", () => ({ elfPng, elfPngKey }));
+vi.mock("../../src/db/elf-game", async (orig) => ({ ...(await orig<typeof import("../../src/db/elf-game")>()), detectiveDoorsDone }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
@@ -57,6 +60,10 @@ async function get(file: string, extra: Record<string, string> = {}) {
 beforeEach(() => {
   elfPng.mockReset();
   elfPng.mockResolvedValue(Buffer.from("png"));
+  elfPngKey.mockClear();
+  detectiveDoorsDone.mockReset();
+  // Ruby cracked door 2, whose Christmas tree she may now wear.
+  detectiveDoorsDone.mockResolvedValue({ cracked: [2], visited: [], snow: [] });
 });
 
 describe("a detective's elf on Detective HQ", () => {
@@ -69,8 +76,12 @@ describe("a detective's elf on Detective HQ", () => {
     // shows at once (final review, 3 November 2026: every reload used to make it again).
     expect(r.headers["Cache-Control"]).toBe("private, no-cache");
     expect(r.headers["ETag"]).toBe('"k1"');
-    // The doors done are the server's own (in wave 1, none), never anything the browser says.
-    expect(elfPng).toHaveBeenCalledWith(null, { doors: [] }, 240);
+    // The doors done are the server's own, from the doors as the family's routes read them, never
+    // anything the browser says: the picture and its name are made in that wardrobe.
+    expect(detectiveDoorsDone).toHaveBeenCalledWith(2026, 100, expect.any(Array), expect.any(Date));
+    expect(detectiveDoorsDone.mock.calls[0][2]).toHaveLength(24);
+    expect(elfPng).toHaveBeenCalledWith(null, { doors: [2] }, 240);
+    expect(elfPngKey).toHaveBeenCalledWith(null, { doors: [2] }, 240);
   });
 
   it("is not found for another family's detective, or any other name", async () => {

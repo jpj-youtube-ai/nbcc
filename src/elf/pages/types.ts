@@ -195,7 +195,8 @@ export interface PosterView {
 
 /** A word that won: what the gold "You're first!" card shows the staff. */
 export interface ClaimWin {
-  door: Door;
+  /** 1 to 24, or 0 for the practice door ("The practice door"). */
+  door: Door | 0;
   elfName: string;
   placeName: string;
   /** When the claim arrived, and the server's time as the card is drawn (for the ticking clock). */

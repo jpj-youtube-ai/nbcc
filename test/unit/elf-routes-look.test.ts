@@ -3,12 +3,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // NBCC Elf Detective School: saving how a detective's elf looks. The server decides which doors the
 // detective has done; whatever the page sends is made safe against that. Every family is invented.
 
-const { clientQuery, poolQuery } = vi.hoisted(() => ({ clientQuery: vi.fn(), poolQuery: vi.fn() }));
+const { clientQuery, poolQuery, detectiveDoorsDone } = vi.hoisted(() => ({ clientQuery: vi.fn(), poolQuery: vi.fn(), detectiveDoorsDone: vi.fn() }));
 vi.mock("../../src/db/pool", () => ({
   pool: { query: poolQuery, connect: async () => ({ query: clientQuery, release: vi.fn() }) },
 }));
+// The route's own session lookup, and the doors done from the game's data layer; saveLook itself is real.
+vi.mock("../../src/db/elf", async (orig) => ({ ...(await orig<typeof import("../../src/db/elf")>()), findElfSession: async () => ({ familyId: 3 }) }));
+vi.mock("../../src/db/elf-game", async (orig) => ({ ...(await orig<typeof import("../../src/db/elf-game")>()), detectiveDoorsDone }));
+vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
+vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
+import type { Request, Response } from "express";
 import { saveLook } from "../../src/db/elf";
+import { postLook } from "../../src/routes/elf";
+import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { defaultLook } from "../../src/elf/wardrobe";
 
 const NO_DOORS = { cracked: [], visited: [] };
@@ -18,6 +26,7 @@ const ROW = { id: 100, fresh: ["tree", "polarbear"], favourites: STORED };
 beforeEach(() => {
   clientQuery.mockReset();
   poolQuery.mockReset();
+  detectiveDoorsDone.mockReset();
 });
 
 function db(row: typeof ROW | null) {
@@ -74,5 +83,61 @@ describe("saving a look", () => {
     expect(saved[0].sql).not.toMatch(/favourites/);
     expect(saved[0].params.length).toBe(3);
     if (kept !== "not-found") expect(kept.favourites).toEqual(STORED);
+  });
+});
+
+describe("the look route", () => {
+  const SETTINGS = { ...ELF_DEFAULTS, schoolOn: true, year: 2026 };
+
+  async function post(body: Record<string, unknown>) {
+    const out = { status: 200, body: undefined as unknown };
+    const res = {
+      locals: { elfSettings: SETTINGS, elfPractice: false },
+      setHeader: () => res,
+      status(s: number) {
+        out.status = s;
+        return res;
+      },
+      json(b: unknown) {
+        out.body = b;
+        return res;
+      },
+      type: () => res,
+      send: () => res,
+      redirect(s: number) {
+        out.status = s;
+        return res;
+      },
+    };
+    const req = { headers: { cookie: `nbcc_elf_session=${"a".repeat(40)}`, "content-type": "application/json", host: "nbcc.scot" }, body };
+    await postLook(req as unknown as Request, res as unknown as Response);
+    return out;
+  }
+
+  it("makes the look safe against the detective's own doors done, worked out on the server", async () => {
+    // Ruby cracked door 2, so its Christmas tree is hers to wear.
+    detectiveDoorsDone.mockResolvedValue({ cracked: [2], visited: [], snow: [] });
+    const saved = db(ROW);
+    const r = await post({ detectiveId: 100, look: { ...defaultLook(), costume: "tree" }, tried: [] });
+    expect(r.status).toBe(200);
+    expect(detectiveDoorsDone).toHaveBeenCalledWith(2026, 100, expect.any(Array), expect.any(Date));
+    // The doors as every family route reads them: all 24, wave 1's while December's doors are off.
+    expect(detectiveDoorsDone.mock.calls[0][2]).toHaveLength(24);
+    expect(JSON.parse(saved[0].params[1] as string)).toEqual({ ...defaultLook(), costume: "tree" });
+  });
+
+  it("still stores a costume the detective has not unlocked as none", async () => {
+    detectiveDoorsDone.mockResolvedValue({ cracked: [], visited: [], snow: [] });
+    const saved = db(ROW);
+    await post({ detectiveId: 100, look: { ...defaultLook(), costume: "tree" }, tried: [] });
+    expect(JSON.parse(saved[0].params[1] as string)).toEqual(defaultLook());
+  });
+
+  it("asks nothing of the doors for an id that is not a detective's", async () => {
+    const saved = db(ROW);
+    const r = await post({ detectiveId: "not an id", look: defaultLook(), tried: [] });
+    expect(r.status).toBe(404);
+    expect(detectiveDoorsDone).not.toHaveBeenCalled();
+    expect(saved.length).toBe(0);
   });
 });

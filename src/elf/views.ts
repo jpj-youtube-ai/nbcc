@@ -118,8 +118,9 @@ function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>;
   };
 }
 
-/** The family's marks: a door is cracked or visited by any of its detectives, or snowed in. */
-function marksOf(runs: readonly DoorRun[], family: FamilyRow, doorsDone: Map<number, DoorsDone>, photos: FamilyMarks["photos"], now: Date): FamilyMarks {
+/** The family's marks: a door is cracked or visited by any of its detectives, or snowed in. Detective
+ *  HQ draws them, and the calendar's script reads them from /api/elf/me. */
+export function marksOf(runs: readonly DoorRun[], family: FamilyRow, doorsDone: Map<number, DoorsDone>, photos: FamilyMarks["photos"], now: Date): FamilyMarks {
   const crackedDoors = new Set<number>();
   const visitedDoors = new Set<number>();
   for (const d of family.detectives) {
@@ -185,11 +186,6 @@ export function wardrobeViewFor(o: { detective: DetectiveRow; settings: ElfSetti
     calendarUrl: "/elf",
     saveUrl: "/api/elf/look",
   };
-}
-
-/** Wave 1's wardrobe state (no doors done), for saving a look. Task 7 removes its last caller. */
-export function wardrobeStateNow() {
-  return earned(NO_DOORS).state;
 }
 
 /** A look as the plain wardrobe form sends it (no script): one field for each part, with an empty choice

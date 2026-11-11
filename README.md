@@ -1672,9 +1672,9 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `PATCH /api/admin/elf/families/:id`, `POST /api/admin/elf/families/:id/sign-in-code` \| `remove` \| `restore`, `PATCH /api/admin/elf/detectives/:id` | **implemented** | Head Elf HQ's changes, each written to the audit log: a grown up's name or email, a sign in code sent for them, a family taken out or put back, a detective's name ticked, unticked or changed (section `elf`: edit) |
 | `GET /elf/preview/:code`, `POST /api/admin/elf/preview`, `DELETE /api/admin/elf/preview` | **implemented** | The private preview link: an admin makes it (any earlier one stops working; only its sha256 is kept), and a browser that opens it sees every `/elf` page while Elf Detective School is switched off, each marked Private preview, `noindex` and never cached publicly. Payments in the preview are real |
 | `GET /elf/p/:code`, `POST /elf/p/:code/word`, `POST /api/elf/word` | **implemented, switched off** | A door's poster page (the code on the poster) and the word on the elf's tag: one typed word is both the claim and the stamp. Behind December's doors switch as well as Elf Detective School's own: 404 while that is off. Limited to 30 words a family and 300 an address in 15 minutes, and six wrong words a door for a family. See **Doors in December** |
-| `POST /api/elf/guess` | **implemented, switched off** | A typed guess at where a door's place is (JSON for the script, a drawn page for the plain form); a guess naming a place already open is refused kindly with that door's number |
-| `POST /api/elf/p/:code/photo`, `DELETE /api/elf/p/:code/photo`, `DELETE /api/elf/door/:n/photo`, `GET /elf/door/:n/photo/:token.jpg` | **implemented, switched off** | A family's photo: sent only after a visit at that door (5 a family a day), taken down by the family (its bytes deleted), and served by its random token only once approved and while the door is open. The 4 MB body parser is reached only by the photo post |
-| `GET /elf/door/:n/elf/:visitId.png`, `GET /elf/hq/clue/:door/:n.jpg` | **implemented, switched off** | A family's elf standing on a door, and a clue's picture (signed in families only, once that clue is out) |
+| `POST /api/elf/guess` | **implemented, switched off** | A typed guess at where a door's place is (JSON for the script, a drawn page for the plain form); a guess naming a place already open is refused kindly with that door's number. Limited to 60 guesses a family in 15 minutes |
+| `POST /api/elf/p/:code/photo`, `DELETE /api/elf/p/:code/photo`, `DELETE /api/elf/door/:n/photo`, `GET /elf/door/:n/photo/:token.jpg` | **implemented, switched off** | A family's photo: sent only after a visit at that door (5 a family a day; none once its elf has gone home, 409), taken down by the family (its bytes deleted), and served by its random token only once approved and while the door is open. The 4 MB body parser is reached only by the photo post (a take down's DELETE gets the usual small one) |
+| `GET /elf/door/:n/elf/:visitId.png`, `GET /elf/hq/clue/:door/:n.jpg` | **implemented, switched off** | A family's elf standing on a door (one read a request; drawn from the look stored with the visit and kept drawn, the most recent 200), and a clue's picture (signed in families only, once that clue is out) |
 | `GET /api/admin/elf/practice`, `POST /api/admin/elf/practice`, `DELETE /api/admin/elf/practice` | **implemented** | The practice door (door 0): read, start (needs a preview link) and clear, from Head Elf HQ Settings; starting and clearing are audited (section `elf`: edit) |
 | `POST /api/admin/elf/families/:id/word-tries/clear` | **implemented** | A head elf clears a family's wrong words (section `elf`: edit; audited) |
 | `GET /api/admin/elf/doors`, `GET` \| `PATCH /api/admin/elf/doors/:door`, `POST /api/admin/elf/doors/:door/names`, `DELETE .../names/:id`, `POST .../word`, `POST` \| `DELETE .../dropped-off` \| `thanked`, `PUT /api/admin/elf/doors/:door/clues/:n`, `POST /api/admin/elf/clues/check` \| `save`, `GET .../poster` \| `staff-card` \| `tag`, `GET /api/admin/elf/places-list` | **implemented** | Head Elf HQ's Doors (see **Head Elf HQ**) |
@@ -11982,29 +11982,41 @@ second after does not), and a guess naming a place already open is refused kindl
 number. A door is shut, hunting, found with its place hidden, shown, snowed in or gone home. No
 family route carries a place, a clue word, a clue picture or a photo for a door that is shut,
 hunting, found with its place hidden or snowed in. Found and hidden are separate: the first right
-word sets `found_at`, but the place stays hidden until its time.
+word sets `found_at`, but the place stays hidden until its time. Detective HQ says the staff reveal
+time until it passes, then that the place is shown as soon as the elf is found; it never says the
+place's closing time (when an unfound elf's place is shown), which would tell how late a place is open.
 
 **The word is both the claim and the stamp.** `decideWord` takes the family's typed word. The first
 family in wins the door under the row lock (`elf_doors.found_at` is set once, so two families in the
-same second give exactly one winner) and takes the prize: one prize a family. Every other right word
-is a visit that counts from the shown time, earns stamps and puts the family's elves on the door.
-Limits: 30 words a family and 300 an address in 15 minutes; six wrong words a door for a family (a
-head elf can clear them); a family that taps twice within 2 minutes of its own find sees the winner's
-card again. The prize is named on every door once its elf is found, whether or not Show it off is
-ticked.
+same second give exactly one winner) and takes the prize: one prize a family a year. A family's words
+are recorded one at a time (its `elf_families` row is locked first), and a claim also needs the family
+to have won no door this year, so two right words for two doors sent at once still win one prize.
+Every other right word is a visit that counts from the shown time, earns stamps and puts the family's
+elves on the door. Limits: 30 words a family and 300 an address in 15 minutes, and 60 guesses a family;
+six wrong words a door for a family (a head elf can clear them); a family that taps twice within 2
+minutes of its own find sees the winner's card again. The prize is named on every door once its elf
+is found, whether or not Show it off is ticked.
 
 **Snow days and Gone home.** A head elf can call a Snow day before a door's first clue; a door that
 cannot run when its first clue falls due is snowed in automatically. The snow day is stored, and a
-snow day door counts as done for every detective. Gone home is allowed only after the door's day.
+snow day door counts as done for every detective, and shows done on the family's marks (Detective
+HQ and the calendar's holly). Gone home is allowed only after the door's day; a door whose elf has
+gone home takes no more photos.
 
 **Switched off means wave 1.** While December's doors are off, `runsFor` (the one loader every family
 route uses) gives exactly the wave 1 doors (`waveOneRuns`): shut, each door's default clue 1 time
 shown (a door whose day has passed keeps its time on the calendar), the stock elf names, no clues, no
-teaser, no door picture, no snow and no progress; Detective HQ has no today's case. Every game route
-answers 404. A practice browser (the preview cookie) also gets door 0, never a real door.
+teaser, no door picture, no snow and no progress; Detective HQ has no today's case and counts down
+only to door 1's first clue, as wave 1's did. Nothing a family reads differs from wave 1: the
+calendar's How it works and today's door keep wave 1's words (`view.doorsOn` picks them). Every game
+route answers 404. A practice browser (the preview cookie) also gets door 0, never a real door.
 
 **The public calendar** is built at most once every 15 seconds and shared by everyone
-(`src/elf/public-calendar.ts`); its found count includes found doors whose place is still hidden.
+(`src/elf/public-calendar.ts`); its found count includes found doors whose place is still hidden. The
+page and the feed each tell the script the time of their own answer, never the build's, and the script
+moves its clock only for a newer time (a copy the browser kept repeats an older one). A door elf that
+fails (the picture maker is busy, 503) is asked for again twice, after 2 and 5 seconds; Detective HQ
+fetches itself again between 1 and 6 seconds after a clue comes out, a different while on each page.
 
 **The scrapbook.** Two rows, elves and photos. The photo row is in a stable shuffled order (sorted by
 each photo's random token), not approval order, so nobody can match a face to a finder named above
@@ -12036,7 +12048,9 @@ evening. Starting and clearing are audited.
 `features/elf-game.feature`, which plays a whole practice evening in CI (about a minute longer).
 Every `@elf-school` scenario sets the game's year to next year and December's doors off before it
 runs and puts both back after (`features/steps/elf-join.steps.js`), so a real door is always in the
-future. BDD runs only in CI.
+future. A real door keeps clock times on its own day, so one scenario plays a real door in last
+year's December, which is always over (a find, a visit, the scrapbook, a photo, a door elf, wrong
+tries cleared and an automatic snow day), and takes last year's rows away after. BDD runs only in CI.
 
 **Still to come (Plan 2b).** The head elves' photo check, the alerts (text and email), the emails and
 Finds.

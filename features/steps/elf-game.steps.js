@@ -16,7 +16,9 @@ const nextYear = () => new Date().getFullYear() + 1;
 
 // The doors list makes next year's 24 door rows, and the practice evening makes a preview link: each
 // scenario starts without those rows and leaves none behind, and puts the preview link back as it was.
-// These touch neither the year nor December's doors switch, which the @elf-school hooks keep.
+// These touch neither the year nor December's doors switch, which the @elf-school hooks keep. A scenario
+// played in last year's December (whose After hook runs after the @elf-school one, which has put the
+// year back) leaves nothing of that December behind either.
 Before({ tags: "@elf-game" }, async function () {
   await pool.query("DELETE FROM elf_doors WHERE year = $1", [nextYear()]);
   const r = await pool.query("SELECT preview_hash FROM elf_settings WHERE id = 1");
@@ -24,6 +26,13 @@ Before({ tags: "@elf-game" }, async function () {
 });
 After({ tags: "@elf-game" }, async function () {
   await pool.query("DELETE FROM elf_doors WHERE year = $1", [nextYear()]);
+  if (this.gamePastYear) {
+    for (const table of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos"]) {
+      await pool.query(`DELETE FROM ${table} WHERE year = $1`, [this.gamePastYear]);
+    }
+    // The door's names and clues go with it.
+    await pool.query("DELETE FROM elf_doors WHERE year = $1", [this.gamePastYear]);
+  }
   if (this.gamePreviewBefore) await pool.query("UPDATE elf_settings SET preview_hash = $1 WHERE id = 1", [this.gamePreviewBefore.hash]);
 });
 AfterAll(async () => {
@@ -96,6 +105,7 @@ async function asFamily(world, family, method, path, json) {
   if (json !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE_URL}${path}`, { method, headers, redirect: "manual", body: json === undefined ? undefined : JSON.stringify(json) });
   world.gameStatus = res.status;
+  world.gameType = res.headers.get("content-type") || "";
   world.gameText = await res.text();
   try {
     world.gameBody = JSON.parse(world.gameText);
@@ -330,6 +340,228 @@ Then("the family's marks are empty: the practice door never counts", function ()
 When("{string} with password {string} clears the practice", async function (email, password) {
   const answer = await asHeadElf(email, password, "DELETE", "/api/admin/elf/practice");
   assert.equal(answer.practice, null, JSON.stringify(answer));
+});
+
+// ---- a real door, played in a December that is over ----------------------------------------------------
+//
+// A real door keeps clock times on its own day, December n of the school's year (elf_doors), where the
+// practice door keeps instants. So with next year's year no SQL on a door can bring its evening into the
+// past, and no real door can be hunted in CI without a date bomb: these steps play in last year's
+// December, which is always over. The @elf-school After hook puts the year back; the @elf-game After hook
+// above takes last year's rows away.
+
+/** The school's year as the server reads it. */
+async function schoolYear() {
+  return (await pool.query("SELECT year FROM elf_settings WHERE id = 1")).rows[0].year;
+}
+
+async function familyIdOf(email) {
+  const r = await pool.query("SELECT id FROM elf_families WHERE email = $1", [email]);
+  assert.ok(r.rows[0], `no family ${email}`);
+  return r.rows[0].id;
+}
+
+/** A place's name as a guess is compared: normalisePlaceName (src/elf/place-names.ts), for plain letters. */
+const placeNorm = (name) =>
+  String(name)
+    .toLowerCase()
+    .trim()
+    .replace(/^the(?![a-z0-9])/, "")
+    .replace(/[^a-z0-9]/g, "");
+
+Given("the school's year is last year, whose December is over", async function () {
+  const year = new Date().getFullYear() - 1;
+  // Only ever on a test database: a December that already holds doors is never played over.
+  const had = await pool.query("SELECT count(*)::int AS n FROM elf_doors WHERE year = $1", [year]);
+  assert.equal(had.rows[0].n, 0, `${year} already has doors in this database, so this scenario will not play over them`);
+  this.gamePastYear = year;
+  await pool.query("UPDATE elf_settings SET year = $1 WHERE id = 1", [year]);
+});
+
+// Every door row is made with a usable tag word: with a place and a first clue too, the door can run, so
+// it is never snowed in.
+Given("door {int} is ready to run at {string} in {string}, with the prize {string}", async function (door, placeName, placeTown, prize) {
+  const year = await schoolYear();
+  const r = await pool.query("UPDATE elf_doors SET place_name = $1, place_town = $2, prize = $3 WHERE year = $4 AND door = $5", [placeName, placeTown, prize, year, door]);
+  assert.equal(r.rowCount, 1, `door ${door} has no row: open the doors list first`);
+  await pool.query(
+    `INSERT INTO elf_clues (year, door, n, words) VALUES ($1, $2, 1, $3)
+     ON CONFLICT (year, door, n) DO UPDATE SET words = EXCLUDED.words`,
+    [year, door, "Pretend clue 1: it lives where the bread lives."],
+  );
+});
+
+// A guess can only be typed while its door is hunted, which a December that is over never is: this one is
+// kept as if typed at noon on 1 December, before the door's evening.
+Given("the family {string} guessed {string} for door {int} before its evening", async function (email, text, door) {
+  const year = await schoolYear();
+  await pool.query("INSERT INTO elf_guesses (year, door, family_id, text, norm, saved_at) VALUES ($1, $2, $3, $4, $5, $6)", [
+    year,
+    door,
+    await familyIdOf(email),
+    text,
+    placeNorm(text),
+    new Date(Date.UTC(year, 11, 1, 12)),
+  ]);
+});
+
+When("{string} with password {string} clears the wrong words of {string} at door {int}", async function (email, password, familyEmail, door) {
+  const id = await familyIdOf(familyEmail);
+  const sheet = await asHeadElf(email, password, "GET", `/api/admin/elf/families/${id}`);
+  assert.deepEqual(sheet.wordTries, [{ door, wrong: 1 }], JSON.stringify(sheet.wordTries));
+  const cleared = await asHeadElf(email, password, "POST", `/api/admin/elf/families/${id}/word-tries/clear`, { door });
+  assert.deepEqual(cleared.wordTries, [], JSON.stringify(cleared));
+});
+
+Then("the family {string} has no wrong words left at door {int}", async function (email, door) {
+  const r = await pool.query("SELECT wrong FROM elf_word_tries WHERE year = $1 AND door = $2 AND family_id = $3", [await schoolYear(), door, await familyIdOf(email)]);
+  assert.equal(r.rows.length, 1, JSON.stringify(r.rows));
+  assert.equal(r.rows[0].wrong, 0);
+});
+
+Then("door {int} was found by the family {string}", async function (door, email) {
+  const year = await schoolYear();
+  const family = await familyIdOf(email);
+  const r = await pool.query("SELECT found_at, found_family_id FROM elf_doors WHERE year = $1 AND door = $2", [year, door]);
+  assert.ok(r.rows[0] && r.rows[0].found_at, `door ${door} was not found`);
+  assert.equal(r.rows[0].found_family_id, family);
+  const visits = await pool.query("SELECT found FROM elf_visits WHERE year = $1 AND door = $2 AND family_id = $3", [year, door, family]);
+  assert.deepEqual(
+    visits.rows.map((v) => v.found),
+    [true],
+  );
+});
+
+When("the family {string} sends a photo to door {int}, saying yes to showing it", { timeout: 20 * 1000 }, async function (email, door) {
+  const jpeg = await tinyJpeg();
+  await asFamily(this, familyOf(this, email), "POST", `/api/elf/p/${await posterCodeOf(door)}/photo`, { mime: "image/jpeg", dataBase64: jpeg.toString("base64"), consent: true });
+});
+
+Then("the photo for door {int} is waiting, with a token", async function (door) {
+  assert.equal(this.gameStatus, 202, sentence(this));
+  assert.equal(this.gameBody.status, "waiting", sentence(this));
+  assert.match(String(this.gameBody.token), /^[a-km-np-z2-9]{12}$/);
+  this.gamePhotoToken = this.gameBody.token;
+  const r = await pool.query("SELECT id, status FROM elf_photos WHERE token = $1 AND year = $2 AND door = $3", [this.gamePhotoToken, await schoolYear(), door]);
+  assert.ok(r.rows[0], `the photo was not kept as door ${door}'s`);
+  assert.equal(r.rows[0].status, "waiting");
+  this.gamePhotoId = r.rows[0].id;
+});
+
+// The photo check is Plan 2b's: a head elf's yes is put in here as it would be kept.
+When("a head elf approves that photo, by SQL", async function () {
+  assert.ok(this.gamePhotoId, "a photo was sent first");
+  await pool.query("UPDATE elf_photos SET status = 'approved', decided_at = now(), decided_by = $2 WHERE id = $1", [this.gamePhotoId, "admin:alex.game.admin.bdd@example.com"]);
+});
+
+When("someone signed out asks for that photo at door {int}", async function (door) {
+  assert.ok(this.gamePhotoToken, "a photo was sent first");
+  await asFamily(this, null, "GET", `/elf/door/${door}/photo/${this.gamePhotoToken}.jpg`);
+});
+
+Then("the game answers {int} with a picture of type {string}", function (status, type) {
+  assert.equal(this.gameStatus, status, `${this.gameStatus}: ${this.gameType}`);
+  assert.equal(String(this.gameType).split(";")[0].trim(), type);
+});
+
+When("someone signed out asks for the elf of the visit of {string} to door {int}", { timeout: 20 * 1000 }, async function (email, door) {
+  const r = await pool.query("SELECT id FROM elf_visits WHERE year = $1 AND door = $2 AND family_id = $3", [await schoolYear(), door, await familyIdOf(email)]);
+  assert.equal(r.rows.length, 1, `${email} has no one visit to door ${door}: ${JSON.stringify(r.rows)}`);
+  this.gameVisit = { id: r.rows[0].id, door };
+  await asFamily(this, null, "GET", `/elf/door/${door}/elf/${this.gameVisit.id}.png`);
+});
+
+When("that visit is moved to count from an hour from now", async function () {
+  assert.ok(this.gameVisit, "a visit was asked for first");
+  await pool.query("UPDATE elf_visits SET counts_from = now() + interval '1 hour' WHERE id = $1", [this.gameVisit.id]);
+});
+
+When("that visit is moved back to count from a minute ago", async function () {
+  assert.ok(this.gameVisit, "a visit was asked for first");
+  await pool.query("UPDATE elf_visits SET counts_from = now() - interval '1 minute' WHERE id = $1", [this.gameVisit.id]);
+});
+
+When("someone signed out asks for the elf of that visit", { timeout: 20 * 1000 }, async function () {
+  assert.ok(this.gameVisit, "a visit was asked for first");
+  await asFamily(this, null, "GET", `/elf/door/${this.gameVisit.door}/elf/${this.gameVisit.id}.png`);
+});
+
+/** A door's tile and detail together, as the calendar's door feed draws them. */
+const doorSaid = (world) => (world.gameBody ? `${world.gameBody.tile || ""}${world.gameBody.detail || ""}` : "");
+
+// The calendar is built at most once every 15 seconds and shared, so a door can take that long to show what
+// has just happened. Each build also snows in every door not ready at its first clue (only once
+// December's doors are on).
+When("someone signed out reads door {int} on the calendar until it says {string}", { timeout: 45 * 1000 }, async function (door, words) {
+  const until = Date.now() + 40_000;
+  for (;;) {
+    await asFamily(this, null, "GET", `/api/elf/door/${door}`);
+    if (this.gameStatus === 200 && doorSaid(this).includes(words)) return;
+    assert.ok(Date.now() < until, `door ${door} never said "${words}": ${sentence(this)}`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+});
+
+Then("door {int} on the calendar says {string}", async function (door, words) {
+  await asFamily(this, null, "GET", `/api/elf/door/${door}`);
+  assert.equal(this.gameStatus, 200, sentence(this));
+  assert.ok(doorSaid(this).includes(words), `door ${door} does not say "${words}": ${sentence(this)}`);
+});
+
+Then("door {int}'s scrapbook shows {string} first, then {string}", async function (door, first, then) {
+  await asFamily(this, null, "GET", `/api/elf/door/${door}`);
+  const detail = String((this.gameBody && this.gameBody.detail) || "");
+  const collage = /<div class="elf-collage">([\s\S]*?)<\/div>/.exec(detail);
+  assert.ok(collage, `door ${door} has no scrapbook: ${sentence(this)}`);
+  const names = [...collage[1].matchAll(/<figcaption>([^<]*)<\/figcaption>/g)].map((m) => m[1]);
+  assert.deepEqual(names, [first, then], collage[1].slice(0, 400));
+  // The finder's polaroid comes first and wears the rosette.
+  assert.ok(collage[1].startsWith('<figure class="elf-pol elf-pol--first">'), collage[1].slice(0, 200));
+  assert.ok(collage[1].includes("FOUND FIRST!"));
+});
+
+Then("door {int} on the calendar shows that photo in its row of photos", async function (door) {
+  await asFamily(this, null, "GET", `/api/elf/door/${door}`);
+  const detail = String((this.gameBody && this.gameBody.detail) || "");
+  const row = /<div class="elf-photos">([\s\S]*?)<\/div>/.exec(detail);
+  assert.ok(row, `door ${door} has no row of photos: ${sentence(this)}`);
+  assert.ok(row[1].includes(`/elf/door/${door}/photo/${this.gamePhotoToken}.jpg`), row[1]);
+  // A photo never has a name beside it.
+  assert.doesNotMatch(row[1], /figcaption|Detective/);
+});
+
+Then("door {int} was snowed in automatically", async function (door) {
+  const r = await pool.query("SELECT snow_day_at, snow_day_by FROM elf_doors WHERE year = $1 AND door = $2", [await schoolYear(), door]);
+  assert.ok(r.rows[0] && r.rows[0].snow_day_at, `door ${door} was not snowed in`);
+  assert.equal(r.rows[0].snow_day_by, "automatic");
+});
+
+When("the family {string} takes that photo down from the poster page of door {int}", async function (email, door) {
+  await asFamily(this, familyOf(this, email), "DELETE", `/api/elf/p/${await posterCodeOf(door)}/photo`);
+});
+
+Then("that photo is taken down, with its bytes gone", async function () {
+  assert.ok(this.gamePhotoId, "a photo was sent first");
+  const r = await pool.query("SELECT status, taken_down_by FROM elf_photos WHERE id = $1", [this.gamePhotoId]);
+  assert.equal(r.rows[0].status, "taken-down");
+  assert.equal(r.rows[0].taken_down_by, "family");
+  const files = await pool.query("SELECT count(*)::int AS n FROM elf_photo_files WHERE photo_id = $1", [this.gamePhotoId]);
+  assert.equal(files.rows[0].n, 0, "the photo's bytes are still there");
+});
+
+Then("the family's marks say door {int} is cracked and visited, and door {int} is snowed in", function (done, snowed) {
+  assert.equal(this.gameStatus, 200, sentence(this));
+  const doors = (this.gameBody && this.gameBody.doors) || [];
+  assert.deepEqual(
+    doors.find((d) => d.door === done),
+    { door: done, cracked: true, visited: true, snow: false },
+    sentence(this),
+  );
+  assert.deepEqual(
+    doors.find((d) => d.door === snowed),
+    { door: snowed, cracked: false, visited: false, snow: true },
+    sentence(this),
+  );
 });
 
 Then("nothing of the practice door is left", async function () {

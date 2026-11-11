@@ -66,17 +66,15 @@ a{color:inherit}
 .sl-skip{position:absolute;left:12px;top:-60px;z-index:20;background:var(--ink);color:var(--cream);padding:10px 14px;border-radius:10px;text-decoration:none}
 .sl-skip:focus{top:12px}
 
-/* ---- the top bar: the red logo on cream, always (brand rule) ---- */
-.sl-top{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px var(--gutter);background:var(--cream);border-bottom:1px solid var(--line)}
-.sl-logo{width:52px;height:auto}
-.sl-top__give{font:600 15px var(--sans);color:var(--cream);background:var(--crimson);text-decoration:none;padding:9px 20px;border-radius:999px;border:2.5px solid var(--ink);box-shadow:0 3px 0 var(--ink);transition:transform .15s var(--ease-out),box-shadow .15s var(--ease-out)}
-.sl-top__give:hover{transform:translateY(-1px);box-shadow:0 4px 0 var(--ink)}
-.sl-top__give:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+/* ---- the site's own menu bar (assets/css/styles.css), solid cream from the start ----
+   Elsewhere it is see-through until the page scrolls; here it sits over the night sky, where its
+   red logo and dark links would be lost, and the red logo sits on cream only (brand rule). */
+.sl-page .nav{background:var(--cream);box-shadow:var(--shadow-sm);border-bottom:1px solid var(--line)}
 
-/* ---- the night sky ---- */
+/* ---- the night sky, starting under the fixed bar ---- */
 .sl-sky{position:relative;overflow:hidden;isolation:isolate;color:var(--cream);
   background:radial-gradient(90% 70% at 82% 0%,var(--night-hi) 0%,transparent 60%),linear-gradient(180deg,var(--night) 0%,var(--night-lo) 100%);
-  padding:clamp(36px,6vw,72px) 0 0}
+  padding:calc(var(--nav-h) + clamp(36px,6vw,72px)) 0 0}
 .sl-moon{position:absolute;z-index:-1;right:7%;top:28px;width:clamp(64px,9vw,104px);aspect-ratio:1;border-radius:50%;background:#FBEFD6;
   box-shadow:0 0 0 14px rgba(251,239,214,.06),0 0 0 36px rgba(251,239,214,.035),0 0 90px 30px rgba(251,239,214,.12);animation:sl-glow 6s ease-in-out infinite}
 .sl-hero{position:relative;max-width:var(--wrap);margin:0 auto;padding:0 var(--gutter);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(16px,3vw,40px);align-items:center}
@@ -222,12 +220,9 @@ a{color:inherit}
 
 .sl-last{margin-top:clamp(56px,8vw,96px);background:var(--crimson);color:var(--cream);text-align:center;padding:clamp(48px,7vw,80px) var(--gutter);display:grid;justify-items:center;gap:22px}
 .sl-last .sl-h2{color:var(--cream)}
-.sl-foot{background:var(--maroon);color:var(--cream-70);font-size:13px;text-align:center;padding:24px var(--gutter)}
-.sl-foot p{margin:4px 0}
-.sl-foot a{color:var(--cream)}
 
 /* ---- the thank you ---- */
-.sl-sky--thanks{min-height:calc(100dvh - 70px);display:grid;align-content:end}
+.sl-sky--thanks{min-height:100dvh;display:grid;align-content:end}
 .sl-thanks__inner{position:relative;z-index:3;max-width:720px;margin:0 auto;padding:0 var(--gutter);text-align:center;display:grid;justify-items:center}
 .sl-thanks__img{width:min(420px,80vw);height:auto;animation:sl-glide 1.4s var(--ease-expo) both,sl-bob 4.6s ease-in-out 1.4s infinite}
 .sl-thanks .sl-lede{margin-inline:auto}

@@ -25,6 +25,8 @@ let clock = new Date("2026-11-10T20:00:00Z");
 let failNights = false;
 let failTotal = false;
 let session: unknown = null;
+let failDecorate = false;
+let seenCookie: string | undefined;
 let server: Server;
 let base = "";
 
@@ -43,6 +45,11 @@ beforeAll(async () => {
         return 12_345;
       },
       session: async () => session as never,
+      decorate: async (html, cookie) => {
+        if (failDecorate) throw new Error("database down");
+        seenCookie = cookie;
+        return html.replace("</footer>", "<!-- decorated --></footer>");
+      },
     }),
   );
   server = app.listen(0);
@@ -61,6 +68,25 @@ describe("GET /sleigh", () => {
     const html = await r.text();
     expect(html).toContain("New Farm");
     expect(html).toContain('data-total="12345"');
+  });
+
+  // The menu and footer are the site's, so they gain what every page gains as it goes out (the
+  // switched on menu items, the footer's Fill a Red Bag and fundraising links: src/routes/site.ts).
+  it("adds to the site's menu and footer what every other page gets, and stays up if that fails", async () => {
+    const r = await fetch(`${base}/sleigh`, { headers: { cookie: "a=1" } });
+    expect(await r.text()).toContain("<!-- decorated --></footer>");
+    expect(seenCookie).toBe("a=1");
+    failDecorate = true;
+    const plain = await get("/sleigh");
+    const thanks = await get("/sleigh/thank-you");
+    failDecorate = false;
+    expect(plain.status).toBe(200);
+    expect(await plain.text()).toContain('<footer class="site-footer"');
+    expect(thanks.status).toBe(200);
+  });
+
+  it("dresses the thank you's menu and footer the same way", async () => {
+    expect(await (await get("/sleigh/thank-you")).text()).toContain("<!-- decorated --></footer>");
   });
 
   it("stays up without a number when the total cannot be read", async () => {

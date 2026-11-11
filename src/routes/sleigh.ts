@@ -18,6 +18,8 @@ export interface SleighRouterDeps {
   settings: () => Promise<SleighSettings>;
   total: () => Promise<number | null>;
   session: (id: string) => Promise<{ payment_status?: string | null; amount_total?: number | null; metadata?: Record<string, string> | null } | null>;
+  /** What every page gains in the site's menu and footer as it goes out (src/routes/site.ts). */
+  decorate: (html: string, cookieHeader: string | undefined) => Promise<string>;
 }
 
 const FALLBACK_SETTINGS: SleighSettings = { seasonFrom: "2026-11-01", offOn: "2027-01-31" };
@@ -29,7 +31,29 @@ const defaults: SleighRouterDeps = {
   settings: publicSettings,
   total: async () => (await sleighTotals())?.totalPence ?? null,
   session: async (id) => (await stripe.checkout.sessions.retrieve(id)) as never,
+  decorate: async (html, cookieHeader) => (await import("./site")).decorateSitePage(html, cookieHeader),
 };
+
+// The menu's extras are read from the database. A slow read never holds a QR scan up: after this
+// long, or on any failure, the page goes out with the site's menu and footer as they are in the file.
+const DECORATE_WAIT_MS = 1500;
+
+async function dressed(d: SleighRouterDeps, html: string, cookieHeader: string | undefined): Promise<string> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      d.decorate(html, cookieHeader),
+      new Promise<string>((done) => {
+        timer = setTimeout(() => done(html), DECORATE_WAIT_MS);
+      }),
+    ]);
+  } catch (err) {
+    console.error("sleigh page: could not add the menu's extras:", err instanceof Error ? err.message : err);
+    return html;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // A Checkout Session id as Stripe writes it ("cs_test_..." or "cs_live_...").
 const CHECKOUT_SESSION_ID = /^cs_[A-Za-z0-9_]{1,250}$/;
@@ -70,7 +94,7 @@ export function createSleighRouter(overrides: Partial<SleighRouterDeps> = {}): R
     } else {
       res.setHeader("Cache-Control", "public, max-age=0");
     }
-    res.type("html").send(renderSleighPage({ nights, phase: shown, stop, totalPence: total }));
+    res.type("html").send(await dressed(d, renderSleighPage({ nights, phase: shown, stop, totalPence: total }), req.headers.cookie));
   });
 
   router.get(SLEIGH_THANKS_PATH, async (req, res) => {
@@ -86,7 +110,7 @@ export function createSleighRouter(overrides: Partial<SleighRouterDeps> = {}): R
       }
     }
     res.setHeader("Cache-Control", "private, no-store");
-    res.type("html").send(renderSleighThanks(amount));
+    res.type("html").send(await dressed(d, renderSleighThanks(amount), req.headers.cookie));
   });
 
   return router;

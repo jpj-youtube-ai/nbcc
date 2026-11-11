@@ -1,12 +1,18 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
 import { ABOUT_NBCC_SHORT } from "../email/brand";
 import { escapeHtml } from "../ball/page";
 import { SLEIGH_PATH, dayLabel, pounds, timesLabel, type SleighNight, type SleighPhase } from "./model";
 
 // The Kilmarnock Santa Sleigh page, /sleigh, and its thank you (docs/superpowers/specs/
-// 2026-11-10-santa-sleigh-design.md). Drawn whole here, as /bag is (src/ball/bags-page.ts): its own
-// small stylesheet and script (assets/css/sleigh.css, assets/js/sleigh.js) and the visit counter,
-// nothing from the shared bundle, so the site's other pages stay inside their performance budget.
+// 2026-11-10-santa-sleigh-design.md). Drawn whole here, as /bag is (src/ball/bags-page.ts), with its
+// own stylesheet and script (assets/css/sleigh.css, assets/js/sleigh.js) after the site's.
+//
+// The menu across the top and the footer are the site's own (Jaimie, 11 November 2026: "the same
+// links as you would have in the normal site, the same footer as well"), taken from the home page,
+// whose footer test/unit/footer-master.test.ts keeps in step with partials/footer.html. The route
+// adds to them what every page gains as it goes out (decorateSitePage, src/routes/site.ts).
 //
 // Most people arrive from a QR card handed out on the night or from the poster, on a phone, and for
 // many it is the first time they have heard of NBCC (Jaimie, 10 November 2026). So the page says who
@@ -18,7 +24,8 @@ import { SLEIGH_PATH, dayLabel, pounds, timesLabel, type SleighNight, type Sleig
 // own white letters on a Deep Crimson sleigh), the year's total over a road with one house per
 // night, the give form, who is behind the sleigh, other ways in, and one last ask.
 //
-// Pure: no pool, no config, no clock. The route hands in the nights, the phase and the total.
+// No pool, no config, no clock: the route hands in the nights, the phase and the total. The one file
+// read is the home page, once, for its menu and footer.
 
 export interface SleighPageInput {
   nights: readonly SleighNight[];
@@ -30,8 +37,29 @@ export interface SleighPageInput {
 }
 
 const ART_ALT = "Santa and an NBCC elf waving from a red sleigh full of presents";
-const LOGO =
-  '<img class="sl-logo" src="/assets/img/nbcc-logo-192.webp" width="62" height="60" alt="NBCC, Night Before Christmas Campaign" decoding="async" />';
+const ROOT = resolve(__dirname, "../..");
+let chrome: { nav: string; footer: string } | null = null;
+
+/** The site's menu bar and footer, from the home page, with no page in the menu marked as the one you
+ *  are on. Read once. A home page that cannot be read leaves both out rather than taking /sleigh down. */
+function siteChrome(): { nav: string; footer: string } {
+  if (chrome) return chrome;
+  let home: string;
+  try {
+    home = readFileSync(resolve(ROOT, "index.html"), "utf8");
+  } catch (err) {
+    console.error("sleigh page: could not read the home page for its menu:", err instanceof Error ? err.message : err);
+    return { nav: "", footer: "" };
+  }
+  const nav = (home.match(/<header class="nav"[\s\S]*?<\/header>/)?.[0] ?? "").replace(/ class="active" aria-current="page"/g, "");
+  const footer = home.match(/<footer class="site-footer"[\s\S]*?<\/footer>/)?.[0] ?? "";
+  return (chrome = { nav, footer });
+}
+
+/** The site's menu bar, its button pointing at this page's give form rather than the donate page, so
+ *  a gift from here is counted as the sleigh's. */
+const siteNav = (giveHref: string): string =>
+  siteChrome().nav.replace('<a class="nav-cta" href="/donate">', `<a class="nav-cta" href="${giveHref}">`);
 
 // The shapes every falling piece and every house is drawn from, once.
 const SHAPES =
@@ -174,20 +202,21 @@ function frame(o: { title: string; description: string; body: string; bodyClass:
     '<meta property="og:image" content="https://nbcc.scot/assets/img/santa-sleigh-1340.webp" />\n' +
     '<link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />\n' +
     '<link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />\n' +
+    '<link rel="stylesheet" href="/assets/css/styles.css" />\n' +
     '<link rel="stylesheet" href="/assets/css/sleigh.css" />\n' +
+    '<script defer src="/assets/js/main.js"></script>\n' +
     '<script defer src="/assets/js/sleigh.js"></script>\n' +
     '<script defer src="/assets/js/pulse.js"></script>\n' +
     "</head>\n" +
     `<body class="sl-page ${o.bodyClass}">\n` +
     '<a class="sl-skip" href="#main">Skip to the page</a>\n' +
     SHAPES +
-    `<header class="sl-top"><a class="sl-top__home" href="/">${LOGO}</a><a class="sl-top__give" href="${o.giveHref ?? "#give"}">Give</a></header>\n` +
+    siteNav(o.giveHref ?? "#give") +
+    "\n" +
     o.body +
-    '\n<footer class="sl-foot">' +
-    "<p>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</p>" +
-    "<p>Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator, OSCR.</p>" +
-    '<p><a href="/">nbcc.scot</a> · <a href="/privacy">Privacy</a></p>' +
-    "</footer>\n</body>\n</html>\n"
+    "\n" +
+    siteChrome().footer +
+    "\n</body>\n</html>\n"
   );
 }
 

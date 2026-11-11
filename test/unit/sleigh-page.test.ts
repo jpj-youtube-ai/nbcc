@@ -27,12 +27,12 @@ const NIGHTS: SleighNight[] = [
 const page = renderSleighPage({ nights: NIGHTS, phase: "before", stop: 0, totalPence: 318_450 });
 
 describe("the page, /sleigh", () => {
-  it("is a whole page that loads only its own stylesheet, its script and the visit counter", () => {
+  it("is a whole page that loads the site's stylesheet and script, then its own, and the visit counter", () => {
     expect(page.startsWith("<!doctype html>")).toBe(true);
     const sheets = [...page.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
-    expect(sheets).toEqual(["/assets/css/sleigh.css"]);
+    expect(sheets).toEqual(["/assets/css/styles.css", "/assets/css/sleigh.css"]);
     const scripts = [...page.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]);
-    expect(scripts).toEqual(["/assets/js/sleigh.js", "/assets/js/pulse.js"]);
+    expect(scripts).toEqual(["/assets/js/main.js", "/assets/js/sleigh.js", "/assets/js/pulse.js"]);
     expect(page).not.toMatch(/<script>(?!<\/script>)/);
   });
 
@@ -107,8 +107,29 @@ describe("the page, /sleigh", () => {
     expect(w).toContain("Thank you");
   });
 
-  it("points other ways in at this site only", () => {
-    const hrefs = [...page.matchAll(/href="([^"]+)"/g)].map((m) => m[1]).filter((h) => !h.startsWith("/assets/"));
+  // Jaimie, 11 November 2026: the page has the site's own menu across the top and the site's own
+  // footer, the same as every other page.
+  it("wears the site's own menu across the top, the home page's, with no page marked as the one you are on", () => {
+    const home = readFileSync(resolve(ROOT, "index.html"), "utf8");
+    const list = (html: string) => (html.match(/<ul class="nav-links"[\s\S]*?<\/ul>/)?.[0] ?? "").replace(/\s+/g, " ");
+    const nav = page.match(/<header class="nav" id="nav" data-region="nav">[\s\S]*?<\/header>/)?.[0] ?? "";
+    expect(nav).not.toBe("");
+    expect(list(nav)).toBe(list(home).replace(' class="active" aria-current="page"', ""));
+    expect(nav).not.toContain("aria-current");
+    expect(nav).toMatch(/<button class="burger" id="burger"/);
+    expect(nav).toMatch(/<a class="brand" href="\/">/);
+    expect(page).not.toContain("sl-top");
+  });
+
+  it("ends with the site's own footer, word for word", () => {
+    const master = readFileSync(resolve(ROOT, "partials/footer.html"), "utf8");
+    const footer = page.match(/<footer class="site-footer"[\s\S]*?<\/footer>/)?.[0] ?? "";
+    expect(footer.replace(/\s+/g, " ").trim()).toBe(master.replace(/\s+/g, " ").trim());
+    expect(page).not.toContain("sl-foot");
+  });
+
+  it("points other ways in at this site only, outside the site's footer", () => {
+    const hrefs = [...page.replace(/<footer class="site-footer"[\s\S]*?<\/footer>/, "").matchAll(/href="([^"]+)"/g)].map((m) => m[1]).filter((h) => !h.startsWith("/assets/"));
     for (const h of hrefs) expect(h.startsWith("/") || h.startsWith("#")).toBe(true);
     expect(hrefs).toEqual(expect.arrayContaining(["/fill", "/about-us", "/newsletter"]));
   });
@@ -151,8 +172,8 @@ describe("the thank you, /sleigh/thank-you", () => {
     expect(t).toMatch(/<meta name="robots" content="noindex"/);
   });
   it("points the Give button at the top back at the page's give form", () => {
-    expect(renderSleighThanks(2000)).toContain('class="sl-top__give" href="/sleigh#give"');
-    expect(page).toContain('class="sl-top__give" href="#give"');
+    expect(renderSleighThanks(2000)).toContain('class="nav-cta" href="/sleigh#give"');
+    expect(page).toContain('class="nav-cta" href="#give"');
   });
   it("is a plain thank you when the amount is not known", () => {
     expect(words(renderSleighThanks(null))).toContain("Thank you");

@@ -10,7 +10,20 @@ import {
   buildSignUpThanksEmail,
   type StaffSummary,
 } from "../fundraising/emails";
-import { badgeWords, buildElfSignInCodeEmail, buildElfWelcomeEmail } from "../elf/emails";
+import {
+  badgeWords,
+  buildElfClueEmail,
+  buildElfFindAlertEmail,
+  buildElfMorningEmail,
+  buildElfPhotoAlertEmail,
+  buildElfPlaceReminderEmail,
+  buildElfProudEmail,
+  buildElfSignInCodeEmail,
+  buildElfTestAlertEmail,
+  buildElfWelcomeEmail,
+} from "../elf/emails";
+import { factFor } from "../elf/facts";
+import { doorPost, yesterdayPost } from "../elf/posts";
 import { buildMemoryReceiptEmail, buildTshirtAskEmail, greetGuardian } from "../fundraising/signup-tidy-emails";
 import { buildInMemoryApprovedEmail } from "../fundraising/memory-emails";
 import { buildSupporterThanksEmail } from "../fundraising/thanks-email";
@@ -1189,6 +1202,62 @@ const staff = (id: string, name: string, when: string, logKind: string, versions
 const ELF_SCHOOL_STARTS = new Date("2026-12-01T17:30:00.000Z");
 const elfWelcome = (detectives: { name: string; badge: string }[]) => (b: string) =>
   buildElfWelcomeEmail({ grownUpName: "Sam Example", detectives, hqUrl: `${b}/elf/hq`, signInUrl: `${b}/elf/sign-in`, firstClueAt: ELF_SCHOOL_STARTS });
+// The pretend place is "Pine Cone Café, Snowford". Never a real one.
+const ELF_PLACE = "Pine Cone Café";
+const ELF_EVENING_CLUE = new Date("2026-12-07T17:30:00.000Z");
+const ELF_MORNING_CLUE = new Date("2026-12-05T10:00:00.000Z");
+const ELF_CLUE_2 = new Date("2026-12-07T18:30:00.000Z");
+const ELF_CLUE_3 = new Date("2026-12-07T19:30:00.000Z");
+const ELF_REVEAL = new Date("2026-12-07T20:30:00.000Z");
+const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (b: string) =>
+  buildElfClueEmail({
+    grownUpName: "Sam Example",
+    door: 7,
+    elfName: "Pip",
+    clue,
+    clue1At: ELF_EVENING_CLUE,
+    clue2At: ELF_CLUE_2,
+    clue3At: ELF_CLUE_3,
+    revealAt: ELF_REVEAL,
+    hqUrl: `${b}/elf/hq`,
+    fact: factFor(7),
+    giveUrl: `${b}/donate`,
+  });
+const elfReminder = (clue1At: Date) => () =>
+  buildElfPlaceReminderEmail({ contactName: "Alex Example", placeName: ELF_PLACE, elfName: "Pip", door: 7, clue1At, closesAt: "5pm", phone: "01632 960 123" });
+const elfMorning = (ready: boolean, snow: boolean) => (b: string) =>
+  buildElfMorningEmail({
+    day: new Date("2026-12-08T08:00:00.000Z"),
+    today: { door: 8, ready, toDo: ready ? [] : ["the elf's name", "the second clue"], clue1At: ELF_EVENING_CLUE, snow: false },
+    yesterday: snow
+      ? { door: 7, finders: [], foundAt: null, place: null, state: "snow", snow: true }
+      : {
+          door: 7,
+          finders: [{ firstName: "Ruby", surname: "Tinselfoot", approved: false }],
+          foundAt: ELF_EVENING_CLUE,
+          place: { name: ELF_PLACE, town: "Snowford" },
+          state: "found",
+          snow: false,
+        },
+    photosWaiting: 3,
+    posts: {
+      today: doorPost({ door: 8, clue1At: ELF_EVENING_CLUE, joinUrl: `${b}/elf` }),
+      yesterday: snow
+        ? null
+        : yesterdayPost({
+            door: 7,
+            elfName: "Pip",
+            state: "found",
+            finders: [{ firstName: "Ruby", surname: "Tinselfoot", approved: false }],
+            foundAt: ELF_EVENING_CLUE,
+            place: { name: ELF_PLACE, town: "Snowford" },
+          }),
+    },
+    pictures: { today: null, yesterday: null },
+    adminUrl: `${b}/admin`,
+  });
+const elfProud = (o: { kind: "won" | "promoted" | "graduated"; elfName?: string; door?: 7; rank?: "Junior Detective" }) => (b: string) =>
+  buildElfProudEmail({ ...o, grownUpName: "Sam Example", detectiveName: "Detective Ruby Tinselfoot", hqUrl: `${b}/elf/hq`, giveUrl: `${b}/donate` });
 const ELF: CatalogueEmail[] = [
   {
     id: "elf-welcome",
@@ -1213,6 +1282,103 @@ const ELF: CatalogueEmail[] = [
     audience: "public",
     logKinds: ["elfSignInCode"],
     versions: [v("usual", USUAL, () => buildElfSignInCodeEmail(CODE))],
+  },
+  {
+    id: "elf-clue",
+    group: "elf",
+    name: "The first clue is out",
+    who: "Goes to each grown up with detectives enrolled, when a door's first clue comes out in December.",
+    audience: "public",
+    logKinds: ["elfClue"],
+    note: "The clue words and the picture words are typed in Doors. A clue picture is never in the email.",
+    versions: [
+      v("words", "Words", elfClue({ words: "I am waiting by the pine cones, where the tea is hot.", pictureAlt: null })),
+      v("picture", "A picture only", elfClue({ words: null, pictureAlt: "a pine cone on a snowy wall" })),
+      v("both", "Words and a picture", elfClue({ words: "I am waiting by the pine cones, where the tea is hot.", pictureAlt: "a pine cone on a snowy wall" })),
+    ],
+  },
+  {
+    id: "elf-place-reminder",
+    group: "elf",
+    name: "Today is your Elf Detective School day",
+    who: "Goes to the place's contact at 9am on its day, with what to do and when.",
+    audience: "public",
+    logKinds: ["elfPlaceReminder"],
+    versions: [
+      v("evening", "An evening clue", elfReminder(ELF_EVENING_CLUE)),
+      v("morning", "A morning clue", elfReminder(ELF_MORNING_CLUE)),
+    ],
+  },
+  {
+    id: "elf-morning",
+    group: "elf",
+    name: "Elf HQ: the 8am email",
+    who: "Goes to head elves at 8am each day in December, with the day's door, yesterday's find and the two posts.",
+    audience: "staff",
+    logKinds: ["elfMorning"],
+    note: NUMBERS_NOTE,
+    versions: [
+      v("ready", "A door ready, yesterday found", elfMorning(true, false)),
+      v("snow", "A door not ready, yesterday a snow day", elfMorning(false, true)),
+    ],
+  },
+  {
+    id: "elf-find-alert",
+    group: "elf",
+    name: "A door's elf has been found",
+    who: "Goes to head elves whose alerts are on, as soon as an elf is found.",
+    audience: "staff",
+    logKinds: ["elfFindAlert"],
+    note: STAFF_NOTE,
+    versions: [
+      v(
+        "usual",
+        USUAL,
+        (b) =>
+          buildElfFindAlertEmail({
+            door: 7,
+            elfName: "Pip",
+            detectives: ["Ruby Example"],
+            grownUpName: "Sam Example",
+            at: ELF_EVENING_CLUE,
+            placeName: ELF_PLACE,
+            adminUrl: `${b}/admin`,
+          }),
+      ),
+    ],
+  },
+  {
+    id: "elf-photo-alert",
+    group: "elf",
+    name: "A photo is waiting to be checked",
+    who: "Goes to head elves whose alerts are on, when photos start waiting. Never one for every photo.",
+    audience: "staff",
+    logKinds: ["elfPhotoAlert"],
+    note: STAFF_NOTE,
+    versions: [v("usual", USUAL, (b) => buildElfPhotoAlertEmail({ door: 7, adminUrl: `${b}/admin` }))],
+  },
+  {
+    id: "elf-test-alert",
+    group: "elf",
+    name: "Your test alert",
+    who: "Goes to a head elf who presses the test alert button in Head Elf HQ.",
+    audience: "staff",
+    logKinds: ["elfTestAlert"],
+    note: STAFF_NOTE,
+    versions: [v("usual", USUAL, (b) => buildElfTestAlertEmail({ name: "Alex", adminUrl: `${b}/admin` }))],
+  },
+  {
+    id: "elf-proud",
+    group: "elf",
+    name: "A proud moment",
+    who: "Goes to the grown up when their detective wins a door's prize, is promoted or graduates.",
+    audience: "public",
+    logKinds: ["elfProud"],
+    versions: [
+      v("won", "A prize won", elfProud({ kind: "won", elfName: "Pip", door: 7 })),
+      v("promoted", "Promoted", elfProud({ kind: "promoted", rank: "Junior Detective" })),
+      v("graduated", "Graduated", elfProud({ kind: "graduated" })),
+    ],
   },
 ];
 

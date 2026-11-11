@@ -496,6 +496,35 @@ describe("a family's own marks", () => {
     expect(detail(1).querySelector<HTMLElement>(".elf-detail__hint")!.hidden).toBe(true);
   });
 
+  // Plan 2a's final review, parked for Plan 2b Task 7: an open door whose elf has gone home has nothing
+  // left to find, and its scrapbook says so. The family's own line never invites a visit there; it says
+  // only what the family collected, and nothing when they collected nothing.
+  it("never invite a visit to a door whose elf has gone home, and say only what the family collected", async () => {
+    const view = calendarView(AFTERNOON);
+    for (const n of [1, 2, 3, 4]) view.doors[n - 1] = { ...view.doors[n - 1], goneHome: true };
+    me = {
+      status: 200,
+      body: { doors: [{ door: 1, cracked: true, visited: true }, { door: 2, cracked: true, visited: false }, { door: 4, cracked: false, visited: true }] },
+    };
+    const calendar = load(view);
+    await calendar.ready;
+    const mine = (n: number) => detail(n).querySelector<HTMLElement>(".elf-detail__mine")!;
+    for (const n of [1, 2, 3, 4]) {
+      expect(words(detail(n))).not.toContain("Visit any day in December");
+      // The scrapbook's own gone home line stays where it is.
+      const gone = detail(n).querySelector<HTMLElement>(".elf-book__gone")!;
+      expect(words(gone)).toContain("has gone home now, so there is nothing to find there.");
+      expect(gone.hidden).toBe(false);
+    }
+    expect(words(mine(1))).toBe("Your family cracked this case and has been there. Both marks collected.");
+    expect(words(mine(2))).toBe("Your family cracked this case.");
+    expect(words(mine(4))).toBe("Your family has been there. Candy cane collected.");
+    expect(mine(3).hidden).toBe(true);
+    expect(words(mine(3))).toBe("");
+    // A door whose elf is still there still says what is left to do.
+    expect(words(mine(5))).toBe("Not done yet. Visit any day in December for your candy cane.");
+  });
+
   it("stay on a door when the live feed draws it again", async () => {
     me = { status: 200, body: { doors: [{ door: 7, cracked: true, visited: false }] } };
     const calendar = load();

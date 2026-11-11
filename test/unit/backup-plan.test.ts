@@ -81,9 +81,9 @@ describe("knowing how many tables to expect", () => {
   // Detective School's Doors added the hiding places, the other names that count for each, and their
   // clues; 110 since the Santa Sleigh added its nights (with the bucket cash) and its settings; 116
   // since Elf Detective School's game added guesses, word tries, visits, photos, photo files and the
-  // practice door.
-  it("counts 116 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(116);
+  // practice door; 119 since the alerts plan added head elves' mobiles, the alerts sent and the claimed sends.
+  it("counts 119 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(119);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -206,7 +206,11 @@ describe("knowing how many tables to expect", () => {
     for (const t of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos", "elf_photo_files", "elf_practice"]) {
       expect(main).toContain(t);
     }
-    expect(main.length).toBe(113);
+    // Elf Detective School's alerts: head elves' mobiles, the alerts sent and every claimed send.
+    for (const t of ["elf_head_elves", "elf_alerts", "elf_sends"]) {
+      expect(main).toContain(t);
+    }
+    expect(main.length).toBe(116);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

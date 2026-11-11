@@ -25,6 +25,7 @@
     { id: "hq", name: "HQ", icon: PAPER + "icons/icon-bell.webp" },
     { id: "families", name: "Families", icon: PAPER + "icons/icon-friend.webp" },
     { id: "doors", name: "Doors", icon: PAPER + "icons/icon-frame.webp" },
+    { id: "finds", name: "Finds", icon: PAPER + "icons/icon-camera.webp" },
     { id: "money", name: "Money", coin: true },
     { id: "settings", name: "Settings", icon: PAPER + "icons/icon-paint.webp" },
   ];
@@ -106,6 +107,7 @@
               failure.problems = (d && d.problems) || null; // a paste that has problems says which
               failure.fields = (d && d.fields) || null; // a picture the server would not take says which part and why
               failure.printed = !!(d && d.printed); // a tag word asked for again after its tag was printed
+              failure.step = (d && d.step) || null; // a photo someone else has already checked: who, and when
               throw failure;
             }
             return d || {};
@@ -177,7 +179,8 @@
       if (id === "families" && data) loadFamilies();
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
       if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
-      if (id === "settings" && data) loadPractice();
+      if (id === "finds") loadFinds();
+      if (id === "settings" && data) { loadPractice(); loadAlerts(); }
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -1630,7 +1633,8 @@
         kids.push(
           el("p", {
             class: "hq-words",
-            text: automatic ? "Snow day: the door was not ready at its first clue" : "Snow day called by " + who(d.snowDay.by) + " on " + dayWords(d.snowDay.at),
+            // The head elf by name, as the server gives it (their full name, the email when it is blank).
+            text: automatic ? "Snow day: the door was not ready at its first clue" : "Snow day called by " + (d.snowDay.name || who(d.snowDay.by)) + " on " + dayWords(d.snowDay.at),
           }),
         );
         if (edit && !d.started) {
@@ -1704,7 +1708,7 @@
         kids.push(
           el("div", { class: "hq-dtick" }, [
             el("label", { class: "hq-tickbox", for: "hqDoor-goneHome" }, [box, el("span", { text: "Gone home: the place has stopped hosting the elf" })]),
-            d.goneHome ? el("span", { class: "hq-hint", text: "Ticked by " + (who(d.goneHome.by) || "staff") + " on " + dayWords(d.goneHome.at) }) : null,
+            d.goneHome ? el("span", { class: "hq-hint", text: "Ticked by " + (d.goneHome.name || who(d.goneHome.by) || "staff") + " on " + dayWords(d.goneHome.at) }) : null,
           ]),
         );
       }
@@ -2346,6 +2350,7 @@
       if (!admin) part.appendChild(el("p", { class: "hq-words hq-soft", text: "Only an admin can change these." }));
       // Its own panel after the admin only ones: anyone who may edit can start a practice evening.
       part.appendChild(practicePanel());
+      part.appendChild(alertsPanel());
     }
 
     // ---- Settings: the practice door, a pretend evening played through the preview link ----
@@ -2522,6 +2527,619 @@
       return box;
     }
 
+    // ---- Finds: the photos to check, and the photo log ----
+    // Read afresh each time the tile opens (src/routes/admin-elf-finds.ts). The first waiting photo is
+    // drawn big, its picture fetched with the signed in token into a Blob address (never in a link), and
+    // that address revoked when the photo is replaced or the part is drawn again. Names, places and
+    // reasons go on the page as text. A head elf who is too late sees who checked it and when.
+    var finds = { data: null, seq: 0, picSeq: 0, blob: null, currentId: null, notice: "", queue: null, log: null, tonight: null, doors: null, doorsError: "", tseq: 0 };
+    var CHECKS = [
+      "Only the family in it",
+      "No school uniform or badge",
+      "Nothing that shows where anyone lives, like a house number or a car number plate",
+      "Nothing unkind",
+    ];
+    var CHIP_CLASS = { approved: "hq-chip--holly", waiting: "hq-chip--crimson", declined: "hq-chip--crimson" };
+    var CHIP_WORDS = { approved: "Up", waiting: "Waiting", declined: "Declined", replaced: "Replaced", "taken-down": "Taken down", deleted: "Deleted" };
+    var SAY_WHY = "Say why in a few words. Only head elves see it.";
+
+    /** "7pm", "6:04pm": a moment's time in London, with no ":00". */
+    function timeShort(iso) {
+      return timeWords(iso).replace(/:00(?=[ap]m)/, "");
+    }
+    /** "Monday 7 December": the evening of a door in the year's December. */
+    function doorDayWords(year, door) {
+      return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(year, 11, door))).replace(/,/g, "");
+    }
+    /** "Mon 5:20pm": a step in the log. */
+    function stepWhen(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "Europe/London" }).format(d) + " " + timeShort(iso);
+    }
+    /** "6:04pm" for a moment today in London, and stepWhen's "Sun 9:12pm" for one on any other day, so a time
+     *  in the photo check never passes for today's when it is not. */
+    function whenShort(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      var day = new Intl.DateTimeFormat("en-GB", { year: "numeric", month: "numeric", day: "numeric", timeZone: "Europe/London" });
+      return day.format(d) === day.format(new Date()) ? timeShort(iso) : stepWhen(iso);
+    }
+    /** "Sunday 31 January 2027": the day every photo from the year's December is deleted. */
+    function deletionDay() {
+      var year = (data && data.settings && Number(data.settings.year)) || new Date().getFullYear();
+      return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year + 1, 0, 31))).replace(/,/g, "");
+    }
+    function doorName(p) {
+      return p.practice ? "The practice door" : "Door " + p.door;
+    }
+
+    function buildFinds() {
+      if (finds.queue) return;
+      var part = parts.finds;
+      part.textContent = "";
+      finds.queue = el("section", { class: "hq-panel hq-queue", "aria-label": "Photos to check" });
+      finds.log = el("section", { class: "hq-panel hq-log", "aria-label": "The photo log" });
+      part.appendChild(el("div", { class: "hq-finds" }, [finds.queue, finds.log]));
+      finds.tonight = el("section", { class: "hq-panel hq-tonight", "aria-label": "Tonight and before" });
+      part.appendChild(finds.tonight);
+    }
+
+    function clearBlob() {
+      finds.picSeq++;
+      if (finds.blob && win.URL && typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(finds.blob);
+      finds.blob = null;
+    }
+
+    /** Fetches the picture with the token and shows it from a Blob address. */
+    function showPhoto(p, img, wait) {
+      var mine = ++finds.picSeq;
+      win
+        .fetch("/api/admin/elf/photos/" + p.id + "/picture", { headers: { Authorization: "Bearer " + token() } })
+        .then(function (res) {
+          if (!res.ok || typeof res.blob !== "function") throw new Error("not found");
+          return res.blob();
+        })
+        .then(function (blob) {
+          if (!win.URL || typeof win.URL.createObjectURL !== "function") return;
+          var url = win.URL.createObjectURL(blob);
+          if (mine !== finds.picSeq) {
+            if (typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
+            return;
+          }
+          finds.blob = url;
+          img.setAttribute("src", url);
+          img.hidden = false;
+          wait.hidden = true;
+        })
+        .catch(function () {
+          if (mine === finds.picSeq) wait.textContent = "The photo could not be loaded.";
+        });
+    }
+
+    function loadFinds() {
+      buildFinds();
+      loadTonight();
+      var mine = ++finds.seq;
+      return ask("GET", "/api/admin/elf/photos")
+        .then(function (d) {
+          if (mine !== finds.seq) return;
+          finds.data = d && Array.isArray(d.waiting) ? d : { waiting: [], log: [], lastAlert: null, canEdit: false };
+          tileCount("finds", finds.data.waiting.length);
+          drawFinds();
+        })
+        .catch(function (e) {
+          if (mine === finds.seq) say(status, e.message, false);
+        });
+    }
+
+    function drawFinds() {
+      drawQueue();
+      drawLog();
+      drawTonight();
+    }
+
+    // ---- Finds: Tonight and before, who found each door and when ----
+    // Read with the photos (src/routes/admin-elf-finds.ts, /api/admin/elf/finds). Head elves see the
+    // finders' full names; the place is for staff only. A name that counts can be added until midnight at
+    // the end of the door's day, by someone who may edit.
+    function loadTonight() {
+      var mine = ++finds.tseq;
+      return ask("GET", "/api/admin/elf/finds")
+        .then(function (d) {
+          if (mine !== finds.tseq) return;
+          finds.doors = d && Array.isArray(d.doors) ? d.doors : [];
+          finds.doorsError = "";
+          drawTonight();
+        })
+        .catch(function (e) {
+          if (mine !== finds.tseq) return;
+          finds.doorsError = e.message;
+          drawTonight();
+        });
+    }
+
+    /** "Sam Twinkle and Kim Twinkle", or "A, B and C". */
+    function joinNames(names) {
+      return names.length < 2 ? names.join("") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+    }
+
+    function foundWords(f) {
+      return "Found by " + joinNames(f.detectives) + " (" + f.grownUpName + "'s family) at " + timeShort(f.at);
+    }
+
+    /** The one line that says how a door stands. */
+    function standingWords(r) {
+      if (r.found) return foundWords(r.found);
+      if (r.state === "snow") return "Snow day";
+      if (r.state === "found" || r.state === "found-hidden") return "Found.";
+      return "Not found yet. " + r.cluesOut + " of 3 clues out.";
+    }
+
+    /** The field and button that add a name that counts to one door. */
+    function addNameBox(r) {
+      var id = "hqFind-name-" + r.door;
+      var said = el("p", { class: "hq-status", role: "status" });
+      var field = el("input", { type: "text", id: id, name: "name", maxlength: 80, autocomplete: "off" });
+      var add = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Add" });
+      add.addEventListener("click", function () {
+        if (!field.value.trim()) return;
+        add.disabled = true;
+        say(said, "", null);
+        ask("POST", "/api/admin/elf/doors/" + r.door + "/names", { name: field.value })
+          .then(function () {
+            add.disabled = false;
+            field.value = "";
+            say(said, "Added. Guesses are checked against it from now.", true);
+          })
+          .catch(function (e) {
+            add.disabled = false;
+            say(said, e.message, false);
+          });
+      });
+      return el("div", { class: "hq-field hq-tadd" }, [
+        el("label", { for: id, text: "Add a name that counts" }),
+        el("div", { class: "hq-addname" }, [field, add]),
+        said,
+      ]);
+    }
+
+    function tonightCard(r, canEdit) {
+      var lines = [];
+      if (r.placeName) lines.push(el("p", { class: "hq-words", text: r.placeName + (r.placeTown ? ", " + r.placeTown : "") }));
+      lines.push(el("p", { class: "hq-words", text: standingWords(r) }));
+      if (r.counts) {
+        var n = r.counts.families;
+        lines.push(el("p", { class: "hq-words hq-soft", text: n + plural(n, " family has", " families have") + " visited and " + r.counts.cracked + " cracked it with a guess" }));
+      }
+      if (canEdit && r.canAddName) lines.push(addNameBox(r));
+      return el("li", { class: "hq-row" }, [
+        el("p", { class: "hq-what" }, [el("b", { text: r.practice ? "The practice door" : "Door " + r.door + " \u00b7 " + r.day })]),
+        el("div", { class: "hq-tlines" }, lines),
+      ]);
+    }
+
+    function drawTonight() {
+      var box = finds.tonight;
+      if (!box || finds.doors === null) return;
+      var canEdit = !!(finds.data && finds.data.canEdit);
+      // Keep what is being typed when the photos arrive after the doors.
+      var kept = {};
+      Array.prototype.forEach.call(box.querySelectorAll("input[name=name]"), function (i) { kept[i.id] = i.value; });
+      box.textContent = "";
+      box.appendChild(
+        el("div", { class: "hq-phead" }, [
+          el("h2", { class: "hq-h2", text: "Tonight and before" }),
+          el("p", { class: "hq-soft", text: "Who found each door and when. Today's door first." }),
+        ]),
+      );
+      if (finds.doorsError) box.appendChild(el("p", { class: "hq-status is-error", role: "status", text: finds.doorsError }));
+      var list = el("ul", { class: "hq-rows" });
+      finds.doors.forEach(function (r) {
+        list.appendChild(tonightCard(r, canEdit));
+      });
+      if (!finds.doors.length) list.appendChild(el("li", { class: "hq-words hq-soft", text: "No door has started yet." }));
+      box.appendChild(list);
+      Array.prototype.forEach.call(box.querySelectorAll("input[name=name]"), function (i) { if (kept[i.id]) i.value = kept[i.id]; });
+    }
+
+    /** One decision's request, then the queue again. A head elf who was too late is shown the step that
+     *  beat them in place of the buttons for a moment. */
+    function decide(p, url, body, doneWords, card, decideBox, said) {
+      var held = Array.prototype.slice.call(card.querySelectorAll("button"));
+      held.forEach(function (b) { b.disabled = true; });
+      say(said, "", null);
+      return ask("POST", "/api/admin/elf/photos/" + p.id + "/" + url, body)
+        .then(function () {
+          finds.notice = doneWords;
+          return loadFinds();
+        })
+        .catch(function (e) {
+          if (e.status === 404) {
+            // Someone has taken it away since: read the queue again rather than offer buttons that cannot work.
+            finds.notice = "That photo is no longer there.";
+            return loadFinds();
+          }
+          if (e.status === 409 && e.step) {
+            decideBox.textContent = "";
+            decideBox.appendChild(el("p", { class: "hq-words hq-stepnote", role: "status", text: e.step }));
+            win.setTimeout(loadFinds, 3000);
+            return;
+          }
+          held.forEach(function (b) { b.disabled = false; });
+          say(said, e.message, false);
+        });
+    }
+
+    /** The buttons under a photo: Approve, and Decline which asks for the reason in a field first. */
+    function drawDecide(p, card, decideBox, said) {
+      decideBox.textContent = "";
+      var approve = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Approve" });
+      var decline = el("button", { class: "hq-btn hq-btn--danger", type: "button", text: "Decline" });
+      approve.addEventListener("click", function () {
+        decide(p, "approve", undefined, "Approved.", card, decideBox, said);
+      });
+      decline.addEventListener("click", function () {
+        decideBox.textContent = "";
+        var id = "hqReason-" + p.id;
+        var field = el("input", { class: "hq-reason", type: "text", id: id, maxlength: 200, autocomplete: "off" });
+        var send = el("button", { class: "hq-btn hq-btn--danger", type: "button", text: "Decline this photo" });
+        var cancel = el("button", { class: "hq-btn", type: "button", text: "Cancel" });
+        send.addEventListener("click", function () {
+          var reason = field.value.trim();
+          if (!reason) return say(said, SAY_WHY, false);
+          decide(p, "decline", { reason: reason }, "Declined.", card, decideBox, said);
+        });
+        cancel.addEventListener("click", function () {
+          say(said, "", null);
+          drawDecide(p, card, decideBox, said);
+        });
+        decideBox.appendChild(el("div", { class: "hq-field" }, [el("label", { for: id, text: "Why are you declining it? Only head elves see it." }), field]));
+        decideBox.appendChild(el("div", { class: "hq-actions" }, [send, cancel]));
+        field.focus();
+      });
+      decideBox.appendChild(el("div", { class: "hq-decide" }, [approve, decline]));
+    }
+
+    /** The photo being checked: the picture on a polaroid, and everything a head elf needs to decide. */
+    function checkCard(p, canEdit) {
+      var img = el("img", { class: "hq-photo", alt: "A photo a family sent, waiting for a head elf to check", hidden: true });
+      var wait = el("span", { class: "hq-photo__wait", text: "Loading the photo…" });
+      var polaroid = el("figure", { class: "hq-polaroid" }, [el("div", { class: "hq-pic" }, [img, wait]), el("figcaption", { text: doorName(p) })]);
+      var shown = p.placeShownAt
+        ? el("p", { class: "hq-hold" }, [
+            el("img", { src: PAPER + "icons/icon-lock.webp", alt: "", width: 26, height: 26 }),
+            el("span", { text: (p.practice ? "The practice door's" : "Door " + p.door + "'s") + " place is shown at " + timeShort(p.placeShownAt) + ", so this photo waits until then, even once it is approved." }),
+          ])
+        : null;
+      var first = p.firstFamily
+        ? el("p", { class: "hq-hold" }, [
+            el("img", { src: PAPER + "icons/icon-lock.webp", alt: "", width: 26, height: 26 }),
+            el("span", { text: "This is the first family's photo on " + (p.practice ? "the practice door" : "door " + p.door) + ", so it stays hidden until a photo from a second family is approved." }),
+          ])
+        : null;
+      var n = p.family.detectives;
+      var said = el("p", { class: "hq-status", role: "status" });
+      var decideBox = el("div", { class: "hq-decidebox" });
+      var card = el("article", { class: "hq-check", "aria-label": doorName(p) + ", sent at " + whenShort(p.sentAt) }, [
+        polaroid,
+        el("div", { class: "hq-facts" }, [
+          el("div", {}, [
+            el("h3", { class: "hq-h3", text: p.practice ? "The practice door" : doorName(p) + " · " + doorDayWords(p.year, p.door) }),
+            p.practice ? el("span", { class: "hq-chip hq-chip--plain", text: "Practice" }) : null,
+            p.placeName ? el("p", { class: "hq-where", text: p.placeName }) : null,
+          ]),
+          el("ul", { class: "hq-meta" }, [
+            el("li", { text: "Sent at " + whenShort(p.sentAt) }),
+            el("li", { text: "From " + p.family.grownUpName + "'s family, " + n + " " + plural(n, "detective", "detectives") + ". Only head elves see who sent it." }),
+          ]),
+          shown,
+          first,
+          el("div", { class: "hq-look-wrap" }, [
+            el("h4", { class: "hq-h4", text: "Before you approve" }),
+            el("ul", { class: "hq-look" }, CHECKS.map(function (c) { return el("li", { text: c }); })),
+          ]),
+          canEdit ? decideBox : null,
+          said,
+          el("p", { class: "hq-note", text: "Your name and the time go in the log either way. Decline asks for a short reason that only head elves see. The family's elves stay behind the door, and they can send another photo." }),
+        ]),
+      ]);
+      if (canEdit) drawDecide(p, card, decideBox, said);
+      showPhoto(p, img, wait);
+      return card;
+    }
+
+    function drawQueue() {
+      var d = finds.data;
+      var box = finds.queue;
+      clearBlob();
+      box.textContent = "";
+      var w = d.waiting;
+      box.appendChild(
+        el("div", { class: "hq-phead" }, [
+          el("h2", { class: "hq-h2", text: "Photos to check" }),
+          el("span", { class: "hq-chip " + (w.length ? "hq-chip--crimson" : "hq-chip--holly"), text: w.length + " waiting" }),
+        ]),
+      );
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: d.lastAlert && d.lastAlert.at ? "One alert went at " + whenShort(d.lastAlert.at) + "." : "No alert has gone yet." }));
+      if (finds.notice) {
+        box.appendChild(el("p", { class: "hq-status is-ok", role: "status", text: finds.notice }));
+        finds.notice = "";
+      }
+      if (w.length === 0) {
+        box.appendChild(el("p", { class: "hq-words", text: "No photos are waiting." }));
+        return;
+      }
+      var at = 0;
+      w.forEach(function (p, i) {
+        if (p.id === finds.currentId) at = i;
+      });
+      finds.currentId = w[at].id;
+      box.appendChild(checkCard(w[at], !!d.canEdit));
+      if (w.length > 1) {
+        var thumbs = el("ul", { class: "hq-thumbs" });
+        w.forEach(function (p, i) {
+          if (i === at) return;
+          var b = el("button", { class: "hq-thumb", type: "button" }, [
+            el("span", { class: "hq-pic", "aria-hidden": "true" }),
+            el("b", { text: doorName(p) }),
+            p.placeName ? el("span", { text: p.placeName }) : null,
+            el("span", { class: "hq-soft", text: "Sent " + whenShort(p.sentAt) }),
+          ]);
+          b.addEventListener("click", function () {
+            finds.currentId = p.id;
+            drawQueue();
+          });
+          thumbs.appendChild(el("li", {}, [b]));
+        });
+        box.appendChild(el("div", { class: "hq-next" }, [el("h3", { class: "hq-h3", text: "Next" }), thumbs]));
+      }
+    }
+
+    /** One log row's "Take it down": asks for an optional reason in a field, then posts. */
+    function takeDownBox(r, holder) {
+      holder.textContent = "";
+      var first = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Take it down" });
+      var said = el("p", { class: "hq-status", role: "status" });
+      first.addEventListener("click", function () {
+        holder.textContent = "";
+        var id = "hqDown-" + r.id;
+        var field = el("input", { class: "hq-reason", type: "text", id: id, maxlength: 200, autocomplete: "off" });
+        var yes = el("button", { class: "hq-btn hq-btn--small hq-btn--danger", type: "button", text: "Yes, take it down" });
+        var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Cancel" });
+        yes.addEventListener("click", function () {
+          var reason = field.value.trim();
+          yes.disabled = true;
+          ask("POST", "/api/admin/elf/photos/" + r.id + "/take-down", reason ? { reason: reason } : {})
+            .then(function () {
+              finds.notice = "Taken down.";
+              return loadFinds();
+            })
+            .catch(function (e) {
+              yes.disabled = false;
+              say(said, e.message, false);
+            });
+        });
+        no.addEventListener("click", function () {
+          takeDownBox(r, holder);
+        });
+        holder.appendChild(el("div", { class: "hq-field" }, [el("label", { for: id, text: "Why are you taking it down? Only head elves see it. You can leave this empty." }), field]));
+        holder.appendChild(el("div", { class: "hq-actions" }, [yes, no]));
+        holder.appendChild(said);
+        field.focus();
+      });
+      holder.appendChild(first);
+    }
+
+    function drawLog() {
+      var d = finds.data;
+      var box = finds.log;
+      box.textContent = "";
+      box.appendChild(
+        el("div", { class: "hq-phead" }, [
+          el("h2", { class: "hq-h2", text: "The photo log" }),
+          el("p", { class: "hq-soft", text: "Every photo, who checked it and when. Newest first." }),
+        ]),
+      );
+      var list = el("ul", { class: "hq-rows" });
+      (d.log || []).forEach(function (r) {
+        var row = el("li", { class: "hq-row" });
+        row.appendChild(el("p", { class: "hq-what" }, [el("b", { text: doorName(r) }), " (" + r.family.grownUpName + "'s family)"]));
+        // An approved photo that no one sees yet (no second family's photo is approved on its door) says so.
+        var held = r.status === "approved" && r.held === true;
+        row.appendChild(el("span", { class: "hq-chip " + (held ? "hq-chip--long" : CHIP_CLASS[r.status] || "hq-chip--plain"), text: held ? "Up when a second family's photo is approved" : CHIP_WORDS[r.status] || r.status }));
+        row.appendChild(
+          el(
+            "ul",
+            { class: "hq-steps" },
+            (r.steps || []).map(function (s) {
+              return el("li", {}, [el("time", { datetime: s.at, text: stepWhen(s.at) }), el("span", { text: s.words })]);
+            }),
+          ),
+        );
+        if (d.canEdit && r.status === "approved") {
+          var holder = el("div", { class: "hq-down" });
+          takeDownBox(r, holder);
+          row.appendChild(holder);
+        }
+        list.appendChild(row);
+      });
+      if (!(d.log || []).length) list.appendChild(el("li", { class: "hq-words hq-soft", text: "No photos have been sent yet." }));
+      box.appendChild(list);
+      box.appendChild(el("p", { class: "hq-end", text: deletionDay() + ": every photo is deleted. The log keeps these lines, without the pictures." }));
+    }
+
+    // ---- Settings: Alerts, who gets a text and an email when a photo is waiting ----
+    // Read afresh each time Settings opens (src/routes/admin-elf.ts, /api/admin/elf/alerts). A head elf
+    // changes only their own mobile and tick; the rest are shown as words.
+    var alerts = { loaded: false, answer: null, error: null, asking: false, seq: 0 };
+    var ALERT_RULES = [
+      "One text and one email when photos start waiting.",
+      "No more until every waiting photo has been checked.",
+      "Nothing between 9pm and 8am. Photos sent overnight are in one alert at 8am.",
+    ];
+    var TEST_WORDS = {
+      sent: "Sent. Check your email and your phone.",
+      stubbed: "Sent. Check your email and your phone.",
+      "no-mobile": "Sent by email. Add a mobile number to get texts too.",
+      failed: "Sent by email. The text did not go.",
+      off: "Sent by email. Texts are not switched on yet.",
+    };
+
+    /** +447700900123 as people write it: 07700 900123. Anything else as it came. */
+    function mobileWords(m) {
+      var t = /^\+44(7\d{3})(\d{6})$/.exec(m || "");
+      return t ? "0" + t[1] + " " + t[2] : m || "";
+    }
+
+    function alertsSay(words, ok) {
+      var now = parts.settings.querySelector(".hq-alerts .hq-alerts__said");
+      if (now) say(now, words, ok);
+    }
+
+    function redrawAlerts() {
+      var old = parts.settings.querySelector(".hq-alerts");
+      if (old && old.parentNode) old.parentNode.replaceChild(alertsPanel(), old);
+    }
+
+    function loadAlerts() {
+      if (alerts.asking) return;
+      alerts.asking = true;
+      var mine = ++alerts.seq;
+      ask("GET", "/api/admin/elf/alerts")
+        .then(function (d) {
+          alerts.asking = false;
+          if (mine !== alerts.seq) return;
+          alerts.answer = d && Array.isArray(d.people) ? d : null;
+          alerts.error = null;
+          alerts.loaded = true;
+          redrawAlerts();
+        })
+        .catch(function (e) {
+          alerts.asking = false;
+          if (mine !== alerts.seq) return;
+          alerts.error = e.message;
+          alerts.loaded = true;
+          redrawAlerts();
+        });
+    }
+
+    /** One head elf: their name, mobile and email, and whether their alerts are on. The signed in head
+     *  elf's own card also has a box for the mobile, Save, and the tick. */
+    function personCard(p) {
+      var li = el("li", { class: "hq-person" + (p.alertsOn ? "" : " is-off") });
+      li.appendChild(
+        el("div", { class: "hq-person__who" }, [
+          el("b", { text: p.name }),
+          el("span", { text: (p.mobile ? mobileWords(p.mobile) : "No mobile number yet") + " · " + p.email }),
+        ]),
+      );
+      li.appendChild(el("span", { class: "hq-person__tick", text: p.alertsOn ? "On" : "Off" }));
+      if (!p.me) return li;
+      var mobile = el("input", { id: "hqAlertMobile", name: "mobile", type: "tel", inputmode: "tel", maxlength: 40, autocomplete: "tel" });
+      mobile.value = p.mobile ? mobileWords(p.mobile) : "";
+      var save = el("button", { class: "hq-btn hq-btn--small", type: "submit", text: "Save my mobile number" });
+      var form = el("form", { class: "hq-alerts__form", novalidate: true }, [
+        el("div", { class: "hq-field" }, [el("label", { for: "hqAlertMobile", text: "Your mobile number" }), mobile, el("small", { class: "hq-hint", text: "A UK mobile, for the text. Leave it empty for emails only." })]),
+        save,
+      ]);
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        change({ mobile: mobile.value }, "Saved.", [save]);
+      });
+      var tick = el("input", { type: "checkbox", id: "hqAlertsOn", name: "alertsOn" });
+      tick.checked = !!p.alertsOn;
+      tick.addEventListener("change", function () {
+        change({ alertsOn: tick.checked }, "Saved.", [tick]);
+      });
+      li.appendChild(form);
+      li.appendChild(el("label", { class: "hq-tickbox is-wide", for: "hqAlertsOn" }, [tick, el("span", { text: "Send me alerts" })]));
+      return li;
+    }
+
+    /** Saves my own mobile or tick, then draws the answer and says so. */
+    function change(body, saidWords, busy) {
+      busy.forEach(function (b) { b.disabled = true; });
+      alerts.seq++;
+      ask("PATCH", "/api/admin/elf/alerts/me", body)
+        .then(function (d) {
+          alerts.answer = d && Array.isArray(d.people) ? d : alerts.answer;
+          alerts.error = null;
+          redrawAlerts();
+          alertsSay(saidWords, true);
+        })
+        .catch(function (e) {
+          busy.forEach(function (b) { b.disabled = false; });
+          alertsSay(e.message, false);
+        });
+    }
+
+    function alertsPanel() {
+      var box = el("section", { class: "hq-panel hq-alerts", "aria-label": "Alerts" });
+      box.appendChild(el("h2", { class: "hq-h2", text: "Alerts" }));
+      if (!alerts.loaded) {
+        box.appendChild(el("p", { class: "hq-loading", text: WORDS.loading }));
+        return box;
+      }
+      if (alerts.error || !alerts.answer) {
+        var failed = el("p", { class: "hq-status", role: "status" });
+        say(failed, alerts.error || "Alerts could not be read.", false);
+        box.appendChild(failed);
+        return box;
+      }
+      var a = alerts.answer;
+      var said = el("p", { class: "hq-status hq-alerts__said", role: "status" });
+      var people = el("ul", { class: "hq-people" }, a.people.map(personCard));
+      var test = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Send me a test alert" });
+      test.addEventListener("click", function () {
+        test.disabled = true;
+        alertsSay("", null);
+        ask("POST", "/api/admin/elf/alerts/test")
+          .then(function (d) {
+            test.disabled = false;
+            var t = d && d.text;
+            alertsSay(TEST_WORDS[t] || TEST_WORDS.sent, t !== "failed");
+          })
+          .catch(function (e) {
+            test.disabled = false;
+            alertsSay(e.message, false);
+          });
+      });
+      // The words of the text and the email come from the server's own builders, so they can never drift.
+      var preview = a.preview || {};
+      var failedTexts = a.lastAlert && a.lastAlert.textsFailed ? a.lastAlert.textsFailed : [];
+      var who = el("div", { class: "hq-alerts__who" }, [
+        el("h3", { class: "hq-h3", text: "Who gets a text and an email when a photo is waiting" }),
+        people,
+        el("p", { class: "hq-words hq-soft", text: "Every head elf is listed here. Whoever gets to a photo first checks it, and the others see it is done." }),
+        a.textsOn ? null : el("p", { class: "hq-words hq-soft", text: "Texts are not switched on yet, so alerts go by email only." }),
+        failedTexts.length ? el("p", { class: "hq-status is-error", text: "The last alert's text did not reach " + failedTexts.join(", ") + "." }) : null,
+        el("div", { class: "hq-rules" }, [
+          el("h4", { class: "hq-h4", text: "When alerts go" }),
+          el("ul", {}, ALERT_RULES.map(function (r) { return el("li", { text: r }); })),
+        ]),
+        test,
+        said,
+      ]);
+      var previews = el("div", { class: "hq-alerts__previews" }, [
+        el("div", { class: "hq-prev" }, [
+          el("h4", { class: "hq-h4", text: "The text" }),
+          el("div", { class: "hq-sms" }, [el("span", { class: "hq-sms__from", text: "From NBCC" }), el("p", { class: "hq-sms__bubble", text: preview.text || "" })]),
+        ]),
+        el("div", { class: "hq-prev" }, [
+          el("h4", { class: "hq-h4", text: "The email" }),
+          el("div", { class: "hq-mail" }, [
+            el("p", { class: "hq-mail__head", text: "Subject: " + (preview.emailSubject || "") }),
+            el("p", { text: preview.emailLine || "" }),
+            el("p", { class: "hq-words hq-soft", text: "You get one of these when photos start waiting, not one for every photo." }),
+          ]),
+        ]),
+        el("p", { class: "hq-words hq-soft", text: "Neither shows the photo or the family's name." }),
+      ]);
+      box.appendChild(el("div", { class: "hq-alerts__grid" }, [who, previews]));
+      return box;
+    }
+
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
     function draw() {
       if (!data) return;
@@ -2530,6 +3148,7 @@
       stateChip.classList.toggle("is-live", on);
       tileCount("families", data.numbers ? data.numbers.namesToCheck : 0);
       tileCount("doors", data.doorsNotReady || 0);
+      tileCount("finds", data.photosWaiting || 0);
       drawHq();
       drawMoneyPart();
       drawSettingsPart();
@@ -2543,7 +3162,8 @@
           data = d;
           say(status, "", null);
           draw();
-          if (!parts.settings.hidden) loadPractice();
+          if (!parts.settings.hidden) { loadPractice(); loadAlerts(); }
+          if (!parts.finds.hidden) loadFinds();
           // A sheet already open was drawn before anyone knew whether this person may change it.
           if (fam.sheet) drawSheet();
           var asked = remembered(FAMILY_KEY);

@@ -165,3 +165,8 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
       { "confirm": true }
       """
     Then the doors answer is 200
+
+  Scenario: Finds on the evening lists no door before any clue is out
+    When "look.doors.admin.bdd@example.com" with password "Elf-Doors-Viewer-1" sends GET to "/api/admin/elf/finds"
+    Then the doors answer is 200
+    And the doors answer has 0 doors

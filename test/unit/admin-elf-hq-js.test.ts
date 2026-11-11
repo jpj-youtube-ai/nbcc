@@ -55,12 +55,12 @@ beforeEach(() => {
 });
 
 describe("Head Elf HQ's menu", () => {
-  it("draws five tiles, with HQ open", () => {
+  it("draws six tiles, with HQ open", () => {
     page();
-    expect(tabs().map((t) => t.textContent!.trim())).toEqual(["HQ", "Families", "Doors", "Money", "Settings"]);
+    expect(tabs().map((t) => t.textContent!.trim())).toEqual(["HQ", "Families", "Doors", "Finds", "Money", "Settings"]);
     expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
     expect(panel("hq").hidden).toBe(false);
-    for (const id of ["families", "doors", "money", "settings"]) expect(panel(id).hidden, id).toBe(true);
+    for (const id of ["families", "doors", "finds", "money", "settings"]) expect(panel(id).hidden, id).toBe(true);
     expect(document.querySelector("#elfHq h1")!.textContent).toBe("Elf Detective School");
   });
 
@@ -481,7 +481,7 @@ describe("the Money screen", () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     document.body.insertAdjacentHTML("beforeend", '<button class="admin-nav-link" data-view="donations">Donations</button><input type="checkbox" id="donationsElfFilter">');
     await hq.open();
-    tabs()[3].click();
+    tabs()[4].click();
     expect(moneyPart().textContent).toContain("£1,486");
     expect(moneyPart().textContent).toContain("from 128 families");
     expect(moneyPart().textContent).toContain("Entries are a payment to take part, so they are never claimed for Gift Aid.");
@@ -500,7 +500,7 @@ describe("the Money screen", () => {
   it("says when there is no money yet", async () => {
     const { hq } = page();
     await hq.open();
-    tabs()[3].click();
+    tabs()[4].click();
     expect(moneyPart().textContent).toContain("No payments yet.");
   });
 });
@@ -509,7 +509,7 @@ describe("the Settings screen", () => {
   it("steps the prices in pounds within their limits, and saves both in pence", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, entryFromPence: 200, entrySuggestedPence: 600 } } } });
     await hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     const [least, suggested] = [...settingsPart().querySelectorAll<HTMLElement>(".hq-stepper")];
     const out = (s: HTMLElement) => s.querySelector("output")!.textContent;
     const press = (s: HTMLElement, which: "less" | "more", times = 1) => {
@@ -537,7 +537,7 @@ describe("the Settings screen", () => {
   it("shows the server's refusal as an error", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     await hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "The suggested amount cannot be less than the least a family pays." }) }));
     inPart(settingsPart(), "Save the prices")!.click();
@@ -551,7 +551,7 @@ describe("the Settings screen", () => {
     const url = "https://nbcc.scot/elf/preview/" + "a".repeat(64);
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/preview": { url } } });
     await hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     expect(settingsPart().textContent).toContain("There is no preview link.");
     inPart(settingsPart(), "Make a preview link")!.click();
     await flush();
@@ -567,7 +567,7 @@ describe("the Settings screen", () => {
   it("ends the preview link", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, settings: { ...BUSY.settings, previewOn: true } }, "/api/admin/elf/preview": { ok: true } } });
     await hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     inPart(settingsPart(), "End the link")!.click();
     await flush();
     expect(calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/admin/elf/preview"]);
@@ -578,7 +578,7 @@ describe("the Settings screen", () => {
   it("shows someone who is not an admin the prices and the link as words, with nothing to press", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, previewOn: true } } } });
     await hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     expect(settingsPart().textContent).toContain("The least anyone pays is £1 for each detective, and we suggest £5.");
     expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
     expect(settingsPart().textContent).toContain("Only an admin can change these.");
@@ -613,7 +613,7 @@ describe("the place phone in Settings", () => {
   it("lets an admin save it", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
     await hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     expect(settingsPart().querySelector('label[for="hqPlacePhone"]')!.textContent).toBe("NBCC's phone number for places");
     expect(settingsPart().textContent).toContain("It goes on every staff card.");
     const box = settingsPart().querySelector<HTMLInputElement>("#hqPlacePhone")!;
@@ -627,7 +627,7 @@ describe("the place phone in Settings", () => {
   it("shows a head elf who is not an admin the number as words", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
     await hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     expect(settingsPart().textContent).toContain("NBCC's phone number for places: 01632 960 123");
     expect(settingsPart().querySelector("#hqPlacePhone")).toBeNull();
   });
@@ -657,7 +657,7 @@ describe("the practice door in Settings", () => {
   async function openSettings(answers: Record<string, unknown>) {
     const env = page({ answers });
     await env.hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     await flush();
     return env;
   }
@@ -777,7 +777,7 @@ describe("the practice door in Settings", () => {
       return Promise.resolve(answer({ practice: RUNNING, previewOn: true }));
     });
     tabs()[0].click();
-    tabs()[4].click(); // a fresh reading, held back
+    tabs()[5].click(); // a fresh reading, held back
     field("placeName").value = "The Example Office";
     field("placeTown").value = "Snowford";
     inPart(panelNow(), "Start a practice evening")!.click();
@@ -797,7 +797,7 @@ describe("the practice door in Settings", () => {
   it("reads the practice afresh each time Settings is opened, and when HQ opens on Settings", async () => {
     const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE });
     tabs()[0].click();
-    tabs()[4].click();
+    tabs()[5].click();
     await flush();
     expect(urls(calls).filter((u) => u === "GET /api/admin/elf/practice")).toHaveLength(2);
     // Settings was the open tile: the next visit reads the practice with HQ.
@@ -977,7 +977,7 @@ describe("the practice door's own mutations", () => {
   it("applies a start's answer even when Settings was left and entered again while it was on its way", async () => {
     const env = page({ answers: { "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: null, previewOn: true } } });
     await env.hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     await flush();
     let answerPost: () => void = () => {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -989,7 +989,7 @@ describe("the practice door's own mutations", () => {
     panelNow().querySelector<HTMLInputElement>('input[name="placeTown"]')!.value = "Snowford";
     inPart(panelNow(), "Start a practice evening")!.click();
     tabs()[0].click(); // away while the start is on its way
-    tabs()[4].click(); // and back: a fresh reading goes out
+    tabs()[5].click(); // and back: a fresh reading goes out
     await flush();
     answerPost();
     await flush();
@@ -1000,7 +1000,7 @@ describe("the practice door's own mutations", () => {
   it("applies a clear's answer in the same way", async () => {
     const env = page({ answers: { "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: RUN, previewOn: true } } });
     await env.hq.open();
-    tabs()[4].click();
+    tabs()[5].click();
     await flush();
     let answerClear: () => void = () => {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1010,11 +1010,145 @@ describe("the practice door's own mutations", () => {
     });
     inPart(panelNow(), "Clear the practice")!.click();
     tabs()[0].click();
-    tabs()[4].click();
+    tabs()[5].click();
     await flush();
     answerClear();
     await flush();
     expect(panelNow().querySelector(".hq-tagword")).toBeNull();
     expect(panelNow().querySelector("form")).not.toBeNull();
+  });
+});
+
+// ---- Settings > Alerts (wave 2, Task 3) ----
+
+describe("Alerts in Settings", () => {
+  const ALEX = { userId: 1, name: "Alex Example", email: "alex@example.org", mobile: "+447700900123", alertsOn: true, me: true };
+  const SAM = { userId: 2, name: "Sam Example", email: "sam@example.org", mobile: null, alertsOn: false, me: false };
+  const PREVIEW = { text: "Pretend text from the server", emailSubject: "Pretend subject from the server", emailLine: "Pretend first line from the server." };
+  const ALERTS = { people: [ALEX, SAM], textsOn: true, lastAlert: null, preview: PREVIEW };
+  const alertsNow = () => settingsPart().querySelector<HTMLElement>(".hq-alerts")!;
+  async function openSettings(answers: Record<string, unknown>) {
+    const env = page({ answers: { "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false }, "GET /api/admin/elf/alerts": ALERTS, ...answers } });
+    await env.hq.open();
+    tabs()[5].click();
+    await flush();
+    return env;
+  }
+
+  it("lists each head elf as a card with their mobile or none, their email and On or Off", async () => {
+    const { calls } = await openSettings({});
+    expect(urls(calls)).toContain("GET /api/admin/elf/alerts");
+    const box = alertsNow();
+    expect(box.querySelector("h2")!.textContent).toBe("Alerts");
+    expect(box.textContent).toContain("Who gets a text and an email when a photo is waiting");
+    const cards = [...box.querySelectorAll<HTMLElement>(".hq-person")];
+    expect(cards).toHaveLength(2);
+    expect(cards[0].textContent).toContain("Alex Example");
+    expect(cards[0].textContent).toContain("alex@example.org");
+    expect(cards[0].textContent).toContain("On");
+    expect(cards[1].textContent).toContain("No mobile number yet");
+    expect(cards[1].textContent).toContain("sam@example.org");
+    expect(cards[1].textContent).toContain("Off");
+    // Only the signed in head elf's own card has a box and a tick.
+    expect(box.querySelectorAll("input")).toHaveLength(2);
+    expect(cards[0].querySelector("#hqAlertMobile")).toBeTruthy();
+    expect(cards[1].querySelector("input")).toBeNull();
+  });
+
+  it("shows the rules, and the text and the email as words", async () => {
+    await openSettings({});
+    const t = alertsNow().textContent!;
+    expect(t).toContain("When alerts go");
+    expect(t).toContain("One text and one email when photos start waiting.");
+    expect(t).toContain("No more until every waiting photo has been checked.");
+    expect(t).toContain("Nothing between 9pm and 8am. Photos sent overnight are in one alert at 8am.");
+    // The words come from the server's own builders: the screen keeps no copy of them.
+    expect(t).toContain("Pretend text from the server");
+    expect(t).toContain("Subject: Pretend subject from the server");
+    expect(t).toContain("Pretend first line from the server.");
+    expect(t).not.toContain("a photo is waiting for a head elf to check");
+    expect(t).toContain("Neither shows the photo or the family's name.");
+    expect(alertsNow().querySelector(".hq-sms")).toBeTruthy();
+  });
+
+  it("saves my own mobile as typed", async () => {
+    const { calls } = await openSettings({ "PATCH /api/admin/elf/alerts/me": { ...ALERTS, people: [{ ...ALEX, mobile: "+447700900456" }, SAM] } });
+    const box = alertsNow().querySelector<HTMLInputElement>("#hqAlertMobile")!;
+    box.value = "07700 900 123";
+    inPart(alertsNow(), "Save my mobile number")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([{ method: "PATCH", url: "/api/admin/elf/alerts/me", body: { mobile: "07700 900 123" } }]);
+    expect(alertsNow().textContent).toContain("Saved.");
+  });
+
+  it("saves my tick when I change it", async () => {
+    const { calls } = await openSettings({ "PATCH /api/admin/elf/alerts/me": { ...ALERTS, people: [{ ...ALEX, alertsOn: false }, SAM] } });
+    const tick = alertsNow().querySelector<HTMLInputElement>("#hqAlertsOn")!;
+    expect(tick.checked).toBe(true);
+    tick.checked = false;
+    tick.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toEqual([{ alertsOn: false }]);
+  });
+
+  it("sends a test alert and says to check the email and the phone", async () => {
+    const { calls } = await openSettings({ "POST /api/admin/elf/alerts/test": { email: true, text: "sent" } });
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/api/admin/elf/alerts/test"]);
+    const said = alertsNow().querySelector(".hq-status")!;
+    expect(said.textContent).toContain("Check your email and your phone.");
+    expect(said.classList.contains("is-ok")).toBe(true);
+  });
+
+  it("says when only the email went", async () => {
+    await openSettings({ "POST /api/admin/elf/alerts/test": { email: true, text: "no-mobile" } });
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    expect(alertsNow().querySelector(".hq-status")!.textContent).toBe("Sent by email. Add a mobile number to get texts too.");
+  });
+
+  it("says when the text did not go, as an error", async () => {
+    await openSettings({ "POST /api/admin/elf/alerts/test": { email: true, text: "failed" } });
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    const said = alertsNow().querySelector(".hq-status")!;
+    expect(said.textContent).toBe("Sent by email. The text did not go.");
+    expect(said.classList.contains("is-error")).toBe(true);
+  });
+
+  // The server allows one test a minute for each head elf (src/routes/admin-elf.ts): its words are shown.
+  it("says in words, as an error, when a test went a moment ago, and the button can be pressed again", async () => {
+    await openSettings({});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const before = w.fetch;
+    w.fetch = vi.fn((url: string, init: RequestInit = {}) =>
+      init.method === "POST"
+        ? Promise.resolve({ ok: false, status: 429, json: () => Promise.resolve({ error: "You sent a test a moment ago. Try again in a minute." }) })
+        : before(url, init),
+    );
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    const said = alertsNow().querySelector(".hq-status")!;
+    expect(said.textContent).toBe("You sent a test a moment ago. Try again in a minute.");
+    expect(said.classList.contains("is-error")).toBe(true);
+    expect(inPart(alertsNow(), "Send me a test alert")!.disabled).toBe(false);
+  });
+
+  it("says whose text did not reach them at the last alert, as an error", async () => {
+    await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, lastAlert: { at: "2026-12-07T18:04:00.000Z", textsFailed: ["Alex Example"] } } });
+    const line = [...alertsNow().querySelectorAll<HTMLElement>(".is-error")].find((n) => n.textContent!.includes("did not reach"))!;
+    expect(line.textContent).toContain("The last alert's text did not reach Alex Example.");
+  });
+
+  it("shows no failed line when every text went", async () => {
+    await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, lastAlert: { at: "2026-12-07T18:04:00.000Z", textsFailed: [] } } });
+    expect(alertsNow().textContent).not.toContain("did not reach");
+  });
+
+  it("says when texts are not switched on", async () => {
+    await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, textsOn: false } });
+    expect(alertsNow().textContent).toContain("Texts are not switched on yet, so alerts go by email only.");
   });
 });

@@ -62,6 +62,7 @@ import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
 import { createSiteRouter } from "./routes/site";
 import { elfPhotoBodyGuard, elfRouter, ELF_PHOTO_POST_PATH } from "./routes/elf";
 import { adminElfRouter } from "./routes/admin-elf";
+import { adminElfFindsRouter } from "./routes/admin-elf-finds";
 import { adminElfDoorsRouter, ELF_CLUE_PICTURE_PATH, elfCluePictureBodyWanted } from "./routes/admin-elf-doors";
 
 export function createApp() {
@@ -195,6 +196,7 @@ export function createApp() {
   app.use(elfRouter);
   app.use(adminElfRouter);
   app.use(adminElfDoorsRouter);
+  app.use(adminElfFindsRouter);
   app.use(adminEventTicketsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);

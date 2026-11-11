@@ -60,6 +60,11 @@ export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
   // Invoices for donations: an invoice paid twice, to giving@.
   "invoiceStaff",
   "backupAlert",
+  // Elf Detective School wave 2: the 8am email and the alerts, to head elves only.
+  "elfMorning",
+  "elfFindAlert",
+  "elfPhotoAlert",
+  "elfTestAlert",
 ]);
 
 // The words for an email of this kind, or null for a staff only kind.

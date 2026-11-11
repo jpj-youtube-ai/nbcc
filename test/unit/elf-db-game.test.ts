@@ -27,6 +27,7 @@ import {
   familyPhoto,
   familyVisits,
   familyWordTries,
+  finderOf,
   finderParts,
   giveBackWordTry,
   loadDoorRun,
@@ -808,9 +809,26 @@ describe("photos", () => {
   });
 
   it("reads an approved photo as waiting while the place is hidden", async () => {
-    query.mockResolvedValue({ rows: [{ token: "aaaaaaaaaaaa", status: "approved" }] });
+    query.mockResolvedValue({ rows: [{ token: "aaaaaaaaaaaa", status: "approved", shown: true }] });
     expect(await familyPhoto(2026, 7, 3, false)).toEqual({ token: "aaaaaaaaaaaa", status: "waiting" });
     expect(await familyPhoto(2026, 7, 3, true)).toEqual({ token: "aaaaaaaaaaaa", status: "approved" });
+  });
+
+  it("reads an approved photo as waiting to its own family until a second family's photo is approved on the door", async () => {
+    query.mockResolvedValue({ rows: [{ token: "aaaaaaaaaaaa", status: "approved", shown: false }] });
+    expect(await familyPhoto(2026, 7, 3, true)).toEqual({ token: "aaaaaaaaaaaa", status: "waiting" });
+    expect(await familyPhoto(2026, 7, 3, false)).toEqual({ token: "aaaaaaaaaaaa", status: "waiting" });
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("count(DISTINCT");
+    expect(sql).toContain(">= 2");
+    expect(sql).toContain("removed_at IS NULL");
+  });
+
+  it("never reads a waiting or declined photo as anything else because of the two family rule", async () => {
+    query.mockResolvedValue({ rows: [{ token: "aaaaaaaaaaaa", status: "declined", shown: false }] });
+    expect((await familyPhoto(2026, 7, 3, true))!.status).toBe("declined");
+    query.mockResolvedValue({ rows: [{ token: "aaaaaaaaaaaa", status: "waiting", shown: false }] });
+    expect((await familyPhoto(2026, 7, 3, true))!.status).toBe("waiting");
   });
 
   it("never gives a family a decline's reason, and skips replaced, taken down and deleted photos", async () => {
@@ -845,6 +863,25 @@ describe("photos", () => {
     expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.photo.taken_down");
   });
 
+  it("takes the family row first, as every photo writer does, so it cannot deadlock with an approval", async () => {
+    clientQuery.mockImplementation(async (sql: string) => {
+      if (/UPDATE elf_photos/.test(String(sql))) return { rows: [{ id: 42 }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    await takeDownOwnPhoto(2026, 7, 3, FIVE_31);
+    const s = sqls();
+    const lock = s.findIndex((q) => /FROM elf_families WHERE id = \$1 FOR UPDATE/.test(q));
+    expect(lock).toBeGreaterThan(s.indexOf("BEGIN"));
+    expect(lock).toBeLessThan(s.findIndex((q) => /UPDATE elf_photos/.test(q)));
+    expect(call(/FROM elf_families WHERE id = \$1 FOR UPDATE/)![1]).toEqual([3]);
+  });
+
+  it("offers the approved photo that is up before a newer one that is waiting or declined", async () => {
+    query.mockResolvedValue({ rows: [{ token: "aaaaaaaaaaaa", status: "approved", shown: true }] });
+    await familyPhoto(2026, 7, 3, true);
+    expect(String(query.mock.calls[0][0])).toMatch(/ORDER BY \(p\.status = 'approved'\) DESC, p\.sent_at DESC, p\.id DESC/);
+  });
+
   it("answers false and deletes nothing when the family has no photo to take down", async () => {
     clientQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     expect(await takeDownOwnPhoto(2026, 7, 3, FIVE_31)).toBe(false);
@@ -862,6 +899,35 @@ describe("photos", () => {
     expect(sql).toContain("removed_at IS NULL");
     query.mockResolvedValueOnce({ rows: [] });
     expect(await approvedPhoto(2026, 7, "bbbbbbbbbbbb")).toBeNull();
+  });
+
+  it("serves a photo only once approved photos from two different families are on its door", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await approvedPhoto(2026, 7, "aaaaaaaaaaaa")).toBeNull();
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("count(DISTINCT");
+    expect(sql).toContain(">= 2");
+    expect(sql).toContain("status = 'approved'");
+    // The count ignores removed families and deleted photos, like the photo itself.
+    expect(sql.match(/removed_at IS NULL/g)!.length).toBeGreaterThanOrEqual(2);
+    expect(sql.match(/deleted_at IS NULL/g)!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("lists a door's photos in the scrapbook only once two families' photos are approved on it", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await doorScrapbook(2026, 7, SIX_10);
+    const sql = String(query.mock.calls.map((c) => String(c[0])).find((q) => /FROM elf_photos/.test(q)));
+    expect(sql).toContain("count(DISTINCT");
+    expect(sql).toContain(">= 2");
+  });
+
+  it("shows at most one photo a family on each door: approving replaces the family's other approved photo", async () => {
+    // The rule lives in decidePhoto (src/db/elf-photos.ts); here, the family side proves the read side
+    // never lists two photos from one family even if two approved rows were ever there.
+    query.mockResolvedValue({ rows: [] });
+    await doorScrapbook(2026, 7, SIX_10);
+    const sql = String(query.mock.calls.map((c) => String(c[0])).find((q) => /FROM elf_photos/.test(q)));
+    expect(sql).toContain("NOT EXISTS");
   });
 });
 
@@ -890,5 +956,43 @@ describe("visitElf, cluePicture and the switch", () => {
     expect(query.mock.calls[0][1][0]).toBe(2026);
     expect(sqls().some((q) => /DELETE FROM elf_practice/.test(q))).toBe(true);
     expect(sqls().some((q) => /DELETE FROM elf_guesses/.test(q) && /year = 0/.test(q))).toBe(true);
+  });
+});
+
+describe("finderOf", () => {
+  it("reads a real door's find and its finding family's detectives by full name, leaving a removed family out", async () => {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_doors/.test(s)) return { rows: [{ found_at: at("2026-12-06T18:10:00Z"), found_family_id: 3 }] };
+      if (/FROM elf_families/.test(s)) return { rows: [{ grown_up_name: "Alex Example", email: "alex@example.org" }] };
+      return { rows: [{ first_name: "Sam", surname: "Twinkle" }, { first_name: "Kim", surname: "Twinkle" }] };
+    });
+    const found = await finderOf(2026, 6);
+    expect(found).toEqual({ detectives: ["Sam Twinkle", "Kim Twinkle"], grownUpName: "Alex Example", email: "alex@example.org", at: at("2026-12-06T18:10:00Z") });
+    const sqls = query.mock.calls.map((c) => String(c[0]));
+    expect(sqls.some((s) => /FROM elf_doors/.test(s))).toBe(true);
+    expect(sqls.filter((s) => /elf_families/.test(s)).every((s) => s.includes("removed_at IS NULL"))).toBe(true);
+  });
+
+  it("reads door 0 from the practice row", async () => {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_practice/.test(s)) return { rows: [{ found_at: at("2026-12-07T18:05:00Z"), found_family_id: 5 }] };
+      if (/FROM elf_families/.test(s)) return { rows: [{ grown_up_name: "Kim Example", email: "kim@example.org" }] };
+      return { rows: [{ first_name: "Pip", surname: "Twinkle" }] };
+    });
+    const found = await finderOf(0, 0);
+    expect(found?.detectives).toEqual(["Pip Twinkle"]);
+    expect(query.mock.calls.some((c) => /FROM elf_practice/.test(String(c[0])))).toBe(true);
+    expect(query.mock.calls.every((c) => !/FROM elf_doors/.test(String(c[0])))).toBe(true);
+  });
+
+  it("is null when nobody has found it, or the finding family has been removed", async () => {
+    query.mockResolvedValue({ rows: [] });
+    expect(await finderOf(2026, 6)).toBeNull();
+    query.mockImplementation(async (sql: string) =>
+      /FROM elf_doors/.test(String(sql)) ? { rows: [{ found_at: at("2026-12-06T18:10:00Z"), found_family_id: 3 }] } : { rows: [] },
+    );
+    expect(await finderOf(2026, 6)).toBeNull();
   });
 });

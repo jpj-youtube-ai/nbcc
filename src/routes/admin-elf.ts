@@ -26,7 +26,15 @@ import { doorPicture, doorSeason, emptyDoor, type DoorSetup, readinessOf, staffE
 import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/admin-families";
 import { daysUntil, questsFor, tileFor, type SoonNotReady } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
-import { badgeWords } from "../elf/emails";
+import { badgeWords, buildElfPhotoAlertEmail, buildElfTestAlertEmail, ELF_PHOTO_TEXT, ELF_TEST_TEXT } from "../elf/emails";
+import { normaliseUkMobile } from "../elf/alerts";
+import { elfTextsOn } from "../elf/texts-on";
+import { createRateLimiter } from "../portal/request-limiter";
+import { lastAlert, listHeadElves, recordAlert, setMyAlerts } from "../db/elf-alerts";
+import { countPhotosWaiting } from "../db/elf-photos";
+import { sendText, smsConfigured } from "../clients/sms";
+import { sendElfTestAlert } from "../clients/email";
+import { realElfDeps, runElfTick } from "../elf/worker";
 import { FESTIVE_SURNAMES } from "../elf/names";
 import { PRACTICE_ELF_NAME } from "../elf/practice-words";
 import { hashElfToken, newElfToken } from "../elf/session";
@@ -53,6 +61,12 @@ function forAdmin(s: ElfSettings) {
 //   POST   /api/admin/elf/practice  start a practice evening at a pretend place (elf: edit; only with a
 //                                   preview link, which is how it is played)
 //   DELETE /api/admin/elf/practice  clear it and everything played at it (elf: edit)
+//   GET   /api/admin/elf/alerts     the head elves, their mobiles and ticks, the last photo alert and the
+//                                   words of the text and the email as they are sent (elf: view)
+//   PATCH /api/admin/elf/alerts/me  change only my own mobile and tick (elf: view)
+//   POST  /api/admin/elf/alerts/test  send me a test alert, by email and by text (elf: view)
+//   POST  /api/admin/elf/worker/tick  run the elf worker's tick once at { at } (elf: edit; outside
+//                                   production only, 404 in production): how the BDD moves it to midday
 //
 // The school has its own permission section, "elf" (src/admin/permissions.ts): admins by role, a head
 // elf given it from the Team matrix. The screen is assets/js/admin/elf-hq.js. Unit tested in
@@ -174,11 +188,12 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
   if (!claims) return;
   try {
     const now = new Date();
-    const [settings, numbers, recruits, perms] = await Promise.all([
+    const [settings, numbers, recruits, perms, photosWaiting] = await Promise.all([
       getElfSettings(),
       elfHqNumbers(now),
       elfRecruits(RECRUITS),
       loadEffectivePermissions(claims.sub),
+      countPhotosWaiting(),
     ]);
     const clue = firstClueAt(settings.year);
     const { notReady, soon } = await doorsNotReadyAt(settings.year, now);
@@ -193,6 +208,8 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       numbers,
       quests: questsFor(numbers, !!settings.previewHash, notReady, soon),
       doorsNotReady: notReady.length,
+      // The count on the Finds tile: photos waiting for a head elf to check.
+      photosWaiting,
       doorsOn: settings.doorsOn === true,
       doorsSoonNotReady: soon,
       recruits: recruits.map((d) => ({
@@ -533,6 +550,148 @@ export async function deleteAdminElfPractice(req: Request, res: Response): Promi
   }
 }
 
+
+// ---- Settings > Alerts (wave 2): who gets a text and an email when a photo is waiting ----
+
+const BAD_MOBILE = "That does not look like a UK mobile number.";
+
+const alertsMeSchema = z
+  .object({ mobile: z.string().max(40).nullable().optional(), alertsOn: z.boolean().optional() })
+  .strict();
+
+/** What Settings > Alerts shows: every head elf (with `me` for the one asking), whether texts are
+ *  switched on, the last photo alert, and the words of the text and the email as the real builders write
+ *  them (the screen keeps no copy of its own). The email's sample is door 7's. */
+function alertPreview() {
+  const email = buildElfPhotoAlertEmail({ door: 7, adminUrl: `${siteOrigin()}/admin` });
+  return { text: ELF_PHOTO_TEXT, emailSubject: email.subject, emailLine: email.text.split(/\r?\n/)[0] };
+}
+
+async function alertsAnswer(userId: number) {
+  const [people, last] = await Promise.all([listHeadElves(), lastAlert("photo")]);
+  return {
+    people: people.map((p) => ({ ...p, me: p.userId === userId })),
+    textsOn: smsConfigured,
+    lastAlert: last,
+    preview: alertPreview(),
+  };
+}
+
+/** The head elves and their alert settings (elf: view). */
+export async function getAdminElfAlerts(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
+  try {
+    return res.status(200).json(await alertsAnswer(claims.sub));
+  } catch (err) {
+    console.error("admin elf alerts failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+/** A head elf changes only their own mobile and tick (elf: view). */
+export async function patchAdminElfAlertsMe(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
+  const parsed = alertsMeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "Those alert settings could not be read." });
+  const change: { mobile?: string | null; alertsOn?: boolean } = {};
+  if (parsed.data.mobile !== undefined) {
+    const typed = parsed.data.mobile === null ? "" : parsed.data.mobile.trim();
+    if (typed === "") change.mobile = null;
+    else {
+      const mobile = normaliseUkMobile(typed);
+      if (!mobile) return res.status(400).json({ error: BAD_MOBILE });
+      change.mobile = mobile;
+    }
+  }
+  if (parsed.data.alertsOn !== undefined) change.alertsOn = parsed.data.alertsOn;
+  try {
+    if (Object.keys(change).length > 0) await setMyAlerts(claims.sub, change, actorOf(claims));
+    return res.status(200).json(await alertsAnswer(claims.sub));
+  } catch (err) {
+    console.error("admin elf alerts save failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+/** One test alert a minute for each head elf: each press can be a paid text to a number nobody has confirmed.
+ *  Counted in this task's memory, as every limit made with createRateLimiter is. */
+const TEST_ALERT_LIMIT = { max: 1, windowMs: 60_000 } as const;
+let testAlertLimit = createRateLimiter(TEST_ALERT_LIMIT);
+const TEST_TOO_SOON = { error: "You sent a test a moment ago. Try again in a minute." };
+
+/** For tests: a fresh minute for every head elf. */
+export function resetTestAlertLimit(): void {
+  testAlertLimit = createRateLimiter(TEST_ALERT_LIMIT);
+}
+
+/** Sends the caller a test alert: the email, and the text when they have a mobile and texts are tried
+ *  (elf: view). Whether texts are tried is the photo alert's own rule (elfTextsOn): switched on, or outside
+ *  production through the stub. A text that fails never stops the email. One a minute for each head elf;
+ *  a second press inside the minute is 429, with nothing sent. */
+export async function postAdminElfAlertsTest(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
+  if (!testAlertLimit.allow(String(claims.sub), Date.now())) return res.status(429).json(TEST_TOO_SOON);
+  try {
+    const me = (await listHeadElves()).find((p) => p.userId === claims.sub);
+    const name = me ? me.name : claims.email;
+    const mail = buildElfTestAlertEmail({ name, adminUrl: `${siteOrigin()}/admin` });
+    await sendElfTestAlert(name, { email: claims.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    let text: "sent" | "stubbed" | "failed" | "no-mobile" | "off";
+    if (!me || !me.mobile) text = "no-mobile";
+    else if (!elfTextsOn()) text = "off";
+    else {
+      try {
+        text = await sendText({ to: me.mobile, text: ELF_TEST_TEXT, senderId: config.SMS_SENDER_ID });
+      } catch (err) {
+        console.error("admin elf test text failed:", err instanceof Error ? err.message : err);
+        text = "failed";
+      }
+    }
+    const settings = await getElfSettings();
+    await recordAlert({
+      kind: "test",
+      year: settings.year,
+      door: null,
+      emails: 1,
+      texts: text === "sent" || text === "stubbed" ? 1 : 0,
+      textsFailed: text === "failed" ? [name] : [],
+    });
+    return res.status(200).json({ email: true, text });
+  } catch (err) {
+    console.error("admin elf test alert failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+// ---- the elf worker's tick, for the BDD (outside production only) ----
+
+const tickSchema = z.object({ at: z.string().refine((s) => !Number.isNaN(Date.parse(s))) }).strict();
+
+/** Runs the elf worker's tick once, at the moment given (elf: edit). Outside production only: in production
+ *  it is not found, for anyone. It is how the BDD moves the worker to midday, so quiet hours never bite; the
+ *  claims in elf_sends keep it and the worker's own timer from ever sending the same thing twice. */
+export async function postAdminElfWorkerTick(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  if (config.NODE_ENV === "production") return res.status(404).json({ error: "Not found" });
+  const claims = await authorizeSection(req, res, "elf", "edit");
+  if (!claims) return;
+  const parsed = tickSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json(BAD_ID);
+  try {
+    await runElfTick(new Date(parsed.data.at), realElfDeps());
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("admin elf worker tick failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
 adminElfRouter.post("/api/admin/elf/preview", postAdminElfPreview);
 adminElfRouter.delete("/api/admin/elf/preview", deleteAdminElfPreview);
 adminElfRouter.get("/api/admin/elf/settings", getAdminElfSettings);
@@ -549,3 +708,7 @@ adminElfRouter.post("/api/admin/elf/families/:id/remove", postAdminElfFamilyRemo
 adminElfRouter.post("/api/admin/elf/families/:id/restore", postAdminElfFamilyRestore);
 adminElfRouter.patch("/api/admin/elf/detectives/:id", patchAdminElfDetective);
 adminElfRouter.post("/api/admin/elf/families/:id/word-tries/clear", postAdminElfWordTriesClear);
+adminElfRouter.get("/api/admin/elf/alerts", getAdminElfAlerts);
+adminElfRouter.patch("/api/admin/elf/alerts/me", patchAdminElfAlertsMe);
+adminElfRouter.post("/api/admin/elf/alerts/test", postAdminElfAlertsTest);
+adminElfRouter.post("/api/admin/elf/worker/tick", postAdminElfWorkerTick);

@@ -43,6 +43,7 @@ vi.mock("../../src/config", () => ({
 import * as routes from "../../src/routes/admin-elf-doors";
 import { patchAdminElfSettings } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
+import { pool } from "../../src/db/pool";
 import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
 import { isUsableSecretWord } from "../../src/elf/claim";
 import type { Door } from "../../src/elf/calendar";
@@ -87,6 +88,9 @@ const body = (res: { body: unknown }) => res.body as any;
 
 const doorOf = (n: number, over: Partial<DoorSetup> = {}): DoorSetup => ({ ...emptyDoor(n as Door, "abcdefghijkm"), ...over });
 const all24 = () => Array.from({ length: 24 }, (_, i) => doorOf(i + 1));
+/** The users table, for the names of who called a snow day or ticked gone home. */
+const users = (rows: { full_name: string; email: string }[]) =>
+  vi.mocked(pool.query).mockImplementation((async (sql: string) => ({ rows: /FROM users/.test(String(sql)) ? rows : [] })) as never);
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -104,6 +108,8 @@ beforeEach(() => {
   processPictureMock.mockReset();
   cluePictureMock.mockReset();
   doors.savePastedClues.mockResolvedValue({ doors: 1, clues: 3 });
+  vi.mocked(pool.query).mockReset();
+  users([]);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -255,6 +261,17 @@ describe("names", () => {
     const res = await add("7", { name: "The Pine Cone" });
     expect(res.statusCode).toBe(201);
     expect(doors.addElfDoorName).toHaveBeenCalledWith(2026, 7, "The Pine Cone", ACTOR);
+  });
+
+  it("fixes names at midnight at the end of the door's day: 409 for door 6 and 201 for door 7", async () => {
+    const late = await add("6", { name: "The Pine Cone" });
+    expect(late.statusCode).toBe(409);
+    expect(body(late)).toEqual({ error: "Door 6's day is over, so its names are fixed now." });
+    expect(doors.addElfDoorName).not.toHaveBeenCalled();
+    vi.setSystemTime(new Date("2026-12-07T23:59:30Z"));
+    expect((await add("7", { name: "The Pine Cone" })).statusCode).toBe(201);
+    vi.setSystemTime(new Date("2026-12-08T00:00:00Z"));
+    expect((await add("7", { name: "The Pine Cone" })).statusCode).toBe(409);
   });
 
   it("refuses a name with no letter or number, and one already counting", async () => {
@@ -589,8 +606,41 @@ describe("a snow day", () => {
     doors.getElfDoor.mockResolvedValue(doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: "admin:other@example.org" }));
     const res = await call(routes.postAdminElfDoorSnowDay, "8");
     expect(res.statusCode).toBe(200);
-    expect(body(res).door.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "admin:other@example.org" });
+    // Nobody in Team has that email any more: the email is the name, as in the photo log.
+    expect(body(res).door.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "admin:other@example.org", name: "other@example.org" });
     expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  // As the photo log names a head elf: their users.full_name, the email only when it is blank.
+  it("names who called it and who ticked gone home by their name, and by their email only when the name is blank", async () => {
+    users([
+      { full_name: "Alex Example", email: "Staff@Example.org" },
+      { full_name: "  ", email: "jo@example.org" },
+    ]);
+    doors.getElfDoor.mockResolvedValue(
+      doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: ACTOR, goneHomeAt: new Date("2026-12-09T09:00:00Z"), goneHomeBy: "admin:jo@example.org" }),
+    );
+    const d = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }))).door;
+    expect(d.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: ACTOR, name: "Alex Example" });
+    expect(d.goneHome).toEqual({ at: "2026-12-09T09:00:00.000Z", by: "admin:jo@example.org", name: "jo@example.org" });
+    const lookups = vi.mocked(pool.query).mock.calls.filter((c) => /FROM users/.test(String(c[0])));
+    expect(lookups).toHaveLength(1);
+    expect(lookups[0][1]).toEqual([["staff@example.org", "jo@example.org"]]);
+  });
+
+  it("answers the name of whoever called it from every route that answers the sheet", async () => {
+    users([{ full_name: "Alex Example", email: "staff@example.org" }]);
+    doors.tickElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { snowDayAt: new Date("2026-12-07T09:00:00Z"), snowDayBy: ACTOR }));
+    const res = await call(routes.postAdminElfDoorSnowDay, "8");
+    expect(body(res).door.snowDay).toEqual({ at: "2026-12-07T09:00:00.000Z", by: ACTOR, name: "Alex Example" });
+  });
+
+  it("reads no users for a door nobody has called off or ticked, or one snowed in by itself", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: "automatic" }));
+    await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }));
+    doors.getElfDoor.mockResolvedValue(doorOf(8));
+    await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }));
+    expect(vi.mocked(pool.query).mock.calls.filter((c) => /FROM users/.test(String(c[0])))).toEqual([]);
   });
 
   it("is cancelled before clue 1 only", async () => {
@@ -619,10 +669,11 @@ describe("a snow day", () => {
   });
 
   it("is on the door's sheet, with who and when", async () => {
+    users([{ full_name: "Alex Example", email: "staff@example.org" }]);
     doors.getElfDoor.mockResolvedValue(doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: "automatic", goneHomeAt: new Date("2026-12-09T09:00:00Z"), goneHomeBy: "admin:staff@example.org" }));
     const d = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }))).door;
-    expect(d.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "automatic" });
-    expect(d.goneHome).toEqual({ at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org" });
+    expect(d.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "automatic", name: "automatic" });
+    expect(d.goneHome).toEqual({ at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org", name: "Alex Example" });
     doors.getElfDoor.mockResolvedValue(doorOf(8));
     const none = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }))).door;
     expect(none.snowDay).toBeNull();

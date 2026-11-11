@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { renderJoinPage } from "../../src/elf/pages/join";
@@ -87,12 +88,13 @@ describe("the enrol page's script", () => {
     load();
     $<HTMLInputElement>('input[name="grownUpName"]').value = "Sam Example";
     $<HTMLInputElement>('input[name="email"]').value = "sam@example.com";
+    $<HTMLInputElement>('input[name="mobile"]').value = "07700 900 123";
     $<HTMLInputElement>('input[name="detective-1-first"]').value = "Ruby";
     $<HTMLInputElement>('input[name="agreed"]').checked = true;
     $("form.elf-join-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flush();
     expect(calls[0].url).toBe("/api/elf/join");
-    expect(calls[0].body).toMatchObject({ grownUpName: "Sam Example", email: "sam@example.com", entryPence: 500, agreed: true });
+    expect(calls[0].body).toMatchObject({ grownUpName: "Sam Example", email: "sam@example.com", mobile: "07700 900 123", entryPence: 500, agreed: true });
     expect(calls[0].body.detectives).toEqual([{ firstName: "Ruby", surname: FESTIVE_SURNAMES[0] }]);
     expect(went).toEqual(["https://checkout.stripe.example/c/pay"]);
   });
@@ -103,5 +105,62 @@ describe("the enrol page's script", () => {
     await flush();
     expect($(".elf-join-errors").textContent).toContain("Please pick a surname");
     expect(went).toEqual([]);
+  });
+});
+
+// TASK-614: a family that has already paid, enrolling again without signing in, is not enrolled again.
+// The server emails it a code and answers 200 { status: "check-email", message } (src/routes/elf.ts).
+// The script used to read that as a failure and say "Something went wrong".
+describe("enrolling again with an email that already has detectives", () => {
+  const SERVER_WORDS = "Check your email to carry on. If you have enrolled with us before, we have sent you a code: sign in with it, then add your detectives from Detective HQ.";
+  const submit = async () => {
+    $("form.elf-join-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+  };
+
+  it("says what the answer means, in the server's own words, and goes nowhere", async () => {
+    load({ status: 200, body: { status: "check-email", message: SERVER_WORDS } });
+    await submit();
+    const notice = $(".elf-join-notice");
+    expect(notice.getAttribute("role")).toBe("status");
+    expect(notice.textContent).toBe(SERVER_WORDS);
+    expect(document.body.textContent).not.toContain("Something went wrong");
+    expect(document.querySelector(".elf-join-errors")).toBeNull();
+    expect(went).toEqual([]);
+  });
+
+  it("says it in its own words when the server sends none", async () => {
+    load({ status: 200, body: { status: "check-email" } });
+    await submit();
+    expect($(".elf-join-notice").textContent).toBe("You are already signed up. We have emailed you a code to sign in.");
+    expect(document.body.textContent).not.toContain("Something went wrong");
+  });
+
+  it("takes away a refusal shown before, and says it once however often the form is sent", async () => {
+    load({ status: 400, body: { errors: ["Please pick a surname from the list for each detective."] } });
+    await submit();
+    expect(document.querySelector(".elf-join-errors")).not.toBeNull();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ status: "check-email", message: SERVER_WORDS }) }));
+    await submit();
+    await submit();
+    expect(document.querySelector(".elf-join-errors")).toBeNull();
+    expect(document.querySelectorAll(".elf-join-notice")).toHaveLength(1);
+  });
+
+  it("draws the news on the same torn paper note a refusal has, so the page's look does not change", () => {
+    const css = readFileSync(resolve(ROOT, "assets/css/elf.css"), "utf8");
+    expect(css).toMatch(/\.elf-join-errors,\s*\.elf-join-notice \{ position: relative;/);
+    expect(css).toMatch(/\.elf-join-errors::before,\s*\.elf-join-notice::before \{ content: "";/);
+  });
+
+  it("takes the news away again if the next answer is a refusal", async () => {
+    load({ status: 200, body: { status: "check-email", message: SERVER_WORDS } });
+    await submit();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ errors: ["Please type a UK mobile number, like 07700 900 123."] }) }));
+    await submit();
+    expect(document.querySelector(".elf-join-notice")).toBeNull();
+    expect($(".elf-join-errors").textContent).toContain("Please type a UK mobile number, like 07700 900 123.");
   });
 });

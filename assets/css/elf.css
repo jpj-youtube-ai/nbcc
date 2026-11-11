@@ -82,6 +82,8 @@
 /* The year's class on a torn holly label, tucked under the school's name. */
 .elf-top .elf-top__class { margin: 0 0 0 clamp(20px, 6vw, 46px); }
 .elf-top .lede { margin-top: 18px; }
+/* The grand prize, under the welcome (TASK-613): the lede's measure, in the page's own words size. */
+.elf-top__prize { max-width: 54ch; }
 .elf-top__actions { display: flex; flex-wrap: wrap; gap: 14px 16px; margin: 24px 0 0; }
 @media (min-width: 981px) {
   .elf-top__grid { grid-template-columns: 1.15fr 0.85fr; }
@@ -1100,6 +1102,7 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 .elf-join-form .elf-field { display: grid; gap: 6px; }
 .elf-join-form input[type="text"],
 .elf-join-form input[type="email"],
+.elf-join-form input[type="tel"],
 .elf-join-form select,
 .elf-sign-in input[type="text"],
 .elf-sign-in input[type="email"] {
@@ -1142,9 +1145,13 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 }
 .elf-hint { margin: 0; font-size: .9rem; color: var(--slate-soft); }
 .elf-join-last { display: grid; gap: 14px; }
-/* What to put right, on a torn pink note. The script draws the same box. */
-.elf-join-errors { position: relative; isolation: isolate; margin: 0 0 24px; padding: 18px 20px 16px; max-width: 720px; color: var(--maroon); }
-.elf-join-errors::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, var(--elf-crimson-soft); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-card-c); mask: var(--elf-tear-card-c); }
+/* What to put right, on a torn pink note. The script draws the same box. Its news for an email that has
+   already paid for detectives (a code has gone to it, TASK-614) goes on the same note. */
+.elf-join-errors,
+.elf-join-notice { position: relative; isolation: isolate; margin: 0 0 24px; padding: 18px 20px 16px; max-width: 720px; color: var(--maroon); }
+.elf-join-notice p { margin: 0; }
+.elf-join-errors::before,
+.elf-join-notice::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, var(--elf-crimson-soft); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-card-c); mask: var(--elf-tear-card-c); }
 .elf-join-errors ul { margin: 8px 0 0; padding-left: 20px; }
 .elf-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 @media (max-width: 520px) { .elf-join-detective { grid-template-columns: minmax(0, 1fr); } }

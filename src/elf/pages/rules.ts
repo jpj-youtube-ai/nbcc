@@ -10,7 +10,8 @@ import type { ElfSettings } from "../settings";
 // test/unit/elf-page-rules.test.ts.
 
 /** Who wins what while December's doors are off: wave 1's words, word for word, so no new words go live
- *  before the doors do (as the calendar's steps, src/elf/pages/calendar.ts). */
+ *  before the doors do (as the calendar's steps, src/elf/pages/calendar.ts). The one exception is
+ *  TASK-613's: the clue times say Christmas Eve's are in the morning, with the doors off too. */
 const WAVE_ONE_PRIZE = "The first detective to reach the elf and type the secret word on its tag wins that elf's prize. Each family can win one elf.";
 
 /** Who wins what once December's doors are on (docs/superpowers/specs/2026-11-10-elf-detective-wave-2-design.md):
@@ -49,7 +50,7 @@ export function renderRulesPage(view: { settings: ElfSettings }): string {
     "holly",
     `<ul class="elf-rules-list">
       <li>Each day from 1 to 24 December, one elf hides in a local shop, cafe or business. Where it hides is a secret.</li>
-      <li>Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends and in the holidays.</li>
+      <li>Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve.</li>
       <li>Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.</li>
       <li>${view.settings.doorsOn === true ? PRIZE : WAVE_ONE_PRIZE}</li>
       <li>Visit a place after its elf is found to collect a candy cane stamp.</li>
@@ -71,6 +72,7 @@ export function renderRulesPage(view: { settings: ElfSettings }): string {
       <li>A first name is shown in full in public only once our team has checked it. Until then the public sees its first letter.</li>
       <li>A photo only goes on the website if the grown up says yes to that photo, and after our team has checked it.</li>
       <li>All photos come down, and children's details are deleted, at the end of January.</li>
+      <li>The mobile number you give when you enrol is only for ringing the grand prize winner, and we delete it at the end of January.</li>
     </ul>`,
   )}
   ${section(

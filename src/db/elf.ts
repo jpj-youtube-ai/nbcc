@@ -137,6 +137,10 @@ function newReference(): string {
  * paid for detectives must sign in to add more ("sign-in-first", and nothing is saved): otherwise
  * anyone could add detectives to someone else's family by typing their email. `familyId` is the
  * signed in family, whose email is then not used.
+ *
+ * The grown up's mobile (TASK-613, checked by parseJoin as +447 and nine digits) goes with the family,
+ * the newest one typed while it has not paid, as its name does. A signed in family keeps the one it
+ * gives: a family from before mobiles were asked for gets one, and a family can put a wrong one right.
  */
 export async function createPendingJoin(o: {
   body: JoinBody;
@@ -150,18 +154,21 @@ export async function createPendingJoin(o: {
     let familyId = o.familyId;
     if (familyId === undefined) {
       const family = await client.query<{ id: number; active: boolean }>(
-        `INSERT INTO elf_families (email, grown_up_name, newsletter) VALUES ($1, $2, $3)
+        `INSERT INTO elf_families (email, grown_up_name, newsletter, mobile) VALUES ($1, $2, $3, $4)
          ON CONFLICT (email) DO UPDATE
            SET grown_up_name = CASE WHEN elf_families.active THEN elf_families.grown_up_name ELSE EXCLUDED.grown_up_name END,
-               newsletter = CASE WHEN elf_families.active THEN elf_families.newsletter ELSE EXCLUDED.newsletter END
+               newsletter = CASE WHEN elf_families.active THEN elf_families.newsletter ELSE EXCLUDED.newsletter END,
+               mobile = CASE WHEN elf_families.active THEN elf_families.mobile ELSE EXCLUDED.mobile END
          RETURNING id, active`,
-        [o.body.email.trim().toLowerCase(), o.body.grownUpName, o.body.newsletter],
+        [o.body.email.trim().toLowerCase(), o.body.grownUpName, o.body.newsletter, o.body.mobile],
       );
       if (family.rows[0].active) {
         await client.query("ROLLBACK");
         return "sign-in-first";
       }
       familyId = family.rows[0].id;
+    } else {
+      await client.query("UPDATE elf_families SET mobile = $2 WHERE id = $1", [familyId, o.body.mobile]);
     }
     const detectiveIds: number[] = [];
     for (const d of o.body.detectives) {

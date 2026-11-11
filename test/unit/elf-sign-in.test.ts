@@ -211,7 +211,7 @@ describe("adding a detective, signed in", () => {
       req({
         json: true,
         cookie: `${ELF_SESSION_COOKIE}=abcDEF123_-xyz`,
-        body: { email: "someone@else.example", grownUpName: "Someone Else", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true },
+        body: { email: "someone@else.example", grownUpName: "Someone Else", mobile: "07700 900 123", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true },
       }),
       res as never,
     );
@@ -219,6 +219,60 @@ describe("adding a detective, signed in", () => {
     expect(call.familyId).toBe(3);
     expect(call.body.email).toBe("sam@example.com");
     expect(call.body.grownUpName).toBe("Sam Example");
+    // TASK-613: the mobile it gives is the family's, kept as +447 and nine digits.
+    expect(call.body.mobile).toBe("+447700900123");
+  });
+});
+
+// TASK-613: a mobile number on every way of enrolling: the plain form, the page's script (JSON), signed
+// in or not. Refused in the form's own words, before anything is saved.
+describe("the grown up's mobile, on every way of enrolling", () => {
+  const MOBILE_WORDS = "Please type a UK mobile number, like 07700 900 123.";
+  const json = { grownUpName: "Sam Example", email: "sam@example.com", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true };
+  const form = { grownUpName: "Sam Example", email: "sam@example.com", "detective-1-first": "Ivy", "detective-1-surname": "Snowsleuth", entry: "5", agreed: "on" };
+
+  it("refuses the page's script without one, or with one that is not a UK mobile", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    for (const body of [json, { ...json, mobile: "" }, { ...json, mobile: "01632 960 123" }]) {
+      const res = fakeRes();
+      res.locals = { elfSettings: ON };
+      await postJoin(req({ json: true, body }), res as never);
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ errors: [MOBILE_WORDS] });
+    }
+    expect(db.createPendingJoin).not.toHaveBeenCalled();
+  });
+
+  it("refuses the plain form without one, on the form, keeping what was typed", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    const res = fakeRes();
+    res.locals = { elfSettings: ON };
+    await postJoin(req({ body: { ...form, mobile: "07700 900" } }), res as never);
+    expect(res.statusCode).toBe(400);
+    expect(res.html).toContain(`<li>${MOBILE_WORDS}</li>`);
+    expect(res.html).toContain('value="07700 900"');
+    expect(db.createPendingJoin).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed in family adding a detective without one", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    db.findElfSession.mockResolvedValue({ familyId: 3 });
+    db.familyWithDetectives.mockResolvedValue({ id: 3, grownUpName: "Sam Example", email: "sam@example.com", detectives: [] });
+    const res = fakeRes();
+    res.locals = { elfSettings: ON };
+    await postJoin(req({ json: true, cookie: `${ELF_SESSION_COOKIE}=abcDEF123_-xyz`, body: json }), res as never);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ errors: [MOBILE_WORDS] });
+    expect(db.createPendingJoin).not.toHaveBeenCalled();
+  });
+
+  it("takes the plain form's mobile, and hands it on as +447 and nine digits", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    db.createPendingJoin.mockResolvedValue("sign-in-first");
+    const res = fakeRes();
+    res.locals = { elfSettings: ON };
+    await postJoin(req({ body: { ...form, mobile: "07700 900 045" } }), res as never);
+    expect(db.createPendingJoin.mock.calls[0][0].body.mobile).toBe("+447700900045");
   });
 });
 
@@ -238,7 +292,7 @@ describe("the review's findings: signing in", () => {
     db.activeFamilyByEmail.mockResolvedValue({ id: 3, grownUpName: "Sam Example" });
     const res = fakeRes();
     res.locals = { elfSettings: ON };
-    await postJoin(req({ json: true, body: { grownUpName: "Sam Example", email: "sam@example.com", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true } }), res as never);
+    await postJoin(req({ json: true, body: { grownUpName: "Sam Example", email: "sam@example.com", mobile: "07700 900 123", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true } }), res as never);
     expect(res.statusCode).toBe(200);
     expect(JSON.stringify(res.body)).toContain("Check your email");
     expect(JSON.stringify(res.body)).not.toMatch(/already has detectives/);

@@ -44,6 +44,16 @@ describe("the rules page", () => {
     expect(words).toContain("end of January");
   });
 
+  // TASK-613: the grown up's mobile, asked for when enrolling, said beside what else is deleted when.
+  it("says the mobile number is only for ringing the grand prize winner, and goes at the end of January", () => {
+    const safe = [...doc.querySelectorAll('[aria-labelledby="elf-rules-safe"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim());
+    const deleted = safe.indexOf("All photos come down, and children's details are deleted, at the end of January.");
+    expect(deleted).toBeGreaterThan(-1);
+    expect(safe[deleted + 1]).toBe(
+      "The mobile number you give when you enrol is only for ringing the grand prize winner, and we delete it at the end of January.",
+    );
+  });
+
   it("says pay what you can, with the admin's amounts", () => {
     expect(words).toContain("Pay what you can");
     expect(words).toContain("£5");
@@ -66,10 +76,11 @@ describe("how the hunt works, with December's doors off and on", () => {
   const hunt = (d: Document) =>
     [...d.querySelectorAll('[aria-labelledby="elf-rules-how"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim());
 
-  it("reads exactly as wave 1's did while December's doors are off", () => {
+  // TASK-613 changed one line with the doors off too: Christmas Eve's clues come in the morning.
+  it("reads as wave 1's did while December's doors are off, with Christmas Eve's clues in the morning", () => {
     expect(hunt(page(false))).toEqual([
       "Each day from 1 to 24 December, one elf hides in a local shop, cafe or business. Where it hides is a secret.",
-      "Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends and in the holidays.",
+      "Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve.",
       "Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.",
       "The first detective to reach the elf and type the secret word on its tag wins that elf's prize. Each family can win one elf.",
       "Visit a place after its elf is found to collect a candy cane stamp.",
@@ -84,6 +95,7 @@ describe("how the hunt works, with December's doors off and on", () => {
     );
     expect(on.join(" ")).not.toContain("win one elf");
     expect(on.join(" ")).not.toContain("secret word");
+    expect(on[1]).toMatch(/and at 10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve\.$/);
   });
 
   it("uses no dashes either way", () => {
@@ -114,7 +126,8 @@ describe("the rules, in paper", () => {
   });
 
   it("marks each rule with a small circle of paper", () => {
-    expect(doc.querySelectorAll(".elf-rules-list li").length).toBe(10);
+    // Eleven since TASK-613's line about the grown up's mobile number.
+    expect(doc.querySelectorAll(".elf-rules-list li").length).toBe(11);
     expect(css).toMatch(/\.elf-rules-list \{[^}]*list-style:\s*none/);
     expect(css).toMatch(/\.elf-rules-list li::before \{[^}]*border-radius:\s*50%/);
   });

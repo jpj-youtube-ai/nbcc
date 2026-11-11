@@ -7,6 +7,8 @@
  *   - the suggested amount kept in step with the number of detectives, until someone types their own;
  *   - the Gift Aid declaration shown only when Gift Aid is ticked;
  *   - the form sent as JSON, with the server's own words shown when something needs another look;
+ *   - an email that has already paid for detectives told what has happened (a code has gone to it),
+ *     never "Something went wrong" (TASK-614);
  *   - the robot check's script loaded only when the page has one.
  *
  * Unit tested in test/unit/elf-js-join.test.ts.
@@ -118,6 +120,7 @@
       var b = {
         grownUpName: field("grownUpName"),
         email: field("email"),
+        mobile: field("mobile"),
         detectives: detectives,
         entryPence: pence(field("entry")),
         donationPence: pence(field("donation")),
@@ -142,6 +145,8 @@
       return b;
     }
     function showErrors(list) {
+      var news = doc.querySelector(".elf-join-notice");
+      if (news && news.parentNode) news.parentNode.removeChild(news);
       var box = doc.querySelector(".elf-join-errors");
       if (!box) {
         box = doc.createElement("div");
@@ -165,6 +170,28 @@
       if (box.focus) box.focus();
     }
 
+    // An email that has already paid for detectives is not enrolled again: the server emails it a sign
+    // in code and answers 200 { status: "check-email", message } (src/routes/elf.ts). That is news, not
+    // a mistake, so it is said as news, in the server's own words when it sends some.
+    var ALREADY_SIGNED_UP = "You are already signed up. We have emailed you a code to sign in.";
+    function showNotice(words) {
+      var refused = doc.querySelector(".elf-join-errors");
+      if (refused && refused.parentNode) refused.parentNode.removeChild(refused);
+      var box = doc.querySelector(".elf-join-notice");
+      if (!box) {
+        box = doc.createElement("div");
+        box.className = "elf-join-notice";
+        box.setAttribute("role", "status");
+        box.tabIndex = -1;
+        form.parentNode.insertBefore(box, form);
+      }
+      box.innerHTML = "";
+      var p = doc.createElement("p");
+      p.textContent = words;
+      box.appendChild(p);
+      if (box.focus) box.focus();
+    }
+
     var sending = false;
     var button = form.querySelector('button[type="submit"]');
     form.addEventListener("submit", function (e) {
@@ -183,6 +210,7 @@
         })
         .then(function (res) {
           if (res.ok && res.data.url) return go(res.data.url);
+          if (res.ok) return showNotice(typeof res.data.message === "string" && res.data.message ? res.data.message : ALREADY_SIGNED_UP);
           showErrors(res.data.errors && res.data.errors.length ? res.data.errors : ["Something went wrong. Please try again."]);
         })
         .catch(function () {

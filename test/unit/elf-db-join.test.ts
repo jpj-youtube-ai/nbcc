@@ -13,6 +13,7 @@ import type { JoinBody } from "../../src/elf/join";
 const BODY: JoinBody = {
   grownUpName: "Sam Example",
   email: "sam@example.com",
+  mobile: "+447700900123",
   detectives: [
     { firstName: "Ruby", surname: "Tinselfoot" },
     { firstName: "Leo", surname: "Frostwhistle" },
@@ -91,5 +92,33 @@ describe("saving an enrolment before it is paid", () => {
     await createPendingJoin({ body: { ...BODY, donationPence: 500, giftAid: true, declaration }, browserTokenHash: "a".repeat(64), feeCoverPence: 0 });
     const order = clientQuery.mock.calls.find((c) => /INSERT INTO elf_orders/.test(String(c[0])))!;
     expect(order[1]).toContain(JSON.stringify(declaration));
+  });
+});
+
+// TASK-613: the grown up's mobile, kept with the family so a head elf can ring the grand prize winner.
+describe("the grown up's mobile number", () => {
+  const familyWrite = () => clientQuery.mock.calls.find((c) => /elf_families/.test(String(c[0])) && !/SELECT/.test(String(c[0])))!;
+
+  it("is kept with a new family, as parseJoin gives it", async () => {
+    fakeDb();
+    await createPendingJoin({ body: BODY, browserTokenHash: "a".repeat(64), feeCoverPence: 0 });
+    const [sql, params] = familyWrite();
+    expect(String(sql)).toMatch(/INSERT INTO elf_families \(email, grown_up_name, newsletter, mobile\)/);
+    expect(params).toEqual(["sam@example.com", "Sam Example", false, "+447700900123"]);
+  });
+
+  it("is the newest one typed while the family has not paid yet, and stays as it was once it has", async () => {
+    fakeDb();
+    await createPendingJoin({ body: BODY, browserTokenHash: "a".repeat(64), feeCoverPence: 0 });
+    expect(String(familyWrite()[0])).toMatch(/mobile = CASE WHEN elf_families\.active THEN elf_families\.mobile ELSE EXCLUDED\.mobile END/);
+  });
+
+  it("is kept for a signed in family adding detectives: a family from before it was asked gets one", async () => {
+    fakeDb([{ email: "sam@example.com", active: true }]);
+    await createPendingJoin({ body: { ...BODY, mobile: "+447700900045" }, browserTokenHash: "a".repeat(64), feeCoverPence: 0, familyId: 1 });
+    const update = clientQuery.mock.calls.find((c) => /UPDATE elf_families SET mobile/.test(String(c[0])))!;
+    expect(update[1]).toEqual([1, "+447700900045"]);
+    const sqls = clientQuery.mock.calls.map((c) => String(c[0]));
+    expect(sqls.indexOf(String(update[0]))).toBeLessThan(sqls.indexOf("COMMIT"));
   });
 });

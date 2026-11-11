@@ -95,6 +95,9 @@ export interface FamilySheetRow {
   id: number;
   grownUpName: string;
   email: string;
+  /** The grown up's mobile, +447 and nine digits, to ring the grand prize winner (TASK-613). Null for a
+   *  family that enrolled before it was asked. Head elves only: the sheet, never the list. */
+  mobile: string | null;
   newsletter: boolean;
   enrolledAt: Date;
   removedAt: Date | null;
@@ -161,8 +164,8 @@ export async function listElfFamilies(o: { q: string; filter: FamilyFilter; offs
 type Querier = Pick<PoolClient, "query">;
 
 async function readSheet(q: Querier, id: number): Promise<FamilySheetRow | null> {
-  const f = await q.query<{ id: number; grown_up_name: string; email: string; newsletter: boolean; created_at: Date; removed_at: Date | null; removed_by: string | null }>(
-    "SELECT id, grown_up_name, email, newsletter, created_at, removed_at, removed_by FROM elf_families WHERE id = $1 AND active",
+  const f = await q.query<{ id: number; grown_up_name: string; email: string; mobile: string | null; newsletter: boolean; created_at: Date; removed_at: Date | null; removed_by: string | null }>(
+    "SELECT id, grown_up_name, email, mobile, newsletter, created_at, removed_at, removed_by FROM elf_families WHERE id = $1 AND active",
     [id],
   );
   const fam = f.rows[0];
@@ -179,6 +182,7 @@ async function readSheet(q: Querier, id: number): Promise<FamilySheetRow | null>
     id: fam.id,
     grownUpName: fam.grown_up_name,
     email: fam.email,
+    mobile: fam.mobile ?? null,
     newsletter: fam.newsletter,
     enrolledAt: fam.created_at,
     removedAt: fam.removed_at,

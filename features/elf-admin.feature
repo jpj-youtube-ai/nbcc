@@ -18,6 +18,12 @@ Feature: Head Elf HQ, the Elf Detective School's own admin section
     When "editor.elfhq.admin.bdd@example.com" with password "Elf-Hq-Editor-1" reads Head Elf HQ
     Then Head Elf HQ answers 403
 
+  # TASK-613: to ring the grand prize winner's grown up on Christmas Eve.
+  Scenario: A head elf sees the grown up's mobile on the family's sheet
+    Given "sam.ring.elf.bdd@example.com" has already enrolled "Ruby Tinselfoot" and paid
+    When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" opens the family sheet of "sam.ring.elf.bdd@example.com"
+    Then the family sheet shows the mobile number "+447700900123"
+
   Scenario: A head elf ticks a name, and a changed name waits for a tick again
     Given "sam.names.elf.bdd@example.com" has already enrolled "Ruby Tinselfoot" and paid
     When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" ticks "Ruby" to show in public

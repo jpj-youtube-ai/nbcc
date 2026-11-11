@@ -1669,7 +1669,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fill/:slug` | **implemented** | A company's own Workshop (`/fill/<slug>`), made in Admin > Fill a Red Bag > Company Workshops: the night look with only that company's bags on the shelves and its name on the sign; a page only while /fill is at night (now: `FILL_NIGHT_NOW`), `noindex`, and the 404 for a company nobody made. See **Fill a Red Bag: the paintings, the Workshop and companies' own links** |
 | `GET /fill-a-red-bag`, `GET /fill-a-bag` | **implemented** | The address the page first had, and the other way people type it: a permanent redirect (`301`) to `/fill`, query string kept (an old return from paying, `?thanks=1`, goes to `/fill/thank-you`), while the page is switched on; the 404 if it were switched off. Fixed in code, reserved, on no site map |
 | `GET /elf`, `GET /elf/rules` | **implemented, switched off** | NBCC Elf Detective School: the public calendar of 24 doors counting down to the first clue, and the rules. Every `/elf` page and `/api/elf/*` route answers 404 until an admin switches the school on. See **Elf Detective School** |
-| `GET /elf/join`, `POST /api/elf/join` | **implemented, switched off** | Enrol detectives (first name and a festive surname only) and pay what you can (from £1, £5 suggested, per detective; an optional gift can carry Gift Aid); goes on to Stripe Checkout tagged `product: elf_school` |
+| `GET /elf/join`, `POST /api/elf/join` | **implemented, switched off** | Enrol detectives (first name and a festive surname only) and pay what you can (from £1, £5 suggested, per detective; an optional gift can carry Gift Aid); the grown up's UK mobile is required (TASK-613); goes on to Stripe Checkout tagged `product: elf_school` |
 | `GET /elf/welcome` | **implemented, switched off** | Where Stripe returns a family; signs the paying browser in only when its payment opened the account |
 | `GET /elf/sign-in`, `POST /api/elf/sign-in/request`, `POST /api/elf/sign-in`, `POST /api/elf/sign-out` | **implemented, switched off** | Signing in to Detective HQ with an emailed 6 digit code (cookie `nbcc_elf_session`, 30 days) |
 | `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.png`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture (a PNG of the elf on its stage, stacked from the paper pictures; 503 with `Retry-After` when the picture maker is busy), and saving a look and up to three favourite looks, each made safe against the doors the detective has done (`{ ok, look, favourites }`) |
@@ -11871,6 +11871,14 @@ switched on, and only from **10am on Friday 13 November 2026** (TASK-613, below)
   marked "Not live yet" until the school is on, so a code for a letter home can be made before then.
   Its page code carries `utm_campaign=elf`.
 
+**The grand prize on the front page (TASK-613).** Jaimie, 11 November 2026: the grand prize, judged
+by the Head Elf, must be clear on the front page. The calendar's welcome (`/elf`,
+`src/elf/pages/calendar.ts`) has it straight under the lede, in the rules' words, with December's doors
+off too: "Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest
+elf at home for the grand prize, judged by" the Head Elf, named as the rules name her. The Head Elf is a
+real person, so the tests check the line through its other words ("grand prize", "our Head Elf") and
+against the name the rules page gives, and never carry her name.
+
 **Open early, linked from Friday 10am (TASK-613).** Jaimie switches Elf Detective School on the
 evening of 11 November, so a teacher with the link in an email can look around and enrol: every
 `/elf` page answers the moment it is switched on. But nothing on the site links to it until the big
@@ -11905,6 +11913,33 @@ newsletter's `consent_source` check also allows `elf`.
 `migrations/1791200000320_elf-favourites.js` (additive) adds `elf_detectives.favourites` (jsonb, default
 `[]`): up to three favourite looks from the wardrobe's Snap a photo. A detective's `look` is a costume
 look, and `fresh` holds the ids of costumes unlocked and not opened yet.
+
+`migrations/1791200000460_elf-family-mobile.js` (TASK-613, additive) adds `elf_families.mobile`: empty
+for families who enrolled before it was asked, otherwise `+447` and nine digits, with the same check as
+`elf_head_elves.mobile`. It sorts straight after `1791200000450_elf-alerts.js`, the newest on main.
+
+**The grown up's mobile (TASK-613).** Jaimie, 11 November 2026: so NBCC can ring the grand prize
+winner's grown up straight away on Christmas Eve. The enrol form asks for a **Mobile number** straight
+after the email (`type="tel"`, `autocomplete="tel"`, `inputmode="tel"`, at most 20 characters, required),
+with "So we can ring you straight away if one of your detectives wins the grand prize on Christmas Eve.
+We only use it for that." under its label. A signed in family adding a detective is asked too, so a
+family from before tonight gives one, and the newest one is kept. The server requires it on every way of
+enrolling (the plain form, the page's script, the private preview): `parseJoin` reads it with
+`normaliseUkMobile` (the one Settings > Alerts uses: 07 and nine more digits, or +44 7 and nine more,
+spaces allowed) and keeps `+447` and nine digits. A missing or wrong one is refused on the form like the
+other refusals: "Please type a UK mobile number, like 07700 900 123." Only head elves see it, on a
+family's sheet in Head Elf HQ. It is never public, never in an email to anyone else, and never in a log
+line. The rules' **Keeping everyone safe** says "The mobile number you give when you enrol is only for
+ringing the grand prize winner, and we delete it at the end of January." That
+is the only place the site says what is deleted when: the join form asks the grown up to agree to the
+rules. The end of January clear out, still to be built before 31 January 2027, must take
+`elf_families.mobile` with it.
+
+**An email that has already paid (TASK-614).** Enrolling again without signing in, the server emails a
+sign in code and answers 200 `{ status: "check-email", message }`. The enrol page's script used to read
+that as a failure ("Something went wrong. Please try again."). Now it shows the server's own words, or
+"You are already signed up. We have emailed you a code to sign in." when it sends none, on the same torn
+paper note as a refusal (`.elf-join-notice`).
 
 ### Paying
 
@@ -11952,7 +11987,9 @@ preview link stay admins only, whoever holds the section.
 - **Families**: search by name, email or badge, and filter by all, names to check, this week or
   removed. A family's sheet has its detectives (tick a first name to show it in public; a changed
   name waits for a tick again), its payments, the grown up's name and email (a new email ends the
-  family's sessions), a sign in code sent for them (if the email cannot go, the head elf is told so
+  family's sessions), the grown up's mobile as a link to ring (TASK-613: "No mobile number yet" for a
+  family that enrolled before it was asked; on the sheet only, never the list, so head elves only),
+  a sign in code sent for them (if the email cannot go, the head elf is told so
   and nothing is noted), and taking the family out or putting it back. Someone given only a look at
   the section (view) sees each family as words, with nothing to change; HQ's answer says which
   (`canEdit`, read from their access as it is now).
@@ -11968,6 +12005,16 @@ preview link stay admins only, whoever holds the section.
   prizes. The poster, staff card and elf tag open as pages for head elves, never cached or indexed; the
   prize list is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
   saved after clue 1 is out. Once a door's first clue is out, its times and tag word are locked. Nothing in Doors is ever seen by families.
+  **Christmas Eve in the morning (TASK-613).** A door's clue 1 starts at 5:30pm on a school day and
+  10am at a weekend or on a weekday marked a holiday (`dayKind` and `defaultClueTime`,
+  `src/elf/calendar.ts`), and door 24 is now a holiday whether or not anyone marked it, because places
+  close early on Christmas Eve. Unless a head elf sets its own times, its clues come out at 10am,
+  10:30am and 11am and its place is shown at 11:30am. One rule feeds the calendar, the clue emails and
+  the worker as well as Doors. Door 24's evening says "In the morning on Christmas Eve, because places
+  close early. Staff can change any of them." The rules end their clue times sentence "...and at
+  10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve." The calendar's first step
+  says "It comes out after school on school days, and in the morning at weekends, in the holidays and
+  on Christmas Eve." Both say so with December's doors off too, the one change to wave 1's words.
 - **Finds** (after Doors, its count the photos waiting): the photo check, the photo log, and Tonight and
   before, who found each door and when (see **Photos, alerts, emails, the worker and Finds** below).
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every

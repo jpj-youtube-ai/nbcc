@@ -20,6 +20,7 @@ Feature: Elf Detective School, wave 1: enrolling, paying, signing in and dressin
     When "sam.elf.bdd@example.com" enrols "Ruby Tinselfoot" and "Leo Frostwhistle" paying 1000 pence
     Then the elf response status should be 200
     And the enrolment is waiting for its payment
+    And the family of "sam.elf.bdd@example.com" keeps the mobile number "+447700900123"
     When Stripe says the enrolment was paid
     Then the enrolment is paid, with a badge for each detective
     And 1 "elfWelcome" email went to "sam.elf.bdd@example.com"
@@ -33,6 +34,21 @@ Feature: Elf Detective School, wave 1: enrolling, paying, signing in and dressin
     And the favourite kept for "Ruby" is made safe too
     When Stripe says the enrolment was paid
     Then 1 "elfWelcome" email went to "sam.elf.bdd@example.com"
+
+  # TASK-613: a mobile number, so NBCC can ring the grand prize winner's grown up on Christmas Eve.
+  Scenario: an enrolment with no mobile number, or one that is not a UK mobile, is refused and nothing is saved
+    Given the Elf Detective School is switched "on"
+    When "pat.mobile.elf.bdd@example.com" enrols "Ruby Tinselfoot" paying 500 pence with no mobile number
+    Then the elf response status should be 400
+    And the elf response should contain "Please type a UK mobile number, like 07700 900 123."
+    And no family was saved for "pat.mobile.elf.bdd@example.com"
+    When "pat.mobile.elf.bdd@example.com" enrols "Ruby Tinselfoot" paying 500 pence with the mobile number "01632 960 123"
+    Then the elf response status should be 400
+    And the elf response should contain "Please type a UK mobile number, like 07700 900 123."
+    And no family was saved for "pat.mobile.elf.bdd@example.com"
+    When "pat.mobile.elf.bdd@example.com" enrols "Ruby Tinselfoot" paying 500 pence with the mobile number "+44 7700 900 045"
+    Then the elf response status should be 200
+    And the family of "pat.mobile.elf.bdd@example.com" keeps the mobile number "+447700900045"
 
   Scenario: an email that already has detectives must sign in to add more, and is never told so outright
     Given the Elf Detective School is switched "on"

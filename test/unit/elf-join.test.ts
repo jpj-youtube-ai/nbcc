@@ -20,6 +20,7 @@ function body(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     grownUpName: "Sam Example",
     email: "sam@example.com",
+    mobile: "07700 900 123",
     detectives: [
       { firstName: "Ruby", surname: "Tinselfoot" },
       { firstName: "Leo", surname: "Frostwhistle" },
@@ -94,6 +95,51 @@ describe("who can be enrolled", () => {
   it("never asks for an age, a school or a real surname", () => {
     const keys = Object.keys(joinBodySchema().shape);
     for (const k of keys) expect(k.toLowerCase()).not.toMatch(/age|school|lastname|realsurname|birth/);
+  });
+});
+
+// TASK-613 (Jaimie, 11 November 2026): a mobile number, so NBCC can ring the grand prize winner's grown
+// up on Christmas Eve. Kept as +447 and nine digits, exactly as a head elf's mobile is kept.
+describe("the grown up's mobile number", () => {
+  const MOBILE_WORDS = "Please type a UK mobile number, like 07700 900 123.";
+  const kept = (mobile: unknown) => {
+    const r = parseJoin(SETTINGS, body({ mobile }));
+    if (!r.ok) throw new Error(r.errors.join());
+    return r.body.mobile;
+  };
+
+  it("takes 07 and nine more digits, spaces and all, and keeps it as +447 and nine digits", () => {
+    expect(kept("07700 900 123")).toBe("+447700900123");
+    expect(kept("07700900045")).toBe("+447700900045");
+    expect(kept(" 07700 900045 ")).toBe("+447700900045");
+  });
+
+  it("takes +44 7 and nine more digits", () => {
+    expect(kept("+44 7700 900 123")).toBe("+447700900123");
+    expect(kept("+447700900045")).toBe("+447700900045");
+  });
+
+  it("refuses an enrolment with no mobile, in plain words", () => {
+    const without = body();
+    delete without.mobile;
+    const r = parseJoin(SETTINGS, without);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toEqual([MOBILE_WORDS]);
+    expect(refusal({ mobile: "" })).toBe(MOBILE_WORDS);
+    expect(refusal({ mobile: "   " })).toBe(MOBILE_WORDS);
+  });
+
+  it("refuses a number that is not a UK mobile, in the same words", () => {
+    for (const mobile of ["01632 960 123", "07700 900 12", "07700 900 1234", "+1 202 555 0123", "seven seven", 7700900123, null]) {
+      expect(refusal({ mobile }), String(mobile)).toBe(MOBILE_WORDS);
+    }
+  });
+
+  it("says it alongside any other refusal, once", () => {
+    const words = refusal({ mobile: "nope", agreed: false });
+    expect(words).toContain(MOBILE_WORDS);
+    expect(words).toContain("agree to the rules");
+    expect(words.split(MOBILE_WORDS)).toHaveLength(2);
   });
 });
 

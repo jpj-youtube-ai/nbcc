@@ -85,10 +85,50 @@ describe("the enrol page", () => {
   });
 });
 
+// TASK-613: a mobile number, so NBCC can ring the grand prize winner's grown up on Christmas Eve.
+describe("the mobile number", () => {
+  const HINT = "So we can ring you straight away if one of your detectives wins the grand prize on Christmas Eve. We only use it for that.";
+  const field = (doc: Document) => doc.querySelector('input[name="mobile"]')!.closest(".elf-field")!;
+
+  it("is asked for straight after the email, and must be given", () => {
+    const doc = page();
+    const mobile = doc.querySelector<HTMLInputElement>('input[name="mobile"]')!;
+    expect(mobile.getAttribute("type")).toBe("tel");
+    expect(mobile.getAttribute("autocomplete")).toBe("tel");
+    expect(mobile.getAttribute("inputmode")).toBe("tel");
+    expect(mobile.getAttribute("maxlength")).toBe("20");
+    expect(mobile.hasAttribute("required")).toBe(true);
+    expect(field(doc).previousElementSibling).toBe(doc.querySelector('input[name="email"]')!.closest(".elf-field"));
+  });
+
+  it("is called Mobile number, with why we ask under its label in the form's hint style", () => {
+    const doc = page();
+    const mobile = doc.querySelector('input[name="mobile"]')!;
+    expect(words(doc.querySelector(`label[for="${mobile.id}"]`))).toBe("Mobile number");
+    const hint = field(doc).querySelector("label + .elf-hint")!;
+    expect(words(hint)).toBe(HINT);
+    expect(mobile.getAttribute("aria-describedby")).toBe(hint.id);
+  });
+
+  it("keeps what was typed after a refusal", () => {
+    const doc = page({ errors: ["Please type a UK mobile number, like 07700 900 123."], values: { mobile: "07700 900 12" } });
+    expect(words(doc.querySelector(".elf-join-errors"))).toContain("Please type a UK mobile number, like 07700 900 123.");
+    expect(doc.querySelector('input[name="mobile"]')!.getAttribute("value")).toBe("07700 900 12");
+  });
+
+  it("has a box drawn like the form's other boxes", () => {
+    const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+    const selectors = /([^{}]*)\{[^}]*inset 0 0 0 1\.5px color-mix\(in srgb, var\(--maroon\) 55%/.exec(css.slice(css.indexOf('.elf-join-form input[type="text"]')))?.[1] ?? "";
+    expect(selectors).toContain('.elf-join-form input[type="email"]');
+    expect(selectors).toContain('.elf-join-form input[type="tel"]');
+  });
+});
+
 describe("reading the plain form", () => {
   const form = {
     grownUpName: "Sam Example",
     email: "sam@example.com",
+    mobile: "07700 900 123",
     "detective-1-first": "Ruby",
     "detective-1-surname": "Tinselfoot",
     "detective-2-first": "",
@@ -102,7 +142,7 @@ describe("reading the plain form", () => {
 
   it("turns pounds into pence and skips a detective left blank", () => {
     const body = joinBodyFromForm(form);
-    expect(body).toMatchObject({ entryPence: 1000, donationPence: 250, agreed: true, giftAid: false, coverFee: false, newsletter: false });
+    expect(body).toMatchObject({ entryPence: 1000, donationPence: 250, agreed: true, giftAid: false, coverFee: false, newsletter: false, mobile: "07700 900 123" });
     expect(body.detectives).toEqual([
       { firstName: "Ruby", surname: "Tinselfoot" },
       { firstName: "Leo", surname: "Frostwhistle" },
@@ -165,6 +205,16 @@ describe("adding a detective, signed in", () => {
   it("still reads the plain form without the grown up's fields", () => {
     const body = joinBodyFromForm({ "detective-1-first": "Ivy", "detective-1-surname": "Snowsleuth", entry: "5", agreed: "on" });
     expect(body.detectives).toEqual([{ firstName: "Ivy", surname: "Snowsleuth" }]);
+  });
+
+  // The mobile is asked for on every way of enrolling (TASK-613): a family from before it was asked
+  // gives one when it adds a detective, and a family that has one can put it right.
+  it("asks for the mobile number too, with why we ask", () => {
+    const doc = page({ signedIn });
+    const mobile = doc.querySelector('input[name="mobile"]')!;
+    expect(mobile.hasAttribute("required")).toBe(true);
+    expect(mobile.closest(".elf-join-you")).not.toBeNull();
+    expect(words(mobile.closest(".elf-field")!.querySelector(".elf-hint"))).toContain("grand prize on Christmas Eve");
   });
 });
 

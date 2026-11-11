@@ -207,6 +207,12 @@ describe("the public calendar before December", () => {
     expect(view.doors[4].clueAt.toISOString()).toBe("2026-12-05T10:00:00.000Z");
   });
 
+  // TASK-613: places close early on Christmas Eve, so its door is in the morning, a Thursday though it is.
+  it("shows Christmas Eve's door at 10am, and the Wednesday before it after school", () => {
+    expect(view.doors[23].clueAt.toISOString()).toBe("2026-12-24T10:00:00.000Z");
+    expect(view.doors[22].clueAt.toISOString()).toBe("2026-12-23T17:30:00.000Z");
+  });
+
   it("shows the price the admin set, as words", () => {
     expect(view.price).toEqual({ from: "£1", suggested: "£5" });
     expect(view.joinUrl).toBe("/elf/join");

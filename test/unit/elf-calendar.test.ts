@@ -12,6 +12,7 @@ import {
   doorDate,
   doorInstant,
   doorOn,
+  eveningFor,
   isClockTime,
   isDoor,
   type ElfSeason,
@@ -85,6 +86,41 @@ describe("the kind of day a door falls on", () => {
 
   it("keeps a weekend a weekend even when it is marked as a holiday", () => {
     expect(dayKind({ ...SEASON, holidayDoors: [19, 20] }, 19)).toBe("weekend");
+  });
+});
+
+// TASK-613 (Jaimie, 11 November 2026): places close early on Christmas Eve, so door 24 is a morning
+// door by default, as if staff had marked it a holiday, unless a head elf sets its own times.
+describe("Christmas Eve's door", () => {
+  const UNMARKED: ElfSeason = { ...SEASON, holidayDoors: [] };
+
+  it("is a holiday though nobody marked it one, every year it falls on a weekday", () => {
+    expect(dayKind(UNMARKED, 24)).toBe("holiday"); // Thursday 24 December 2026
+    expect(dayKind({ ...UNMARKED, year: 2027 }, 24)).toBe("holiday"); // Friday
+  });
+
+  it("stays a weekend in a year it falls on one", () => {
+    expect(dayKind({ ...UNMARKED, year: 2022 }, 24)).toBe("weekend"); // Saturday
+  });
+
+  it("starts with its clue at the morning time, 10am, whatever kind of day it is", () => {
+    expect(defaultClueTime(UNMARKED, 24)).toBe("10:00");
+    expect(defaultClueTime({ ...UNMARKED, year: 2022 }, 24)).toBe("10:00");
+    expect(defaultClueTime({ ...UNMARKED, morningClueTime: "09:30" }, 24)).toBe("09:30");
+  });
+
+  it("runs its morning at 10am, 10:30am and 11am, with the place shown at 11:30am", () => {
+    expect(eveningFor(UNMARKED, 24, {})).toEqual({ clue1: "10:00", clue2: "10:30", clue3: "11:00", reveal: "11:30", problems: [] });
+  });
+
+  it("keeps the times a head elf sets for it", () => {
+    expect(clueTimeFor(UNMARKED, 24, "17:30")).toBe("17:30");
+    expect(eveningFor(UNMARKED, 24, { clue1: "16:00" })).toMatchObject({ clue1: "16:00", clue2: "16:30", clue3: "17:00", reveal: "17:30" });
+  });
+
+  it("leaves the weekdays before it school days", () => {
+    expect(dayKind(UNMARKED, 23)).toBe("school"); // Wednesday 23 December 2026
+    expect(defaultClueTime(UNMARKED, 23)).toBe("17:30");
   });
 });
 

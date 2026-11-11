@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { calendarStatus, renderCalendarPage } from "../../src/elf/pages/calendar";
+import { renderRulesPage } from "../../src/elf/pages/rules";
+import { ELF_DEFAULTS } from "../../src/elf/settings";
 import type { CalendarView } from "../../src/elf/pages/types";
 import { AFTERNOON, at, calendarView as view } from "./elf-fixtures";
 
@@ -11,6 +13,9 @@ import { AFTERNOON, at, calendarView as view } from "./elf-fixtures";
 
 const page = (v: CalendarView) => new DOMParser().parseFromString(renderCalendarPage(v), "text/html");
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+// How it works, first step (TASK-613: as the rules say, Christmas Eve's clue comes in the morning).
+const FIRST_STEP =
+  "Every day from 1 to 24 December, a clue tells detectives where one elf is hiding. It comes out after school on school days, and in the morning at weekends, in the holidays and on Christmas Eve.";
 
 describe("what Jaimie asked for on 4 October", () => {
   it("tells under 16s to bring a grown up, in How it works", () => {
@@ -209,6 +214,7 @@ describe("the calendar page", () => {
   it("explains how it works in four steps, as the doors run in December", () => {
     const steps = [...page(view(AFTERNOON)).querySelectorAll(".elf-steps > li")];
     expect(steps.length).toBe(4);
+    expect(words(steps[0])).toContain(FIRST_STEP);
     expect(words(steps[1])).toContain("Type in your guess at Detective HQ before the hiding place is shown. Get it right and you have cracked the case.");
     expect(words(steps[2])).toContain(
       "Three clues come out across the evening, each easier than the last. The first detective to find the elf and type the word on its tag wins the prize.",
@@ -224,12 +230,13 @@ describe("the calendar page", () => {
   });
 
   // Final review, Important 7: while December's doors are off nothing a family sees may differ from
-  // wave 1 (origin/main), so How it works keeps wave 1's four steps, word for word.
-  it("keeps wave 1's four steps, word for word, while December's doors are off", () => {
+  // wave 1 (origin/main), so How it works keeps wave 1's four steps, word for word. TASK-613 changed the
+  // first one's last sentence with the doors off too: Christmas Eve's clue comes in the morning.
+  it("keeps wave 1's four steps while December's doors are off, with Christmas Eve's clue in the morning", () => {
     const steps = [...page(view(at("2026-11-20T10:00:00.000Z"), {}, { doorsOn: false })).querySelectorAll(".elf-steps > li")];
     expect(steps.map((s) => words(s.querySelector("h3")))).toEqual(["A clue comes out", "Lock in your guess", "Race to find it", "Collect your candy canes"]);
     expect(steps.map((s) => words(s.querySelector("p")))).toEqual([
-      "Every day from 1 to 24 December, a clue tells detectives where one elf is hiding. It comes out after school on school days and in the morning at weekends.",
+      FIRST_STEP,
       "Pick the hiding place from the list before anyone finds the elf. Get it right and you have cracked the case.",
       "The first detective to find the elf and type the secret word on its tag wins the elf and a prize.",
       "Once a door is open, visit its hiding place any day and scan the poster for a candy cane stamp. Every door you crack or visit takes you up the ranks.",
@@ -238,6 +245,32 @@ describe("the calendar page", () => {
 
   it("can be listed by search engines", () => {
     expect(page(view(AFTERNOON)).querySelector('meta[name="robots"]')).toBeNull();
+  });
+});
+
+// TASK-613 (Jaimie, 11 November 2026): the grand prize, judged by the Head Elf, clear on the front page.
+// The Head Elf is a real person. The product's words name her, as the rules do, but no test carries her
+// name: the line is checked through its other words, and against the name the rules page gives.
+describe("the grand prize on the front page", () => {
+  const LINE = /^Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest elf at home for the grand prize, judged by ([A-Z][a-z]+), our Head Elf\.$/;
+  const prize = (doc: Document) => doc.querySelector(".elf-top__prize");
+
+  it("says how to enter and who judges it, straight under the welcome", () => {
+    const doc = page(view(AFTERNOON));
+    expect(words(prize(doc))).toMatch(LINE);
+    expect(prize(doc)!.previousElementSibling!.classList.contains("lede")).toBe(true);
+    expect(prize(doc)!.closest(".elf-top__words")).not.toBeNull();
+  });
+
+  it("says it with December's doors off too", () => {
+    expect(words(prize(page(view(at("2026-11-20T10:00:00.000Z"), {}, { doorsOn: false }))))).toMatch(LINE);
+  });
+
+  it("names the same Head Elf the rules do", () => {
+    const judge = LINE.exec(words(prize(page(view(AFTERNOON)))))?.[1];
+    const rules = renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } });
+    expect(judge).toBeTruthy();
+    expect(rules).toContain(`judged by ${judge}, Head Elf`);
   });
 });
 

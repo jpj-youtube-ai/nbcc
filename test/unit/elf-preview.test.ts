@@ -20,7 +20,7 @@ import { elfRouter } from "../../src/routes/elf";
 
 type Layer = { route?: { path: string; stack: { handle: (req: unknown, res: unknown, next: () => void) => unknown }[] } };
 
-async function get(path: string, cookie?: string) {
+async function get(path: string, cookie?: string, body: Record<string, unknown> = {}) {
   const route = (elfRouter.stack as Layer[]).find((l) => l.route?.path === path)!.route!;
   const out = { status: 200, body: "", headers: {} as Record<string, string> };
   const res: Record<string, unknown> = {
@@ -53,7 +53,7 @@ async function get(path: string, cookie?: string) {
   };
   for (const layer of route.stack) {
     let next = false;
-    await layer.handle({ headers: cookie ? { cookie } : {}, body: {}, query: {}, params: {} }, res, () => (next = true));
+    await layer.handle({ headers: cookie ? { cookie } : {}, body, query: {}, params: {} }, res, () => (next = true));
     if (!next) break;
   }
   return out;
@@ -72,5 +72,14 @@ describe("the private preview", () => {
   it("is not found without the code, or with a wrong one", async () => {
     expect((await get("/elf")).status).toBe(404);
     expect((await get("/elf", `nbcc_elf_preview=${"d".repeat(64)}`)).status).toBe(404);
+  });
+
+  // TASK-613: the preview's sign up asks for a mobile number like every other way of enrolling.
+  it("refuses a sign up through the preview without a mobile number, in the form's own words", async () => {
+    const form = { grownUpName: "Sam Example", email: "sam@example.com", "detective-1-first": "Ivy", "detective-1-surname": "Snowsleuth", entry: "5", agreed: "on" };
+    const r = await get("/api/elf/join", `nbcc_elf_preview=${TOKEN}`, form);
+    expect(r.status).toBe(400);
+    expect(r.body).toContain("<li>Please type a UK mobile number, like 07700 900 123.</li>");
+    expect(r.body).toContain('class="elf-preview-strip"');
   });
 });

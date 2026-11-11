@@ -248,6 +248,7 @@ const SAM_SHEET = {
   id: 3,
   grownUpName: "Sam Example",
   email: "sam@example.org",
+  mobile: "+447700900123",
   newsletter: true,
   enrolledAt: "2026-11-13T19:04:00.000Z",
   removedAt: null,
@@ -334,6 +335,28 @@ describe("the Families screen", () => {
     expect(familiesPart().querySelector(".hq-families")!.classList.contains("is-open")).toBe(true);
     inFamilies("Back to families")!.click();
     expect(familiesPart().querySelector(".hq-families")!.classList.contains("is-open")).toBe(false);
+  });
+
+  // TASK-613: so a head elf can ring the grand prize winner's grown up on Christmas Eve.
+  it("shows the grown up's mobile with their details, ready to ring, and never on the list", async () => {
+    await openFamilies();
+    expect(familiesPart().querySelector(".hq-fams, .hq-list")?.textContent ?? "").not.toContain("07700");
+    expect(cards().map((c) => c.textContent).join(" ")).not.toContain("07700");
+    cards()[0].click();
+    await flush();
+    const ring = familiesPart().querySelector<HTMLAnchorElement>('.hq-sheet__details a[href^="tel:"]')!;
+    expect(ring.getAttribute("href")).toBe("tel:+447700900123");
+    expect(ring.textContent).toBe("07700 900123");
+    expect(ring.closest("p")!.textContent).toBe("Mobile 07700 900123");
+  });
+
+  it("says when a family enrolled before mobiles were asked for", async () => {
+    await openFamilies({ ...FAMILY_SERVER, "/api/admin/elf/families/3": { ...SHEET_ANSWER, family: { ...SAM_SHEET, mobile: null } } });
+    cards()[0].click();
+    await flush();
+    const details = familiesPart().querySelector(".hq-sheet__details")!;
+    expect(details.querySelector('a[href^="tel:"]')).toBeNull();
+    expect(details.textContent).toContain("No mobile number yet. They enrolled before we asked for one.");
   });
 
   it("ticks a name in one press, and the Families tile counts one fewer", async () => {

@@ -81,15 +81,18 @@ Then("the elf response should contain {string}", function (words) {
   assert.ok(this.elfText.includes(words), `expected "${words}" in ${this.elfText.slice(0, 400)}`);
 });
 
-async function enrol(world, email, names, entryPence) {
+// TASK-613: every enrolment gives the grown up's mobile, as the form asks; `mobile: null` leaves it out.
+async function enrol(world, email, names, entryPence, mobile = "07700 900 123") {
   const detectives = names.map((n) => {
     const [firstName, surname] = n.split(" ");
     return { firstName, surname };
   });
+  const body = { grownUpName: "Sam Example", email, detectives, entryPence, donationPence: 0, giftAid: false, coverFee: false, newsletter: false, agreed: true };
+  if (mobile !== null) body.mobile = mobile;
   const res = await fetch(`${BASE_URL}/api/elf/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ grownUpName: "Sam Example", email, detectives, entryPence, donationPence: 0, giftAid: false, coverFee: false, newsletter: false, agreed: true }),
+    body: JSON.stringify(body),
   });
   world.elfPending = cookieFrom(res, "nbcc_elf_pending");
   await keep(world, res);
@@ -98,6 +101,24 @@ async function enrol(world, email, names, entryPence) {
 
 When("{string} enrols {string} and {string} paying {int} pence", async function (email, a, b, pence) {
   await enrol(this, email, [a, b], pence);
+});
+
+When("{string} enrols {string} paying {int} pence with no mobile number", async function (email, name, pence) {
+  await enrol(this, email, [name], pence, null);
+});
+
+When("{string} enrols {string} paying {int} pence with the mobile number {string}", async function (email, name, pence, mobile) {
+  await enrol(this, email, [name], pence, mobile);
+});
+
+Then("no family was saved for {string}", async function (email) {
+  const r = await pool.query("SELECT count(*)::int AS n FROM elf_families WHERE email = $1", [email]);
+  assert.equal(r.rows[0].n, 0);
+});
+
+Then("the family of {string} keeps the mobile number {string}", async function (email, mobile) {
+  const r = await pool.query("SELECT mobile FROM elf_families WHERE email = $1", [email]);
+  assert.equal(r.rows[0] && r.rows[0].mobile, mobile);
 });
 
 Then("the enrolment is waiting for its payment", async function () {

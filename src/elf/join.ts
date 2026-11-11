@@ -1,6 +1,7 @@
 import type StripeNS from "stripe";
 import { z } from "zod";
 import { cleanFirstName, isFestiveSurname, type FirstNameRefusal } from "./names";
+import { normaliseUkMobile } from "./alerts";
 import { declarationFieldsSchema } from "../declarations/fields";
 import { grossedUpFeePence, type CardFeeRate } from "../ball/pricing";
 import type { ElfSettings } from "./settings";
@@ -13,6 +14,8 @@ import type { ElfSettings } from "./settings";
 // amount for each detective (£1), with the admin's suggested amount (£5) offered. The entry is never
 // Gift Aided; a separate gift can be, with its declaration. A detective is a first name and a
 // festive surname from the list: never a real surname, school or age, so there are no such fields.
+// The grown up gives a UK mobile number (TASK-613), only so NBCC can ring them straight away if one
+// of their detectives wins the grand prize on Christmas Eve.
 //
 // Pure: no pool, no config, no clock (apart from the checkout's expiry). Unit tested in
 // test/unit/elf-join.test.ts.
@@ -43,11 +46,18 @@ export function firstNameRefusalWords(reason: FirstNameRefusal): string {
 
 const detectiveSchema = z.object({ firstName: z.string().max(60), surname: z.string().max(40) });
 
+/** The words for a mobile number that is missing or is not a UK mobile (TASK-613). */
+export const MOBILE_WORDS = "Please type a UK mobile number, like 07700 900 123.";
+
 /** The shape of an enrolment as it is sent. Checked further by parseJoin. */
 export function joinBodySchema() {
   return z.object({
     grownUpName: z.string().trim().min(1, "Please tell us your name.").max(80),
     email: z.string().trim().toLowerCase().email("Please give an email address we can reach you at.").max(200),
+    /** The grown up's mobile, so NBCC can ring the grand prize winner's grown up on Christmas Eve
+     *  (TASK-613). parseJoin checks it and keeps it as +447 and nine digits, as a head elf's mobile is
+     *  kept (normaliseUkMobile, src/elf/alerts.ts). */
+    mobile: z.string().max(40),
     detectives: z.array(detectiveSchema).max(50),
     entryPence: pence(10_000_000),
     donationPence: pence(MAX_DONATION_PENCE).default(0),
@@ -84,6 +94,7 @@ function poundsWords(p: number): string {
 export type JoinResult = { ok: true; body: JoinBody } | { ok: false; errors: string[] };
 
 const FIELD_WORDS: Record<string, string> = {
+  mobile: MOBILE_WORDS,
   entryPence: "Please give the entry in pounds and pence, like 5 or 5.50.",
   donationPence: "Please give the gift in pounds and pence, like 5 or 5.50.",
   detectives: "Please check each detective's first name and surname.",
@@ -117,6 +128,8 @@ export function parseJoin(settings: ElfSettings, sent: unknown): JoinResult {
   const body = shaped.data;
   const errors: string[] = [];
 
+  const mobile = normaliseUkMobile(body.mobile);
+  if (!mobile) errors.push(MOBILE_WORDS);
   if (body.detectives.length === 0) errors.push("Please enrol at least one detective.");
   if (body.detectives.length > MAX_DETECTIVES) errors.push(`You can enrol up to ${MAX_DETECTIVES} detectives at a time.`);
   const detectives = body.detectives.map((d) => {
@@ -139,8 +152,8 @@ export function parseJoin(settings: ElfSettings, sent: unknown): JoinResult {
   if (body.giftAid && body.donationPence > 0 && !body.declaration) errors.push("Please fill in the Gift Aid declaration.");
   if (!body.agreed) errors.push("Please agree to the rules to enrol.");
 
-  if (errors.length > 0) return { ok: false, errors: [...new Set(errors)] };
-  return { ok: true, body: { ...body, detectives, declaration: body.giftAid ? body.declaration : undefined } };
+  if (errors.length > 0 || !mobile) return { ok: false, errors: [...new Set(errors)] };
+  return { ok: true, body: { ...body, mobile, detectives, declaration: body.giftAid ? body.declaration : undefined } };
 }
 
 /** Pounds as typed ("5", "5.50", "£10") in whole pence. Anything else is NaN, which the schema refuses. */
@@ -170,6 +183,7 @@ export function joinBodyFromForm(form: Record<string, unknown>): Record<string, 
   const body: Record<string, unknown> = {
     grownUpName: text(form.grownUpName),
     email: text(form.email),
+    mobile: text(form.mobile),
     detectives,
     entryPence: penceFromPounds(form.entry),
     donationPence: penceFromPounds(form.donation),

@@ -620,6 +620,13 @@
       if (f.newsletter) facts.push("gets the newsletter");
       details.appendChild(el("h2", { class: "hq-h2", text: f.grownUpName }));
       details.appendChild(el("p", { class: "hq-words hq-soft", text: facts.join(" · ") }));
+      // TASK-613: the grown up's mobile, to ring them on Christmas Eve if one of their detectives wins
+      // the grand prize. Only a family's sheet has it, and only head elves see a sheet.
+      details.appendChild(
+        f.mobile
+          ? el("p", { class: "hq-words" }, ["Mobile ", el("a", { href: "tel:" + f.mobile, text: mobileWords(f.mobile) })])
+          : el("p", { class: "hq-words hq-soft", text: "No mobile number yet. They enrolled before we asked for one." }),
+      );
       if (f.removedAt) {
         details.appendChild(
           el("p", {

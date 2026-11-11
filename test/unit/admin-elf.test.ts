@@ -352,6 +352,7 @@ const SHEET_ROW = {
   id: 3,
   grownUpName: "Sam Example",
   email: "sam@example.org",
+  mobile: "+447700900123",
   newsletter: true,
   enrolledAt: PAID_AT,
   removedAt: null,
@@ -399,6 +400,7 @@ describe("the families in the admin", () => {
         id: 3,
         grownUpName: "Sam Example",
         email: "sam@example.org",
+        mobile: "+447700900123",
         newsletter: true,
         enrolledAt: PAID_AT.toISOString(),
         removedAt: null,
@@ -414,6 +416,21 @@ describe("the families in the admin", () => {
     const missing = await run(getAdminElfFamily, ask("admin", { params: { id: "99" } }));
     expect(missing.statusCode).toBe(404);
     expect(missing.body).toEqual({ error: "We could not find that family." });
+  });
+
+  // TASK-613: the grown up's mobile, so a head elf can ring the grand prize winner. Head elves only:
+  // the sheet, never the list, and nobody without the section sees it.
+  it("shows the grown up's mobile on the family's sheet to head elves only, and never on the list", async () => {
+    dbAdmin.elfFamilySheet.mockResolvedValue(SHEET_ROW);
+    const editor = await run(getAdminElfFamily, ask("editor", { params: { id: "3" } }));
+    expect(editor.statusCode).toBe(403);
+    expect(JSON.stringify(editor.body)).not.toContain("447700900123");
+    dbAdmin.listElfFamilies.mockResolvedValue({ rows: [{ ...FAMILY_ROW, mobile: "+447700900123" }], total: 1, counts: { all: 1, check: 1, week: 1, removed: 0 } });
+    const list = await run(getAdminElfFamilies, ask("viewer", { permissions: HEAD_ELF }));
+    expect(JSON.stringify(list.body)).not.toContain("447700900123");
+    dbAdmin.elfFamilySheet.mockResolvedValue({ ...SHEET_ROW, mobile: null });
+    const before = await run(getAdminElfFamily, ask("viewer", { permissions: HEAD_ELF, params: { id: "3" } }));
+    expect((before.body as { family: { mobile: unknown } }).family.mobile).toBeNull();
   });
 
   it("refuses an id that is not a whole number above 0", async () => {

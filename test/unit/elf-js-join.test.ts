@@ -88,12 +88,13 @@ describe("the enrol page's script", () => {
     load();
     $<HTMLInputElement>('input[name="grownUpName"]').value = "Sam Example";
     $<HTMLInputElement>('input[name="email"]').value = "sam@example.com";
+    $<HTMLInputElement>('input[name="mobile"]').value = "07700 900 123";
     $<HTMLInputElement>('input[name="detective-1-first"]').value = "Ruby";
     $<HTMLInputElement>('input[name="agreed"]').checked = true;
     $("form.elf-join-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flush();
     expect(calls[0].url).toBe("/api/elf/join");
-    expect(calls[0].body).toMatchObject({ grownUpName: "Sam Example", email: "sam@example.com", entryPence: 500, agreed: true });
+    expect(calls[0].body).toMatchObject({ grownUpName: "Sam Example", email: "sam@example.com", mobile: "07700 900 123", entryPence: 500, agreed: true });
     expect(calls[0].body.detectives).toEqual([{ firstName: "Ruby", surname: FESTIVE_SURNAMES[0] }]);
     expect(went).toEqual(["https://checkout.stripe.example/c/pay"]);
   });

@@ -71,6 +71,7 @@ export function renderRulesPage(view: { settings: ElfSettings }): string {
       <li>A first name is shown in full in public only once our team has checked it. Until then the public sees its first letter.</li>
       <li>A photo only goes on the website if the grown up says yes to that photo, and after our team has checked it.</li>
       <li>All photos come down, and children's details are deleted, at the end of January.</li>
+      <li>The mobile number you give when you enrol is only for ringing the grand prize winner, and it is deleted at the end of January with everything else.</li>
     </ul>`,
   )}
   ${section(

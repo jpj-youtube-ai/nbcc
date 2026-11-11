@@ -44,6 +44,16 @@ describe("the rules page", () => {
     expect(words).toContain("end of January");
   });
 
+  // TASK-613: the grown up's mobile, asked for when enrolling, said beside what else is deleted when.
+  it("says the mobile number is only for ringing the grand prize winner, and goes at the end of January", () => {
+    const safe = [...doc.querySelectorAll('[aria-labelledby="elf-rules-safe"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim());
+    const deleted = safe.indexOf("All photos come down, and children's details are deleted, at the end of January.");
+    expect(deleted).toBeGreaterThan(-1);
+    expect(safe[deleted + 1]).toBe(
+      "The mobile number you give when you enrol is only for ringing the grand prize winner, and it is deleted at the end of January with everything else.",
+    );
+  });
+
   it("says pay what you can, with the admin's amounts", () => {
     expect(words).toContain("Pay what you can");
     expect(words).toContain("£5");
@@ -114,7 +124,8 @@ describe("the rules, in paper", () => {
   });
 
   it("marks each rule with a small circle of paper", () => {
-    expect(doc.querySelectorAll(".elf-rules-list li").length).toBe(10);
+    // Eleven since TASK-613's line about the grown up's mobile number.
+    expect(doc.querySelectorAll(".elf-rules-list li").length).toBe(11);
     expect(css).toMatch(/\.elf-rules-list \{[^}]*list-style:\s*none/);
     expect(css).toMatch(/\.elf-rules-list li::before \{[^}]*border-radius:\s*50%/);
   });

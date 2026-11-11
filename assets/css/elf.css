@@ -1100,6 +1100,7 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 .elf-join-form .elf-field { display: grid; gap: 6px; }
 .elf-join-form input[type="text"],
 .elf-join-form input[type="email"],
+.elf-join-form input[type="tel"],
 .elf-join-form select,
 .elf-sign-in input[type="text"],
 .elf-sign-in input[type="email"] {

@@ -13,6 +13,7 @@ import type { JoinView } from "./types";
 // A detective is a first name and a festive surname from the list. There is no field for a real
 // surname, a school or an age, by design. The only last name on the page is the grown up's own,
 // for Gift Aid, and only for a gift: the entry is a payment to take part and is never Gift Aided.
+// The grown up's mobile number is asked for too (TASK-613), only to ring the grand prize winner.
 //
 // Unit tested in test/unit/elf-page-join.test.ts and test/unit/elf-pages-house-rules.test.ts.
 
@@ -56,6 +57,13 @@ export function renderJoinPage(view: JoinView): string {
     ? `<div class="cf-turnstile" data-sitekey="${escapeHtml(view.captchaSiteKey)}"></div>`
     : "";
 
+  // TASK-613: so NBCC can ring the grand prize winner's grown up on Christmas Eve. Asked on every way
+  // of enrolling, signed in too: a family from before it was asked gives one when it adds a detective.
+  const mobile =
+    `<div class="elf-field"><label for="elf-mobile">Mobile number</label>` +
+    `<p class="elf-hint" id="elf-mobile-hint">So we can ring you straight away if one of your detectives wins the grand prize on Christmas Eve. We only use it for that.</p>` +
+    `<input id="elf-mobile" name="mobile" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" required aria-describedby="elf-mobile-hint"${value("mobile")} /></div>`;
+
   const main = `
   <section class="section page-top elf-join-top" aria-labelledby="elf-join-heading">
     <div class="wrap elf-join-top__grid">
@@ -78,13 +86,15 @@ export function renderJoinPage(view: JoinView): string {
         <span class="elf-tape" aria-hidden="true"></span>
         ${
           view.signedIn
-            ? `<div class="elf-join-you"><p>Enrolling for <b>${escapeHtml(view.signedIn.grownUpName)}</b> (${escapeHtml(view.signedIn.email)}). Your welcome email for them goes there too.</p></div>`
+            ? `<div class="elf-join-you"><p>Enrolling for <b>${escapeHtml(view.signedIn.grownUpName)}</b> (${escapeHtml(view.signedIn.email)}). Your welcome email for them goes there too.</p>
+          ${mobile}</div>`
             : `<fieldset class="elf-join-you">
           <legend class="h-md">You, the grown up</legend>
           <div class="elf-field"><label for="elf-grown-up">Your name</label>
           <input id="elf-grown-up" name="grownUpName" type="text" maxlength="80" autocomplete="name" required${value("grownUpName")} /></div>
           <div class="elf-field"><label for="elf-email">Your email</label>
           <input id="elf-email" name="email" type="email" maxlength="200" autocomplete="email" required${value("email")} /></div>
+          ${mobile}
         </fieldset>`
         }
 

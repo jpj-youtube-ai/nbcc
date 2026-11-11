@@ -291,6 +291,9 @@ function sheetForAdmin(f: FamilySheetRow) {
     id: f.id,
     grownUpName: f.grownUpName,
     email: f.email,
+    // TASK-613: to ring the grand prize winner. Every route that answers with a sheet needs the
+    // Elf Detective School section, so head elves only; the families list never carries it.
+    mobile: f.mobile,
     newsletter: f.newsletter,
     enrolledAt: iso(f.enrolledAt),
     removedAt: iso(f.removedAt),

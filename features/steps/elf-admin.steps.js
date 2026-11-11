@@ -103,6 +103,15 @@ When("{string} with password {string} tries to give the family of {string} the e
   this.hqBody = await res.json().catch(() => ({}));
 });
 
+// TASK-613: the grown up's mobile, on the family's sheet, so a head elf can ring the grand prize winner.
+When("{string} with password {string} opens the family sheet of {string}", async function (email, password, family) {
+  await asHeadElf(this, email, password, "GET", `/api/admin/elf/families/${await familyOf(family)}`);
+});
+
+Then("the family sheet shows the mobile number {string}", function (mobile) {
+  assert.equal(this.hqBody.family.mobile, mobile, JSON.stringify(this.hqBody.family));
+});
+
 Then("the family of {string} still has its own email", async function (email) {
   const r = await pool.query("SELECT count(*)::int AS n FROM elf_families WHERE email = $1", [email]);
   assert.equal(r.rows[0].n, 1);

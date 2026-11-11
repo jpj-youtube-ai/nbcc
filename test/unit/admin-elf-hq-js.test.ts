@@ -26,7 +26,8 @@ const HQ = {
 
 type Call = { method: string; url: string; body: unknown };
 
-/** The admin page around the section, the pretend server, and Head Elf HQ started on it. */
+/** The admin page around the section, the pretend server, and Head Elf HQ started on it. An answer is
+ *  found by "METHOD /path" first, then by "/path" whatever the method. */
 function page(o: { answers?: Record<string, unknown>; status?: number; shown?: boolean } = {}) {
   document.body.innerHTML = `<div id="appView"><section class="admin-view" id="view-elf"${o.shown ? "" : " hidden"}><div id="elfHq"></div></section></div>`;
   const calls: Call[] = [];
@@ -35,7 +36,9 @@ function page(o: { answers?: Record<string, unknown>; status?: number; shown?: b
     const method = init.method ?? "GET";
     calls.push({ method, url, body: init.body ? JSON.parse(String(init.body)) : null });
     const status = o.status ?? 200;
-    const body = (o.answers ?? {})[url.split("?")[0]] ?? (status >= 400 ? { error: "Admin is temporarily unavailable" } : HQ);
+    const path = url.split("?")[0];
+    const answers = o.answers ?? {};
+    const body = answers[`${method} ${path}`] ?? answers[path] ?? (status >= 400 ? { error: "Admin is temporarily unavailable" } : HQ);
     // A fresh copy each time, as a real answer is: the screen may change what it was given.
     return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(JSON.parse(JSON.stringify(body))) });
   });
@@ -579,7 +582,8 @@ describe("the Settings screen", () => {
     expect(settingsPart().textContent).toContain("The least anyone pays is £1 for each detective, and we suggest £5.");
     expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
     expect(settingsPart().textContent).toContain("Only an admin can change these.");
-    expect(settingsPart().querySelectorAll("button")).toHaveLength(0);
+    // The admin only panels. The practice door below them is for anyone who may edit (canEdit here).
+    expect(settingsPart().querySelectorAll(".hq-settings button")).toHaveLength(0);
   });
 });
 
@@ -626,5 +630,181 @@ describe("the place phone in Settings", () => {
     tabs()[4].click();
     expect(settingsPart().textContent).toContain("NBCC's phone number for places: 01632 960 123");
     expect(settingsPart().querySelector("#hqPlacePhone")).toBeNull();
+  });
+});
+
+// ---- The practice door in Settings (wave 2, Task 8): a pretend evening, played through the preview link ----
+
+describe("the practice door in Settings", () => {
+  // A practice started at 3pm on 11 November (London is on GMT then), a minute between clues.
+  const RUNNING = {
+    placeName: "The Example Office",
+    placeTown: "Snowford",
+    elfName: "Pip",
+    tagWord: "SNOWBALL 472",
+    clue1At: "2026-11-11T15:01:00.000Z",
+    clue2At: "2026-11-11T15:02:00.000Z",
+    clue3At: "2026-11-11T15:03:00.000Z",
+    revealAt: "2026-11-11T15:04:00.000Z",
+    found: false,
+    posterUrl: "https://www.example.org/elf/p/abcdefghjkmn",
+  };
+  const LINKED = { ...BUSY, settings: { ...BUSY.settings, previewOn: true } };
+  const NONE = { practice: null, previewOn: true };
+  const NO_LINK = "Make a preview link in Settings first: the practice door is played through it.";
+  const panelNow = () => settingsPart().querySelector<HTMLElement>(".hq-practice")!;
+  const field = (name: string) => panelNow().querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+  async function openSettings(answers: Record<string, unknown>) {
+    const env = page({ answers });
+    await env.hq.open();
+    tabs()[4].click();
+    await flush();
+    return env;
+  }
+
+  it("starts a practice evening: posts the fields, then shows the clue times, the tag word and Clear the practice", async () => {
+    const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE, "POST /api/admin/elf/practice": { practice: RUNNING, previewOn: true } });
+    expect(urls(calls)).toContain("GET /api/admin/elf/practice");
+    // Its own panel, after the admin only ones.
+    expect(settingsPart().querySelector(".hq-settings .hq-practice")).toBeNull();
+    expect(panelNow().querySelector("h2")!.textContent).toBe("The practice door");
+    field("placeName").value = "The Example Office";
+    field("placeTown").value = "Snowford";
+    field("elfName").value = "Pip";
+    field("minutesApart").value = "1";
+    inPart(panelNow(), "Start a practice evening")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "POST")).toEqual([
+      { method: "POST", url: "/api/admin/elf/practice", body: { placeName: "The Example Office", placeTown: "Snowford", elfName: "Pip", minutesApart: 1 } },
+    ]);
+    const now = panelNow();
+    expect(now.querySelector("form")).toBeNull();
+    expect(now.querySelector(".hq-tagword")!.textContent).toBe("The word on its tag: SNOWBALL 472");
+    expect([...now.querySelectorAll(".hq-practice__times li")].map((li) => li.textContent)).toEqual([
+      "Clue 1 comes out at 3:01pm",
+      "Clue 2 comes out at 3:02pm",
+      "Clue 3 comes out at 3:03pm",
+      "The place is shown at 3:04pm",
+    ]);
+    expect(now.textContent).toContain("Pip is hiding at The Example Office, Snowford.");
+    expect(now.textContent).toContain("Pip is still hiding.");
+    const poster = [...now.querySelectorAll("a")].find((a) => a.textContent === "Open the poster page")!;
+    expect(poster.getAttribute("href")).toBe(RUNNING.posterUrl);
+    expect(poster.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(inPart(now, "Clear the practice")).toBeTruthy();
+    expect(now.textContent).toContain("Open the preview link first in the browser you will play on.");
+    expect(now.textContent).toContain("Make a new preview link if anyone outside the team still has the old one.");
+    const said = now.querySelector(".hq-status")!;
+    expect(said.textContent).toBe("Started. Clue 1 comes out in a minute.");
+    expect(said.classList.contains("is-ok")).toBe(true);
+  });
+
+  it("leaves an empty elf name to the server, and sends three minutes between clues unless changed", async () => {
+    const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE, "POST /api/admin/elf/practice": { practice: RUNNING, previewOn: true } });
+    expect(field("minutesApart").value).toBe("3");
+    expect(field("elfName").value).toBe("");
+    field("placeName").value = " The Example Office ";
+    field("placeTown").value = "Snowford";
+    inPart(panelNow(), "Start a practice evening")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([{ placeName: "The Example Office", placeTown: "Snowford", minutesApart: 3 }]);
+  });
+
+  it("clears the practice, and shows the form again", async () => {
+    const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: RUNNING, previewOn: true }, "DELETE /api/admin/elf/practice": NONE });
+    inPart(panelNow(), "Clear the practice")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/admin/elf/practice"]);
+    expect(panelNow().querySelector(".hq-tagword")).toBeNull();
+    expect(field("placeName")).toBeTruthy();
+    expect(inPart(panelNow(), "Start a practice evening")).toBeTruthy();
+    expect(panelNow().querySelector(".hq-status")!.textContent).toBe("The practice is cleared.");
+  });
+
+  it("says to make a preview link first when there is none, with nothing to start", async () => {
+    await openSettings({ "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false } });
+    expect(panelNow().textContent).toContain(NO_LINK);
+    expect(inPart(panelNow(), "Start a practice evening")).toBeUndefined();
+    expect(panelNow().querySelector("form")).toBeNull();
+  });
+
+  it("offers the start as soon as an admin makes a preview link beside it", async () => {
+    const url = "https://www.example.org/elf/preview/" + "b".repeat(64);
+    await openSettings({ "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false }, "/api/admin/elf/preview": { url } });
+    inPart(settingsPart(), "Make a preview link")!.click();
+    await flush();
+    expect(panelNow().textContent).not.toContain(NO_LINK);
+    expect(inPart(panelNow(), "Start a practice evening")).toBeTruthy();
+  });
+
+  it("shows the server's refusal as an error, and lets the head elf try again", async () => {
+    await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ error: NO_LINK }) }));
+    field("placeName").value = "The Example Office";
+    field("placeTown").value = "Snowford";
+    inPart(panelNow(), "Start a practice evening")!.click();
+    await flush();
+    const said = panelNow().querySelector(".hq-status")!;
+    expect(said.textContent).toBe(NO_LINK);
+    expect(said.classList.contains("is-error")).toBe(true);
+    expect(inPart(panelNow(), "Start a practice evening")!.disabled).toBe(false);
+  });
+
+  it("shows a head elf who may only look the practice as words, with nothing to press", async () => {
+    await openSettings({ "/api/admin/elf/hq": { ...LINKED, canSwitch: false, canEdit: false }, "GET /api/admin/elf/practice": { practice: { ...RUNNING, found: true }, previewOn: true } });
+    expect(panelNow().querySelector(".hq-tagword")!.textContent).toBe("The word on its tag: SNOWBALL 472");
+    expect(panelNow().textContent).toContain("Pip has been found.");
+    expect(panelNow().querySelectorAll("button")).toHaveLength(0);
+    expect(panelNow().textContent).toContain("Starting or clearing a practice evening needs edit access to Head Elf HQ, which an admin can give in Team.");
+  });
+
+  it("tells a head elf who may only look when no practice is running", async () => {
+    await openSettings({ "/api/admin/elf/hq": { ...LINKED, canSwitch: false, canEdit: false }, "GET /api/admin/elf/practice": NONE });
+    expect(panelNow().textContent).toContain("No practice evening is running.");
+    expect(panelNow().querySelector("form")).toBeNull();
+  });
+
+  it("ignores a reading that comes back after a newer request was sent", async () => {
+    const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE });
+    let release: () => void = () => {};
+    const answer = (body: unknown) => ({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn((url: string, init: RequestInit = {}) => {
+      const method = init.method ?? "GET";
+      calls.push({ method, url, body: init.body ? JSON.parse(String(init.body)) : null });
+      if (method === "GET") return new Promise((resolve) => (release = () => resolve(answer(NONE))));
+      return Promise.resolve(answer({ practice: RUNNING, previewOn: true }));
+    });
+    tabs()[0].click();
+    tabs()[4].click(); // a fresh reading, held back
+    field("placeName").value = "The Example Office";
+    field("placeTown").value = "Snowford";
+    inPart(panelNow(), "Start a practice evening")!.click();
+    await flush();
+    expect(panelNow().querySelector(".hq-tagword")).not.toBeNull();
+    release(); // the older reading arrives, from before the start
+    await flush();
+    expect(panelNow().querySelector(".hq-tagword")!.textContent).toBe("The word on its tag: SNOWBALL 472");
+  });
+
+  it("draws all of Settings again when the practice's answer shows a preview link made since HQ was read", async () => {
+    await openSettings({ "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": NONE });
+    expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
+    expect(inPart(panelNow(), "Start a practice evening")).toBeTruthy();
+  });
+
+  it("reads the practice afresh each time Settings is opened, and when HQ opens on Settings", async () => {
+    const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE });
+    tabs()[0].click();
+    tabs()[4].click();
+    await flush();
+    expect(urls(calls).filter((u) => u === "GET /api/admin/elf/practice")).toHaveLength(2);
+    // Settings was the open tile: the next visit reads the practice with HQ.
+    const again = page({ answers: { "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: RUNNING, previewOn: true } } });
+    await again.hq.open();
+    await flush();
+    expect(urls(again.calls)).toContain("GET /api/admin/elf/practice");
+    expect(panelNow().querySelector(".hq-tagword")!.textContent).toBe("The word on its tag: SNOWBALL 472");
   });
 });

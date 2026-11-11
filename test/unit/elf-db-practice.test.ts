@@ -109,6 +109,40 @@ describe("clearPractice", () => {
   });
 });
 
+// Starting and clearing a practice are a head elf's writes, so each is noted in the audit log, in the
+// same transaction as the write. The note never carries the place, its town, the elf's name or the word.
+describe("the audit log", () => {
+  const now = new Date("2026-11-10T15:00:00Z");
+  const audits = () => clientQuery.mock.calls.filter((c) => /INSERT INTO audit_log/.test(String(c[0])));
+  const inside = () => {
+    const s = sqls();
+    const at = s.findIndex((q) => /INSERT INTO audit_log/.test(q));
+    expect(at).toBeGreaterThan(s.indexOf("BEGIN"));
+    expect(at).toBeLessThan(s.lastIndexOf("COMMIT"));
+  };
+
+  it("notes a practice started, by whom and how many minutes apart, and nothing it names", async () => {
+    const row = await startPractice({ placeName: "The Pretend Kettle", placeTown: "Exampleton", elfName: "Pip", minutesApart: 3, startedBy: "admin:staff@example.org", now });
+    expect(audits()).toHaveLength(1);
+    const params = audits()[0][1] as unknown[];
+    expect(params).toEqual(["admin:staff@example.org", "elf.practice.started", "elf_practice", 1, { minutesApart: 3 }]);
+    for (const secret of ["The Pretend Kettle", "Exampleton", "Pip", row.tagWord]) expect(JSON.stringify(params)).not.toContain(secret);
+    inside();
+  });
+
+  it("notes a practice cleared by a head elf, with nothing it named", async () => {
+    await clearPractice("admin:staff@example.org");
+    expect(audits()).toHaveLength(1);
+    expect(audits()[0][1]).toEqual(["admin:staff@example.org", "elf.practice.cleared", "elf_practice", 1, {}]);
+    inside();
+  });
+
+  it("writes no note when the practice is cleared with no head elf, as switching on December's doors does", async () => {
+    await clearPractice();
+    expect(audits()).toHaveLength(0);
+  });
+});
+
 describe("getPractice and markPracticeFound", () => {
   it("reads the row, or null when there is none", async () => {
     query.mockResolvedValueOnce({

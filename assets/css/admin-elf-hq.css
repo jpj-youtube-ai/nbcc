@@ -366,6 +366,21 @@
 .hq-field > label { font-family: var(--hq-head); font-weight: 700; color: var(--hq-ink); }
 .hq-preview .hq-field input { background: var(--hq-cream); font-size: 0.95rem; }
 
+/* ---- Settings: the practice door, a pretend evening played through the preview link. The fields wrap
+   to one column on a phone; long names wrap rather than run past the panel. ---- */
+.hq-practice { display: grid; gap: var(--hq-space-md); align-content: start; }
+.hq-root .hq-practice .hq-h2 { margin: 0; }
+.hq-practice p { overflow-wrap: anywhere; }
+/* The site wide form rule (styles.css) draws every form as a card; this one sits in a panel that already is one. */
+.hq-practice__form { display: grid; gap: var(--hq-space-md); min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.hq-practice__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: var(--hq-space-md) var(--hq-space-lg); align-items: start; min-width: 0; }
+.hq-practice__fields .hq-field { min-width: 0; }
+.hq-practice__times { display: grid; gap: var(--hq-space-xs); margin: 0; padding: 0; list-style: none; }
+.hq-practice__times li { display: flex; align-items: center; gap: var(--hq-space-sm); font-weight: 500; }
+.hq-practice__times li::before { content: ""; flex: none; width: 10px; height: 10px; border: 2px solid var(--hq-ink); border-radius: 50%; background: var(--hq-gold-soft); }
+.hq-practice .hq-tagword { justify-self: start; max-width: 100%; }
+.hq-practice .hq-tagword b { overflow-wrap: anywhere; }
+
 @media (prefers-reduced-motion: no-preference) {
   .hq-lever__knob { transition: transform 0.28s var(--hq-ease); }
   .hq-toggle i::after { transition: transform 0.22s var(--hq-ease); }

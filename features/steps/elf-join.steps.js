@@ -16,10 +16,33 @@ async function cleanUp() {
   await pool.query("DELETE FROM email_log WHERE recipient LIKE '%.elf.bdd@example.com'");
 }
 
-Before({ tags: "@elf-school" }, cleanUp);
-After({ tags: "@elf-school" }, async () => {
+/** The practice door (year 0, door 0): everything played at it in the four game tables, and its row. */
+async function clearPracticeDoor() {
+  for (const table of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos"]) {
+    await pool.query(`DELETE FROM ${table} WHERE year = 0`);
+  }
+  await pool.query("DELETE FROM elf_practice");
+}
+
+// No date bombs: every @elf-school scenario plays in next year's December, so a real door is always
+// still to come, with December's doors switched off; the practice door, whose times are absolute, is
+// what plays an evening. The row's own year and doors_on are kept in this scenario's world and put back
+// after. Plan 1's @elf-doors hooks (elf-admin-doors.steps.js) move the year too and put it back from
+// their own variables: cucumber runs Before hooks in the order they are defined and After hooks in the
+// reverse order, so the two nest whichever runs first, as long as each puts back only what it kept.
+Before({ tags: "@elf-school" }, async function () {
   await cleanUp();
+  await clearPracticeDoor();
+  const r = await pool.query("SELECT year, doors_on FROM elf_settings WHERE id = 1");
+  this.elfSettingsBefore = r.rows[0] ? { year: r.rows[0].year, doorsOn: r.rows[0].doors_on } : null;
+  await pool.query("UPDATE elf_settings SET year = $1, doors_on = false WHERE id = 1", [new Date().getFullYear() + 1]);
+});
+After({ tags: "@elf-school" }, async function () {
+  await cleanUp();
+  await clearPracticeDoor();
   await pool.query("UPDATE elf_settings SET school_on = false WHERE id = 1");
+  const kept = this.elfSettingsBefore;
+  if (kept) await pool.query("UPDATE elf_settings SET year = $1, doors_on = $2 WHERE id = 1", [kept.year, kept.doorsOn]);
 });
 
 /** A cookie's value from a response's Set-Cookie headers. */

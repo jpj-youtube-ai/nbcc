@@ -19,6 +19,7 @@ import {
   type FamilySummaryRow,
 } from "../db/elf-admin";
 import { listElfDoors } from "../db/elf-doors";
+import { clearPractice, getPractice, startPractice, type PracticeRow } from "../db/elf-practice";
 import { doorInstant, eveningFor, DOOR_COUNT, type Door } from "../elf/calendar";
 import { doorPicture, doorSeason, emptyDoor, type DoorSetup, readinessOf, staffEveningOf } from "../elf/door-setup";
 import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/admin-families";
@@ -26,6 +27,7 @@ import { daysUntil, questsFor, tileFor } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { badgeWords } from "../elf/emails";
 import { FESTIVE_SURNAMES } from "../elf/names";
+import { PRACTICE_ELF_NAME } from "../elf/practice-words";
 import { hashElfToken, newElfToken } from "../elf/session";
 import { firstClueAt } from "../elf/views";
 
@@ -43,6 +45,11 @@ function forAdmin(s: ElfSettings) {
 //   PATCH /api/admin/elf/settings   change them (admins only: switching the school on puts it live)
 //   GET   /api/admin/elf/hq         HQ: the settings, the numbers, Needs you, the newest recruits and
 //                                   the days to the first clue (elf: view)
+//   GET    /api/admin/elf/practice  the practice door, with its tag word so a head elf can type it, and
+//                                   whether there is a preview link (elf: view)
+//   POST   /api/admin/elf/practice  start a practice evening at a pretend place (elf: edit; only with a
+//                                   preview link, which is how it is played)
+//   DELETE /api/admin/elf/practice  clear it and everything played at it (elf: edit)
 //
 // The school has its own permission section, "elf" (src/admin/permissions.ts): admins by role, a head
 // elf given it from the Team matrix. The screen is assets/js/admin/elf-hq.js. Unit tested in
@@ -51,6 +58,9 @@ function forAdmin(s: ElfSettings) {
 export const adminElfRouter = Router();
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
+
+/** The site's own address, with no slash on the end: links handed to head elves start with it. */
+const siteOrigin = (): string => String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "");
 
 const PHONE_WORDS = "Use only numbers, spaces, brackets, plus signs and hyphens, with at least 7 numbers.";
 
@@ -186,7 +196,7 @@ export async function postAdminElfPreview(req: Request, res: Response): Promise<
   try {
     const token = newElfToken();
     await setElfPreview(hashElfToken(token), actorOf(claims));
-    return res.status(200).json({ url: `${String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "")}/elf/preview/${token}` });
+    return res.status(200).json({ url: `${siteOrigin()}/elf/preview/${token}` });
   } catch (err) {
     console.error("admin elf preview failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
@@ -361,11 +371,123 @@ function familyMark(change: (id: number, actor: string) => Promise<FamilySheetRo
 export const postAdminElfFamilyRemove = familyMark((id, actor) => removeElfFamily(id, actor), "remove");
 export const postAdminElfFamilyRestore = familyMark((id, actor) => restoreElfFamily(id, actor), "restore");
 
+// ---- The practice door (wave 2): a pretend evening a head elf plays through the preview link ----
+//
+// It is door 0 of year 0, with absolute times (src/db/elf-practice.ts), seen only by a browser holding
+// the preview cookie: so it can only be started while there is a preview link. The tag word is shown to
+// head elves so they can type it on the poster page; it is never cached and never logged.
+
+const NO_PREVIEW = { error: "Make a preview link in Settings first: the practice door is played through it." };
+const BAD_PRACTICE = "That did not look right. Reload the page and try again.";
+const MINUTES_WORDS = "The minutes between clues must be a whole number from 1 to 30.";
+
+/** Missing words are empty words, so they get the same sentence. */
+const missingIsEmpty = (v: unknown) => (v === undefined ? "" : v);
+/** Blank words are not given, so the default is used. */
+const blankIsMissing = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+
+const practiceSchema = z
+  .object({
+    placeName: z.preprocess(
+      missingIsEmpty,
+      z.string({ invalid_type_error: BAD_PRACTICE }).trim().min(1, "Type the name of the pretend place.").max(80, "The place name can be up to 80 characters."),
+    ),
+    placeTown: z.preprocess(
+      missingIsEmpty,
+      z.string({ invalid_type_error: BAD_PRACTICE }).trim().min(1, "Type the town the pretend place is in.").max(60, "The town can be up to 60 characters."),
+    ),
+    elfName: z.preprocess(blankIsMissing, z.string({ invalid_type_error: BAD_PRACTICE }).trim().max(30, "The elf's name can be up to 30 characters.").optional()),
+    minutesApart: z
+      .number({ invalid_type_error: BAD_PRACTICE })
+      .refine((n) => Number.isInteger(n) && n >= 1 && n <= 30, MINUTES_WORDS)
+      .optional(),
+  })
+  .strict();
+
+/** The sentence for a refusal: our own words, never the checker's ("Required", "Expected string, ..."),
+ *  as src/routes/admin-elf-doors.ts does for its own forms. */
+const CHECKER_OWN = new Set(["invalid_type", "unrecognized_keys", "invalid_union", "invalid_literal"]);
+const practiceSentence = (issue: { message?: string; code?: string } | undefined): string =>
+  issue?.message && !CHECKER_OWN.has(issue.code ?? "") && issue.message !== "Required" && /^[A-Z]/.test(issue.message) ? issue.message : BAD_PRACTICE;
+
+function practiceForAdmin(p: PracticeRow | null) {
+  if (!p) return null;
+  return {
+    placeName: p.placeName,
+    placeTown: p.placeTown,
+    elfName: p.elfName,
+    tagWord: p.tagWord,
+    clue1At: iso(p.clue1At),
+    clue2At: iso(p.clue2At),
+    clue3At: iso(p.clue3At),
+    revealAt: iso(p.revealAt),
+    found: p.foundAt !== null,
+    posterUrl: `${siteOrigin()}/elf/p/${p.posterCode}`,
+  };
+}
+
+/** The practice door, or none, and whether there is a preview link to play it through (elf: view). */
+export async function getAdminElfPractice(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  if (!(await authorizeSection(req, res, "elf", "view"))) return;
+  try {
+    const [practice, settings] = await Promise.all([getPractice(), getElfSettings()]);
+    return res.status(200).json({ practice: practiceForAdmin(practice), previewOn: !!settings.previewHash });
+  } catch (err) {
+    console.error("admin elf practice failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+/** A head elf starts a practice evening (elf: edit): clue 1 a minute from now, then the gaps asked for.
+ *  It replaces any practice before it, and everything played at it. */
+export async function postAdminElfPractice(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "edit");
+  if (!claims) return;
+  const parsed = practiceSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: practiceSentence(parsed.error.issues[0]) });
+  try {
+    const settings = await getElfSettings();
+    if (!settings.previewHash) return res.status(409).json(NO_PREVIEW);
+    const practice = await startPractice({
+      placeName: parsed.data.placeName,
+      placeTown: parsed.data.placeTown,
+      elfName: parsed.data.elfName ?? PRACTICE_ELF_NAME,
+      minutesApart: parsed.data.minutesApart ?? 3,
+      startedBy: actorOf(claims),
+      now: new Date(),
+    });
+    return res.status(200).json({ practice: practiceForAdmin(practice), previewOn: true });
+  } catch (err) {
+    console.error("admin elf practice start failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+/** A head elf clears the practice door and everything played at it (elf: edit). */
+export async function deleteAdminElfPractice(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "edit");
+  if (!claims) return;
+  try {
+    await clearPractice(actorOf(claims));
+    const settings = await getElfSettings();
+    return res.status(200).json({ practice: null, previewOn: !!settings.previewHash });
+  } catch (err) {
+    console.error("admin elf practice clear failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
 adminElfRouter.post("/api/admin/elf/preview", postAdminElfPreview);
 adminElfRouter.delete("/api/admin/elf/preview", deleteAdminElfPreview);
 adminElfRouter.get("/api/admin/elf/settings", getAdminElfSettings);
 adminElfRouter.patch("/api/admin/elf/settings", patchAdminElfSettings);
 adminElfRouter.get("/api/admin/elf/hq", getAdminElfHq);
+adminElfRouter.get("/api/admin/elf/practice", getAdminElfPractice);
+adminElfRouter.post("/api/admin/elf/practice", postAdminElfPractice);
+adminElfRouter.delete("/api/admin/elf/practice", deleteAdminElfPractice);
 adminElfRouter.get("/api/admin/elf/families", getAdminElfFamilies);
 adminElfRouter.get("/api/admin/elf/families/:id", getAdminElfFamily);
 adminElfRouter.patch("/api/admin/elf/families/:id", patchAdminElfFamily);

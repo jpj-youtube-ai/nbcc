@@ -175,6 +175,7 @@
       remember(TAB_KEY, id);
       if (id === "families" && data) loadFamilies();
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
+      if (id === "settings" && data) loadPractice();
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -199,12 +200,17 @@
     function plural(n, one, many) {
       return n === 1 ? one : many;
     }
+    /** A moment's time in London as people say it: "5:30pm". */
+    function timeWords(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Europe/London" }).format(d).replace(/\s/g, "").toLowerCase();
+    }
     function whenWords(iso) {
       var d = new Date(iso);
       if (isNaN(d.getTime())) return "";
       var day = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" }).format(d).replace(/,/g, "");
-      var time = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Europe/London" }).format(d).replace(/\s/g, "").toLowerCase();
-      return day + ", " + time;
+      return day + ", " + timeWords(iso);
     }
     /** A paper rosette with a number or a word on it: the scallops in `ring`, the middle in `disc`. */
     function rosette(ring, disc, words) {
@@ -1888,6 +1894,178 @@
       grid.appendChild(preview);
       part.appendChild(grid);
       if (!admin) part.appendChild(el("p", { class: "hq-words hq-soft", text: "Only an admin can change these." }));
+      // Its own panel after the admin only ones: anyone who may edit can start a practice evening.
+      part.appendChild(practicePanel());
+    }
+
+    // ---- Settings: the practice door, a pretend evening played through the preview link ----
+    // Door 0 of year 0 (src/db/elf-practice.ts), read afresh each time Settings opens. Each request takes
+    // a number, and an answer that comes back after a newer request was sent is ignored.
+    var NO_PREVIEW_WORDS = "Make a preview link in Settings first: the practice door is played through it.";
+    var practice = { loaded: false, answer: null, error: null, asking: false, seq: 0 };
+
+    /** Takes an answer from the practice door's routes. True when it shows the preview link has come or
+     *  gone since HQ was read, so all of Settings is drawn again rather than only this panel. */
+    function takePractice(d) {
+      practice.answer = d && d.practice ? d.practice : null;
+      practice.error = null;
+      practice.loaded = true;
+      var s = data && data.settings;
+      if (!s || !d || typeof d.previewOn !== "boolean" || d.previewOn === !!s.previewOn) return false;
+      s.previewOn = d.previewOn;
+      return true;
+    }
+
+    /** Draws the practice door's panel again in its place, or all of Settings when `everything`. */
+    function redrawPractice(everything) {
+      if (everything) {
+        drawSettingsPart();
+        return;
+      }
+      var old = parts.settings.querySelector(".hq-practice");
+      if (old && old.parentNode) old.parentNode.replaceChild(practicePanel(), old);
+    }
+
+    /** Says something in the practice panel's status line as it is drawn now (it may have been drawn
+     *  again while a request was on its way). */
+    function practiceSay(words, ok) {
+      var now = parts.settings.querySelector(".hq-practice .hq-status");
+      if (now) say(now, words, ok);
+    }
+
+    function loadPractice() {
+      if (practice.asking) return;
+      practice.asking = true;
+      var mine = ++practice.seq;
+      ask("GET", "/api/admin/elf/practice")
+        .then(function (d) {
+          practice.asking = false;
+          if (mine === practice.seq) redrawPractice(takePractice(d));
+        })
+        .catch(function (e) {
+          practice.asking = false;
+          if (mine !== practice.seq) return;
+          practice.error = e.message;
+          practice.loaded = true;
+          redrawPractice(false);
+        });
+    }
+
+    /** Only the site's own kind of link goes in an href: http(s), or a path on this site. */
+    function linkable(url) {
+      return typeof url === "string" && /^(https?:\/\/|\/(?!\/))/.test(url);
+    }
+
+    /** A field: its label, its box, and a hint in small words (never a span, which the label's own style
+     *  for ".hq-field > span" would make bold). */
+    function practiceField(input, label, hint) {
+      return el("div", { class: "hq-field" }, [el("label", { for: input.id, text: label }), input, hint ? el("small", { class: "hq-hint", text: hint }) : null]);
+    }
+
+    /** The form that starts a practice evening. The server checks every field and says what is wrong. */
+    function practiceForm() {
+      var place = el("input", { id: "hqPracticePlace", name: "placeName", type: "text", maxlength: 80, autocomplete: "off", required: true });
+      var town = el("input", { id: "hqPracticeTown", name: "placeTown", type: "text", maxlength: 60, autocomplete: "off", required: true });
+      var elf = el("input", { id: "hqPracticeElf", name: "elfName", type: "text", maxlength: 30, autocomplete: "off" });
+      var gap = el("input", { id: "hqPracticeGap", name: "minutesApart", type: "number", min: 1, max: 30, step: 1, inputmode: "numeric", required: true });
+      gap.value = "3";
+      var start = el("button", { class: "hq-btn hq-btn--go", type: "submit", text: "Start a practice evening" });
+      var form = el("form", { class: "hq-practice__form", novalidate: true }, [
+        el("div", { class: "hq-practice__fields" }, [
+          practiceField(place, "The pretend place", "The office, say."),
+          practiceField(town, "Its town"),
+          practiceField(elf, "The elf's name", "Leave it empty for the usual practice elf."),
+          practiceField(gap, "Minutes between clues"),
+        ]),
+        el("div", { class: "hq-actions" }, [start]),
+      ]);
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (start.disabled) return;
+        var sent = { placeName: place.value.trim(), placeTown: town.value.trim() };
+        if (elf.value.trim()) sent.elfName = elf.value.trim();
+        if (gap.value.trim()) sent.minutesApart = Number(gap.value);
+        start.disabled = true;
+        var mine = ++practice.seq;
+        ask("POST", "/api/admin/elf/practice", sent)
+          .then(function (d) {
+            if (mine !== practice.seq) return;
+            redrawPractice(takePractice(d));
+            practiceSay("Started. Clue 1 comes out in a minute.", true);
+          })
+          .catch(function (err) {
+            practiceSay(err.message, false);
+            start.disabled = false;
+          });
+      });
+      return form;
+    }
+
+    /** A practice evening as it runs: where, the times, whether its elf is found, the word on its tag, the
+     *  poster page, and (for someone who may edit) Clear the practice. */
+    function practiceRunning(box, p, mayChange) {
+      box.appendChild(el("p", { class: "hq-words", text: p.elfName + " is hiding at " + p.placeName + ", " + p.placeTown + "." }));
+      box.appendChild(
+        el("ul", { class: "hq-practice__times" }, [
+          el("li", { text: "Clue 1 comes out at " + timeWords(p.clue1At) }),
+          el("li", { text: "Clue 2 comes out at " + timeWords(p.clue2At) }),
+          el("li", { text: "Clue 3 comes out at " + timeWords(p.clue3At) }),
+          el("li", { text: "The place is shown at " + timeWords(p.revealAt) }),
+        ]),
+      );
+      box.appendChild(el("p", { class: "hq-words", text: p.found ? p.elfName + " has been found." : p.elfName + " is still hiding." }));
+      box.appendChild(el("div", { class: "hq-tagword" }, [el("span", { text: "The word on its tag:" }), " ", el("b", { text: p.tagWord })]));
+      var actions = el("div", { class: "hq-actions" });
+      if (linkable(p.posterUrl)) actions.appendChild(el("a", { class: "hq-btn hq-btn--go", href: p.posterUrl, target: "_blank", rel: "noopener noreferrer", text: "Open the poster page" }));
+      if (mayChange) {
+        var clear = el("button", { class: "hq-btn hq-btn--danger", type: "button", text: "Clear the practice" });
+        clear.addEventListener("click", function () {
+          if (clear.disabled) return;
+          clear.disabled = true;
+          var mine = ++practice.seq;
+          ask("DELETE", "/api/admin/elf/practice")
+            .then(function (d) {
+              if (mine !== practice.seq) return;
+              redrawPractice(takePractice(d));
+              practiceSay("The practice is cleared.", true);
+            })
+            .catch(function (err) {
+              practiceSay(err.message, false);
+              clear.disabled = false;
+            });
+        });
+        actions.appendChild(clear);
+      }
+      if (actions.childNodes.length) box.appendChild(actions);
+    }
+
+    /** The practice door's panel, drawn from what the server last said. */
+    function practicePanel() {
+      var box = el("section", { class: "hq-panel hq-practice", "aria-label": "The practice door" });
+      box.appendChild(el("h2", { class: "hq-h2", text: "The practice door" }));
+      if (!practice.loaded) {
+        box.appendChild(el("p", { class: "hq-loading", text: WORDS.loading }));
+        return box;
+      }
+      var mayChange = !!(data && data.canEdit);
+      var previewOn = !!(data && data.settings && data.settings.previewOn);
+      var said = el("p", { class: "hq-status", role: "status" });
+      box.appendChild(
+        el("p", {
+          class: "hq-words hq-soft",
+          text: "Play a whole evening at a pretend place before December: three clues a few minutes apart, the word on the elf's tag, and the place shown at the end. Families never see it, and nothing from it counts.",
+        }),
+      );
+      if (practice.error) say(said, practice.error, false);
+      else if (practice.answer) practiceRunning(box, practice.answer, mayChange);
+      else if (!mayChange) box.appendChild(el("p", { class: "hq-words", text: "No practice evening is running." }));
+      else if (!previewOn) box.appendChild(el("p", { class: "hq-words", text: NO_PREVIEW_WORDS }));
+      else box.appendChild(practiceForm());
+      box.appendChild(said);
+      if (!mayChange) box.appendChild(el("p", { class: "hq-words hq-soft", text: "Starting or clearing a practice evening needs edit access to Head Elf HQ, which an admin can give in Team." }));
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: "Open the preview link first in the browser you will play on." }));
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: "Make a new preview link if anyone outside the team still has the old one." }));
+      return box;
     }
 
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
@@ -1911,6 +2089,7 @@
           data = d;
           say(status, "", null);
           draw();
+          if (!parts.settings.hidden) loadPractice();
           // A sheet already open was drawn before anyone knew whether this person may change it.
           if (fam.sheet) drawSheet();
           var asked = remembered(FAMILY_KEY);

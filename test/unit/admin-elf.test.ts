@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
 // numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
   db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), setElfPreview: vi.fn() },
   dbAdmin: {
@@ -21,27 +21,38 @@ const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors } = vi.hoisted(() => ({
   },
   signIn: { sendSignInCodeTo: vi.fn() },
   dbDoors: { ensureElfDoors: vi.fn(), listElfDoors: vi.fn() },
+  dbPractice: { startPractice: vi.fn(), getPractice: vi.fn(), clearPractice: vi.fn() },
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf", () => db);
 vi.mock("../../src/db/elf-admin", () => dbAdmin);
 vi.mock("../../src/elf/sign-in-code", () => signIn);
 vi.mock("../../src/db/elf-doors", () => dbDoors);
+vi.mock("../../src/db/elf-practice", () => dbPractice);
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
-  config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret", STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaa", STRIPE_WEBHOOK_SECRET: "whsec_x" },
+  config: {
+    NODE_ENV: "development",
+    ADMIN_SESSION_SECRET: "test-admin-secret",
+    STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaa",
+    STRIPE_WEBHOOK_SECRET: "whsec_x",
+    PORTAL_BASE_URL: "https://www.example.org/",
+  },
 }));
 
 import {
+  deleteAdminElfPractice,
   getAdminElfFamilies,
   getAdminElfFamily,
   getAdminElfHq,
+  getAdminElfPractice,
   getAdminElfSettings,
   patchAdminElfDetective,
   patchAdminElfFamily,
   patchAdminElfSettings,
   postAdminElfFamilyRemove,
   postAdminElfFamilyRestore,
+  postAdminElfPractice,
   postAdminElfSignInCode,
 } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
@@ -56,7 +67,14 @@ const tokenFor = (role: string, permissions: object = {}) => {
 };
 
 function mockRes() {
-  const res = { statusCode: 200, body: undefined as unknown, status(c: number) { res.statusCode = c; return res; }, json(b: unknown) { res.body = b; return res; }, setHeader() { return res; } };
+  const res = {
+    statusCode: 200,
+    body: undefined as unknown,
+    headers: {} as Record<string, string>,
+    status(c: number) { res.statusCode = c; return res; },
+    json(b: unknown) { res.body = b; return res; },
+    setHeader(k: string, v: string) { res.headers[k] = v; return res; },
+  };
   return res;
 }
 const req = (role: string | null, body: unknown = {}, permissions: object = {}) => ({ headers: role ? { authorization: `Bearer ${tokenFor(role, permissions)}` } : {}, body, params: {}, query: {} });
@@ -79,7 +97,7 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors)]) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice)]) f.mockReset();
   db.getElfSettings.mockResolvedValue(ON);
   dbDoors.ensureElfDoors.mockResolvedValue(undefined);
   dbDoors.listElfDoors.mockResolvedValue([]);
@@ -449,5 +467,191 @@ describe("a head elf changing a family", () => {
     dbAdmin.removeElfFamily.mockResolvedValue(null);
     expect((await run(postAdminElfFamilyRemove, ask("admin", { params: { id: "9" } }))).statusCode).toBe(404);
     expect((await run(postAdminElfFamilyRemove, ask("viewer", { permissions: HEAD_ELF, params: { id: "3" } }))).statusCode).toBe(403);
+  });
+});
+
+// ---- The practice door (wave 2, Task 8): a pretend evening played through the preview link ----
+
+describe("the practice door in the admin", () => {
+  const ROW = {
+    startedAt: new Date("2026-11-11T15:00:00.000Z"),
+    startedBy: "admin:staff@example.org",
+    placeName: "The Example Office",
+    placeTown: "Snowford",
+    elfName: "Tinsel",
+    tagWord: "SNOWBALL 472",
+    posterCode: "abcdefghjkmn",
+    clue1At: new Date("2026-11-11T15:01:00.000Z"),
+    clue2At: new Date("2026-11-11T15:04:00.000Z"),
+    clue3At: new Date("2026-11-11T15:07:00.000Z"),
+    revealAt: new Date("2026-11-11T15:10:00.000Z"),
+    foundAt: null,
+    foundFamilyId: null,
+  };
+  // The answer a head elf gets: the times as written, the tag word so they can type it, and the poster
+  // page on the site's own address (its trailing slash dropped).
+  const RUNNING = {
+    placeName: "The Example Office",
+    placeTown: "Snowford",
+    elfName: "Tinsel",
+    tagWord: "SNOWBALL 472",
+    clue1At: "2026-11-11T15:01:00.000Z",
+    clue2At: "2026-11-11T15:04:00.000Z",
+    clue3At: "2026-11-11T15:07:00.000Z",
+    revealAt: "2026-11-11T15:10:00.000Z",
+    found: false,
+    posterUrl: "https://www.example.org/elf/p/abcdefghjkmn",
+  };
+  const WITH_LINK = { ...ON, previewHash: "a".repeat(64) };
+  const NO_LINK = "Make a preview link in Settings first: the practice door is played through it.";
+  const GOOD = { placeName: "The Example Office", placeTown: "Snowford" };
+  const EDIT = { elf: "edit" };
+
+  it("shows a head elf the practice with its tag word and poster page, and is never cached", async () => {
+    dbPractice.getPractice.mockResolvedValue(ROW);
+    db.getElfSettings.mockResolvedValue(WITH_LINK);
+    const res = await run(getAdminElfPractice, req("viewer", {}, HEAD_ELF));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ practice: RUNNING, previewOn: true });
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("says when its elf has been found", async () => {
+    dbPractice.getPractice.mockResolvedValue({ ...ROW, foundAt: new Date("2026-11-11T15:02:00.000Z"), foundFamilyId: 3 });
+    db.getElfSettings.mockResolvedValue(WITH_LINK);
+    const res = await run(getAdminElfPractice, req("admin"));
+    expect((res.body as { practice: { found: boolean } }).practice.found).toBe(true);
+  });
+
+  it("says when no practice is set, and whether there is a preview link", async () => {
+    dbPractice.getPractice.mockResolvedValue(null);
+    const res = await run(getAdminElfPractice, req("admin"));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ practice: null, previewOn: false });
+  });
+
+  it("is not for anyone signed out, or an editor who has not been given the section", async () => {
+    for (const h of [getAdminElfPractice, postAdminElfPractice, deleteAdminElfPractice]) {
+      expect((await run(h, req(null, GOOD))).statusCode).toBe(401);
+      expect((await run(h, req("editor", GOOD))).statusCode).toBe(403);
+    }
+    expect(dbPractice.getPractice).not.toHaveBeenCalled();
+    expect(dbPractice.startPractice).not.toHaveBeenCalled();
+    expect(dbPractice.clearPractice).not.toHaveBeenCalled();
+  });
+
+  it("lets a head elf who may only look see it, but not start or clear it", async () => {
+    const start = await run(postAdminElfPractice, req("viewer", GOOD, HEAD_ELF));
+    expect(start.statusCode).toBe(403);
+    expect(start.headers["Cache-Control"]).toBe("no-store");
+    expect((await run(deleteAdminElfPractice, req("viewer", {}, HEAD_ELF))).statusCode).toBe(403);
+    expect(dbPractice.startPractice).not.toHaveBeenCalled();
+    expect(dbPractice.clearPractice).not.toHaveBeenCalled();
+  });
+
+  it("will not start one without a preview link, since the practice door is played through it", async () => {
+    db.getElfSettings.mockResolvedValue({ ...ON, previewHash: null });
+    const res = await run(postAdminElfPractice, req("admin", GOOD));
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: NO_LINK });
+    expect(dbPractice.startPractice).not.toHaveBeenCalled();
+  });
+
+  it("starts one with a preview link, for a head elf who may edit, as the person who did it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-11T15:00:00.000Z"));
+    let res;
+    try {
+      db.getElfSettings.mockResolvedValue(WITH_LINK);
+      dbPractice.startPractice.mockResolvedValue(ROW);
+      res = await run(postAdminElfPractice, req("viewer", { placeName: "  The Example Office ", placeTown: " Snowford" }, EDIT));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ practice: RUNNING, previewOn: true });
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+    // The practice elf and three minutes between clues, unless the head elf says otherwise.
+    expect(dbPractice.startPractice).toHaveBeenCalledWith({
+      placeName: "The Example Office",
+      placeTown: "Snowford",
+      elfName: "Tinsel",
+      minutesApart: 3,
+      startedBy: "admin:staff@example.org",
+      now: new Date("2026-11-11T15:00:00.000Z"),
+    });
+  });
+
+  it("takes the elf's name and the minutes between clues when given, and reads an empty name as the practice elf", async () => {
+    db.getElfSettings.mockResolvedValue(WITH_LINK);
+    dbPractice.startPractice.mockResolvedValue(ROW);
+    await run(postAdminElfPractice, req("admin", { ...GOOD, elfName: " Pip ", minutesApart: 1 }));
+    expect(dbPractice.startPractice).toHaveBeenLastCalledWith(expect.objectContaining({ elfName: "Pip", minutesApart: 1 }));
+    await run(postAdminElfPractice, req("admin", { ...GOOD, elfName: "   " }));
+    expect(dbPractice.startPractice).toHaveBeenLastCalledWith(expect.objectContaining({ elfName: "Tinsel", minutesApart: 3 }));
+  });
+
+  it("takes the longest names and both ends of the minutes allowed", async () => {
+    db.getElfSettings.mockResolvedValue(WITH_LINK);
+    dbPractice.startPractice.mockResolvedValue(ROW);
+    for (const body of [
+      { placeName: "p".repeat(80), placeTown: "t".repeat(60), elfName: "e".repeat(30), minutesApart: 1 },
+      { placeName: "P", placeTown: "T", elfName: "E", minutesApart: 30 },
+    ]) {
+      expect((await run(postAdminElfPractice, req("admin", body))).statusCode, JSON.stringify(body)).toBe(200);
+    }
+    expect(dbPractice.startPractice).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses what it cannot use, in plain words, and starts nothing", async () => {
+    db.getElfSettings.mockResolvedValue(WITH_LINK);
+    const said = async (body: unknown) => {
+      const res = await run(postAdminElfPractice, req("admin", body));
+      expect(res.statusCode, JSON.stringify(body)).toBe(400);
+      return (res.body as { error: string }).error;
+    };
+    expect(await said({ placeTown: "Snowford" })).toBe("Type the name of the pretend place.");
+    expect(await said({ placeName: "  ", placeTown: "Snowford" })).toBe("Type the name of the pretend place.");
+    expect(await said({ placeName: "p".repeat(81), placeTown: "Snowford" })).toBe("The place name can be up to 80 characters.");
+    expect(await said({ placeName: "The Example Office" })).toBe("Type the town the pretend place is in.");
+    expect(await said({ placeName: "The Example Office", placeTown: "t".repeat(61) })).toBe("The town can be up to 60 characters.");
+    expect(await said({ ...GOOD, elfName: "e".repeat(31) })).toBe("The elf's name can be up to 30 characters.");
+    for (const minutesApart of [0, 31, 2.5]) {
+      expect(await said({ ...GOOD, minutesApart })).toBe("The minutes between clues must be a whole number from 1 to 30.");
+    }
+    // Anything else gets the plain sentence, never the checker's own words.
+    for (const body of [{ ...GOOD, minutesApart: "3" }, { ...GOOD, minutesApart: null }, { ...GOOD, where: "the kettle" }, { placeName: 7, placeTown: "Snowford" }, "nonsense"]) {
+      expect(await said(body)).toBe("That did not look right. Reload the page and try again.");
+    }
+    expect(dbPractice.startPractice).not.toHaveBeenCalled();
+  });
+
+  it("clears the practice as the person who did it, and answers as reading it does", async () => {
+    db.getElfSettings.mockResolvedValue(WITH_LINK);
+    dbPractice.clearPractice.mockResolvedValue(undefined);
+    const res = await run(deleteAdminElfPractice, req("viewer", {}, EDIT));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ practice: null, previewOn: true });
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+    expect(dbPractice.clearPractice).toHaveBeenCalledWith("admin:staff@example.org");
+  });
+
+  it("says so in words when the practice cannot be read, started or cleared", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      db.getElfSettings.mockResolvedValue(WITH_LINK);
+      dbPractice.getPractice.mockRejectedValue(new Error("down"));
+      dbPractice.startPractice.mockRejectedValue(new Error("down"));
+      dbPractice.clearPractice.mockRejectedValue(new Error("down"));
+      for (const [h, body] of [[getAdminElfPractice, {}], [postAdminElfPractice, GOOD], [deleteAdminElfPractice, {}]] as const) {
+        const res = await run(h, req("admin", body));
+        expect(res.statusCode).toBe(500);
+        expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
+      }
+      // The log names what failed, never the place or the word.
+      for (const call of spy.mock.calls) expect(JSON.stringify(call)).not.toMatch(/Example Office|Snowford|SNOWBALL/);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

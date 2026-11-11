@@ -1,12 +1,15 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
+import { insertAudit } from "./donations";
 import { makePosterCode, makeTagWord } from "../elf/door-codes";
 
 // NBCC Elf Detective School wave 2: the practice door. One row (elf_practice, migrations/
 // 1791200000440_elf-game.js) with absolute clue times, so a practice evening can be played at any time
 // of day. Its game rows live in the same tables as the real doors, as year 0, door 0, and are cleared
 // whenever a practice is started or cleared. The row names a pretend place; it is seen only by a
-// browser holding the preview cookie. The SQL is proved against a real database in CI.
+// browser holding the preview cookie. A head elf starting or clearing one is noted in the audit log, in
+// the same transaction, by who and never by what it names. The SQL is proved against a real database
+// in CI.
 
 export interface PracticeRow {
   startedAt: Date;
@@ -88,7 +91,9 @@ export async function inTransaction<T>(work: (client: PoolClient) => Promise<T>)
 }
 
 /** Starts a practice evening: clue 1 a minute from `now`, each later time `minutesApart` after the one
- *  before, the place shown `minutesApart` after clue 3. Replaces any earlier practice and its play. */
+ *  before, the place shown `minutesApart` after clue 3. Replaces any earlier practice and its play. The
+ *  audit note is by `startedBy` and holds only the minutes apart: never the place, its town, the elf's
+ *  name or the word. */
 export async function startPractice(o: {
   placeName: string;
   placeTown: string;
@@ -111,6 +116,7 @@ export async function startPractice(o: {
        RETURNING ${COLUMNS}`,
       [o.startedBy, o.placeName, o.placeTown, o.elfName, makeTagWord(), makePosterCode(), clue1At, clue2At, clue3At, revealAt, o.now],
     );
+    await insertAudit(client, { actor: o.startedBy, action: "elf.practice.started", entity: "elf_practice", entityId: 1, data: { minutesApart: o.minutesApart } });
     return practiceFrom(r.rows[0]);
   });
 }
@@ -121,10 +127,12 @@ export async function getPractice(): Promise<PracticeRow | null> {
   return r.rows[0] ? practiceFrom(r.rows[0]) : null;
 }
 
-/** Removes the practice door and everything played at it. */
-export async function clearPractice(): Promise<void> {
+/** Removes the practice door and everything played at it. `actor` is the head elf who cleared it, noted
+ *  in the audit log; switching on December's doors clears it with no one named, and notes nothing. */
+export async function clearPractice(actor?: string): Promise<void> {
   await inTransaction(async (client) => {
     await deletePractice(client);
+    if (actor) await insertAudit(client, { actor, action: "elf.practice.cleared", entity: "elf_practice", entityId: 1, data: {} });
   });
 }
 

@@ -2,7 +2,7 @@ import { config } from "../config";
 import { sendSesEmail, type SesMessage } from "./ses";
 import { buildKindEmail } from "../email/templates";
 import { recordEmailSend } from "../db/email-log";
-import { ELF_CODE_LOG_SUBJECT } from "../elf/emails";
+import { ELF_CODE_LOG_SUBJECT, ELF_PROUD_LOG_SUBJECT } from "../elf/emails";
 import { linkTagsForKind, ownSiteHosts, tagLinksInHtml, tagLinksInText, type LinkTags } from "../email/tracked-links";
 
 // Transactional email client (TASK-070; Resend→SES migration). Sends every app email straight
@@ -602,7 +602,9 @@ export async function sendElfSignInCode(name: string | null, message: FundraiseE
 
 // Elf Detective School wave 2 (src/elf/emails.ts). The clue, the place reminder and the proud emails
 // go to families and places; the morning email, both alerts and the test alert go to head elves only
-// (STAFF_ONLY_KINDS in src/email/tracked-links.ts). All from events@ on the apex.
+// (STAFF_ONLY_KINDS in src/email/tracked-links.ts). All from events@ on the apex. A promotion's and a
+// graduation's subject name the detective, so the proud email's log row keeps a fixed subject: no child's
+// name goes in the email log. No other elf email's subject names a detective.
 export async function sendElfClue(name: string | null, message: FundraiseEmailMessage): Promise<void> {
   await sendVerbatim("elfClue", name, message);
 }
@@ -628,7 +630,7 @@ export async function sendElfTestAlert(name: string | null, message: FundraiseEm
 }
 
 export async function sendElfProud(name: string | null, message: FundraiseEmailMessage): Promise<void> {
-  await sendVerbatim("elfProud", name, message);
+  await sendVerbatim("elfProud", name, message, ELF_PROUD_LOG_SUBJECT);
 }
 
 // TASK-501: to events@ when an organiser presses "I've finished". Staff only, so never tagged.

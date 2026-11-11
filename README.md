@@ -12138,7 +12138,9 @@ examples (the pretend place is Pine Cone Café, Snowford):
 - **A photo is waiting to be checked**, the photo alert;
 - **Your test alert**;
 - **A proud moment**, to the grown up: a prize won, a promotion or graduating, with a gentle "could"
-  ask.
+  ask. A promotion's and a graduation's subject name the detective, so its Email audit row keeps "A proud
+  moment from Elf Detective School" instead (`ELF_PROUD_LOG_SUBJECT`): no child's name goes in the email
+  log, which is kept for six tax years. No other elf email's subject names a detective.
 
 The four that go to staff are staff kinds (`STAFF_ONLY_KINDS`), so their links are never tagged.
 

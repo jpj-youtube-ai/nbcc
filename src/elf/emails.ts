@@ -312,6 +312,10 @@ export function buildElfTestAlertEmail(o: { name: string; adminUrl: string }): B
 export const ELF_PHOTO_TEXT = "Elf Detective School: a photo is waiting for a head elf to check. nbcc.scot/admin";
 export const ELF_TEST_TEXT = "Elf Detective School: this is your test alert. nbcc.scot/admin";
 
+/** What the email log keeps as every proud email's subject. A promotion's and a graduation's subject name the
+ *  detective, and the log is kept for six tax years and copied into the backups, so no child's name goes in it. */
+export const ELF_PROUD_LOG_SUBJECT = "A proud moment from Elf Detective School";
+
 /** To a grown up when their detective wins an elf, is promoted or graduates. A win may name every detective
  *  who was there (a list), and then says "were" and "have". */
 export function buildElfProudEmail(o: {

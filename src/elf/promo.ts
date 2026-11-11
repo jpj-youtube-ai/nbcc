@@ -6,6 +6,8 @@ import { SCHOOL_LOGO_SRC } from "./logo";
 // goes out exactly as it would without it: not one byte of the card, and no link to /elf, because
 // every /elf page is a 404 then. The lever in Head Elf HQ is read on every page view, so the card
 // comes and goes with it, with no deploy. The private preview link does not show it: only the switch.
+// TASK-613: switched on, it still waits for 10am on Friday 13 November 2026 (src/elf/links-at.ts);
+// the routes ask both before they hand `on` to addElfCard.
 //
 // Its styles are a file of their own (assets/css/elf-promo.css), loaded only by a page that draws the
 // card, so no page with a weight budget pays for it while the school is off.

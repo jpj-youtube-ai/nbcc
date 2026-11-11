@@ -8,7 +8,12 @@ import { resolve } from "node:path";
 // switch through the real site router: the database is mocked, the switch is flipped between visits,
 // and the clock stands after the Ball's moment, as it does on the live site now. The card itself is in
 // elf-promo.test.ts. Every name and address here is invented.
+//
+// TASK-613: nothing links to Elf Detective School before 10am on Friday 13 November 2026
+// (src/elf/links-at.ts), however it is switched. The clock stands after that moment unless a test
+// moves it.
 
+const AFTER_THE_MOMENT = new Date("2026-11-13T12:00:00Z");
 const state = vi.hoisted(() => ({
   now: new Date("2026-11-13T12:00:00Z"),
   schoolOn: false,
@@ -68,6 +73,7 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 beforeEach(() => {
+  state.now = AFTER_THE_MOMENT;
   state.schoolOn = false;
   state.settingsFail = false;
   state.settingsReads = 0;
@@ -154,5 +160,40 @@ describe("the lever", () => {
     expect(res.status).toBe(200);
     expect(html).not.toContain(CARD);
     expect(html).not.toContain('href="/elf');
+  });
+});
+
+// TASK-613 (Jaimie, 11 November 2026): switched on tonight so a teacher's emailed link works, but
+// nothing on the site links to Elf Detective School until the big push at 10am on Friday 13 November.
+describe("switched on, before 10am on Friday 13 November", () => {
+  beforeEach(() => {
+    state.now = new Date("2026-11-13T09:59:59.999Z");
+  });
+
+  it.each(PAGES)("%s is byte for byte what it is with the school switched off", async (path) => {
+    state.schoolOn = false;
+    const off = await body(path);
+    state.schoolOn = true;
+    const on = await body(path);
+    expect(on).toBe(off);
+    expect(on).not.toContain('href="/elf');
+  });
+
+  it("the site maps leave it out", async () => {
+    state.schoolOn = true;
+    expect(await body("/sitemap")).not.toContain('href="/elf"');
+    expect(await body("/sitemap.xml")).not.toContain("https://nbcc.scot/elf<");
+  });
+
+  it("tonight too", async () => {
+    state.now = new Date("2026-11-11T21:30:00Z");
+    state.schoolOn = true;
+    for (const path of PAGES) expect(await body(path), path).not.toContain('href="/elf');
+  });
+
+  it("the card is there from 10am on the dot", async () => {
+    state.schoolOn = true;
+    state.now = new Date("2026-11-13T10:00:00.000Z");
+    for (const path of PAGES) expect(count(await body(path), CARD), path).toBe(1);
   });
 });

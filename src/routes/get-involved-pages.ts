@@ -23,9 +23,9 @@ export interface ShortPageDeps {
   decorate: (html: string, cookieHeader: string | undefined, query?: unknown) => Promise<string>;
   /** Is this view after the Ball's moment? Left out: no. */
   isAfterBall?: (query?: unknown) => boolean;
-  /** Is the Elf Detective School switched on? Your school carries its card then (src/elf/promo.ts).
-   *  Left out: no card. */
-  elfSchoolIsOn?: () => Promise<boolean>;
+  /** May the page link to Elf Detective School: switched on, and from its moment (src/elf/links-at.ts)?
+   *  Your school carries its card then (src/elf/promo.ts). Left out: no card. */
+  elfLinksOn?: () => Promise<boolean>;
 }
 
 /** The one short page the spec names for checking the moment: the others take no ?at=after-ball. */
@@ -49,7 +49,7 @@ export function addShortPageRoutes(router: Router, siteRoot: string, deps: Short
       try {
         const query = path === DROP_OFF_PATH ? req.query : undefined;
         const source = readFileSync(file, "utf8");
-        const elfOn = path === SCHOOLS_PATH && deps.elfSchoolIsOn ? await deps.elfSchoolIsOn() : false;
+        const elfOn = path === SCHOOLS_PATH && deps.elfLinksOn ? await deps.elfLinksOn() : false;
         const page = addElfCard(
           path === DROP_OFF_PATH && deps.isAfterBall?.(query) ? addFillToDropOff(source) : source,
           "schools",

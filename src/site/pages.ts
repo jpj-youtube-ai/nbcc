@@ -20,6 +20,7 @@ export interface SitePage {
   fundraisingGated?: boolean;
   // The Elf Detective School, listed only while the school is switched on (elf_settings.school_on).
   // Off, every /elf page is a 404. Its QR code can still be made before then, marked not live yet.
+  // TASK-613: the site maps also wait for 10am on Friday 13 November (src/routes/site.ts).
   elfGated?: boolean;
   children?: SitePage[];
 }

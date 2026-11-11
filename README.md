@@ -240,9 +240,9 @@ of the day added as they go out, and listed in `SHORT_PAGES` in `src/site/pages.
 - **Styles.** Each page loads `styles.css`, then `get-involved.css` for the bands, the drift, the taped
   photographs and the lined paper (`body.page-hub`), then `assets/css/short-pages.css` for what only
   these six add. `short-pages.css` adds no movement of its own.
-- **Your school carries the Elf Detective School's card** while the school is switched on, before the
-  form, with the short address for a letter home. See **Finding the school** under **Elf Detective
-  School**.
+- **Your school carries the Elf Detective School's card** while the school is switched on, from 10am
+  on Friday 13 November 2026 (TASK-613), before the form, with the short address for a letter home.
+  See **Finding the school** under **Elf Detective School**.
 - **Left out until Jaimie sends the details, each to go in as a small change:** what to bring and
   what we can't take (Drop-off points); the Christmas referrals closing date (Referrals); a
   volunteer's quote (Volunteer); payroll giving and its tick (Your business). The five films are not
@@ -11845,7 +11845,7 @@ See the table under **API endpoints**: `/elf`, `/elf/rules`, `/elf/join`, `/elf/
 ### Finding the school: the card, the site maps and QR codes
 
 Jaimie, 9 November 2026: nothing on the site linked to the school. Now, only while the school is
-switched on:
+switched on, and only from **10am on Friday 13 November 2026** (TASK-613, below):
 
 - **A card** on the home page (after Fill a Red Bag's stage, before the four ways to start), Get
   involved (after the events and Fill a Red Bag, before "Coming as a business, school or group?") and
@@ -11857,15 +11857,32 @@ switched on:
   none of these pages is cached, so the lever in Head Elf HQ shows or hides the card on the next view,
   with no deploy. The private preview link does not show it.
 - **The site maps.** `/elf` is in `SITE_PAGES` as "Elf Detective School", `elfGated`, so `/sitemap`
-  and `sitemap.xml` list it only while the school is on. It stays in `RESERVED_PREFIXES`: no spare
+  and `sitemap.xml` list it only while the school is on (and, from TASK-613, from Friday 10am). It stays in `RESERVED_PREFIXES`: no spare
   address may take `/elf` or anything under it (one may point to it).
 - **Admin → QR codes**, page codes and named codes alike: "Elf Detective School" is offered at once,
   marked "Not live yet" until the school is on, so a code for a letter home can be made before then.
   Its page code carries `utm_campaign=elf`.
 
-Tests: `test/unit/elf-promo.test.ts` (the card and where it goes) and
+**Open early, linked from Friday 10am (TASK-613).** Jaimie switches Elf Detective School on the
+evening of 11 November, so a teacher with the link in an email can look around and enrol: every
+`/elf` page answers the moment it is switched on. But nothing on the site links to it until the big
+push at 10:00 UK time on Friday 13 November 2026, one moment defined once in `src/elf/links-at.ts`
+(`Date.UTC(2026, 10, 13, 10, 0, 0)`: November is GMT). Until then the card on the home page, Get
+involved and Your school, `/sitemap` and `sitemap.xml` all wait, and those pages are byte for byte
+what they are with Elf Detective School switched off. Nobody presses anything at 10am:
+each page asks `elfLinksLive(now)` as it goes out, with the clock read once, at the edge, in
+`src/routes/site.ts` (`elfLinksOn`, injected into the Get involved and short page routes), so a test
+can stand on either side. Before the moment the switch is not even read. Admin → QR codes does not
+wait: it is for staff. `/elf` is not added to the site maps for the moment: it was already there
+behind the switch, and now also waits for 10am.
+
+Tests: `test/unit/elf-promo.test.ts` (the card and where it goes),
 `test/unit/elf-promo-routes.test.ts` (the three pages and the site maps through the real router, the
-switch flipped between visits).
+switch flipped between visits, the clock either side of 10am on Friday) and
+`test/unit/elf-links-at.test.ts` (the moment). BDD: `features/elf-links.feature`, whose checks read the
+real clock (`features/steps/elf-links-moment.js` reads the moment from `src/elf/links-at.ts`), so it
+passes on either side of Friday 10am: the front page answers at once; the home page, Your school and
+the site map link to it only from the moment; and switched off, nothing links to it.
 
 ### Data (`migrations/1791200000310_elf-school.js`, additive only)
 

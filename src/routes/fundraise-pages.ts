@@ -52,9 +52,9 @@ export interface FundraisePageDeps {
   eventsPageIsOn: () => Promise<boolean>;
   /** Is this view after the Ball's moment? */
   isAfterBall: (query?: unknown) => boolean;
-  /** Is the Elf Detective School switched on? Get involved carries its card then (src/elf/promo.ts).
-   *  Left out: no card. */
-  elfSchoolIsOn?: () => Promise<boolean>;
+  /** May the page link to Elf Detective School: switched on, and from its moment (src/elf/links-at.ts)?
+   *  Get involved carries its card then (src/elf/promo.ts). Left out: no card. */
+  elfLinksOn?: () => Promise<boolean>;
 }
 
 async function fundraisingOn(): Promise<boolean> {
@@ -346,9 +346,9 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       const after = deps.isAfterBall(req.query);
       // Fill a Red Bag's stage, from the Ball's moment on. "" leaves it out, as before the moment.
       const fillStage = after ? await loadFillStage() : "";
-      const elfOn = deps.elfSchoolIsOn ? await deps.elfSchoolIsOn() : false;
+      const elfOn = deps.elfLinksOn ? await deps.elfLinksOn() : false;
       const drawn = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), { ...(await deckInput(after)), fillStage });
-      // The Elf Detective School's card, after the events and Fill a Red Bag, while the school is on.
+      // The Elf Detective School's card, after the events and Fill a Red Bag, while it may be linked to.
       const html = addElfCard(fillStage ? addFillStageStyles(drawn) : drawn, "get-involved", elfOn);
       fresh(res);
       markAfterBallCheck(res, req.query);

@@ -10,6 +10,7 @@ import { addRedBagPageRoutes } from "./red-bag";
 import { addFillFooterLink, type FillLinkPage } from "../red-bag/fill-links";
 import { addFillStageToHome, loadFillStage } from "../red-bag/stage";
 import { addElfCard, elfSchoolIsOn } from "../elf/promo";
+import { elfLinksLive } from "../elf/links-at";
 import { markAfterBallCheck, showAfterBall } from "../site/after-ball";
 import {
   SUPPORTER_TIERS,
@@ -236,6 +237,9 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   const isAfterBall = (query?: unknown): boolean => showAfterBall(clock(), query);
   const decorate = (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage): Promise<string> =>
     decorateNav(html, cookieHeader, isAfterBall(query), page);
+  // TASK-613: may a page link to Elf Detective School? Only while it is switched on, and only from
+  // 10am on Friday 13 November (src/elf/links-at.ts). Before then the switch is not even read.
+  const elfLinksOn = async (): Promise<boolean> => elfLinksLive(clock()) && (await elfSchoolIsOn());
 
   // `/` serves the home page (no `_redirects` rule — served automatically).
   //
@@ -253,7 +257,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // not, and the page needs nothing of the Ball's, so a failed read of its settings costs nothing.
   // Fill a Red Bag's stage goes in instead, as the page goes out (left out if it cannot be drawn).
   // So does the Elf Detective School's card, straight after the stage, while the school is switched
-  // on (src/elf/promo.ts). Only this branch draws it: the school opens after the Ball.
+  // on (src/elf/promo.ts), from its moment (src/elf/links-at.ts). Only this branch draws it: the
+  // school opens after the Ball.
   const homeFile = join(siteRoot, "index.html");
   router.get("/", async (req, res) => {
     try {
@@ -261,7 +266,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         const [html, stage, elfOn] = await Promise.all([
           decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true),
           loadFillStage(),
-          elfSchoolIsOn(),
+          elfLinksOn(),
         ]);
         markAfterBallCheck(res, req.query);
         res.type("html").send(addElfCard(addFillStageToHome(html, stage), "home", elfOn));
@@ -365,11 +370,11 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // of every way to help. Both are served only while an admin has the events switch on; switched off
   // they fall through to the catch-all below exactly as if the routes were not here.
   // src/routes/fundraise-pages.ts.
-  // Both carry the Elf Detective School's card while the school is switched on (src/elf/promo.ts):
-  // Get involved, and Your school among the short pages.
-  addFundraisePageRoutes(router, siteRoot, { decorate, eventsPageIsOn, isAfterBall, elfSchoolIsOn });
+  // Both carry the Elf Detective School's card while the school is switched on (src/elf/promo.ts),
+  // from its moment (src/elf/links-at.ts): Get involved, and Your school among the short pages.
+  addFundraisePageRoutes(router, siteRoot, { decorate, eventsPageIsOn, isAfterBall, elfLinksOn });
   // The short pages under /get-involved/ (src/routes/get-involved-pages.ts). No switch of their own.
-  addShortPageRoutes(router, siteRoot, { decorate, isAfterBall, elfSchoolIsOn });
+  addShortPageRoutes(router, siteRoot, { decorate, isAfterBall, elfLinksOn });
   // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
   addTeamPageRoutes(router, siteRoot, { decorate });
   // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).
@@ -429,7 +434,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // /sitemap: the branded page tree, server-rendered into sitemap.html's .sitemap-tree
   // placeholder (the /supporters pattern) so it can never go stale. Deliberately unlisted:
   // nothing links here, the file carries noindex, and the header repeats it for robots that
-  // read headers only. Ball pages appear only once the gate is open.
+  // read headers only. Ball pages appear only once the gate is open; Elf Detective School only while it
+  // may be linked to (TASK-613: switched on, and from 10am on Friday 13 November).
   const sitemapFile = join(siteRoot, "sitemap.html");
   router.get("/sitemap", async (req, res) => {
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -439,7 +445,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         ballIsPublished(req.headers.cookie),
         eventsPageIsOn(),
         fundraisingIsOn(),
-        elfSchoolIsOn(),
+        elfLinksOn(),
       ]);
       const template = readFileSync(sitemapFile, "utf8");
       let html = template.replace(
@@ -467,7 +473,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         ballIsPublished(undefined), // never let a preview cookie leak the ball to a crawler
         eventsPageIsOn(),
         fundraisingIsOn(),
-        elfSchoolIsOn(),
+        elfLinksOn(),
       ]);
       res
         .type("application/xml")

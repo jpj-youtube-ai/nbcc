@@ -251,6 +251,23 @@ describe("the proud emails", () => {
   });
 });
 
+describe("typed names are escaped in every wave 2 email", () => {
+  it("never lets an elf name with & and < through raw", () => {
+    const elf = "Pip & <b>Co";
+    const built = [
+      proud({ kind: "won", elfName: elf, door: 7 }),
+      clue({ elfName: elf }),
+      reminder({ elfName: elf, placeName: "Pine & <i>Cone" }),
+      findAlert(),
+    ];
+    for (const e of built) {
+      expect(e.html).not.toContain("<b>Co");
+      expect(e.html).not.toContain("<i>Cone");
+    }
+    expect(built[0].html).toContain("You found Pip &amp; &lt;b&gt;Co!");
+  });
+});
+
 describe("every wave 2 email", () => {
   it("is from the apex, never news.nbcc.scot, and has no dashes", () => {
     const built: BuiltEmail[] = [clue(), reminder(), morning(), findAlert(), photoAlert(), testAlert(), proud({ kind: "won", elfName: "Pip", door: 7 })];

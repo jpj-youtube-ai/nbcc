@@ -334,7 +334,7 @@ export function buildElfProudEmail(o: {
   const thanks = "Thank you for playing along. It means a great deal to everyone at NBCC.";
   const ask = "If Elf Detective School has given your family a smile, a little more could help another family this Christmas.";
   const body =
-    heading(headline) +
+    heading(escapeHtml(headline)) +
     bodyP(escapeHtml(hi)) +
     bodyP(escapeHtml(news)) +
     bodyP(escapeHtml(thanks)) +

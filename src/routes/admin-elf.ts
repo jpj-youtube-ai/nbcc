@@ -28,6 +28,7 @@ import { daysUntil, questsFor, tileFor, type SoonNotReady } from "../elf/admin-h
 import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { badgeWords, buildElfPhotoAlertEmail, buildElfTestAlertEmail, ELF_PHOTO_TEXT, ELF_TEST_TEXT } from "../elf/emails";
 import { normaliseUkMobile } from "../elf/alerts";
+import { elfTextsOn } from "../elf/texts-on";
 import { lastAlert, listHeadElves, recordAlert, setMyAlerts } from "../db/elf-alerts";
 import { countPhotosWaiting } from "../db/elf-photos";
 import { sendText, smsConfigured } from "../clients/sms";
@@ -615,8 +616,9 @@ export async function patchAdminElfAlertsMe(req: Request, res: Response): Promis
   }
 }
 
-/** Sends the caller a test alert: the email, and the text when they have a mobile and texts are on
- *  (elf: view). A text that fails never stops the email. */
+/** Sends the caller a test alert: the email, and the text when they have a mobile and texts are tried
+ *  (elf: view). Whether texts are tried is the photo alert's own rule (elfTextsOn): switched on, or outside
+ *  production through the stub. A text that fails never stops the email. */
 export async function postAdminElfAlertsTest(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const claims = await authorizeSection(req, res, "elf", "view");
@@ -628,7 +630,7 @@ export async function postAdminElfAlertsTest(req: Request, res: Response): Promi
     await sendElfTestAlert(name, { email: claims.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
     let text: "sent" | "stubbed" | "failed" | "no-mobile" | "off";
     if (!me || !me.mobile) text = "no-mobile";
-    else if (!smsConfigured) text = "off";
+    else if (!elfTextsOn()) text = "off";
     else {
       try {
         text = await sendText({ to: me.mobile, text: ELF_TEST_TEXT, senderId: config.SMS_SENDER_ID });

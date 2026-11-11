@@ -983,13 +983,50 @@ describe("the alerts in Settings", () => {
       expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "stubbed" });
     });
 
-    it("answers no-mobile when the caller has none, and off when texts are off", async () => {
+    it("answers no-mobile when the caller has none", async () => {
       dbAlerts.listHeadElves.mockResolvedValue([{ ...ALEX, mobile: null }]);
       expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "no-mobile" });
-      dbAlerts.listHeadElves.mockResolvedValue([ALEX]);
-      sms.on = false;
-      expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "off" });
       expect(sms.sendText).not.toHaveBeenCalled();
+    });
+
+    // The test alert decides whether to try the text exactly as the worker's photo alert does (elfTextsOn):
+    // once texts are switched on, and outside production, where the text client sends nothing.
+    describe("decides whether texts are on as the photo alert does", () => {
+      const inProduction = async (work: () => Promise<void>) => {
+        const was = config.NODE_ENV;
+        (config as { NODE_ENV: string }).NODE_ENV = "production";
+        try {
+          await work();
+        } finally {
+          (config as { NODE_ENV: string }).NODE_ENV = was;
+        }
+      };
+
+      it("tries the text through the stub outside production, though texts are not switched on", async () => {
+        sms.on = false;
+        sms.sendText.mockResolvedValue("stubbed");
+        expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "stubbed" });
+        expect(sms.sendText).toHaveBeenCalledWith(expect.objectContaining({ to: "+447700900123" }));
+        expect(dbAlerts.recordAlert).toHaveBeenCalledWith(expect.objectContaining({ kind: "test", texts: 1 }));
+      });
+
+      it("answers off in production while texts are not switched on, and tries no text", async () => {
+        sms.on = false;
+        await inProduction(async () => {
+          expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "off" });
+        });
+        expect(sms.sendText).not.toHaveBeenCalled();
+        expect(mailer.sendElfTestAlert).toHaveBeenCalledTimes(1);
+      });
+
+      it("sends the text in production once texts are switched on", async () => {
+        sms.on = true;
+        sms.sendText.mockResolvedValue("sent");
+        await inProduction(async () => {
+          expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "sent" });
+        });
+        expect(sms.sendText).toHaveBeenCalledTimes(1);
+      });
     });
 
     it("is for those given the section", async () => {

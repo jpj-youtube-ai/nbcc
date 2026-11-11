@@ -6,8 +6,9 @@ import { claimSend, familiesStillToEmail, familiesToSweep, markSendFailed, markS
 import { lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert } from "../db/elf-alerts";
 import { countPhotosWaiting, deleteExpiredPhotoFiles, oldestWaitingPhotoDoor } from "../db/elf-photos";
 import { sendElfClue, sendElfFindAlert, sendElfMorning, sendElfPhotoAlert, sendElfPlaceReminder, sendElfProud, type FundraiseEmailMessage } from "../clients/email";
-import { sendText, smsConfigured, type SmsMessage } from "../clients/sms";
+import { sendText, type SmsMessage } from "../clients/sms";
 import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
+import { elfTextsOn } from "./texts-on";
 import { doorInstant, doorOn, type Door } from "./calendar";
 import { doorPicture, doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
 import { doorState, isOpen } from "./doors";
@@ -55,7 +56,7 @@ export interface ElfWorkerDeps {
   /** The sender name on a text. */
   smsSenderId: string;
   /** Are texts tried? Yes once they are switched on, and outside production, where the text client sends
-   *  nothing; with them off in production no text is tried, as the test alert does. */
+   *  nothing; with them off in production no text is tried. The test alert asks the same rule (elfTextsOn). */
   textsOn: boolean;
   /** Sends that went but could not be marked sent, kept until they are (never sent again meanwhile). */
   unmarked: Unmarked;
@@ -91,7 +92,7 @@ export function realElfDeps(): ElfWorkerDeps {
     siteOrigin: String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, ""),
     from: config.BALL_FROM_EMAIL,
     smsSenderId: config.SMS_SENDER_ID,
-    textsOn: smsConfigured || config.NODE_ENV !== "production",
+    textsOn: elfTextsOn(),
     unmarked: UNMARKED,
     getSettings: getElfSettings,
     loadDoorRuns,

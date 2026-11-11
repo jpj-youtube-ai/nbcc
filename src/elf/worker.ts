@@ -4,7 +4,7 @@ import { familyDoorsDone, finderOf, finderParts, loadDoorRuns, markAutomaticSnow
 import { listElfDoors } from "../db/elf-doors";
 import { claimSend, familiesStillToEmail, familiesToSweep, markSendFailed, markSent, type ClueFamily } from "../db/elf-sends";
 import { lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert } from "../db/elf-alerts";
-import { countPhotosWaiting, deleteExpiredPhotoFiles, photosWaiting } from "../db/elf-photos";
+import { countPhotosWaiting, deleteExpiredPhotoFiles, oldestWaitingPhotoDoor } from "../db/elf-photos";
 import { sendElfClue, sendElfFindAlert, sendElfMorning, sendElfPhotoAlert, sendElfPlaceReminder, sendElfProud, type FundraiseEmailMessage } from "../clients/email";
 import { sendText, smsConfigured, type SmsMessage } from "../clients/sms";
 import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
@@ -16,10 +16,10 @@ import { factFor } from "./facts";
 import { familyDetectiveName, type DetectiveNameParts } from "./names";
 import { doorPost, postPicture, yesterdayPost } from "./posts";
 import { progressOf, type DoorsDone } from "./progress";
-import { CLUE_EMAILS_A_TICK, dueNow, proudMomentsOf, type Due, type ProudMoment } from "./schedule";
+import { CLUE_EMAILS_A_TICK, dueNow, londonDateAndHour, proudMomentsOf, type Due, type ProudMoment } from "./schedule";
 import { ELF_DEFAULTS, type ElfSettings } from "./settings";
 import type { FamilyRow } from "./views";
-import { clockWords, listWords } from "./words";
+import { clockWords } from "./words";
 
 // NBCC Elf Detective School wave 2: the elf worker. Everything that goes on time in December without a
 // developer: the clue email to every family at clue 1, the reminder to each place at 9am, the 8am Elf HQ
@@ -35,9 +35,16 @@ import { clockWords, listWords } from "./words";
 // (POST /api/admin/elf/worker/tick, outside production). Every outside call comes through ElfWorkerDeps,
 // so a tick is unit tested with fakes (test/unit/elf-worker.test.ts). Each part of a tick is on its own:
 // one that fails is logged with its message only (never a place, a clue, a word or a number) and the
-// rest go on.
+// rest go on. A send that went but could not be marked sent (the database failing just then) is kept in
+// this task's memory: marked at the start of every tick until that lands, and never sent again from here.
 
 type Sender = (name: string | null, message: FundraiseEmailMessage) => Promise<void>;
+
+/** Sends that went but could not be marked sent, by `${kind} ${key}`. */
+export type Unmarked = Map<string, { kind: string; key: string }>;
+
+/** This task's memory of them, shared by the timer's ticks and the tick hook's. */
+const UNMARKED: Unmarked = new Map();
 
 /** Every outside call the worker makes. realElfDeps() gives the real ones. */
 export interface ElfWorkerDeps {
@@ -47,8 +54,11 @@ export interface ElfWorkerDeps {
   from: string;
   /** The sender name on a text. */
   smsSenderId: string;
-  /** Are texts switched on? With them off no text is tried, as the test alert does. */
+  /** Are texts tried? Yes once they are switched on, and outside production, where the text client sends
+   *  nothing; with them off in production no text is tried, as the test alert does. */
   textsOn: boolean;
+  /** Sends that went but could not be marked sent, kept until they are (never sent again meanwhile). */
+  unmarked: Unmarked;
   getSettings: () => Promise<ElfSettings>;
   loadDoorRuns: (year: number, now: Date) => Promise<DoorRun[]>;
   /** The doors as head elves set them up: a place's contact, and what a door still needs. */
@@ -63,7 +73,7 @@ export interface ElfWorkerDeps {
   countPhotosWaiting: () => Promise<number>;
   oldestWaitingPhotoAt: () => Promise<Date | null>;
   /** The door of the oldest photo still waiting (0 for the practice door), or null when none waits. */
-  oldestWaitingPhotoDoor: (now: Date) => Promise<Door | 0 | null>;
+  oldestWaitingPhotoDoor: () => Promise<Door | 0 | null>;
   listHeadElves: () => Promise<HeadElf[]>;
   lastAlert: (kind: "photo") => Promise<{ at: Date; textsFailed: string[] } | null>;
   recordAlert: (o: { kind: "photo"; year: number; door: number | null; emails: number; texts: number; textsFailed: string[] }) => Promise<void>;
@@ -81,7 +91,8 @@ export function realElfDeps(): ElfWorkerDeps {
     siteOrigin: String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, ""),
     from: config.BALL_FROM_EMAIL,
     smsSenderId: config.SMS_SENDER_ID,
-    textsOn: smsConfigured,
+    textsOn: smsConfigured || config.NODE_ENV !== "production",
+    unmarked: UNMARKED,
     getSettings: getElfSettings,
     loadDoorRuns,
     listDoors: listElfDoors,
@@ -94,7 +105,7 @@ export function realElfDeps(): ElfWorkerDeps {
     finderParts,
     countPhotosWaiting,
     oldestWaitingPhotoAt,
-    oldestWaitingPhotoDoor: async (now) => (await photosWaiting(now))[0]?.door ?? null,
+    oldestWaitingPhotoDoor,
     listHeadElves,
     lastAlert,
     recordAlert,
@@ -148,17 +159,34 @@ const messageFor = (to: string, mail: BuiltEmail, from: string): FundraiseEmailM
   text: mail.text,
 });
 
-/** One claimed send: it goes only from the task that wins the claim. A send that throws is noted with its
- *  message, so the claim is taken again ten minutes on. Never throws. True when it went. */
-async function claimed(deps: ElfWorkerDeps, kind: string, key: string, send: () => Promise<void>): Promise<boolean> {
-  let mine = false;
+const sendId = (kind: string, key: string): string => `${kind} ${key}`;
+
+/** Claims a send for this task: true only when this task should send it. A send this task has already sent
+ *  but not yet marked is never claimed again from here. Never throws. */
+async function claim(deps: ElfWorkerDeps, kind: string, key: string): Promise<boolean> {
+  if (deps.unmarked.has(sendId(kind, key))) return false;
   try {
-    mine = await deps.claimSend(kind, key);
+    return await deps.claimSend(kind, key);
   } catch (err) {
     failed(`${kind} ${key} claim`, err);
     return false;
   }
-  if (!mine) return false;
+}
+
+/** Marks a claimed send sent. If that fails the send has still gone: it is kept in this task's memory, marked
+ *  at the start of every tick until that lands, and never sent again from here meanwhile. */
+async function noteSent(deps: ElfWorkerDeps, kind: string, key: string): Promise<void> {
+  try {
+    await deps.markSent(kind, key);
+  } catch (err) {
+    failed(`${kind} ${key} sent note`, err);
+    deps.unmarked.set(sendId(kind, key), { kind, key });
+  }
+}
+
+/** Sends a send this task has claimed. One that throws is noted with its message, so the claim is taken
+ *  again ten minutes on. Never throws. True when it went. */
+async function sendClaimed(deps: ElfWorkerDeps, kind: string, key: string, send: () => Promise<void>): Promise<boolean> {
   try {
     await send();
   } catch (err) {
@@ -167,8 +195,25 @@ async function claimed(deps: ElfWorkerDeps, kind: string, key: string, send: () 
     await part(`${kind} ${key} failure note`, () => deps.markSendFailed(kind, key, message));
     return false;
   }
-  await part(`${kind} ${key} sent note`, () => deps.markSent(kind, key));
+  await noteSent(deps, kind, key);
   return true;
+}
+
+/** One claimed send: it goes only from the task that wins the claim. Never throws. True when it went. */
+async function claimed(deps: ElfWorkerDeps, kind: string, key: string, send: () => Promise<void>): Promise<boolean> {
+  return (await claim(deps, kind, key)) ? sendClaimed(deps, kind, key, send) : false;
+}
+
+/** The sends this task sent but could not mark: tried again first thing on every tick until they land. */
+async function markUnmarked(deps: ElfWorkerDeps): Promise<void> {
+  for (const [id, s] of [...deps.unmarked]) {
+    try {
+      await deps.markSent(s.kind, s.key);
+      deps.unmarked.delete(id);
+    } catch (err) {
+      failed(`${s.kind} ${s.key} sent note, again`, err);
+    }
+  }
 }
 
 /** One email to each head elf, each on its own, so one that fails never stops the others. Throws only
@@ -246,15 +291,13 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
   }
 }
 
-/** Thrown when a reminder cannot be written yet: it is noted, and the claim tried again ten minutes on. */
-const NO_PLACE_PHONE = "no phone number for places is set in Head Elf HQ > Settings, so the reminder cannot say who to ring";
-
+/** The 9am reminder to a place. Without a phone number for places in Settings it still goes, without the
+ *  line saying who to ring (a reply reaches NBCC either way). */
 async function placeReminder(due: Due, door: Door, run: DoorRun, t: Tick): Promise<void> {
   const to = run.contactEmail;
   if (!filled(to)) return;
   await claimed(t.deps, "reminder", due.key, async () => {
-    const phone = t.settings.placePhone;
-    if (!filled(phone)) throw new Error(NO_PLACE_PHONE);
+    const phone = filled(t.settings.placePhone) ? t.settings.placePhone : null;
     const setup = await t.setup(door);
     const mail = buildElfPlaceReminderEmail({
       contactName: setup.contactName,
@@ -350,8 +393,10 @@ async function findAlert(due: Due, door: Door, run: DoorRun, t: Tick): Promise<v
 
 // ---- proud moments ---------------------------------------------------------------------------------------
 
-/** Each of a detective's proud moments not yet claimed, claimed as ("proud", `${year}:${key}`) and sent
- *  to the family once: a promotion, or graduating. */
+/** A detective's proud moments not yet claimed, each claimed as ("proud", `${year}:${key}`). Only the highest
+ *  new one is emailed to the family: a run of snow days can bring several ranks at once, and the family hears
+ *  once, about the newest (graduating above every rank); the lower ones are claimed and marked without an
+ *  email. If the email fails, its own claim is tried again ten minutes on. */
 async function sendMoments(
   deps: ElfWorkerDeps,
   year: number,
@@ -359,27 +404,70 @@ async function sendMoments(
   detectiveName: string,
   moments: ProudMoment[],
 ): Promise<void> {
-  for (const m of moments) {
-    await claimed(deps, "proud", `${year}:${m.key}`, async () => {
-      const mail = buildElfProudEmail({
-        kind: m.kind,
-        grownUpName: family.grownUpName,
-        detectiveName,
-        ...(m.rank ? { rank: m.rank } : {}),
-        hqUrl: `${deps.siteOrigin}/elf/hq`,
-        giveUrl: `${deps.siteOrigin}/donate`,
-      });
-      await deps.send.proud(family.grownUpName, messageFor(family.email, mail, deps.from));
+  const fresh: ProudMoment[] = [];
+  for (const m of moments) if (await claim(deps, "proud", `${year}:${m.key}`)) fresh.push(m);
+  const top = fresh[fresh.length - 1];
+  if (!top) return;
+  for (const m of fresh) if (m !== top) await noteSent(deps, "proud", `${year}:${m.key}`);
+  await sendClaimed(deps, "proud", `${year}:${top.key}`, async () => {
+    const mail = buildElfProudEmail({
+      kind: top.kind,
+      grownUpName: family.grownUpName,
+      detectiveName,
+      ...(top.rank ? { rank: top.rank } : {}),
+      hqUrl: `${deps.siteOrigin}/elf/hq`,
+      giveUrl: `${deps.siteOrigin}/donate`,
     });
-  }
+    await deps.send.proud(family.grownUpName, messageFor(family.email, mail, deps.from));
+  });
+}
+
+/** The won email to a finding family, claimed once a family a door as ("proud", `${year}:won:<family>:<door>`),
+ *  by the word that won or, if that one failed, by a later sweep. `detectives` are the finders by the names
+ *  their own family sees. */
+async function sendWon(
+  deps: ElfWorkerDeps,
+  o: { year: number; door: Door; elfName: string; familyId: number; family: { grownUpName: string; email: string }; detectives: string[] },
+): Promise<void> {
+  await claimed(deps, "proud", `${o.year}:won:${o.familyId}:${o.door}`, async () => {
+    const mail = buildElfProudEmail({
+      kind: "won",
+      grownUpName: o.family.grownUpName,
+      detectiveName: o.detectives,
+      elfName: o.elfName,
+      door: o.door,
+      hqUrl: `${deps.siteOrigin}/elf/hq`,
+      giveUrl: `${deps.siteOrigin}/donate`,
+    });
+    await deps.send.proud(o.family.grownUpName, messageFor(o.family.email, mail, deps.from));
+  });
 }
 
 const NO_DOORS: DoorsDone = { cracked: [], visited: [], snow: [] };
 
-/** Every ten minutes: every active detective of a family not removed, so a rank earned by a guess, a snow
+/** Every ten minutes: each found door's won email, in case the word's own did not go (the same claim, so
+ *  never twice); then every active detective of a family not removed, so a rank earned by a guess, a snow
  *  day or a visit that counts from the reveal is never missed. */
 async function sweep(due: Due, t: Tick): Promise<void> {
   await claimed(t.deps, "sweep", due.key, async () => {
+    for (const run of t.runs) {
+      if (run.door === 0 || run.foundFamilyId === null || !run.facts.foundAt) continue;
+      try {
+        // Null when the finding family has been removed: nobody to tell.
+        const finder = await t.deps.finderOf(t.year, run.door);
+        if (!finder) continue;
+        await sendWon(t.deps, {
+          year: t.year,
+          door: run.door,
+          elfName: run.elfName,
+          familyId: run.foundFamilyId,
+          family: finder,
+          detectives: finder.detectives.map((name) => `Detective ${name}`),
+        });
+      } catch (err) {
+        failed("the sweep of a found door", err);
+      }
+    }
     for (const familyId of await t.deps.familiesToSweep()) {
       try {
         const family = await t.deps.familyWithDetectives(familyId);
@@ -410,25 +498,13 @@ export interface WordMoment {
 }
 
 /** The proud moments after a word: for a win, the won email (claimed once a family a door), then each
- *  stamped detective's promotions and graduation as the sweep sends them. The practice door sends nothing.
- *  Best effort: every send is claimed and on its own, so this does not throw for a send that fails; the
- *  word's route still keeps it from ever failing the word. */
+ *  stamped detective's newest promotion or graduation as the sweep sends them. The practice door sends
+ *  nothing. Best effort: every send is claimed and on its own, so this does not throw for a send that fails;
+ *  the word's route still keeps it from ever failing the word. */
 export async function sendProudMoments(m: WordMoment, deps: ElfWorkerDeps): Promise<void> {
   if (m.door === 0 || m.stamped.length === 0) return;
-  const door = m.door;
   if (m.won) {
-    await claimed(deps, "proud", `${m.year}:won:${m.family.id}:${door}`, async () => {
-      const mail = buildElfProudEmail({
-        kind: "won",
-        grownUpName: m.family.grownUpName,
-        detectiveName: listWords(m.stamped.map((s) => s.name)),
-        elfName: m.elfName,
-        door,
-        hqUrl: `${deps.siteOrigin}/elf/hq`,
-        giveUrl: `${deps.siteOrigin}/donate`,
-      });
-      await deps.send.proud(m.family.grownUpName, messageFor(m.family.email, mail, deps.from));
-    });
+    await sendWon(deps, { year: m.year, door: m.door, elfName: m.elfName, familyId: m.family.id, family: m.family, detectives: m.stamped.map((s) => s.name) });
   }
   for (const s of m.stamped) await sendMoments(deps, m.year, m.family, s.name, proudMomentsOf(s.id, progressOf(s.doorsDone)));
 }
@@ -438,14 +514,19 @@ export async function sendProudMoments(m: WordMoment, deps: ElfWorkerDeps): Prom
 /** One email to everyone with alerts on and one text to each of them with a mobile, when photos start
  *  waiting (photoAlertDue: never in quiet hours, never twice for the same photos, never sooner than half an
  *  hour after the last). A text that fails never stops the emails, and is named in the alert's record so
- *  Settings > Alerts can say whose text did not go. Doors on or off: the practice door plays it too. */
+ *  Settings > Alerts can say whose text did not go. Doors on or off: the practice door plays it too.
+ *
+ *  Its claim is keyed by the last alert's time and the London date. The date changes at midnight, inside
+ *  quiet hours, so an alert given up after three failed tries is tried again from 8am the next day rather
+ *  than never. */
 async function photoAlert(at: Date, year: number, deps: ElfWorkerDeps): Promise<void> {
   const [oldestWaitingAt, last] = await Promise.all([deps.oldestWaitingPhotoAt(), deps.lastAlert("photo")]);
   if (!photoAlertDue({ oldestWaitingAt, lastAlertAt: last?.at ?? null }, at)) return;
-  const door = await deps.oldestWaitingPhotoDoor(at);
+  const door = await deps.oldestWaitingPhotoDoor();
   // Checked while this tick was looking: nothing waits, so nothing is claimed.
   if (door === null) return;
-  await claimed(deps, "photo-alert", last ? last.at.toISOString() : "first", async () => {
+  const key = `${last ? last.at.toISOString() : "first"}:${londonDateAndHour(at).date}`;
+  await claimed(deps, "photo-alert", key, async () => {
     const { emails, texts } = alertRecipients(await deps.listHeadElves());
     const mail = buildElfPhotoAlertEmail({ door, adminUrl: `${deps.siteOrigin}/admin` });
     let emailed = 0;
@@ -474,7 +555,14 @@ async function photoAlert(at: Date, year: number, deps: ElfWorkerDeps): Promise<
     }
     // Not one went: no record, so the claim is tried again ten minutes on.
     if (emails.length > 0 && emailed === 0 && texted === 0) throw lastError instanceof Error ? lastError : new Error(messageOf(lastError));
-    await deps.recordAlert({ kind: "photo", year, door, emails: emailed, texts: texted, textsFailed });
+    try {
+      await deps.recordAlert({ kind: "photo", year, door, emails: emailed, texts: texted, textsFailed });
+    } catch (err) {
+      // Once anything went, a record that cannot be written is only logged: the claim is still marked sent,
+      // so the alert is never sent again.
+      if (emailed === 0 && texted === 0) throw err;
+      failed("the record of a photo alert that went", err);
+    }
   });
 }
 
@@ -491,11 +579,13 @@ async function sendDue(due: Due, t: Tick): Promise<void> {
 }
 
 /**
- * One tick at `at`, in order, each part on its own: snow in what cannot run (December's doors on only);
- * then whatever is due (the clue emails, the reminders, the morning email, the find alerts, the sweep);
- * then the photo alert; last, the clear out of every photo past its 31 January.
+ * One tick at `at`, in order, each part on its own: first the sends this task sent but could not mark;
+ * then snow in what cannot run (December's doors on only); then whatever is due (the clue emails, the
+ * reminders, the morning email, the find alerts, the sweep); then the photo alert; last, the clear out of
+ * every photo past its 31 January.
  */
 export async function runElfTick(at: Date, deps: ElfWorkerDeps): Promise<void> {
+  await markUnmarked(deps);
   let settings: ElfSettings;
   try {
     settings = await deps.getSettings();

@@ -411,6 +411,16 @@ Then("{string} with password {string} sees the last photo alert, with no text th
   assert.deepEqual(answer.lastAlert.textsFailed, []);
 });
 
+// The texts are counted in the alert's own record (Settings > Alerts shows only whose text did not go).
+// Only this scenario's head elf has a mobile: no other step gives one, and the @admin hooks remove the
+// test head elves (their mobiles with them) before every scenario.
+Then("the last photo alert went by text to {int} head elf/elves", async function (n) {
+  const r = await pool.query("SELECT texts, texts_failed FROM elf_alerts WHERE kind = 'photo' ORDER BY sent_at DESC, id DESC LIMIT 1");
+  assert.ok(r.rows[0], "no photo alert is on record");
+  assert.equal(r.rows[0].texts, n, JSON.stringify(r.rows[0]));
+  assert.deepEqual(r.rows[0].texts_failed, []);
+});
+
 When("{string} with password {string} reads the photos waiting", async function (email, password) {
   this.gamePhotosAnswer = await asHeadElf(email, password, "GET", "/api/admin/elf/photos");
 });

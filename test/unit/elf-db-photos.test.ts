@@ -19,6 +19,7 @@ import {
   countPhotosWaiting,
   decidePhoto,
   deleteExpiredPhotoFiles,
+  oldestWaitingPhotoDoor,
   photoForStaff,
   photoLog,
   photoStep,
@@ -461,9 +462,40 @@ describe("deleteExpiredPhotoFiles", () => {
     expect(await deleteExpiredPhotoFiles(at("2026-12-20T12:00:00Z"))).toBe(0);
   });
 
+  // A practice photo sent on or after 31 January belongs to the coming December, so it is never past its
+  // clear out the moment it is sent (January in London is on GMT, so midnight is midnight UTC).
+  it("keeps a year 0 photo sent on 31 January at that moment, and deletes one sent on 30 January from 31 January", async () => {
+    photos([{ id: 9, year: 0, sent_at: at("2027-01-31T00:00:00Z") }]);
+    expect(await deleteExpiredPhotoFiles(at("2027-01-31T00:00:00Z"))).toBe(0);
+    photos([{ id: 8, year: 0, sent_at: at("2027-01-30T23:59:00Z") }]);
+    expect(await deleteExpiredPhotoFiles(at("2027-01-30T23:59:30Z"))).toBe(0);
+    expect(await deleteExpiredPhotoFiles(at("2027-01-31T00:00:00Z"))).toBe(1);
+  });
+
   it("only looks at photos not already deleted", async () => {
     photos([]);
     await deleteExpiredPhotoFiles(at("2027-02-01T12:00:00Z"));
     expect(find(/SELECT id, year, sent_at FROM elf_photos/)![0]).toContain("status <> 'deleted'");
+  });
+});
+
+describe("oldestWaitingPhotoDoor", () => {
+  it("reads the door of the oldest photo waiting in one small query, leaving removed families out", async () => {
+    query.mockResolvedValueOnce({ rows: [{ door: 7 }] });
+    expect(await oldestWaitingPhotoDoor()).toBe(7);
+    const s = String(query.mock.calls[0][0]).replace(/\s+/g, " ");
+    expect(s).toContain("FROM elf_photos p JOIN elf_families f ON f.id = p.family_id");
+    expect(s).toContain("WHERE p.status = 'waiting' AND f.removed_at IS NULL");
+    expect(s).toContain("ORDER BY p.sent_at, p.id LIMIT 1");
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(game.loadDoorRun).not.toHaveBeenCalled();
+    expect(game.loadPractice).not.toHaveBeenCalled();
+  });
+
+  it("answers 0 for the practice door, and null when nothing waits", async () => {
+    query.mockResolvedValueOnce({ rows: [{ door: 0 }] });
+    expect(await oldestWaitingPhotoDoor()).toBe(0);
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await oldestWaitingPhotoDoor()).toBeNull();
   });
 });

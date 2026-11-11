@@ -97,6 +97,18 @@ export async function countPhotosWaiting(): Promise<number> {
   return Number(res.rows[0]?.n ?? 0);
 }
 
+/** The door of the oldest photo waiting for a head elf (0 for the practice door), or null when none waits:
+ *  what the photo alert names. One small read, without removed families. */
+export async function oldestWaitingPhotoDoor(): Promise<Door | 0 | null> {
+  const res = await pool.query<{ door: number }>(
+    `SELECT p.door FROM elf_photos p JOIN elf_families f ON f.id = p.family_id
+      WHERE p.status = 'waiting' AND f.removed_at IS NULL
+      ORDER BY p.sent_at, p.id LIMIT 1`,
+  );
+  const r = res.rows[0];
+  return r ? asDoor(Number(r.door)) : null;
+}
+
 /** The bytes of a photo for a head elf to look at, in any status while its bytes are kept. */
 export async function photoForStaff(id: number): Promise<{ mime: string; bytes: Buffer } | null> {
   const res = await pool.query<{ mime: string | null; bytes: Buffer }>(
@@ -290,11 +302,13 @@ const londonParts = (d: Date): { year: number; month: number } => {
 };
 
 /** The December a photo belongs to: its year, or for a practice photo (year 0) the December it was
- *  sent in (one sent in January belongs to the December before). */
+ *  sent in. One sent in January before the 31st belongs to the December before; one sent on or after
+ *  31 January belongs to the coming December, so no practice photo is past its clear out the moment it
+ *  is sent. January in London is on GMT, so its midnight is midnight UTC. */
 function seasonOf(year: number, sentAt: Date): number {
   if (year > 0) return year;
   const { year: y, month } = londonParts(sentAt);
-  return month === 1 ? y - 1 : y;
+  return month === 1 && sentAt.getTime() < Date.UTC(y, 0, 31) ? y - 1 : y;
 }
 
 /** From 31 January of the year after its December, every photo is deleted: its bytes row goes and its

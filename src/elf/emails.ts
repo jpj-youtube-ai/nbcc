@@ -170,7 +170,8 @@ export function buildElfClueEmail(o: {
   return finish(`Door ${o.door}: the first clue is out`, body, text, "Happy hunting!");
 }
 
-/** The morning reminder to a place whose day it is. */
+/** The morning reminder to a place whose day it is. With no phone number for places in Settings it still
+ *  goes, without the line saying who to ring: a reply reaches NBCC's events inbox either way. */
 export function buildElfPlaceReminderEmail(o: {
   contactName: string | null;
   placeName: string;
@@ -178,7 +179,7 @@ export function buildElfPlaceReminderEmail(o: {
   door: Door;
   clue1At: Date;
   closesAt: string | null;
-  phone: string;
+  phone: string | null;
 }): BuiltEmail {
   const hi = hello(o.contactName);
   const when = whenWords(o.clue1At) === "tonight" ? "Tonight" : "Today";
@@ -193,7 +194,7 @@ export function buildElfPlaceReminderEmail(o: {
   const closing = o.closesAt
     ? `Our list says you close at ${o.closesAt}. If nobody finds ${elf} before then, leave ${elf} out when you next open. The first detective to type the word still wins.`
     : `If nobody finds ${elf} before you close, leave ${elf} out when you next open. The first detective to type the word still wins.`;
-  const ring = `Anything at all, ring NBCC on ${o.phone}.`;
+  const ring = o.phone ? `Anything at all, ring NBCC on ${o.phone}.` : null;
 
   const body =
     heading("Today is your Elf Detective School day") +
@@ -202,8 +203,8 @@ export function buildElfPlaceReminderEmail(o: {
     subheading(escapeHtml(stepsHeading)) +
     bodyList(steps.map(escapeHtml), true) +
     bodyP(escapeHtml(closing)) +
-    bodyP(escapeHtml(ring));
-  const text = [hi, "", main, "", stepsHeading, ...steps.map((s, i) => `${i + 1}. ${s}`), "", closing, "", ring];
+    (ring ? bodyP(escapeHtml(ring)) : "");
+  const text = [hi, "", main, "", stepsHeading, ...steps.map((s, i) => `${i + 1}. ${s}`), "", closing, ...(ring ? ["", ring] : [])];
   return finish("Today is your Elf Detective School day", body, text, "Thank you for helping!");
 }
 
@@ -311,11 +312,12 @@ export function buildElfTestAlertEmail(o: { name: string; adminUrl: string }): B
 export const ELF_PHOTO_TEXT = "Elf Detective School: a photo is waiting for a head elf to check. nbcc.scot/admin";
 export const ELF_TEST_TEXT = "Elf Detective School: this is your test alert. nbcc.scot/admin";
 
-/** To a grown up when their detective wins an elf, is promoted or graduates. */
+/** To a grown up when their detective wins an elf, is promoted or graduates. A win may name every detective
+ *  who was there (a list), and then says "were" and "have". */
 export function buildElfProudEmail(o: {
   kind: "won" | "promoted" | "graduated";
   grownUpName: string;
-  detectiveName: string;
+  detectiveName: string | readonly string[];
   elfName?: string;
   door?: Door;
   rank?: Rank;
@@ -325,12 +327,15 @@ export function buildElfProudEmail(o: {
   const hi = hello(o.grownUpName);
   const elf = o.elfName ?? "the elf";
   const rank = o.rank ?? "Detective";
+  const names = typeof o.detectiveName === "string" ? [o.detectiveName] : o.detectiveName;
+  const who = listWords(names);
+  const many = names.length > 1;
   const [subject, headline, news] =
     o.kind === "won"
-      ? [`You found ${elf}!`, `You found ${elf}!`, `${o.detectiveName} was the first to find ${elf}${o.door ? ` on door ${o.door}` : ""}, and has won the prize. Well done!`]
+      ? [`You found ${elf}!`, `You found ${elf}!`, `${who} ${many ? "were" : "was"} the first to find ${elf}${o.door ? ` on door ${o.door}` : ""}, and ${many ? "have" : "has"} won the prize. Well done!`]
       : o.kind === "promoted"
-        ? [`${o.detectiveName} is now a ${rank}`, "A promotion!", `${o.detectiveName} has been promoted to ${rank} in Elf Detective School. Well done!`]
-        : [`${o.detectiveName} has graduated!`, "A graduate!", `${o.detectiveName} has done every door and has graduated from Elf Detective School. Well done!`];
+        ? [`${who} is now a ${rank}`, "A promotion!", `${who} has been promoted to ${rank} in Elf Detective School. Well done!`]
+        : [`${who} has graduated!`, "A graduate!", `${who} has done every door and has graduated from Elf Detective School. Well done!`];
   const thanks = "Thank you for playing along. It means a great deal to everyone at NBCC.";
   const ask = "If Elf Detective School has given your family a smile, a little more could help another family this Christmas.";
   const body =

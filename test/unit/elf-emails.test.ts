@@ -174,6 +174,15 @@ describe("the place reminder", () => {
   it("says Tonight for an evening clue", () => {
     expect(reminder().text).toContain("Tonight at 5:30pm, please put Pip");
   });
+
+  // Settings may have no phone number for places yet: the reminder still goes, and a reply reaches NBCC.
+  it("leaves out the ring line when there is no phone number to give", () => {
+    const e = reminder({ phone: null });
+    expect(e.text).toContain("Tonight at 5:30pm, please put Pip");
+    expect(e.text).not.toContain("ring NBCC");
+    expect(e.html).not.toContain("ring NBCC");
+    expect(reminder().html).toContain("Anything at all, ring NBCC on 01632 960 123.");
+  });
 });
 
 describe("the morning email", () => {
@@ -248,6 +257,13 @@ describe("the proud emails", () => {
     expect(g.text).toContain("If Elf Detective School has given your family a smile, a little more could help another family this Christmas.");
     expect(g.html).toContain("Give a little more");
     expect(g.html).toContain('href="https://nbcc.scot/donate"');
+  });
+
+  it("says was for one detective who found the elf, and were for more", () => {
+    expect(proud({ kind: "won", elfName: "Pip", door: 7 }).text).toContain("Detective Ruby Tinselfoot was the first to find Pip on door 7, and has won the prize.");
+    const two = proud({ kind: "won", elfName: "Pip", door: 7, detectiveName: ["Detective Ruby Tinselfoot", "Detective Leo Frostwhistle"] });
+    expect(two.text).toContain("Detective Ruby Tinselfoot and Detective Leo Frostwhistle were the first to find Pip on door 7, and have won the prize.");
+    expect(two.html).toContain("Detective Ruby Tinselfoot and Detective Leo Frostwhistle were the first to find Pip on door 7, and have won the prize.");
   });
 });
 

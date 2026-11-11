@@ -59,8 +59,10 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
   # The photo check and the alerts (Plan 2b): both families send a photo, because a door's photos stay
   # hidden until approved photos from two families are on it. The elf worker ticks every 30 seconds in CI
   # too, on the real clock, and the tick hook runs it once at midday today, so quiet hours never bite.
-  # Every alert is claimed in elf_sends first, so whichever tick sends it, exactly one email goes. The
-  # @elf-game hooks start every scenario with no photo alert and nothing in this head elf's email log.
+  # Every alert is claimed in elf_sends first, so whichever tick sends it, exactly one email goes. The head
+  # elf gives a mobile before any photo waits, so whichever tick sends the alert texts it too (outside
+  # production the text client sends nothing). The @elf-game hooks start every scenario with no photo
+  # alert and nothing in this head elf's email log.
   Scenario: A practice evening, end to end
     Given "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" makes a preview link
     And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" starts a practice evening at "The Example Office" in "Snowford", 1 minute apart
@@ -86,16 +88,17 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     Then the word wins, and the card says "You're first!"
     When the family "second.game.elf.bdd@example.com" types the practice door's word with one detective
     Then the word is a visit, and the card says "It counts from"
-    When the family "second.game.elf.bdd@example.com" sends a photo to the practice door, saying yes to showing it
+    When "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" gives themselves the mobile "07700 900 123"
+    And the family "second.game.elf.bdd@example.com" sends a photo to the practice door, saying yes to showing it
     Then the photo is waiting, with a token
     When the family "second.game.elf.bdd@example.com" asks for that photo
     Then the game answers 404
     When the family "first.game.elf.bdd@example.com" sends a photo to the practice door, saying yes to showing it
     Then the photo is waiting, with a token
-    When "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" gives themselves the mobile "07700 900 123"
-    And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" runs the elf worker at "12:00" today, London time
+    When "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" runs the elf worker at "12:00" today, London time
     Then once the request has finished, 1 "elfPhotoAlert" email went to "alex.game.admin.bdd@example.com"
     And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" sees the last photo alert, with no text that failed
+    And the last photo alert went by text to 1 head elf
     When "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" runs the elf worker at "12:01" today, London time
     Then once the request has finished, 1 "elfPhotoAlert" email went to "alex.game.admin.bdd@example.com"
     When "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" reads the photos waiting

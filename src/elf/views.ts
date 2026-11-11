@@ -114,8 +114,16 @@ function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>;
     revealAt: shownAt(run.facts),
     guess: guess ? { text: guess.text, at: guess.at } : null,
     canGuess: canGuess(state),
+    // Only the guess route sets this, when the form sent with no script was refused.
+    guessError: null,
     outcome,
   };
+}
+
+/** Detective HQ's case today: the practice run while one runs for this browser, else, only while
+ *  December's doors are on, the door whose day is today in London, else none (wave 1 had no case). */
+export function todayRunOf(o: { settings: ElfSettings; now: Date; runs: FamilyRuns }): DoorRun | null {
+  return o.runs.practice ?? (o.settings.doorsOn ? runForToday(o.runs.runs, o.now) : null);
 }
 
 /** The family's marks: a door is cracked or visited by any of its detectives, or snowed in. Detective
@@ -151,7 +159,7 @@ export function hqViewFor(o: {
 }): HqView {
   const real = o.runs.runs.filter((r) => r.door !== 0);
   // With December's doors off, HQ is wave 1: no case today unless a practice run is going.
-  const todayRun = o.runs.practice ?? (o.settings.doorsOn ? runForToday(real, o.now) : null);
+  const todayRun = todayRunOf(o);
   const next = real
     .map((r) => r.calendarAt)
     .filter((at) => at.getTime() > o.now.getTime())
@@ -310,6 +318,8 @@ export function posterViewFor(o: {
         }))
       : [],
     yourPhoto: o.yourPhoto,
+    // Only the word route sets this, when the form sent with no script was refused for too many words.
+    wordError: null,
     joinUrl: "/elf/join",
     signInUrl: "/elf/sign-in",
     calendarUrl: "/elf",

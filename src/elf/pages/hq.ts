@@ -67,10 +67,19 @@ function clueLadder(today: TodayView, now: Date): string {
   return notes;
 }
 
-/** The guess: one box to type the place in. Its legend asks the question; its label says how. */
+/** Why a guess sent with no script was not taken (the server's words), as a status line, or nothing. */
+function guessErrorLine(today: TodayView): string {
+  return typeof today.guessError === "string" && today.guessError !== ""
+    ? `<p class="elf-guess__status is-error" role="status">${escapeHtml(today.guessError)}</p>`
+    : "";
+}
+
+/** The guess: one box to type the place in. Its legend asks the question; its label says how. A guess
+ *  that was not taken says why in the status line; otherwise the line shows the guess locked in. */
 function guessForm(today: TodayView, guessUrl: string): string {
-  if (!today.canGuess) return line("There is nothing left to guess just now. Keep an eye on the calendar.");
-  const status = today.guess ? `Your guess: ${escapeHtml(today.guess.text)}. You can change it until the hiding place is shown.` : "";
+  if (!today.canGuess) return guessErrorLine(today) + line("There is nothing left to guess just now. Keep an eye on the calendar.");
+  const locked = today.guess ? `Your guess: ${escapeHtml(today.guess.text)}. You can change it until the hiding place is shown.` : "";
+  const status = guessErrorLine(today) || `<p class="elf-guess__status" role="status">${locked}</p>`;
   return (
     `<form class="elf-guess" method="post" action="${sitePath(guessUrl) ?? "/"}" data-api="/api/elf/guess">` +
     `<input type="hidden" name="door" value="${count(today.door)}" />` +
@@ -78,7 +87,7 @@ function guessForm(today: TodayView, guessUrl: string): string {
     `<label class="elf-guess__hint" for="guess-text">Type the name of the place. Spelling does not have to be perfect.</label>` +
     `<input class="elf-guess__text" id="guess-text" name="text" type="text" required maxlength="80" autocomplete="off" autocapitalize="words" enterkeyhint="done" value="${escapeHtml(today.guess?.text ?? "")}" />` +
     `</fieldset>` +
-    `<p class="elf-guess__status" role="status">${status}</p>` +
+    status +
     `<button class="elf-btn elf-btn--crimson" type="submit">${today.guess ? "Change my guess" : "Lock in my guess"}</button>` +
     `</form>`
   );
@@ -125,11 +134,13 @@ function caseCard(view: HqView): string {
   const head = today.practice
     ? `<p class="elf-case__door elf-practice">The practice door <span class="elf-chip elf-chip--new">Practice</span></p>`
     : `<p class="elf-case__door">Door ${count(today.door)}</p>`;
+  // Where the case has no guess form, a guess sent with no script that was not taken still says why.
+  const refused = guessErrorLine(today);
   if (today.state === "shut") {
     // A door whose clue time is not a real date stays shut (src/elf/doors.ts). Say so plainly.
     const clueAt = today.nextClueAt ?? new Date(NaN);
     if (!real(clueAt) || !real(view.now)) {
-      return head + `<h2 id="elf-case-heading">Today's clue is on its way</h2>` + line("Come back later to read it and lock in your guess.");
+      return head + `<h2 id="elf-case-heading">Today's clue is on its way</h2>` + line("Come back later to read it and lock in your guess.") + refused;
     }
     const left = clueAt.getTime() - view.now.getTime();
     return (
@@ -137,7 +148,8 @@ function caseCard(view: HqView): string {
       `<h2 id="elf-case-heading">Today's clue is on its way</h2>` +
       line(`Clue out at ${clockWords(clueAt)}`) +
       `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${clueAt.toISOString()}">${countdownWords(left)}</span></p>` +
-      line("Come back then to read it and lock in your guess.")
+      line("Come back then to read it and lock in your guess.") +
+      refused
     );
   }
   // Found before the place is shown: the clues keep coming and the guessing goes on until then.
@@ -150,11 +162,12 @@ function caseCard(view: HqView): string {
     );
   }
   if (today.state === "snow") {
-    return head + `<h2 id="elf-case-heading">Snow day</h2>` + line(`${escapeHtml(today.elfName)} got snowed in. This door counts as done for everyone.`);
+    return head + `<h2 id="elf-case-heading">Snow day</h2>` + line(`${escapeHtml(today.elfName)} got snowed in. This door counts as done for everyone.`) + refused;
   }
   return (
     head +
     `<h2 id="elf-case-heading">${today.state === "found" ? "Case closed" : `${escapeHtml(today.elfName)} is still out there`}</h2>` +
+    refused +
     outcomeHtml(today)
   );
 }

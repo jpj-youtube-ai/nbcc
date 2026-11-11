@@ -359,6 +359,8 @@ describe("Detective HQ in the evening", () => {
     expect(today.nextClueAt?.toISOString()).toBe("2026-12-07T18:30:00.000Z");
     expect(today.revealAt.toISOString()).toBe("2026-12-07T20:00:00.000Z");
     expect(today.canGuess).toBe(true);
+    // Only the route sets a refused guess's words, for the form sent with no script.
+    expect(today.guessError).toBeNull();
     expect(JSON.stringify(today)).not.toContain("it whistles");
     expect(JSON.stringify(today)).not.toContain("Toy Shop");
     expect(today.outcome).toBeNull();
@@ -451,7 +453,7 @@ describe("the poster page's view", () => {
       { id: "100", name: "Detective Ruby Tinselfoot", hasStamp: true },
       { id: "101", name: "Detective Leo Frostwhistle", hasStamp: false },
     ]);
-    expect(v).toMatchObject({ code: "code7", door: 7, placeName: "The Toy Shop", placeTown: "Troon", open: false, claimable: true, foundHidden: false, revealAt: null, goneHome: false, yourPhoto: null });
+    expect(v).toMatchObject({ code: "code7", door: 7, placeName: "The Toy Shop", placeTown: "Troon", open: false, claimable: true, foundHidden: false, revealAt: null, goneHome: false, yourPhoto: null, wordError: null });
     expect(v.wordUrl).toBe("/elf/p/code7/word");
     expect(v.photoUrl).toBe("/api/elf/p/code7/photo");
     expect(poster(SIX_10, {}, null)).toMatchObject({ signedIn: false, detectives: [] });

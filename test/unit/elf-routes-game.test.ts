@@ -39,9 +39,9 @@ const game = vi.hoisted(() => ({
   cluePicture: vi.fn(),
 }));
 const png = vi.hoisted(() => ({ elfPng: vi.fn(), elfPngKey: vi.fn() }));
-// The real functions, watched: the loader every family route reads through, the word's rule and the
-// picture processing.
-const spies = vi.hoisted(() => ({}) as { runsFor: Mock; decideWord: Mock; processPicture: Mock });
+// The real functions, watched: the loader every family route reads through, the word's rule, the
+// picture processing, Detective HQ's view and the gold card.
+const spies = vi.hoisted(() => ({}) as { runsFor: Mock; decideWord: Mock; processPicture: Mock; hqViewFor: Mock; claimWinHtml: Mock });
 
 vi.mock("../../src/db/elf", () => db);
 vi.mock("../../src/db/elf-doors", () => doors);
@@ -61,18 +61,40 @@ vi.mock("../../src/fundraising/picture-process", async (orig) => {
   spies.processPicture = vi.fn(real.processPicture);
   return { ...real, processPicture: spies.processPicture };
 });
+vi.mock("../../src/elf/views", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/views")>();
+  spies.hqViewFor = vi.fn(real.hqViewFor);
+  return { ...real, hqViewFor: spies.hqViewFor };
+});
+vi.mock("../../src/elf/pages/poster", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/pages/poster")>();
+  spies.claimWinHtml = vi.fn(real.claimWinHtml);
+  return { ...real, claimWinHtml: spies.claimWinHtml };
+});
 vi.mock("../../src/elf/elf-png", () => png);
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
-import { doorsOn, elfPhotoBodyGuard, elfRouter, ELF_PHOTO_POST_PATH, PHOTO_TRIES, resetPublicCalendar, WORD_LIMIT } from "../../src/routes/elf";
+import {
+  doorsOn,
+  elfPhotoBodyGuard,
+  elfRouter,
+  ELF_PHOTO_POST_PATH,
+  PHOTO_TRIES,
+  resetElfLimits,
+  resetPublicCalendar,
+  WORD_ADDRESS_LIMIT,
+  WORD_LIMIT,
+} from "../../src/routes/elf";
 import { PICTURE_JSON_BODY_LIMIT } from "../../src/routes/fundraiser-pictures";
 import { waveOneRuns, type DoorRun } from "../../src/db/elf-game";
 import { emptyDoor, type DoorClue, type DoorSetup } from "../../src/elf/door-setup";
 import { doorState } from "../../src/elf/doors";
-import { calendarViewFor } from "../../src/elf/views";
+import { calendarViewFor, hqViewFor } from "../../src/elf/views";
 import { doorDetail, doorTile } from "../../src/elf/pages/door";
+import { renderHqPage } from "../../src/elf/pages/hq";
+import sharp from "sharp";
 import { normalisePlaceName } from "../../src/elf/place-names";
 import { defaultLook } from "../../src/elf/wardrobe";
 import { ELF_NAMES } from "../../src/elf/names";
@@ -208,6 +230,7 @@ beforeEach(() => {
   for (const group of [db, doors, practice, game, png]) for (const f of Object.values(group)) f.mockReset();
   for (const s of Object.values(spies)) s.mockClear();
   resetPublicCalendar();
+  resetElfLimits();
   db.getElfSettings.mockResolvedValue(ON);
   db.findElfSession.mockResolvedValue({ familyId: 3 });
   db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? FAMILY : null));
@@ -218,6 +241,7 @@ beforeEach(() => {
   game.markAutomaticSnowDays.mockResolvedValue([]);
   game.familyGuesses.mockResolvedValue(new Map());
   game.takeWordTry.mockResolvedValue(1);
+  game.giveBackWordTry.mockResolvedValue(undefined);
   game.familyHasWon.mockResolvedValue(false);
   game.familyVisits.mockResolvedValue([]);
   // As the real one answers: the winner counts from now, anyone else from the later of now and the reveal.
@@ -351,6 +375,16 @@ describe("with December's doors switched off, at 6:10pm on 7 December", () => {
     expect(r.text).not.toContain("Example Bakehouse");
   });
 
+  it("draws exactly wave 1's Detective HQ: the view hqViewFor builds from waveOneRuns, with the stock elves, and empty maps", async () => {
+    const r = await call("GET", "/elf/hq");
+    const runs = waveOneRuns(2026, SIX_10);
+    expect(runs.map((run) => run.elfName)).toEqual([...ELF_NAMES]);
+    const wave1 = hqViewFor({ family: FAMILY, settings: OFF, now: SIX_10, runs: { runs, practice: null }, guesses: new Map(), doorsDone: new Map(), finders: new Map(), photos: [] });
+    // No case today with the doors off, so no elf is named at all, and the next clue is a default time.
+    expect(wave1.today).toBeNull();
+    expect(r.text).toBe(renderHqPage(wave1));
+  });
+
   it("serves the calendar through runsFor as wave 1: shut doors with the stock elves, never what a head elf typed", async () => {
     const feed = await call("GET", "/api/elf/calendar");
     expect(feed.status).toBe(200);
@@ -447,6 +481,21 @@ describe("a practice browser with December's doors switched off, at 6:10pm", () 
     expect(game.familyHasWon).not.toHaveBeenCalled();
     expect(game.takeWordTry).toHaveBeenCalledWith(0, 0, 3);
     expect(game.recordWord).toHaveBeenCalledWith(expect.objectContaining({ year: 0, door: 0, familyId: 3, won: true, detectiveIds: [100] }));
+  });
+
+  it("serves the practice door's approved photo once its place is shown, privately, reading only the practice door", async () => {
+    // Found at 6:10pm, so the place is shown at the reveal, 6:20pm.
+    practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
+    vi.setSystemTime(at("2026-12-07T18:15:00.000Z"));
+    expect((await call("GET", `/elf/door/0/photo/${TOKEN}.jpg`, { cookie: PRACTICE_PASS })).status).toBe(404);
+    expect(game.approvedPhoto).not.toHaveBeenCalled();
+    vi.setSystemTime(at("2026-12-07T18:25:00.000Z"));
+    const r = await call("GET", `/elf/door/0/photo/${TOKEN}.jpg`, { cookie: PRACTICE_PASS });
+    expect(r.status).toBe(200);
+    expect(game.approvedPhoto).toHaveBeenCalledWith(0, 0, TOKEN);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(doors.listElfDoors).not.toHaveBeenCalled();
+    expect(doors.getElfDoor).not.toHaveBeenCalled();
   });
 });
 
@@ -662,6 +711,8 @@ describe("the word on the tag", () => {
     const lines = JSON.stringify(logged.mock.calls);
     expect(lines).toContain("connection lost");
     for (const secret of ["SNOWBALL", "472", "Example Bakehouse", "Example Bakes", TYPED_ELF]) expect(lines).not.toContain(secret);
+    // No try was taken, so none is given back (that would cancel out a real wrong word).
+    expect(game.giveBackWordTry).not.toHaveBeenCalled();
     logged.mockRestore();
   });
 
@@ -681,20 +732,144 @@ describe("the word on the tag", () => {
     expect(r.text).toContain('class="elf-word"');
   });
 
-  it("limits each address to 30 words in 15 minutes", async () => {
+  const wrongFrom = (address: string) => call("POST", "/api/elf/word", { json: { code: CODE, detectiveIds: ["100"], word: "snowball 999" }, headers: { "X-Forwarded-For": address } });
+
+  it("limits each family to 30 words in 15 minutes, from whatever address", async () => {
     expect(WORD_LIMIT).toEqual({ max: 30, windowMs: 900_000 });
-    const from = { "X-Forwarded-For": "203.0.113.9" };
-    for (let i = 1; i <= 30; i++) {
-      const r = await call("POST", "/api/elf/word", { json: { code: CODE, detectiveIds: ["100"], word: "snowball 999" }, headers: from });
-      expect(r.status, `try ${i}`).toBe(400);
-    }
-    const r = await call("POST", "/api/elf/word", { json: { code: CODE, detectiveIds: ["100"], word: "snowball 999" }, headers: from });
+    for (let i = 1; i <= 30; i++) expect((await wrongFrom(`203.0.113.${i}`)).status, `word ${i}`).toBe(400);
+    const r = await wrongFrom("203.0.113.31");
     expect(r.status).toBe(429);
-    expect(r.data.message).toBe("Too many tries. Please wait a few minutes and try again.");
+    expect(r.data).toEqual({ reason: "too-many-requests", message: "Too many tries. Please wait a few minutes and try again." });
     expect(game.takeWordTry).toHaveBeenCalledTimes(30);
-    // Another address is not held up.
-    const other = await call("POST", "/api/elf/word", { json: { code: CODE, detectiveIds: ["100"], word: "snowball 999" }, headers: { "X-Forwarded-For": "198.51.100.4" } });
-    expect(other.status).toBe(400);
+    // Another family is not held up, even at an address the first family used.
+    db.findElfSession.mockResolvedValue({ familyId: 4 });
+    db.familyWithDetectives.mockImplementation(async (id: number) => ({ ...FAMILY, id }));
+    expect((await wrongFrom("203.0.113.1")).status).toBe(400);
+  });
+
+  it("limits each address to 300 words in 15 minutes, whoever types them, and holds up no other address", async () => {
+    expect(WORD_ADDRESS_LIMIT).toEqual({ max: 300, windowMs: 900_000 });
+    // Families sharing one mobile network's address, each well inside its own 30.
+    let n = 0;
+    db.findElfSession.mockImplementation(async () => ({ familyId: 1000 + (n++ % 12) }));
+    db.familyWithDetectives.mockImplementation(async (id: number) => ({ ...FAMILY, id }));
+    for (let batch = 0; batch < 6; batch++) {
+      const answers = await Promise.all(Array.from({ length: 50 }, () => wrongFrom("198.51.100.77")));
+      expect(answers.every((a) => a.status === 400), `batch ${batch + 1}`).toBe(true);
+    }
+    const over = await wrongFrom("198.51.100.77");
+    expect(over.status).toBe(429);
+    expect(over.data.message).toBe("Too many tries. Please wait a few minutes and try again.");
+    expect((await wrongFrom("198.51.100.78")).status).toBe(400);
+  });
+
+  it("draws the poster page for the plain form when the family has typed too many words, with the words in its form", async () => {
+    for (let i = 1; i <= 30; i++) await wrongFrom(`203.0.113.${i}`);
+    const r = await call("POST", `/elf/p/${CODE}/word`, { form: { code: CODE, detective: "100", word: "snowball 999" }, headers: { "X-Forwarded-For": "203.0.113.99" } });
+    expect(r.status).toBe(429);
+    expect(r.headers.get("content-type")).toContain("text/html");
+    expect(r.text).toContain('<p class="elf-form-status is-error" role="status">Too many tries. Please wait a few minutes and try again.</p>');
+    expect(r.text).toContain('class="elf-word"');
+    expect(game.takeWordTry).toHaveBeenCalledTimes(30);
+  });
+
+  it("answers 500, never a failure left unhandled, when the page for the plain form cannot be drawn", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyPhoto.mockRejectedValue(new Error("connection lost"));
+    const r = await call("POST", `/elf/p/${CODE}/word`, { form: { code: CODE, detective: "100", word: "SNOWBALL 472" } });
+    expect(r.status).toBe(500);
+    expect(r.text).toBe("Something went wrong just now. Please try again in a few minutes.");
+    expect(game.recordWord).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("answers 500 when a card cannot be drawn for the script", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    spies.claimWinHtml.mockImplementationOnce(() => {
+      throw new Error("a card that cannot be drawn");
+    });
+    const r = await word("SNOWBALL 472");
+    expect(r.status).toBe(500);
+    expect(r.data).toEqual({ error: "Something went wrong just now. Please try again in a few minutes." });
+    logged.mockRestore();
+  });
+
+  it("gives the try back when the game cannot be read after the try was taken", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyVisits.mockRejectedValue(new Error("connection lost"));
+    const r = await word("snowball 999");
+    expect(r.status).toBe(500);
+    expect(game.takeWordTry).toHaveBeenCalledTimes(1);
+    expect(game.giveBackWordTry).toHaveBeenCalledTimes(1);
+    expect(game.giveBackWordTry).toHaveBeenCalledWith(2026, 7, 3);
+    logged.mockRestore();
+  });
+
+  it("still answers 500, and lets nothing escape, when giving the try back fails too", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyVisits.mockRejectedValue(new Error("connection lost"));
+    game.giveBackWordTry.mockRejectedValue(new Error("still lost"));
+    const r = await word("snowball 999");
+    expect(r.status).toBe(500);
+    await vi.waitFor(() => expect(JSON.stringify(logged.mock.calls)).toContain("still lost"));
+    logged.mockRestore();
+  });
+
+  it("keeps a wrong word's try even when its answer cannot be drawn", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyPhoto.mockRejectedValue(new Error("connection lost"));
+    const r = await call("POST", `/elf/p/${CODE}/word`, { form: { code: CODE, detective: "100", word: "snowball 999" } });
+    expect(r.status).toBe(500);
+    expect(game.giveBackWordTry).not.toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("shows the gold card again to the finder's own second tap, inside two minutes of the find", async () => {
+    const foundAt = at("2026-12-07T17:46:30.000Z");
+    doors.findElfDoorByPosterCode.mockResolvedValue({ year: 2026, setup: door7({ foundAt, foundFamilyId: 3 }) });
+    game.familyHasWon.mockResolvedValue(true);
+    game.familyVisits.mockResolvedValue([{ door: 7, detectiveId: 100, countsFrom: foundAt, found: true }]);
+    const r = await word("SNOWBALL 472", ["100"]);
+    expect(r.status).toBe(200);
+    expect(r.data.outcome).toBe("won");
+    const html = String(r.data.html);
+    expect(html).toContain("You're first!");
+    expect(html).toContain("Found at 5:46pm");
+    expect(html).toContain("Detective Ruby Tinselfoot");
+    expect(game.recordWord).not.toHaveBeenCalled();
+    expect(game.giveBackWordTry).toHaveBeenCalledWith(2026, 7, 3);
+  });
+
+  it("never shows an old gold card again: three minutes after the find, the same tap is nothing new", async () => {
+    const foundAt = at("2026-12-07T17:44:00.000Z");
+    doors.findElfDoorByPosterCode.mockResolvedValue({ year: 2026, setup: door7({ foundAt, foundFamilyId: 3 }) });
+    game.familyHasWon.mockResolvedValue(true);
+    game.familyVisits.mockResolvedValue([{ door: 7, detectiveId: 100, countsFrom: foundAt, found: true }]);
+    const r = await word("SNOWBALL 472", ["100"]);
+    expect(r.status).toBe(400);
+    expect(r.data.reason).toBe("nothing-new");
+  });
+
+  it("never shows another family's gold card to a family that only visited", async () => {
+    const foundAt = at("2026-12-07T17:46:30.000Z");
+    doors.findElfDoorByPosterCode.mockResolvedValue({ year: 2026, setup: door7({ foundAt, foundFamilyId: 9 }) });
+    game.familyVisits.mockResolvedValue([{ door: 7, detectiveId: 100, countsFrom: SEVEN, found: false }]);
+    const r = await word("SNOWBALL 472", ["100"]);
+    expect(r.status).toBe(400);
+    expect(r.data.reason).toBe("nothing-new");
+  });
+
+  it("promises no promotion and no new costumes on a visit that only counts from later", async () => {
+    vi.setSystemTime(SIX_10);
+    doors.findElfDoorByPosterCode.mockResolvedValue({ year: 2026, setup: door7({ foundAt: FIVE_47, foundFamilyId: 9 }) });
+    // Door 7 would be Ruby's sixth door, a promotion and two costumes, but only from 7pm.
+    game.familyDoorsDone.mockResolvedValue(new Map([[100, { cracked: [1, 2, 3], visited: [4, 5], snow: [] }]]));
+    const r = await word("SNOWBALL 472", ["100"]);
+    const html = String(r.data.html);
+    expect(html).toContain("It counts from 7pm");
+    expect(html).toContain("6 doors done");
+    expect(html).not.toContain("Promoted");
+    expect(html).not.toContain("new thing");
   });
 });
 
@@ -763,13 +938,24 @@ describe("the typed guess", () => {
     expect(game.saveGuess).toHaveBeenCalled();
   });
 
-  it("answers the plain form's refusal in words, never as JSON", async () => {
+  it("draws Detective HQ again for the plain form's refusal, with the words in the guess form's status line", async () => {
+    doors.listElfDoors.mockResolvedValue([door3(), door7()]);
+    const r = await call("POST", "/api/elf/guess", { form: { door: "7", text: "the old example mill" } });
+    expect(r.status).toBe(400);
+    expect(r.headers.get("content-type")).toContain("text/html");
+    expect(r.text).toContain("Detective HQ");
+    expect(r.text).toContain('<p class="elf-guess__status is-error" role="status">That elf was already found behind door 3. Try again!</p>');
+    expect(game.saveGuess).not.toHaveBeenCalled();
+  });
+
+  it("says too late on Detective HQ, drawn again, when the plain form arrives after the place is shown", async () => {
     vi.setSystemTime(SEVEN_05);
     doors.listElfDoors.mockResolvedValue([door7({ foundAt: FIVE_47, foundFamilyId: 9 })]);
     const r = await call("POST", "/api/elf/guess", { form: { door: "7", text: "Example Bakes" } });
     expect(r.status).toBe(400);
-    expect(r.headers.get("content-type")).not.toContain("json");
-    expect(r.text).toContain("Too late: the hiding place is shown now.");
+    expect(r.headers.get("content-type")).toContain("text/html");
+    expect(r.text).toContain('<p class="elf-guess__status is-error" role="status">Too late: the hiding place is shown now. Have a look at the calendar.</p>');
+    expect(spies.hqViewFor).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -814,6 +1000,27 @@ describe("the family's photo", () => {
       picture: { mime: "image/jpeg", bytes: true, width: 4, height: 4 },
       at: FIVE_47,
     });
+  });
+
+  it("takes a PNG as the fundraisers' pictures do, and keeps it made again as a JPEG", async () => {
+    game.familyVisits.mockResolvedValue(VISIT);
+    const png = await sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 0, g: 128, b: 0 } } }).png().toBuffer();
+    const r = await photo({ mime: "image/png", dataBase64: png.toString("base64") });
+    expect(r.status).toBe(202);
+    expect(spies.processPicture).toHaveBeenCalledWith("main", png);
+    expect(game.sendElfPhoto.mock.calls[0][0].picture.mime).toBe("image/jpeg");
+  });
+
+  it("spends none of an address's allowance on tries its family's own limit has refused", async () => {
+    game.familyVisits.mockResolvedValue(VISIT);
+    game.sendElfPhoto.mockResolvedValue("limit");
+    const from = { "X-Forwarded-For": "203.0.113.30" };
+    // Twenty tries for the family, then forty its limit refuses: the address has counted only twenty.
+    for (let i = 1; i <= 60; i++) await photo({}, { headers: from });
+    db.findElfSession.mockResolvedValue({ familyId: 4 });
+    game.sendElfPhoto.mockResolvedValue({ token: TOKEN });
+    const r = await photo({}, { headers: from });
+    expect(r.status).toBe(202);
   });
 
   it("says when the family has sent five today", async () => {
@@ -919,6 +1126,14 @@ describe("a photo on a door", () => {
     expect(r.headers.get("x-content-type-options")).toBe("nosniff");
     expect(r.headers.get("cache-control")).toBe("public, max-age=300");
     expect(game.approvedPhoto).toHaveBeenCalledWith(2026, 7, TOKEN);
+  });
+
+  it("reads only its own door, never all 24", async () => {
+    vi.setSystemTime(SEVEN_05);
+    await call("GET", `/elf/door/7/photo/${TOKEN}.jpg`, { cookie: null });
+    expect(doors.getElfDoor).toHaveBeenCalledWith(2026, 7);
+    expect(doors.listElfDoors).not.toHaveBeenCalled();
+    expect(spies.runsFor).not.toHaveBeenCalled();
   });
 
   it("is not found for an address that is not a photo token, or a photo not approved", async () => {
@@ -1099,13 +1314,14 @@ describe("Detective HQ with the doors on", () => {
     expect(game.finderParts).not.toHaveBeenCalled();
   });
 
-  it("names who found today's elf once its place is shown", async () => {
+  it("names who found today's elf once its place is shown, building the view once", async () => {
     vi.setSystemTime(SEVEN_05);
     doors.listElfDoors.mockResolvedValue([door7({ foundAt: FIVE_47, foundFamilyId: 9 })]);
     game.finderParts.mockResolvedValue([{ firstName: "Ava", surname: "Snowdrift", approved: true }]);
     const r = await call("GET", "/elf/hq");
     expect(game.finderParts).toHaveBeenCalledWith(2026, 7);
     expect(r.text).toContain("Detective Ava Snowdrift");
+    expect(spies.hqViewFor).toHaveBeenCalledTimes(1);
   });
 
   it("dresses the wardrobe from the detective's own doors done", async () => {

@@ -110,6 +110,9 @@ export interface TodayView {
   guess: { text: string; at: Date } | null;
   /** Can the family still type or change a guess? */
   canGuess: boolean;
+  /** Why the guess just typed was not taken, when it came from the form with no script; null otherwise.
+   *  Drawn in the guess form's status line. */
+  guessError: string | null;
   /** How it ended, once the door is open: where the elf was, who found it (nobody yet for a revealed
    *  door), and whether this family cracked the case. `by` names ANOTHER family's detectives, so
    *  it is public too: it MUST come from detectiveNames, like DoorView.found.by. */
@@ -183,6 +186,9 @@ export interface PosterView {
   detectives: { id: string; name: string; hasStamp: boolean }[];
   /** The family's own photo for this door, if it sent one. */
   yourPhoto: { token: string; status: "waiting" | "approved" | "declined" } | null;
+  /** Why the word form posted with no script was not looked at (too many words just now), or null.
+   *  Drawn in the form's status line. The same at every place, so it gives nothing away. */
+  wordError: string | null;
   joinUrl: string;
   signInUrl: string;
   calendarUrl: string;

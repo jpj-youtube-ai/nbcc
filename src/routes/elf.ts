@@ -57,13 +57,13 @@ import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
 import { renderHqPage } from "../elf/pages/hq";
 import { claimWinHtml, renderPosterPage, visitWinHtml, wordRefusalWords } from "../elf/pages/poster";
 import { renderRulesPage } from "../elf/pages/rules";
-import type { CalendarView, ClaimWin, FamilyMarks, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
+import type { CalendarView, ClaimWin, FamilyMarks, HqView, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
 import { progressOf, promotionsBetween, type DoorsDone, type Rank } from "../elf/progress";
 import { makePublicCalendar } from "../elf/public-calendar";
 import type { Scrapbook } from "../elf/scrapbook";
 import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState } from "../elf/wardrobe";
-import { calendarViewFor, hqViewFor, lookFromForm, marksOf, posterViewFor, wardrobeViewFor, type DetectiveRow, type FamilyRow } from "../elf/views";
+import { calendarViewFor, hqViewFor, lookFromForm, marksOf, posterViewFor, todayRunOf, wardrobeViewFor, type DetectiveRow, type FamilyRow } from "../elf/views";
 import { elfPng, elfPngKey } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
@@ -496,24 +496,33 @@ async function guessesFor(res: Response, runs: FamilyRuns, familyId: number): Pr
   return guesses;
 }
 
+/** Detective HQ's view for a family, all read through runsFor: the family's guesses, each detective's
+ *  doors done and, once today's door is found and its place shown, who found it (read for that one door
+ *  only). `known` is the doors when the caller has just read them. */
+async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: FamilyRuns): Promise<HqView> {
+  const settings = settingsOf(res);
+  const runs = known ?? (await familyRuns(res, now));
+  const todayRun = todayRunOf({ settings, now, runs });
+  const findersOfToday = async (): Promise<Map<Door, DetectiveNameParts[]>> => {
+    if (!todayRun || todayRun.door === 0 || doorState(todayRun.facts, now) !== "found") return new Map();
+    return new Map([[todayRun.door, await finderParts(todayRun.year, todayRun.door)]]);
+  };
+  const [guesses, doorsDone, finders] = await Promise.all([
+    guessesFor(res, runs, family.id),
+    familyDoorsDone(settings.year, family.id, runs.runs, now),
+    findersOfToday(),
+  ]);
+  // HQ draws no photos: the calendar's script reads the family's own from /api/elf/me.
+  return hqViewFor({ family, settings, now, runs, guesses, doorsDone, finders, photos: [] });
+}
+
 export async function getHq(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
-  const settings = settingsOf(res);
   const now = new Date();
   try {
     const family = await familyOr(req, res);
     if (!family) return;
-    const runs = await familyRuns(res, now);
-    const [guesses, doorsDone] = await Promise.all([guessesFor(res, runs, family.id), familyDoorsDone(settings.year, family.id, runs.runs, now)]);
-    // HQ draws no photos: the calendar's script reads the family's own from /api/elf/me.
-    const base = { family, settings, now, runs, guesses, doorsDone, photos: [] };
-    let view = hqViewFor({ ...base, finders: new Map() });
-    // Today's case names who found its elf once the place is shown: read them for that one door.
-    const today = view.today;
-    if (today && today.door !== 0 && today.state === "found") {
-      view = hqViewFor({ ...base, finders: new Map([[today.door, await finderParts(settings.year, today.door)]]) });
-    }
-    return res.type("html").send(renderHqPage(view));
+    return res.type("html").send(renderHqPage(await hqViewOf(res, family, now)));
   } catch (err) {
     return gameFailed(res, "detective hq", err, false);
   }
@@ -588,9 +597,11 @@ export async function postLook(req: Request, res: Response): Promise<Response | 
   if (detectiveId !== null) {
     const now = new Date();
     try {
-      // The doors this detective has done, worked out here from the doors every family route reads.
-      const doors = await detectiveDoorsDone(settingsOf(res).year, detectiveId, (await familyRuns(res, now)).runs, now);
-      kept = await saveLook({ detectiveId, familyId: s.familyId, look, tried, favourites, doors });
+      // Read from the signed in family's own detectives, so another family's detective is refused before
+      // anything of its doors is read or anything is saved. The doors done are worked out here, from the
+      // doors every family route reads, never taken from the page.
+      const doors = (await familyDoorsDone(settingsOf(res).year, s.familyId, (await familyRuns(res, now)).runs, now)).get(detectiveId);
+      if (doors) kept = await saveLook({ detectiveId, familyId: s.familyId, look, tried, favourites, doors });
     } catch (err) {
       return gameFailed(res, "look", err, json);
     }
@@ -789,6 +800,13 @@ function gameRun(res: Response, runs: FamilyRuns, n: number | null): DoorRun | n
   return where.door === 0 ? runs.practice : (runs.runs.find((r) => r.door === where.door) ?? null);
 }
 
+/** The same door read on its own, for a public route that needs only that one door. */
+async function oneGameRun(res: Response, n: number | null, now: Date): Promise<DoorRun | null> {
+  const where = gameDoor(res, n);
+  if (!where) return null;
+  return where.door === 0 ? await loadPractice(now) : await loadDoorRun(where.year, where.door, now);
+}
+
 /** The door a poster's code opens: the practice door's for a browser with the preview link (never
  *  through the real doors' table), otherwise this year's door with that code while December's doors
  *  are on. Null for anything else, another year's door included. */
@@ -841,12 +859,45 @@ export async function getPoster(req: Request, res: Response): Promise<Response |
   }
 }
 
-/** Words each address may type in 15 minutes, at every place together: plenty for a family going
- *  round the doors, and far too few to guess a tag's word from home. */
+/** Words each family may type in 15 minutes, at every place together: plenty for a family going round
+ *  the doors, and far too few to guess a tag's word from home (each place also allows six wrong words). */
 export const WORD_LIMIT = { max: 30, windowMs: 15 * 60_000 } as const;
-const wordLimiter = createRateLimiter(WORD_LIMIT);
+/** Words from one address in 15 minutes, whoever types them: loose enough for families sharing a mobile
+ *  network's address at a busy door, tight enough to stop a script. */
+export const WORD_ADDRESS_LIMIT = { max: 300, windowMs: 15 * 60_000 } as const;
+/** Photos a family may try to send in a day, counted before any picture is opened, as the fundraisers'
+ *  are: the database's limit of five a day applies only once a picture has been made, so these keep
+ *  anyone from keeping the one picture maker busy. An address gets more, for a shared connection. */
+export const PHOTO_TRIES = { max: 20, windowMs: 24 * 60 * 60_000 } as const;
+const PHOTO_ADDRESS_TRIES = { max: 60, windowMs: PHOTO_TRIES.windowMs } as const;
+
+const gameLimits = () => ({
+  wordFamily: createRateLimiter(WORD_LIMIT),
+  wordAddress: createRateLimiter(WORD_ADDRESS_LIMIT),
+  photoFamily: createRateLimiter(PHOTO_TRIES),
+  photoAddress: createRateLimiter(PHOTO_ADDRESS_TRIES),
+});
+let limits = gameLimits();
+
+/** For tests: fresh counts for the game's limits. */
+export function resetElfLimits(): void {
+  limits = gameLimits();
+}
+
+/** May this family, from this address, try once more? The family's own limit comes first, and an
+ *  address's allowance is spent only on tries the family's limit lets through. A request made on the box
+ *  itself (local development, the pr.yml BDD suite) is never limited, as everywhere in this file. */
+function allowedOnce(req: Request, familyId: number, family: ReturnType<typeof createRateLimiter>, address: ReturnType<typeof createRateLimiter>): boolean {
+  if (isLoopbackRequest(req)) return true;
+  const t = Date.now();
+  return family.allow(String(familyId), t) && address.allow(req.ip ?? "unknown", t);
+}
 
 const NO_DOORS: DoorsDone = { cracked: [], visited: [] };
+
+/** How long after a family's own find its second tap of the same word still shows the gold card: long
+ *  enough for a double tap, too short for an old card to be shown again to claim twice. */
+const DOUBLE_TAP_MS = 2 * 60_000;
 
 /** What a word that counted at `door` gives a detective: the doors done with it, the rank, the rank it
  *  has just reached (if it reached one) and how many costumes it unlocks. The practice door counts for
@@ -867,7 +918,8 @@ function earnedBy(before: DoorsDone, door: Door | 0): { doorsDone: number; rank:
 }
 
 /** The word on the elf's tag, which claims the elf and stamps a visit (src/elf/claim.ts). JSON for the
- *  page's script, or the poster page drawn again for the plain form. */
+ *  page's script, or the poster page drawn again for the plain form. Every answer is awaited inside the
+ *  try, so a failure while drawing one is a 500, never a promise that nothing handles. */
 export async function postWord(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const json = wantsJson(req);
@@ -875,20 +927,25 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
   const signIn = (): Response | void => (json ? res.status(401).json({ error: "Please sign in again." }) : res.redirect(303, "/elf/sign-in"));
   const body = (req.body ?? {}) as Record<string, unknown>;
   const now = new Date();
+  // A try taken at a door that is neither kept (a wrong word keeps it) nor given back yet: if anything
+  // fails before the word is decided, the finally below gives it back, so a failure never costs a try.
+  let held: { year: number; door: Door | 0; familyId: number } | null = null;
   try {
     const s = await signedInFamily(req);
     if (!s) return signIn();
-    if (!isLoopbackRequest(req) && !wordLimiter.allow(req.ip ?? "unknown", Date.now())) {
-      return json ? res.status(429).json({ reason: "too-many-requests", message: ELF_TOO_MANY }) : res.status(429).type("text/plain").send(ELF_TOO_MANY);
-    }
+    const limited = !allowedOnce(req, s.familyId, limits.wordFamily, limits.wordAddress);
+    if (limited && json) return res.status(429).json({ reason: "too-many-requests", message: ELF_TOO_MANY });
     const family = await familyWithDetectives(s.familyId);
     if (!family) return signIn();
     const run = await runByCode(res, String(req.params.code ?? body.code ?? ""), now);
     if (!run) return notFound(res, json);
+    // The plain form is told on its own page, in the form's status line.
+    if (limited) return res.status(429).type("html").send(renderPosterPage({ ...(await posterViewOf(run, family, now)), wordError: ELF_TOO_MANY }));
     const { year, door } = run;
     // The try is taken before the word is looked at, in one step, so a burst of words cannot all read
     // the same count.
     const wrong = await takeWordTry(year, door, family.id);
+    held = { year, door, familyId: family.id };
     const [visits, hasWon] = await Promise.all([familyVisits(year, family.id), door === 0 ? false : familyHasWon(year, family.id)]);
     const state = doorState(run.facts, now);
     const decision = decideWord(
@@ -915,14 +972,52 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
       return res.status(status).json(outcome.outcome === "won" ? { outcome: "won", html: claimWinHtml(outcome.win) } : { outcome: "visited", html: visitWinHtml(outcome.visit) });
     };
 
+    // The family's own screen: each detective's name in full, as the family typed it.
+    const nameOf = (d: DetectiveRow): string => familyDetectiveName({ firstName: d.firstName, surname: d.surname, approved: true });
+    const doorsDoneNow = async (): Promise<Map<number, DoorsDone>> => familyDoorsDone(settingsOf(res).year, family.id, (await familyRuns(res, now)).runs, now);
+    /** The gold card for the staff: who found the elf, with the time of the find. */
+    const goldCard = (detectives: readonly DetectiveRow[], before: Map<number, DoorsDone>, at: Date): PosterOutcome => {
+      const win: ClaimWin = {
+        door,
+        elfName: run.elfName,
+        placeName: run.placeName ?? "",
+        at,
+        now,
+        detectives: detectives.map((d) => ({
+          name: nameOf(d),
+          badgeNumber: d.badgeNumber === null ? "" : badgeWords(d.badgeNumber),
+          rank: earnedBy(before.get(d.id) ?? NO_DOORS, door).rank,
+          elfUrl: `/elf/hq/elf/${d.id}.png`,
+        })),
+        calendarUrl: "/elf",
+        hqUrl: "/elf/hq",
+      };
+      return { form: "word", ok: true, outcome: "won", win };
+    };
+
     // Only a wrong word uses up one of the family's tries at this place.
-    if (!decision.ok && decision.reason === "wrong-word") return answer(400, { form: "word", ok: false, reason: "wrong-word", triesLeft: MAX_WRONG_WORDS - wrong });
+    if (!decision.ok && decision.reason === "wrong-word") {
+      held = null;
+      return await answer(400, { form: "word", ok: false, reason: "wrong-word", triesLeft: MAX_WRONG_WORDS - wrong });
+    }
+    held = null;
     await giveBackWordTry(year, door, family.id);
-    if (!decision.ok) return answer(decision.reason === "too-early" || decision.reason === "gone-home" ? 409 : 400, { form: "word", ok: false, reason: decision.reason });
+    if (!decision.ok) {
+      // A double tap that arrives once the family's own first tap has won: the elf is theirs and every
+      // detective ticked has the stamp. That is the gold card again, with the find's own time, but only
+      // just after the find, so an old card can never be shown again to claim a second prize.
+      const foundAt = run.facts.foundAt;
+      const sinceFind = foundAt ? now.getTime() - foundAt.getTime() : Number.NaN;
+      if (decision.reason === "nothing-new" && foundAt && run.foundFamilyId === family.id && sinceFind >= 0 && sinceFind <= DOUBLE_TAP_MS) {
+        const finders = family.detectives.filter((d) => visits.some((v) => v.door === door && v.found && v.detectiveId === d.id));
+        return await answer(200, goldCard(finders, await doorsDoneNow(), foundAt));
+      }
+      return await answer(decision.reason === "too-early" || decision.reason === "gone-home" ? 409 : 400, { form: "word", ok: false, reason: decision.reason });
+    }
 
     // The ticks arrive as text; the family's detectives are numbers.
     const chosen = decision.detectiveIds.map((id) => family.detectives.find((d) => String(d.id) === id)).filter((d): d is DetectiveRow => d !== undefined);
-    const before = await familyDoorsDone(settingsOf(res).year, family.id, (await familyRuns(res, now)).runs, now);
+    const before = await doorsDoneNow();
     // Each elf goes on the door in its look at this moment, made safe against what its detective has done.
     const looks: Record<number, unknown> = {};
     for (const d of chosen) looks[d.id] = normaliseLook(d.look, wardrobeState(before.get(d.id) ?? NO_DOORS));
@@ -932,52 +1027,49 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
     // shown, so the family that loses the race counts from then.
     const shown = shownAt(won ? { ...run.facts, foundAt: now } : run.facts);
     const result = await recordWord({ year, door, familyId: family.id, detectiveIds: chosen.map((d) => d.id), won, shownAt: shown, at: now, looks });
-    let winner = result.won;
-    let foundAt = now;
+    let winnerAt: Date | null = result.won ? now : null;
     if (won && !result.won) {
-      // Another word was first. If it was this family's own (a double tap), this is still its win.
+      // Another word was first, in the same moment. If it was this family's own (a double tap), this is
+      // still the family's win.
       const fresh = door === 0 ? await loadPractice(now) : await loadDoorRun(year, door, now);
-      if (fresh && fresh.foundFamilyId === family.id) {
-        winner = true;
-        foundAt = fresh.facts.foundAt ?? now;
-      }
+      if (fresh && fresh.foundFamilyId === family.id) winnerAt = fresh.facts.foundAt ?? now;
     }
+    if (winnerAt) return await answer(200, goldCard(chosen, before, winnerAt));
 
-    // The family's own screen: each detective's name in full, as the family typed it.
-    const nameOf = (d: DetectiveRow): string => familyDetectiveName({ firstName: d.firstName, surname: d.surname, approved: true });
-    if (winner) {
-      const win: ClaimWin = {
-        door,
-        elfName: run.elfName,
-        placeName: run.placeName ?? "",
-        at: foundAt,
-        now,
-        detectives: chosen.map((d) => ({
-          name: nameOf(d),
-          badgeNumber: d.badgeNumber === null ? "" : badgeWords(d.badgeNumber),
-          rank: earnedBy(before.get(d.id) ?? NO_DOORS, door).rank,
-          elfUrl: `/elf/hq/elf/${d.id}.png`,
-        })),
-        calendarUrl: "/elf",
-        hqUrl: "/elf/hq",
-      };
-      return answer(200, { form: "word", ok: true, outcome: "won", win });
-    }
+    // A visit that counts only from later (its place still hidden) promises nothing that unlocks only
+    // then, no promotion and no new things: the "It counts from" line says when it counts.
+    const later = result.countsFrom.getTime() > now.getTime();
     const visit: VisitWin = {
       door,
       placeName: run.placeName ?? "",
-      countsFrom: result.countsFrom.getTime() > now.getTime() ? result.countsFrom : null,
+      countsFrom: later ? result.countsFrom : null,
       detectives: chosen.map((d) => {
         const got = earnedBy(before.get(d.id) ?? NO_DOORS, door);
-        return { name: nameOf(d), doorsDone: got.doorsDone, promotedTo: got.promotedTo, newThings: got.newThings, wardrobeUrl: `/elf/hq/wardrobe/${d.id}` };
+        return {
+          name: nameOf(d),
+          doorsDone: got.doorsDone,
+          promotedTo: later ? null : got.promotedTo,
+          newThings: later ? 0 : got.newThings,
+          wardrobeUrl: `/elf/hq/wardrobe/${d.id}`,
+        };
       }),
       photo: { door, sendUrl: `/api/elf/p/${run.posterCode}/photo` },
       calendarUrl: "/elf",
       hqUrl: "/elf/hq",
     };
-    return answer(200, { form: "word", ok: true, outcome: "visited", visit });
+    return await answer(200, { form: "word", ok: true, outcome: "visited", visit });
   } catch (err) {
     return gameFailed(res, "word", err, json);
+  } finally {
+    if (held) {
+      const { year, door, familyId } = held;
+      // Never throws from here: the answer has gone, and a failure must not become a promise nothing handles.
+      try {
+        await giveBackWordTry(year, door, familyId);
+      } catch (err) {
+        console.error("elf word try give back failed:", err instanceof Error ? err.message : err);
+      }
+    }
   }
 }
 
@@ -1016,9 +1108,14 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
     if (!decision.ok) {
       // A door's elf is named only once the door can be guessed: until then its name stays a surprise.
       const message = wordsForGuessRefusal(decision.reason, canGuess(state) ? run.elfName : "the elf", decision.door);
-      // The plain form has no script to show the words in, so they come back on a page of their own.
-      if (!json) return res.status(400).type("text/plain").send(message);
-      return res.status(400).json({ reason: decision.reason, message, ...(decision.door === undefined ? {} : { door: decision.door }) });
+      if (json) return res.status(400).json({ reason: decision.reason, message, ...(decision.door === undefined ? {} : { door: decision.door }) });
+      // The plain form has no script to show the words: Detective HQ is drawn again with them in the guess
+      // form's status line (or in the case, once there is no form to say it in).
+      const family = await familyWithDetectives(s.familyId);
+      if (!family) return res.redirect(303, "/elf/sign-in");
+      const view = await hqViewOf(res, family, now, runs);
+      const today = view.today && view.today.door === run.door ? { ...view.today, guessError: message } : view.today;
+      return res.status(400).type("html").send(renderHqPage({ ...view, today }));
     }
     await saveGuess(run.year, run.door, s.familyId, { text: decision.text, norm: decision.norm }, now);
     return json ? res.status(200).json({ ok: true, text: decision.text }) : res.redirect(303, "/elf/hq");
@@ -1053,13 +1150,6 @@ const PHOTO_READ = "We could not open that picture. Please try a different photo
 const PHOTO_BUSY = { error: "Lots of photos arriving just now. Please try again in a minute." };
 const PHOTO_TOO_MANY_TRIES = { error: "You have tried to send a lot of photos today. Please try again tomorrow." };
 
-/** Photos a family may try to send in a day, counted before any picture is opened, as the fundraisers'
- *  are: the database's limit of five a day applies only once a picture has been made, so these keep
- *  anyone from keeping the one picture maker busy. An address gets more, for a shared connection. */
-export const PHOTO_TRIES = { max: 20, windowMs: 24 * 60 * 60_000 } as const;
-const photoFamilyTries = createRateLimiter(PHOTO_TRIES);
-const photoAddressTries = createRateLimiter({ max: 60, windowMs: PHOTO_TRIES.windowMs });
-
 export async function postPhoto(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
@@ -1073,15 +1163,12 @@ export async function postPhoto(req: Request, res: Response): Promise<Response |
     const visits = await familyVisits(run.year, s.familyId);
     if (!visits.some((v) => v.door === run.door)) return res.status(403).json(NOT_VISITED);
     if (body.consent !== true) return res.status(400).json(NO_CONSENT);
-    if (!isLoopbackRequest(req)) {
-      const t = Date.now();
-      const tries = [photoFamilyTries.allow(String(s.familyId), t), photoAddressTries.allow(req.ip ?? "unknown", t)];
-      if (!tries.every(Boolean)) return res.status(429).json(PHOTO_TOO_MANY_TRIES);
-    }
+    if (!allowedOnce(req, s.familyId, limits.photoFamily, limits.photoAddress)) return res.status(429).json(PHOTO_TOO_MANY_TRIES);
     const bytes = decodeBase64(typeof body.dataBase64 === "string" ? body.dataBase64 : "");
     const check = checkPictureUpload(typeof body.mime === "string" ? body.mime : "", bytes);
-    // Only a JPEG is opened: the page's script always sends one.
-    if (!check.ok || check.mime !== "image/jpeg") {
+    // A JPEG, PNG or WebP whose bytes really are that, as the fundraisers' pictures take: it is made
+    // again below, so what is stored is always a fresh JPEG.
+    if (!check.ok) {
       const size = !check.ok && check.reason === "size";
       return res.status(size ? 413 : 400).json({ error: LOOK_AGAIN, fields: { photo: size ? PHOTO_SIZE : PHOTO_TYPE } });
     }
@@ -1137,7 +1224,7 @@ export async function getDoorPhoto(req: Request, res: Response): Promise<Respons
   if (!CODE_SHAPE.test(token) || !gameDoor(res, n)) return notFound(res);
   const now = new Date();
   try {
-    const run = gameRun(res, await familyRuns(res, now), n);
+    const run = await oneGameRun(res, n, now);
     // Only while its door is open: a photo sent while the place was still hidden never gives it away.
     if (!run || !isOpen(doorState(run.facts, now))) return notFound(res);
     const photo = await approvedPhoto(run.year, run.door, token);

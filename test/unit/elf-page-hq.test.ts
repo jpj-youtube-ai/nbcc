@@ -134,6 +134,32 @@ describe("the guess", () => {
     expect(words(form.querySelector("button"))).toBe("Change my guess");
   });
 
+  it("says why a guess sent with no script was not taken, in the form's status line, made safe", () => {
+    const doc = page(today({ guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, guessError: "That elf was already found behind door 3. <b>Try again!</b>" }));
+    const status = doc.querySelector("form.elf-guess .elf-guess__status")!;
+    expect(status.classList.contains("is-error")).toBe(true);
+    expect(status.getAttribute("role")).toBe("status");
+    expect(words(status)).toBe("That elf was already found behind door 3. <b>Try again!</b>");
+    expect(status.querySelector("b")).toBeNull();
+    // The guess already locked in is still in the box, to change or send again.
+    expect(doc.querySelector<HTMLInputElement>('form.elf-guess input[name="text"]')!.value).toBe("The Bookshop");
+  });
+
+  it("keeps the status line plain when there is nothing wrong", () => {
+    expect(page().querySelector(".elf-guess__status")!.classList.contains("is-error")).toBe(false);
+  });
+
+  it("still says why a guess was not taken where the case has no form any more (the place is shown now)", () => {
+    const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: false };
+    const doc = page(today({ state: "found", canGuess: false, outcome, guessError: "Too late: the hiding place is shown now. Have a look at the calendar." }));
+    expect(doc.querySelector("form.elf-guess")).toBeNull();
+    const status = doc.querySelector(".elf-case .elf-guess__status.is-error")!;
+    expect(words(status)).toBe("Too late: the hiding place is shown now. Have a look at the calendar.");
+    expect(status.getAttribute("role")).toBe("status");
+    // And nothing at all when there is nothing to say.
+    expect(page(today({ state: "found", canGuess: false, outcome })).querySelector(".elf-guess__status")).toBeNull();
+  });
+
   it("offers no empty form when there is nothing left to guess", () => {
     const doc = page(today({ canGuess: false }));
     expect(doc.querySelector("form.elf-guess")).toBeNull();

@@ -235,7 +235,8 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
   const elf = escapeHtml(view.elfName);
   const calendar = sitePath(view.calendarUrl) ?? "/";
   const result = !outcome || !outcome.ok ? "" : outcome.outcome === "won" ? claimWinHtml(outcome.win) : visitWinHtml(outcome.visit);
-  const refusal = outcome && !outcome.ok ? wordRefusalWords(outcome.reason, outcome.triesLeft) : "";
+  // A refused word says why; so does a form sent too often (the server's words, the same at every place).
+  const refusal = outcome && !outcome.ok ? wordRefusalWords(outcome.reason, outcome.triesLeft) : typeof view.wordError === "string" ? view.wordError : "";
 
   let lede: string;
   let body: string;

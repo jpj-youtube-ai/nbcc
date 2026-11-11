@@ -455,6 +455,23 @@ describe("words that are gone for good", () => {
   });
 });
 
+describe("the word form sent too often with no script", () => {
+  it("says so in the form's status line, made safe, and keeps the form", () => {
+    const doc = page(posterView({ wordError: "Too many tries. Please wait a few minutes and try again. <i>x</i>" }));
+    const status = doc.querySelector("form.elf-word .elf-form-status")!;
+    expect(status.classList.contains("is-error")).toBe(true);
+    expect(words(status)).toBe("Too many tries. Please wait a few minutes and try again. <i>x</i>");
+    expect(status.querySelector("i")).toBeNull();
+    expect(doc.querySelector('form.elf-word input[name="word"]')).not.toBeNull();
+  });
+
+  it("is the same at every place whose door is not open", () => {
+    const one = renderPosterPage(posterView({ wordError: "Too many tries. Please wait a few minutes and try again." }));
+    const other = renderPosterPage(posterView({ door: 12, elfName: "Pickle", wordError: "Too many tries. Please wait a few minutes and try again." }));
+    expect(one).toBe(other);
+  });
+});
+
 describe("the page drawn again after the form was posted with no script", () => {
   it("shows the gold card, and no form, after a win", () => {
     const doc = page(posterView(HIDDEN), { form: "word", ok: true, outcome: "won", win: claimWin() });

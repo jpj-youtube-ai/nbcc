@@ -1667,7 +1667,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.png`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture (a PNG of the elf on its stage, stacked from the paper pictures; 503 with `Retry-After` when the picture maker is busy), and saving a look and up to three favourite looks, each made safe against the doors the detective has done (`{ ok, look, favourites }`) |
 | `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks |
 | `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings` | **implemented** | Head Elf HQ (Admin > Content > Elf Detective School): the switch and the prices (section `elf`: view to read, admin only to change) |
-| `GET /api/admin/elf/hq` | **implemented** | Head Elf HQ's front screen: the settings, who may switch, the numbers, what needs a head elf, the newest detectives and the days to the first clue (section `elf`: view) |
+| `GET /api/admin/elf/hq` | **implemented** | Head Elf HQ's front screen: the settings, who may switch, the numbers, what needs a head elf, the newest detectives and the days to the first clue, and how many photos are waiting (the Finds tile's count) (section `elf`: view) |
 | `GET /api/admin/elf/families`, `GET /api/admin/elf/families/:id` | **implemented** | Head Elf HQ's families: searched (`q`, a name, email or badge), filtered (`all`, `check`, `week`, `removed`) and paged 50 at a time, and one family's sheet with its detectives and payments (section `elf`: view) |
 | `PATCH /api/admin/elf/families/:id`, `POST /api/admin/elf/families/:id/sign-in-code` \| `remove` \| `restore`, `PATCH /api/admin/elf/detectives/:id` | **implemented** | Head Elf HQ's changes, each written to the audit log: a grown up's name or email, a sign in code sent for them, a family taken out or put back, a detective's name ticked, unticked or changed (section `elf`: edit) |
 | `GET /elf/preview/:code`, `POST /api/admin/elf/preview`, `DELETE /api/admin/elf/preview` | **implemented** | The private preview link: an admin makes it (any earlier one stops working; only its sha256 is kept), and a browser that opens it sees every `/elf` page while Elf Detective School is switched off, each marked Private preview, `noindex` and never cached publicly. Payments in the preview are real |
@@ -1677,9 +1677,13 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /elf/door/:n/elf/:visitId.png`, `GET /elf/hq/clue/:door/:n.jpg` | **implemented, switched off** | A family's elf standing on a door (one read a request; drawn from the look stored with the visit and kept drawn, the most recent 200), and a clue's picture (signed in families only, once that clue is out) |
 | `GET /api/admin/elf/practice`, `POST /api/admin/elf/practice`, `DELETE /api/admin/elf/practice` | **implemented** | The practice door (door 0): read, start (needs a preview link) and clear, from Head Elf HQ Settings; starting and clearing are audited (section `elf`: edit) |
 | `POST /api/admin/elf/families/:id/word-tries/clear` | **implemented** | A head elf clears a family's wrong words (section `elf`: edit; audited) |
-| `GET /api/admin/elf/doors`, `GET` \| `PATCH /api/admin/elf/doors/:door`, `POST /api/admin/elf/doors/:door/names`, `DELETE .../names/:id`, `POST .../word`, `POST` \| `DELETE .../dropped-off` \| `thanked`, `PUT /api/admin/elf/doors/:door/clues/:n`, `POST /api/admin/elf/clues/check` \| `save`, `GET .../poster` \| `staff-card` \| `tag`, `GET /api/admin/elf/places-list` | **implemented** | Head Elf HQ's Doors (see **Head Elf HQ**) |
+| `GET /api/admin/elf/doors`, `GET` \| `PATCH /api/admin/elf/doors/:door`, `POST /api/admin/elf/doors/:door/names`, `DELETE .../names/:id`, `POST .../word`, `POST` \| `DELETE .../dropped-off` \| `thanked`, `PUT /api/admin/elf/doors/:door/clues/:n`, `POST /api/admin/elf/clues/check` \| `save`, `GET .../poster` \| `staff-card` \| `tag`, `GET /api/admin/elf/places-list` | **implemented** | Head Elf HQ's Doors (see **Head Elf HQ**). A door's names that count are fixed from midnight at the end of its day: adding one after that is 409 |
 | `POST` \| `DELETE /api/admin/elf/doors/:door/snow-day`, `POST` \| `DELETE /api/admin/elf/doors/:door/gone-home` | **implemented** | A head elf calls a Snow day (only before the door's first clue) or marks a door Gone home (only after the door's day), and undoes either |
 | `PUT` \| `GET` \| `DELETE /api/admin/elf/doors/:door/clues/:n/picture` | **implemented** | A clue's picture (alt words required; refused once that clue is out). The 4 MB body parser on that path is reached only by a PUT with a bearer token |
+| `GET /api/admin/elf/alerts`, `PATCH /api/admin/elf/alerts/me`, `POST /api/admin/elf/alerts/test` | **implemented** | Settings > Alerts: every head elf with their email, mobile and alerts on or off, whether texts are switched on, the last photo alert with the names whose text did not go, and the text's and the email's words as the real builders write them. A head elf changes only their own mobile (a UK mobile, else 400) and tick, audited with the field names only. The test sends the caller the email and, with a mobile and texts switched on, the text; its answer's `text` is sent, stubbed, failed, no-mobile or off. Section `elf`: view. See **Photos, alerts, emails, the worker and Finds** |
+| `GET /api/admin/elf/photos`, `GET /api/admin/elf/photos/:id/picture`, `POST /api/admin/elf/photos/:id/approve` \| `decline` \| `take-down` | **implemented** | Finds: the photo check and the photo log (the photos waiting, oldest first; the log, newest first; the last alert; `canEdit`), one photo's picture (`no-store`, `nosniff`, `noindex`), and the decisions, each audited: approve, decline with a reason of 1 to 200 characters, take down with an optional one. A photo someone else got to first is 409 with that photo's newest step ("Approved by Alex Example at 6:13pm"); one no longer there is 404. Section `elf`: view to look, edit to decide |
+| `GET /api/admin/elf/finds` | **implemented** | Finds: Tonight and before. Each door whose first clue is out, today's first (the practice door before it while one runs): who found its elf and when (full names, head elves only), how many clues are out, and once its place is shown how many families visited and how many cracked it. Section `elf`: view |
+| `POST /api/admin/elf/worker/tick` | **implemented** | Runs the elf worker's tick once, at the moment given (`{ at }`), answering `{ ok: true }`: how the BDD plays a tick at midday. 404 in production, for anyone. Section `elf`: edit |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
 | `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
@@ -11895,7 +11899,8 @@ Pure rules in `src/elf/` (`join.ts`, `session.ts`, `views.ts`, `emails.ts`, `set
 Stage A's game rules), screens in `src/elf/pages/`, the data layer in `src/db/elf.ts`, routes in
 `src/routes/elf.ts` and `src/routes/admin-elf.ts`, the enrol page's script in
 `assets/js/elf-join.js`. Unit tests are `test/unit/elf-*.test.ts`; BDD is `features/elf-join.feature`.
-Both emails are in Admin > Get involved > All emails, under Elf Detective School.
+Its emails (wave 1's two, and December's seven: see **Photos, alerts, emails, the worker and Finds**) are
+in Admin > Get involved > All emails, under Elf Detective School.
 
 ### Head Elf HQ (Admin > Content > Elf Detective School)
 
@@ -11936,10 +11941,13 @@ preview link stay admins only, whoever holds the section.
   prizes. The poster, staff card and elf tag open as pages for head elves, never cached or indexed; the
   prize list is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
   saved after clue 1 is out. Once a door's first clue is out, its times and tag word are locked. Nothing in Doors is ever seen by families.
+- **Finds** (after Doors, its count the photos waiting): the photo check, the photo log, and Tonight and
+  before, who found each door and when (see **Photos, alerts, emails, the worker and Finds** below).
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every
   payment in Donations.
 - **Settings**: the pay what you can amounts as steppers, NBCC's phone number for places (it goes on
-  every staff card; an admin changes it and other head elves see it as words), and the private preview link.
+  every staff card; an admin changes it and other head elves see it as words), the private preview link,
+  the practice door, and Alerts.
 
 **Taking a family out.** `migrations/1791200000360_elf-families-removed.js` (additive) adds
 `elf_families.removed_at` and `removed_by`. A removed family gets no sign in code and no session (its
@@ -12008,7 +12016,9 @@ route uses) gives exactly the wave 1 doors (`waveOneRuns`): shut, each door's de
 shown (a door whose day has passed keeps its time on the calendar), the stock elf names, no clues, no
 teaser, no door picture, no snow and no progress; Detective HQ has no today's case and counts down
 only to door 1's first clue, as wave 1's did. Nothing a family reads differs from wave 1: the
-calendar's How it works and today's door keep wave 1's words (`view.doorsOn` picks them). Every game
+calendar's How it works and today's door keep wave 1's words (`view.doorsOn` picks them), and so does
+the rules page's line on who wins what ("Each family can win one elf."; with the doors on, decision 1's
+and C6's words: the finder wins that door's prize, the elf stays there, one prize a family). Every game
 route answers 404. A practice browser (the preview cookie) also gets door 0, never a real door.
 
 **The public calendar** is built at most once every 15 seconds and shared by everyone
@@ -12022,12 +12032,15 @@ fetches itself again between 1 and 6 seconds after a clue comes out, a different
 each photo's random token), not approval order, so nobody can match a face to a finder named above
 it. A door tile's mini collage shows elves only. A child is named only through `detectiveName`, and a
 name never sits beside a photo. Removed families are out of every scrapbook, count and finder line.
+On a door whose elf has gone home, the calendar script's line for a signed in family never invites a
+visit: it says only what the family collected there, and nothing when that is nothing.
 
 **Photos.** Sent only after a visit at that door; 5 a family a day; a try limit applies before any
 picture is opened (20 a family and 60 an address a day). The types `checkPictureUpload` accepts are
 stored as `processPicture` makes them. A photo is served by a random token (never a serial id) only
 once approved and while the door is open; until the place is shown it reads as waiting to its family.
-Plan 2b adds the head elves' check, so nothing is approved yet. The bytes live in `elf_photo_files`,
+A head elf approves it in Finds first, and a door's photos show only once two families have one
+approved there (see **Photos, alerts, emails, the worker and Finds**). The bytes live in `elf_photo_files`,
 which the nightly backup leaves out (`src/backup/plan.ts` records it as 0 rows so the restore check
 passes). A family taking a photo down deletes its bytes.
 
@@ -12052,8 +12065,146 @@ future. A real door keeps clock times on its own day, so one scenario plays a re
 year's December, which is always over (a find, a visit, the scrapbook, a photo, a door elf, wrong
 tries cleared and an automatic snow day), and takes last year's rows away after. BDD runs only in CI.
 
-**Still to come (Plan 2b).** The head elves' photo check, the alerts (text and email), the emails and
-Finds.
+**Since added (Plan 2b).** The head elves' photo check, the alerts by text and email, the December
+emails, the worker that sends them on time, and Finds: see the next section.
+
+### Photos, alerts, emails, the worker and Finds (wave 2, Plan 2b)
+
+Spec `docs/superpowers/specs/2026-11-10-elf-detective-wave-2-design.md` (decisions 8 to 10, calls C7, C8,
+C13 and C14); plan `docs/superpowers/plans/2026-11-10-elf-wave-2-game-2.md`. Every word a family, a place
+or a head elf reads from wave 2 is listed for Jaimie in `docs/superpowers/specs/2026-11-10-elf-wave-2-words.md`,
+each with a tick box: December's doors are not switched on until every box is ticked. Its migration is
+`migrations/1791200000450_elf-alerts.js` (additive): `elf_head_elves` (a head elf's mobile, kept as
+`+447` and nine digits, and their alerts on or off), `elf_alerts` (each alert that went: when, the door,
+how many emails and texts, and the names whose text did not go) and `elf_sends` (every timed send,
+claimed once). The nightly backup dumps them like other staff data. Code: the pure rules in
+`src/elf/alerts.ts`, `src/elf/posts.ts` and `src/elf/schedule.ts`; the emails in `src/elf/emails.ts`;
+the worker in `src/elf/worker.ts`; the data in `src/db/elf-photos.ts`, `src/db/elf-alerts.ts` and
+`src/db/elf-sends.ts`; routes in `src/routes/admin-elf-finds.ts` and `src/routes/admin-elf.ts`; the
+screens in `assets/js/admin/elf-hq.js`.
+
+**The photo check and the photo log** (Head Elf HQ > Finds). The photos waiting, oldest first (a removed
+family's are left out), the first one big beside the four checks of the design (only the family in it;
+no school uniform or badge; nothing that shows where anyone lives; nothing unkind), with its door, its
+place, when it was sent and the family (head elves only). Approve, or Decline with a reason only head
+elves see (1 to 200 characters). Whoever gets there first decides: anyone else is shown the step that
+beat them ("Approved by Alex Example at 6:13pm") and the queue is read again. A decline, a take down and
+a photo replaced by its family delete the bytes at once (C8); the log keeps the line, never the picture.
+Two rules keep a face from being matched to a name: a family has at most one photo up on each door
+(approving one replaces that family's other approved photo there), and a door's photos stay hidden
+until photos from at least two families are approved on it (until then an approved photo reads as
+waiting to its family, is never served, and the check says so beside it). A photo sent before its door's
+place is shown waits until then, even once approved. The photo log, newest first (200 lines), gives
+each photo's steps with who and when: Sent; Approved by, or Declined by with the reason; Taken down by
+the family, or by a head elf with the reason; Deleted. Photos that are up have Take it down. A head elf
+is named by their `users.full_name` (the email only when it is blank), looked up from the `admin:<email>`
+the decision was made under. Each decision is audited (`elf.photo.decided`, `elf.photo.taken_down`)
+with no place and no photo.
+
+**Alerts** (Head Elf HQ > Settings > Alerts). Every head elf (everyone not disabled who holds the `elf`
+section at view or more), with their email, a mobile if they have given one (shown as 07700 900123) and
+alerts on or off. A head elf changes only their own mobile and tick (`elf.alerts.changed`, field names
+only, never the number). The rules (`photoAlertDue`):
+
+- one at a time: when photos start waiting, one email to every head elf with alerts on and one text to
+  each of them with a mobile, and no more until every photo waiting at that alert has been checked;
+- never sooner than 30 minutes after the last alert, so a quick head elf who clears each photo as it
+  comes is not texted for every one (C13);
+- nothing between 9pm and 8am, London time; at 8am, one alert if any photo is waiting;
+- a find is told by email only, to the same people (C7);
+- neither alert shows the photo or the family's name, and following a link changes nothing;
+- a text that Amazon refuses never stops the email, and Settings > Alerts names whose text did not go.
+
+**Send me a test alert** sends the caller the test email and, when they have a mobile and texts are
+switched on, the test text, and says which went. Texts go only once they are switched on in production
+(`SMS_PROVIDER=sns`, `smsConfigured`); until then Settings > Alerts says alerts go by email only. Outside
+production the worker's photo alert tries its text through the stub client, which sends nothing, so CI
+plays the text path; the test alert says texts are off there.
+
+**The emails, and where to read them.** Seven, all from `events@nbcc.scot` on the apex, never
+`news.nbcc.scot`, each in Admin > Get involved > All emails under Elf Detective School with invented
+examples (the pretend place is Pine Cone Café, Snowford):
+
+- **The first clue is out**, to each grown up with detectives enrolled, at a door's first clue: the clue's
+  words, or the words describing its picture (a clue picture is never in an email or linked from one),
+  the times of clues 2 and 3 and of the place being shown, and a fact for grown ups;
+- **Today is your Elf Detective School day**, to the place's contact at 9am on its day: "Tonight" only for a
+  clue after midday, the staff card's three steps in short, its closing time, and NBCC's phone for places
+  when Settings has one;
+- **Elf HQ: the 8am email**, to head elves with alerts on, each day from 30 November to 25 December:
+  today's door and whether it is ready, yesterday's finder by their public name, the photos waiting, and
+  the day's two posts ready to copy (C14), which never name a place before it is shown;
+- **A door's elf has been found**, the find alert, to head elves with alerts on: the finders' full names;
+- **A photo is waiting to be checked**, the photo alert;
+- **Your test alert**;
+- **A proud moment**, to the grown up: a prize won, a promotion or graduating, with a gentle "could"
+  ask.
+
+The four that go to staff are staff kinds (`STAFF_ONLY_KINDS`), so their links are never tagged.
+
+**The worker** (`src/elf/worker.ts`). It ticks every 30 seconds in every app task, on the newsletter
+sender's pattern: started from `src/index.ts` (never from `createApp`), with a guard so a slow tick never
+has another beside it in the same task, and `unref` so it never holds the process open. Each part of a
+tick is on its own (one that fails is logged with its message only, never a place, a clue, a word or a
+number) and the rest go on. Nothing goes to a family or about a real door unless Elf Detective School and
+December's doors are both on; the photo alert (the practice door plays it) and the clear out run either
+way. In order, a tick: marks sent anything this task sent but could not mark; snows in the doors that
+cannot run (`markAutomaticSnowDays`), so a snow day never waits for the first calendar visitor; reads the
+doors; sends what `dueNow` says is due (the clue email for six hours from clue 1, 25 families a tick; the
+place's reminder from 9am to noon on its day, to the place's email; the 8am email; each found door's
+find alert; the sweep, every ten minutes), never for a snowed in door or the practice door; then the
+photo alert; last, the clear out.
+
+- **Claimed once, tried three times.** Every send is claimed in `elf_sends` by its kind and key before it
+  goes (`claimSend`: `INSERT ... ON CONFLICT (kind, key) DO UPDATE ... WHERE sent_at IS NULL AND attempts < 3
+  AND claimed_at < now() - interval '10 minutes' RETURNING key`), so it goes once however many tasks tick
+  at the same second. A send that throws keeps its message (`last_error`) and is claimed again ten minutes
+  on: three tries in all, then it is given up. A row sent, given up or in flight is simply skipped, so a
+  stuck one never holds up the rows after it (`familiesStillToEmail`). A send that went but could not be
+  marked sent is kept in the task's memory, marked first thing every tick until that lands, and never sent
+  again from that task. The photo alert's key is the last alert's time and the London date, so an alert
+  given up after three tries is tried again from 8am the next day.
+- **The sweep** (every ten minutes): first each found door's won email, in case the word's own did not go
+  (the same claim, so never twice; the finders named in full through the name checks, as the word's own
+  email names them); then every active detective of every family not removed, so a rank earned any way,
+  by a guess, a snow day or a visit that counts from the reveal, is never missed. Several new ranks at
+  once bring one email, for the highest: the lower ones are claimed and marked without an email.
+  Graduating has its own email, so nobody is also sent a promotion to Graduate. After a word that
+  stamped someone, the same proud moments go once the word's answer has gone, best effort, by the same
+  claims.
+- **The clear out** (`deleteExpiredPhotoFiles`, every tick): from 31 January, London time, of the year after
+  each photo's December, its bytes row is deleted and its row reads deleted, so the log keeps its lines. A
+  photo's December is its year; a practice photo belongs to the December it was sent in, one sent in
+  January before the 31st to the December before, and one sent on or after 31 January to the coming
+  December, so no practice photo is past its clear out the moment it is sent.
+- **The tick hook.** `POST /api/admin/elf/worker/tick { at }` (section `elf`: edit) runs one tick at the
+  moment given, outside production only (404 in production, for anyone). It is how the BDD plays a tick
+  at midday, so quiet hours never bite; the claims keep it and the task's own timer from sending
+  anything twice.
+
+**Finds** (the Head Elf HQ tile after Doors, a camera; its count is the photos waiting). The photos to
+check and the photo log side by side on a wide screen, and under them **Tonight and before**: each door
+whose first clue is out, today's first and then backwards (the practice door before it while one runs),
+with who found its elf (the detectives' full names and their grown up) and when, or "Not found yet. 2 of
+3 clues out.", or Snow day; once its place is shown, how many families have visited and how many cracked
+it with a guess (counts only: guesses are private). A head elf who may edit can add a name that counts
+until midnight at the end of the door's day; after that the door's names are fixed (409).
+
+**Texts: still owed in the console** (the texts plan's steps, not done yet on 11 November 2026). Until both
+are done no text reaches a phone and every alert goes by email only:
+
+1. The Infra workflow's apply in production, which Jaimie has not run yet (it adds the task role's text
+   permission, the `SMS_SENDER_ID` parameter and `SMS_PROVIDER=sns` in the task definition); the next
+   deploy then picks up the new task definition.
+2. The AWS Support request to take the account out of the text sandbox and raise its monthly text spend
+   limit, due by Friday 20 November; then set that limit in the SNS console (see **Text message keys**).
+
+**Tests.** `test/unit/elf-alerts.test.ts`, `elf-db-alerts`, `elf-db-photos`, `elf-db-sends`,
+`elf-emails`, `elf-posts`, `elf-schedule`, `elf-worker`, `admin-elf-finds`, `admin-elf-finds-js`,
+`admin-elf` and `admin-elf-hq-js`. The BDD (`features/elf-game.feature`, CI only) plays a photo through the
+check and the alerts on the practice door: the head elf's mobile, a tick at midday, one alert email and
+one text, no second alert a minute later, the two families rule, and the family's take down; and the
+clear out on last year's real door, with a tick on 1 February.
 
 ### The dress-up elf
 
@@ -13246,8 +13397,9 @@ blocked on the owner's machine). The keys, all defaulted so boot never blocks:
 **Text message keys (Elf Detective School wave 2).** The website can send a text from "NBCC" to a UK
 mobile (`src/clients/sms.ts`, with the pure request building in `src/clients/sms-request.ts`). It
 calls Amazon SNS `Publish`, signed with the app task's own role exactly as the SES client is, so
-there is no key for anyone to type in. **Nothing sends a text yet**: the Elf Detective School photo
-alerts to head elves (a later plan) are the first caller. The keys:
+there is no key for anyone to type in. Its callers are Elf Detective School's photo alerts and the test
+alert in Head Elf HQ > Settings > Alerts, each passing `config.SMS_SENDER_ID` (see **Photos, alerts,
+emails, the worker and Finds**); in production they try a text only once texts are switched on. The keys:
 
 - `SMS_PROVIDER` (`stub`|`sns`, default `stub`) — `stub` sends nothing and touches no network
   outside production, which is what local runs and CI use. Production's task definition sets `sns`,
@@ -13282,8 +13434,9 @@ approval, so it takes two steps:
    the London region (eu-west-2).
 
 Until the sandbox is left, a text to an unverified number is refused. Once the limit is spent, Amazon
-does not refuse the send: the failure shows only in its delivery logs. No text goes out until the
-photo alerts are built.
+does not refuse the send: the failure shows only in its delivery logs. Neither step is done yet (11
+November 2026), and nor is the Infra workflow's apply in production: until all three are, no text
+reaches a phone, and the photo alerts go by email only.
 
 `DECLARATION_FORM_BASE_URL` (TASK-075) is the public site base the in-person Gift Aid
 declaration link + QR short link are built on (`declarationLinks`). **Not** a secret (it

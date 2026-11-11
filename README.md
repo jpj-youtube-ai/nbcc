@@ -12215,8 +12215,8 @@ are done no text reaches a phone and every alert goes by email only:
    limit, due by Friday 20 November; then set that limit in the SNS console (see **Text message keys**).
 
 **Tests.** `test/unit/elf-alerts.test.ts`, `elf-db-alerts`, `elf-db-photos`, `elf-db-sends`,
-`elf-emails`, `elf-posts`, `elf-schedule`, `elf-worker`, `admin-elf-finds`, `admin-elf-finds-js`,
-`admin-elf` and `admin-elf-hq-js`. The BDD (`features/elf-game.feature`, CI only) plays a photo through the
+`elf-emails`, `elf-email-log`, `elf-posts`, `elf-schedule`, `elf-texts-on`, `elf-worker`, `admin-elf-finds`,
+`admin-elf-finds-js`, `admin-elf` and `admin-elf-hq-js`. The BDD (`features/elf-game.feature`, CI only) plays a photo through the
 check and the alerts on the practice door: the head elf's mobile, a tick at midday, one alert email and
 one text, no second alert a minute later, the two families rule, and the family's take down; and the
 clear out on last year's real door, with a tick on 1 February.

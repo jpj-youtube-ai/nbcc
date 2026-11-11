@@ -8,7 +8,12 @@ import { resolve } from "node:path";
 // switch through the real site router: the database is mocked, the switch is flipped between visits,
 // and the clock stands after the Ball's moment, as it does on the live site now. The card itself is in
 // elf-promo.test.ts. Every name and address here is invented.
+//
+// TASK-613: nothing links to Elf Detective School before 10am on Friday 13 November 2026
+// (src/elf/links-at.ts), however it is switched. The clock stands after that moment unless a test
+// moves it.
 
+const AFTER_THE_MOMENT = new Date("2026-11-13T12:00:00Z");
 const state = vi.hoisted(() => ({
   now: new Date("2026-11-13T12:00:00Z"),
   schoolOn: false,
@@ -47,13 +52,21 @@ vi.mock("../../src/db/donations", () => ({ listPublicSupporters: async () => ({ 
 vi.mock("../../src/db/red-bag-lists", () => ({ loadPublishedRedBagList: async () => null, readRedBagDraft: async () => null }));
 vi.mock("../../src/ball/preview-access", () => ({ holdsPreviewCookie: async () => false }));
 
-import { createSiteRouter } from "../../src/routes/site";
+import { readFileSync } from "node:fs";
+import { createSiteRouter, decorateSitePage } from "../../src/routes/site";
+import { ELF_NAV_ITEM } from "../../src/elf/nav-link";
+import { ELF_MENU_FIT } from "../../src/elf/menu-fit";
 
 const ROOT = resolve(__dirname, "../..");
 const CARD = 'id="elfCard"';
 const CARD_CSS = "/assets/css/elf-promo.css";
 const PAGES = ["/", "/get-involved", "/get-involved/schools"];
+// TASK-613: the menu's item goes on every page of the main site, each kind of page drawn its own way:
+// the home page, plain files, a page drawn by hand, the events pages and the short pages.
+const MENU_PAGES = ["/", "/contact", "/about-us", "/supporters", "/get-involved", "/whats-on", "/get-involved/schools", "/get-involved/volunteer"];
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+const navList = (html: string) => html.match(/<ul class="nav-links"[\s\S]*?<\/ul>/)?.[0] ?? "";
+const hrefs = (list: string) => [...list.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
 
 let server: Server;
 let base = "";
@@ -68,6 +81,7 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 beforeEach(() => {
+  state.now = AFTER_THE_MOMENT;
   state.schoolOn = false;
   state.settingsFail = false;
   state.settingsReads = 0;
@@ -90,6 +104,12 @@ describe("while the school is switched off", () => {
   it("the site maps leave the school out", async () => {
     expect(await body("/sitemap")).not.toContain('href="/elf"');
     expect(await body("/sitemap.xml")).not.toContain("https://nbcc.scot/elf<");
+  });
+
+  it.each(MENU_PAGES)("%s has no Elf Detective School in the menu, and not its fit", async (path) => {
+    const html = await body(path);
+    expect(hrefs(navList(html))).not.toContain("/elf");
+    expect(html).not.toContain(ELF_MENU_FIT);
   });
 });
 
@@ -129,6 +149,22 @@ describe("while the school is switched on", () => {
     expect(await body("/sitemap")).toContain('<a href="/elf">Elf Detective School</a>');
     expect(await body("/sitemap.xml")).toContain("<loc>https://nbcc.scot/elf</loc>");
   });
+
+  it.each(MENU_PAGES)("%s offers Elf Detective School in the menu once, straight after Get involved, with the menu's fit", async (path) => {
+    const html = await body(path);
+    const list = hrefs(navList(html));
+    expect(list.filter((h) => h === "/elf")).toHaveLength(1);
+    expect(list.indexOf("/elf")).toBe(list.indexOf("/get-involved") + 1);
+    expect(navList(html)).toContain(">Elf Detective School</a>");
+    expect(count(html, ELF_MENU_FIT)).toBe(1);
+    expect(html.indexOf(ELF_MENU_FIT)).toBeLessThan(html.indexOf("</head>"));
+  });
+
+  it("keeps Get involved lit up on its short pages", async () => {
+    const list = navList(await body("/get-involved/schools"));
+    expect(list).toContain('<a href="/get-involved" class="active" aria-current="true">Get involved</a>');
+    expect(list).toContain(ELF_NAV_ITEM);
+  });
 });
 
 describe("the lever", () => {
@@ -146,6 +182,16 @@ describe("the lever", () => {
     expect(state.settingsReads).toBeGreaterThanOrEqual(2);
   });
 
+  // TASK-613: the home page carries both the card and the menu's item. They ask once and share the
+  // answer, so the two always agree, even if a read goes wrong.
+  it("is read once for a view of the home page, for the card and the menu alike", async () => {
+    state.schoolOn = true;
+    const html = await body("/");
+    expect(state.settingsReads).toBe(1);
+    expect(count(html, CARD)).toBe(1);
+    expect(count(navList(html), ELF_NAV_ITEM)).toBe(1);
+  });
+
   it.each(PAGES)("counts as off on %s when it cannot be read, and the page still goes out", async (path) => {
     state.schoolOn = true;
     state.settingsFail = true;
@@ -154,5 +200,69 @@ describe("the lever", () => {
     expect(res.status).toBe(200);
     expect(html).not.toContain(CARD);
     expect(html).not.toContain('href="/elf');
+  });
+});
+
+// TASK-613 (Jaimie, 11 November 2026): switched on tonight so a teacher's emailed link works, but
+// nothing on the site links to Elf Detective School until the big push at 10am on Friday 13 November.
+describe("switched on, before 10am on Friday 13 November", () => {
+  beforeEach(() => {
+    state.now = new Date("2026-11-13T09:59:59.999Z");
+  });
+
+  it.each(PAGES)("%s is byte for byte what it is with the school switched off", async (path) => {
+    state.schoolOn = false;
+    const off = await body(path);
+    state.schoolOn = true;
+    const on = await body(path);
+    expect(on).toBe(off);
+    expect(on).not.toContain('href="/elf');
+  });
+
+  it("the site maps leave it out", async () => {
+    state.schoolOn = true;
+    expect(await body("/sitemap")).not.toContain('href="/elf"');
+    expect(await body("/sitemap.xml")).not.toContain("https://nbcc.scot/elf<");
+  });
+
+  it("tonight too", async () => {
+    state.now = new Date("2026-11-11T21:30:00Z");
+    state.schoolOn = true;
+    for (const path of PAGES) expect(await body(path), path).not.toContain('href="/elf');
+  });
+
+  it("the card is there from 10am on the dot", async () => {
+    state.schoolOn = true;
+    state.now = new Date("2026-11-13T10:00:00.000Z");
+    for (const path of PAGES) expect(count(await body(path), CARD), path).toBe(1);
+  });
+
+  it.each(MENU_PAGES)("%s has a menu byte for byte as it is with the school switched off", async (path) => {
+    state.schoolOn = false;
+    const off = await body(path);
+    state.schoolOn = true;
+    const on = await body(path);
+    expect(on).toBe(off);
+    expect(hrefs(navList(on))).not.toContain("/elf");
+  });
+
+  it("the menu's item is there from 10am on the dot", async () => {
+    state.schoolOn = true;
+    state.now = new Date("2026-11-13T10:00:00.000Z");
+    for (const path of MENU_PAGES) expect(count(navList(await body(path)), ELF_NAV_ITEM), path).toBe(1);
+  });
+});
+
+// The Santa Sleigh's page is drawn outside the site router (src/routes/sleigh.ts) and decorated by
+// decorateSitePage, which reads the real clock when it is given none.
+describe("a page drawn outside the site router", () => {
+  const contact = () => readFileSync(resolve(ROOT, "contact.html"), "utf8");
+
+  it("gains the menu's item only while the school is on, and only from 10am on Friday", async () => {
+    state.schoolOn = true;
+    expect(await decorateSitePage(contact(), undefined, new Date("2026-11-13T09:59:59Z"))).not.toContain(ELF_NAV_ITEM);
+    expect(await decorateSitePage(contact(), undefined, new Date("2026-11-13T10:00:00Z"))).toContain(ELF_NAV_ITEM);
+    state.schoolOn = false;
+    expect(await decorateSitePage(contact(), undefined, new Date("2026-11-13T10:00:00Z"))).not.toContain(ELF_NAV_ITEM);
   });
 });

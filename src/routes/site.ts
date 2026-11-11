@@ -10,6 +10,7 @@ import { addRedBagPageRoutes } from "./red-bag";
 import { addFillFooterLink, type FillLinkPage } from "../red-bag/fill-links";
 import { addFillStageToHome, loadFillStage } from "../red-bag/stage";
 import { addElfCard, elfSchoolIsOn } from "../elf/promo";
+import { elfLinksLive } from "../elf/links-at";
 import { markAfterBallCheck, showAfterBall } from "../site/after-ball";
 import {
   SUPPORTER_TIERS,
@@ -182,6 +183,19 @@ async function addEventsItems(html: string): Promise<string> {
   return addMenuFit(addEventsNavLink(html));
 }
 
+// TASK-613: may a page link to Elf Detective School at `now`? Only while it is switched on, and only
+// from 10am on Friday 13 November 2026 (src/elf/links-at.ts). Before then the switch is not even read.
+async function elfLinksAt(now: Date): Promise<boolean> {
+  return elfLinksLive(now) && (await elfSchoolIsOn());
+}
+
+// Elf Detective School's menu item and the menu's fit with it (src/elf/nav-link.ts, src/elf/menu-fit.ts).
+// Added after Get involved, so it can go straight after it. Not on Ball pages, which keep their old menu.
+async function addElfItems(html: string): Promise<string> {
+  const [{ addElfNavLink }, { addElfMenuFit }] = await Promise.all([import("../elf/nav-link"), import("../elf/menu-fit")]);
+  return addElfMenuFit(addElfNavLink(html));
+}
+
 // The menu items a page gets on top of what is in its file: the Festive Ball's while the ball is
 // published (or being previewed), and Get involved and What's on while the events switch is on. And
 // while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up rather than
@@ -189,20 +203,29 @@ async function addEventsItems(html: string): Promise<string> {
 // After the Ball's moment (`after`, src/site/after-ball.ts) the Festive Ball's item comes down, and
 // the footer gains Fill a Red Bag: the gate is still asked exactly as it was, and the answer is
 // simply not acted on. `page`: a quiet page never gains Fill a Red Bag (src/red-bag/fill-links.ts).
-async function decorateNav(html: string, cookieHeader: string | undefined, after: boolean, page?: FillLinkPage): Promise<string> {
-  const [ball, events, fundraising] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn()]);
+// `elf`: may the page link to Elf Detective School (elfLinksAt)? Its item goes in then (TASK-613). It
+// is asked once for each view and handed in, so the home page can share the one answer with its card.
+async function decorateNav(
+  html: string,
+  cookieHeader: string | undefined,
+  after: boolean,
+  elf: Promise<boolean>,
+  page?: FillLinkPage,
+): Promise<string> {
+  const [ball, events, fundraising, elfOn] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn(), elf]);
   let out = html;
   if (ball && !after) out = (await import("../ball/nav-link")).addBallNavLink(out);
   if (events) out = await addEventsItems(out);
+  if (elfOn) out = await addElfItems(out);
   if (fundraising) out = (await import("../fundraising/footer-link")).addFundraiseFooterLink(out);
   if (after) out = addFillFooterLink(out, page);
   return out;
 }
 
 /** The same, for a page drawn outside this router (the Santa Sleigh's, src/routes/sleigh.ts): the
- *  Ball's moment read from the clock, and no query can move it. */
+ *  Ball's moment and Elf Detective School's read from the clock, and no query can move them. */
 export function decorateSitePage(html: string, cookieHeader: string | undefined, now: Date = new Date()): Promise<string> {
-  return decorateNav(html, cookieHeader, showAfterBall(now, undefined));
+  return decorateNav(html, cookieHeader, showAfterBall(now, undefined), elfLinksAt(now));
 }
 
 /**
@@ -234,8 +257,12 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // spec names as one to check before the night passes its query, so ?at=after-ball can answer yes.
   const clock = opts.now ?? (() => new Date());
   const isAfterBall = (query?: unknown): boolean => showAfterBall(clock(), query);
-  const decorate = (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage): Promise<string> =>
-    decorateNav(html, cookieHeader, isAfterBall(query), page);
+  const decorate = (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage): Promise<string> => {
+    const now = clock();
+    return decorateNav(html, cookieHeader, showAfterBall(now, query), elfLinksAt(now), page);
+  };
+  // TASK-613: may this view link to Elf Detective School (elfLinksAt, above)?
+  const elfLinksOn = (): Promise<boolean> => elfLinksAt(clock());
 
   // `/` serves the home page (no `_redirects` rule — served automatically).
   //
@@ -253,15 +280,19 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // not, and the page needs nothing of the Ball's, so a failed read of its settings costs nothing.
   // Fill a Red Bag's stage goes in instead, as the page goes out (left out if it cannot be drawn).
   // So does the Elf Detective School's card, straight after the stage, while the school is switched
-  // on (src/elf/promo.ts). Only this branch draws it: the school opens after the Ball.
+  // on (src/elf/promo.ts), from its moment (src/elf/links-at.ts). Only this branch draws it: the
+  // school opens after the Ball.
   const homeFile = join(siteRoot, "index.html");
   router.get("/", async (req, res) => {
     try {
-      if (isAfterBall(req.query)) {
+      const now = clock();
+      if (showAfterBall(now, req.query)) {
+        // Asked once, for the menu's item and the card alike, so the two always agree.
+        const elf = elfLinksAt(now);
         const [html, stage, elfOn] = await Promise.all([
-          decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true),
+          decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true, elf),
           loadFillStage(),
-          elfSchoolIsOn(),
+          elf,
         ]);
         markAfterBallCheck(res, req.query);
         res.type("html").send(addElfCard(addFillStageToHome(html, stage), "home", elfOn));
@@ -365,11 +396,11 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // of every way to help. Both are served only while an admin has the events switch on; switched off
   // they fall through to the catch-all below exactly as if the routes were not here.
   // src/routes/fundraise-pages.ts.
-  // Both carry the Elf Detective School's card while the school is switched on (src/elf/promo.ts):
-  // Get involved, and Your school among the short pages.
-  addFundraisePageRoutes(router, siteRoot, { decorate, eventsPageIsOn, isAfterBall, elfSchoolIsOn });
+  // Both carry the Elf Detective School's card while the school is switched on (src/elf/promo.ts),
+  // from its moment (src/elf/links-at.ts): Get involved, and Your school among the short pages.
+  addFundraisePageRoutes(router, siteRoot, { decorate, eventsPageIsOn, isAfterBall, elfLinksOn });
   // The short pages under /get-involved/ (src/routes/get-involved-pages.ts). No switch of their own.
-  addShortPageRoutes(router, siteRoot, { decorate, isAfterBall, elfSchoolIsOn });
+  addShortPageRoutes(router, siteRoot, { decorate, isAfterBall, elfLinksOn });
   // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
   addTeamPageRoutes(router, siteRoot, { decorate });
   // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).
@@ -395,15 +426,18 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
       }
       // While the ball is unpublished and the Events page is switched off this is byte-for-byte
       // the old behaviour: the file is sent as-is and no page mentions either. These pages take no
-      // ?at=after-ball: only the real moment takes the Festive Ball's item off them.
-      const [published, events, fundraising] = await Promise.all([
+      // ?at=after-ball: only the real moment takes the Festive Ball's item off them. Elf Detective
+      // School's item goes in while it may be linked to (TASK-613), after Get involved's.
+      const now = clock();
+      const [published, events, fundraising, elf] = await Promise.all([
         ballIsPublished(req.headers.cookie),
         eventsPageIsOn(),
         fundraisingIsOn(),
+        elfLinksAt(now),
       ]);
-      const after = isAfterBall();
+      const after = showAfterBall(now, undefined);
       const ball = published && !after;
-      if (!ball && !events && !fundraising && !after) {
+      if (!ball && !events && !fundraising && !after && !elf) {
         res.sendFile(file);
         return;
       }
@@ -411,6 +445,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         let html = readFileSync(file, "utf8");
         if (ball) html = (await import("../ball/nav-link")).addBallNavLink(html);
         if (events) html = await addEventsItems(html);
+        if (elf) html = await addElfItems(html);
         if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
         if (after) html = addFillFooterLink(html);
         res.type("html").send(html);
@@ -429,7 +464,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // /sitemap: the branded page tree, server-rendered into sitemap.html's .sitemap-tree
   // placeholder (the /supporters pattern) so it can never go stale. Deliberately unlisted:
   // nothing links here, the file carries noindex, and the header repeats it for robots that
-  // read headers only. Ball pages appear only once the gate is open.
+  // read headers only. Ball pages appear only once the gate is open; Elf Detective School only while it
+  // may be linked to (TASK-613: switched on, and from 10am on Friday 13 November).
   const sitemapFile = join(siteRoot, "sitemap.html");
   router.get("/sitemap", async (req, res) => {
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -439,7 +475,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         ballIsPublished(req.headers.cookie),
         eventsPageIsOn(),
         fundraisingIsOn(),
-        elfSchoolIsOn(),
+        elfLinksOn(),
       ]);
       const template = readFileSync(sitemapFile, "utf8");
       let html = template.replace(
@@ -467,7 +503,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         ballIsPublished(undefined), // never let a preview cookie leak the ball to a crawler
         eventsPageIsOn(),
         fundraisingIsOn(),
-        elfSchoolIsOn(),
+        elfLinksOn(),
       ]);
       res
         .type("application/xml")

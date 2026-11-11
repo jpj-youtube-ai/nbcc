@@ -14,6 +14,7 @@ import {
   ELF_TEST_TEXT,
   type BuiltEmail,
 } from "../../src/elf/emails";
+import { findEmail } from "../../src/email/catalogue";
 
 // NBCC Elf Detective School: the welcome email and the sign in code. Every family is invented.
 
@@ -281,6 +282,16 @@ describe("typed names are escaped in every wave 2 email", () => {
       expect(e.html).not.toContain("<i>Cone");
     }
     expect(built[0].html).toContain("You found Pip &amp; &lt;b&gt;Co!");
+  });
+});
+
+describe("their lines in All emails, for staff", () => {
+  // In December the first detective to find the elf wins that door's prize and the elf stays (design
+  // decision 1), and one Send me alerts tick covers the find alert and the photo alert alike.
+  it("say the finder wins a door's prize, and that both alerts go to head elves whose alerts are on", () => {
+    expect(findEmail("elf-proud")!.who).toBe("Goes to the grown up when their detective wins a door's prize, is promoted or graduates.");
+    expect(findEmail("elf-find-alert")!.who).toBe("Goes to head elves whose alerts are on, as soon as an elf is found.");
+    expect(findEmail("elf-photo-alert")!.who).toBe("Goes to head elves whose alerts are on, when photos start waiting. Never one for every photo.");
   });
 });
 

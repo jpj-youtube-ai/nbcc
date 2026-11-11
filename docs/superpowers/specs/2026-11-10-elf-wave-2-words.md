@@ -417,10 +417,10 @@ Graduating has its own email, so nobody is also sent a promotion to Graduate.
 - [ ] **The first clue is out**: Goes to each grown up with detectives enrolled, when a door's first clue comes out in December. (Its note: The clue words and the picture words are typed in Doors. A clue picture is never in the email.) Versions: Words, A picture only, Words and a picture
 - [ ] **Today is your Elf Detective School day**: Goes to the place's contact at 9am on its day, with what to do and when. Versions: An evening clue, A morning clue
 - [ ] **Elf HQ: the 8am email**: Goes to head elves at 8am each day in December, with the day's door, yesterday's find and the two posts. Versions: A door ready, yesterday found, and A door not ready, yesterday a snow day
-- [ ] **A door's elf has been found**: Goes to head elves who chose to hear about finds, as soon as an elf is found.
-- [ ] **A photo is waiting to be checked**: Goes to head elves who chose to hear about photos, when photos start waiting. Never one for every photo.
+- [ ] **A door's elf has been found**: Goes to head elves whose alerts are on, as soon as an elf is found.
+- [ ] **A photo is waiting to be checked**: Goes to head elves whose alerts are on, when photos start waiting. Never one for every photo.
 - [ ] **Your test alert**: Goes to a head elf who presses the test alert button in Head Elf HQ.
-- [ ] **A proud moment**: Goes to the grown up when their detective wins an elf, is promoted or graduates. Versions: A prize won, Promoted, Graduated
+- [ ] **A proud moment**: Goes to the grown up when their detective wins a door's prize, is promoted or graduates. Versions: A prize won, Promoted, Graduated
 
 ## 8. The texts
 
@@ -653,6 +653,5 @@ Noticed while gathering these words:
 
 8. The word box on the poster page says "The secret word on the elf's tag" (and the poster says "type the secret word on its tag"), where the newer words say "the word on its tag": should they match?
 9. The clue email says "The hiding place is shown at 7pm", but if nobody has found the elf by then its place stays hidden until someone does or the place closes: should the email say so?
-10. In All emails, the proud moment goes when a detective "wins an elf" and the find alert goes to head elves "who chose to hear about finds", though in December the finder wins the prize, the elf stays, and one Send me alerts tick covers finds and photos: should those two lines change?
-11. The snow day and Gone home lines in Doors name the head elf by email ("Snow day called by alex@example.org"), where the photo log uses their name: should they use the name?
-12. The When alerts go box does not say that an alert never comes sooner than half an hour after the last one: should it?
+10. The snow day and Gone home lines in Doors name the head elf by email ("Snow day called by alex@example.org"), where the photo log uses their name: should they use the name?
+11. The When alerts go box does not say that an alert never comes sooner than half an hour after the last one: should it?

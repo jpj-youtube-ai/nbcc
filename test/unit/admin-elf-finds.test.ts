@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // NBCC Elf Detective School in the admin, Head Elf HQ: the photo check routes. Every name is invented.
 
-const { getUserAuthRowMock, photos, alerts } = vi.hoisted(() => ({
+const { getUserAuthRowMock, photos, alerts, game, settingsDb } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
+  game: { loadDoorRuns: vi.fn(), loadPractice: vi.fn(), doorCounts: vi.fn(), finderOf: vi.fn() },
+  settingsDb: { getElfSettings: vi.fn() },
   photos: {
     photosWaiting: vi.fn(),
     photoLog: vi.fn(),
@@ -17,6 +19,8 @@ const { getUserAuthRowMock, photos, alerts } = vi.hoisted(() => ({
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf-photos", () => photos);
 vi.mock("../../src/db/elf-alerts", () => alerts);
+vi.mock("../../src/db/elf-game", async (orig) => ({ ...(await orig<object>()), ...game }));
+vi.mock("../../src/db/elf", () => settingsDb);
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
   config: {
@@ -30,6 +34,9 @@ vi.mock("../../src/config", () => ({
 
 import * as routes from "../../src/routes/admin-elf-finds";
 import { signAdminSession } from "../../src/admin/session";
+import { runOf } from "../../src/db/elf-game";
+import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
+import type { Door } from "../../src/elf/calendar";
 
 const ACTOR = "admin:staff@example.org";
 const tokenFor = (role: string, permissions: object = {}) => {
@@ -212,16 +219,97 @@ describe("approving, declining and taking down", () => {
 });
 
 describe("the router", () => {
-  it("mounts the five routes", () => {
+  it("mounts the six routes", () => {
     const paths = (routes.adminElfFindsRouter as unknown as { stack: { route?: { path: string; methods: Record<string, boolean> } }[] }).stack
       .filter((l) => l.route)
       .map((l) => `${Object.keys(l.route!.methods)[0].toUpperCase()} ${l.route!.path}`);
     expect(paths).toEqual([
+      "GET /api/admin/elf/finds",
       "GET /api/admin/elf/photos",
       "GET /api/admin/elf/photos/:id/picture",
       "POST /api/admin/elf/photos/:id/approve",
       "POST /api/admin/elf/photos/:id/decline",
       "POST /api/admin/elf/photos/:id/take-down",
     ]);
+  });
+});
+
+describe("Finds on the evening", () => {
+  const NOW = new Date("2026-12-07T18:12:00Z"); // 6:12pm in London on Monday 7 December
+  const setupOf = (n: number, over: Partial<DoorSetup> = {}): DoorSetup => ({
+    ...emptyDoor(n as Door, "abcdefghijk" + String.fromCharCode(96 + n)),
+    placeName: `Pine Cone Café ${n}`,
+    placeTown: "Snowford",
+    tagWord: "SNOWBALL 472",
+    ...over,
+  });
+  const runs = (over: Record<number, Partial<DoorSetup>> = {}) => Array.from({ length: 24 }, (_, i) => runOf(2026, setupOf(i + 1, over[i + 1]), NOW));
+  const finds = () => run(routes.getAdminElfFinds, ask("viewer", { permissions: VIEW }));
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    for (const f of [...Object.values(game), ...Object.values(settingsDb)]) f.mockReset();
+    settingsDb.getElfSettings.mockResolvedValue({ year: 2026 });
+    game.loadPractice.mockResolvedValue(null);
+    game.doorCounts.mockResolvedValue({ cracked: 3, visited: 5 });
+    game.finderOf.mockResolvedValue(null);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("lists today's door first and backwards, leaving out a door whose clue 1 is not out", async () => {
+    game.loadDoorRuns.mockResolvedValue(runs());
+    const res = await finds();
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+    expect(body(res).doors.map((d: { door: number }) => d.door)).toEqual([7, 6, 5, 4, 3, 2, 1]);
+  });
+
+  it("gives an unfound door two of three clues out and no counts, with the place for staff", async () => {
+    game.loadDoorRuns.mockResolvedValue(runs());
+    const d7 = body(await finds()).doors[0];
+    expect(d7).toMatchObject({ door: 7, practice: false, state: "hunting", placeName: "Pine Cone Café 7", placeTown: "Snowford", found: null, cluesOut: 2, counts: null, canAddName: true });
+    expect(d7.day).toBe("Monday 7 December");
+    expect(game.doorCounts).not.toHaveBeenCalledWith(2026, 7, expect.anything(), expect.anything());
+  });
+
+  it("gives a door found yesterday its finders by full name, and its counts", async () => {
+    game.loadDoorRuns.mockResolvedValue(runs({ 6: { foundAt: new Date("2026-12-06T18:10:00Z"), foundFamilyId: 3 } }));
+    game.finderOf.mockImplementation(async (_y: number, door: number) =>
+      door === 6 ? { detectives: ["Sam Twinkle", "Kim Twinkle"], grownUpName: "Alex Example", email: "alex@example.org", at: new Date("2026-12-06T18:10:00Z") } : null,
+    );
+    const d6 = body(await finds()).doors[1];
+    expect(d6.found).toEqual({ detectives: ["Sam Twinkle", "Kim Twinkle"], grownUpName: "Alex Example", at: "2026-12-06T18:10:00.000Z" });
+    expect(d6.counts).toEqual({ families: 5, cracked: 3 });
+    expect(d6.canAddName).toBe(false);
+    expect(JSON.stringify(d6)).not.toContain("alex@example.org");
+  });
+
+  it("puts a practice run first, as door 0, and never lets a name be added to it", async () => {
+    game.loadDoorRuns.mockResolvedValue(runs());
+    const practice = runOf(2026, setupOf(7), NOW);
+    game.loadPractice.mockResolvedValue({ ...practice, door: 0, year: 0, placeName: "The Pretend Place" });
+    const list = body(await finds()).doors;
+    expect(list[0]).toMatchObject({ door: 0, practice: true, placeName: "The Pretend Place", canAddName: false });
+    expect(list[1].door).toBe(7);
+  });
+
+  it("says a snow day plainly, with no counts and no clues out", async () => {
+    game.loadDoorRuns.mockResolvedValue(runs({ 7: { snowDayAt: new Date("2026-12-07T17:30:00Z") } }));
+    const d7 = body(await finds()).doors[0];
+    expect(d7).toMatchObject({ state: "snow", found: null, cluesOut: 0, counts: null });
+  });
+
+  it("is closed to someone with no elf access", async () => {
+    game.loadDoorRuns.mockResolvedValue(runs());
+    expect((await run(routes.getAdminElfFinds, ask("viewer"))).statusCode).toBe(403);
+  });
+
+  it("answers 500 in words when the database fails", async () => {
+    game.loadDoorRuns.mockRejectedValue(new Error("boom"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await finds();
+    expect(res.statusCode).toBe(500);
+    expect(body(res)).toEqual({ error: "Admin is temporarily unavailable" });
   });
 });

@@ -359,3 +359,100 @@ describe("what the screen puts on the page", () => {
     expect(part().textContent).toContain("<b>Pretend</b>");
   });
 });
+
+describe("Tonight and before", () => {
+  const TONIGHT = {
+    doors: [
+      { door: 7, practice: false, day: "Monday 7 December", state: "hunting", placeName: "Pine Cone Café", placeTown: "Snowford", found: null, cluesOut: 2, counts: null, canAddName: true },
+      {
+        door: 6,
+        practice: false,
+        day: "Sunday 6 December",
+        state: "found",
+        placeName: "Snowford Library",
+        placeTown: "Snowford",
+        found: { detectives: ["Sam Twinkle", "Kim Twinkle"], grownUpName: "Alex Example", at: "2026-12-06T18:10:00.000Z" },
+        cluesOut: 3,
+        counts: { families: 5, cracked: 3 },
+        canAddName: false,
+      },
+      { door: 5, practice: false, day: "Saturday 5 December", state: "snow", placeName: null, placeTown: null, found: null, cluesOut: 0, counts: null, canAddName: false },
+    ],
+  };
+  const open = () => openFinds({ "GET /api/admin/elf/finds": TONIGHT, "POST /api/admin/elf/doors/7/names": { door: {} } });
+  const cards = () => [...part().querySelectorAll<HTMLElement>(".hq-tonight .hq-row")];
+
+  it("is read with the photos and sits beside them without breaking them", async () => {
+    const env = await open();
+    expect(env.calls.some((c) => c.method === "GET" && c.url === "/api/admin/elf/finds")).toBe(true);
+    expect(part().querySelector(".hq-queue")).toBeTruthy();
+    expect(part().querySelector(".hq-log")).toBeTruthy();
+    expect(part().querySelector(".hq-tonight h2")!.textContent).toBe("Tonight and before");
+  });
+
+  it("draws each door with its day, place, and who found it or how many clues are out", async () => {
+    await open();
+    const c = cards();
+    expect(c).toHaveLength(3);
+    expect(c[0].querySelector(".hq-what")!.textContent).toBe("Door 7 · Monday 7 December");
+    expect(c[0].textContent).toContain("Pine Cone Café, Snowford");
+    expect(c[0].textContent).toContain("Not found yet. 2 of 3 clues out.");
+    expect(c[0].textContent).not.toContain("families have visited");
+    expect(c[1].textContent).toContain("Found by Sam Twinkle and Kim Twinkle (Alex Example's family) at 6:10pm");
+    expect(c[1].textContent).toContain("5 families have visited and 3 cracked it with a guess");
+    expect(c[2].textContent).toContain("Snow day");
+  });
+
+  it("names the practice door in words", async () => {
+    await openFinds({ "GET /api/admin/elf/finds": { doors: [{ ...TONIGHT.doors[0], door: 0, practice: true, canAddName: false }] } });
+    expect(cards()[0].querySelector(".hq-what")!.textContent).toBe("The practice door");
+  });
+
+  it("offers Add a name that counts only while a name can be added, and posts it", async () => {
+    const env = await open();
+    const c = cards();
+    expect(c[0].textContent).toContain("Add a name that counts");
+    expect(c[1].querySelector("input")).toBeNull();
+    expect(c[2].querySelector("input")).toBeNull();
+    const field = c[0].querySelector<HTMLInputElement>("input")!;
+    field.value = "The Cone";
+    buttonIn(c[0], "Add")!.click();
+    await flush();
+    expect(posts(env).map((p) => [p.url, p.body])).toEqual([["/api/admin/elf/doors/7/names", { name: "The Cone" }]]);
+    const said = cards()[0].querySelector(".hq-status")!;
+    expect(said.textContent).toBe("Added. Guesses are checked against it from now.");
+    expect(said.classList.contains("is-ok")).toBe(true);
+  });
+
+  it("shows the server's sentence when the day is over, as an error", async () => {
+    const env = page({
+      answers: {
+        "GET /api/admin/elf/photos": PHOTOS,
+        "GET /api/admin/elf/finds": TONIGHT,
+        "POST /api/admin/elf/doors/7/names": { error: "Door 7's day is over, so its names are fixed now." },
+      },
+      statuses: { "POST /api/admin/elf/doors/7/names": 409 },
+    });
+    await env.hq.open();
+    tab().click();
+    await flush();
+    const c = cards()[0];
+    c.querySelector<HTMLInputElement>("input")!.value = "The Cone";
+    buttonIn(c, "Add")!.click();
+    await flush();
+    const said = cards()[0].querySelector(".hq-status")!;
+    expect(said.textContent).toBe("Door 7's day is over, so its names are fixed now.");
+    expect(said.classList.contains("is-error")).toBe(true);
+  });
+
+  it("draws place names as text, never markup", async () => {
+    await openFinds({ "GET /api/admin/elf/finds": { doors: [{ ...TONIGHT.doors[0], placeName: "<b>Pretend</b>" }] } });
+    expect(part().querySelector(".hq-tonight b + b, .hq-tonight .hq-row b b")).toBeNull();
+    expect(part().querySelector(".hq-tonight")!.textContent).toContain("<b>Pretend</b>");
+  });
+
+  it("says plainly when nothing has started", async () => {
+    await openFinds({ "GET /api/admin/elf/finds": { doors: [] } });
+    expect(part().querySelector(".hq-tonight")!.textContent).toContain("No door has started yet.");
+  });
+});

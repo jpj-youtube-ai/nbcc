@@ -1,4 +1,5 @@
 import {
+  doorInstant,
   DEFAULT_MORNING_CLUE_TIME,
   DEFAULT_SCHOOL_CLUE_TIME,
   type Door,
@@ -105,6 +106,13 @@ export function doorSeason(year: number): ElfSeason {
     schoolClueTime: DEFAULT_SCHOOL_CLUE_TIME,
     morningClueTime: DEFAULT_MORNING_CLUE_TIME,
   };
+}
+
+/** Has the door's day ended? True from midnight at the end of it (London time); a door that is not a
+ *  real date counts as over. Names are fixed, and gone home can be ticked, from then. */
+export function dayIsOver(year: number, door: Door, now: Date): boolean {
+  const last = doorInstant(doorSeason(year), door, "23:59");
+  return !last || now.getTime() >= last.getTime() + 60_000;
 }
 
 /** The four evening times staff have stored on a door. */

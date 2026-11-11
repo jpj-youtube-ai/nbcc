@@ -3,7 +3,13 @@ import { z } from "zod";
 import { authorizeSection, loadEffectivePermissions } from "./admin-authz";
 import { actorOf } from "./admin";
 import { can } from "../admin/permissions";
+import { getElfSettings } from "../db/elf";
 import { lastAlert } from "../db/elf-alerts";
+import { doorCounts, finderOf, loadDoorRuns, loadPractice, type DoorRun } from "../db/elf-game";
+import { dayIsOver } from "../elf/door-setup";
+import { cluesOut, isOpen, type DoorState } from "../elf/doors";
+import { longDayWords } from "../elf/words";
+import type { Door } from "../elf/calendar";
 import { decidePhoto, photoForStaff, photoLog, photoStep, photosWaiting, takeDownPhoto } from "../db/elf-photos";
 
 // NBCC Elf Detective School in the admin, Head Elf HQ's Finds tab: the photo check and the photo log
@@ -14,12 +20,29 @@ import { decidePhoto, photoForStaff, photoLog, photoStep, photosWaiting, takeDow
 //   POST /api/admin/elf/photos/:id/approve     approve it (edit)
 //   POST /api/admin/elf/photos/:id/decline     decline it, with a reason only head elves see (edit)
 //   POST /api/admin/elf/photos/:id/take-down   take it down, with an optional reason (edit)
+//   GET  /api/admin/elf/finds                  who found each door and when, tonight and before (view)
 //
 // Head elves see a family's full names here; nothing on these routes is ever shown to a family or the
 // public, and an audit row never carries a place name or a photo. The screen is
 // assets/js/admin/elf-hq.js. Unit tested in test/unit/admin-elf-finds.test.ts.
 
 export const adminElfFindsRouter = Router();
+
+/** One door on Tonight and before: its day, state, place (staff only), finder and counts. */
+export interface FindRow {
+  door: Door | 0;
+  practice: boolean;
+  day: string;
+  state: DoorState;
+  placeName: string | null;
+  placeTown: string | null;
+  found: { detectives: string[]; grownUpName: string; at: string } | null;
+  cluesOut: 0 | 1 | 2 | 3;
+  /** Once the place is shown; `families` is the families that have visited. */
+  counts: { families: number; cracked: number } | null;
+  /** Until midnight at the end of its day; never for the practice door. */
+  canAddName: boolean;
+}
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 const NO_PHOTO = { error: "That photo is not there." };
@@ -52,6 +75,45 @@ export async function getAdminElfPhotos(req: Request, res: Response): Promise<Re
     return res.status(200).json({ waiting, log, lastAlert: last, canEdit: !!perms && can(perms, "elf", "edit") });
   } catch (err) {
     console.error("admin elf photos failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+async function findRow(run: DoorRun, now: Date): Promise<FindRow> {
+  const practice = run.door === 0;
+  const hasFinder = run.state === "found" || run.state === "found-hidden";
+  const finder = hasFinder ? await finderOf(run.year, run.door) : null;
+  const counts = isOpen(run.state) ? await doorCounts(run.year, run.door, now, run) : null;
+  return {
+    door: run.door,
+    practice,
+    day: practice ? "" : longDayWords(run.facts.clue1At),
+    state: run.state,
+    placeName: run.placeName,
+    placeTown: run.placeTown,
+    found: finder ? { detectives: finder.detectives, grownUpName: finder.grownUpName, at: finder.at.toISOString() } : null,
+    cluesOut: cluesOut(run.facts, now),
+    counts: counts ? { families: counts.visited, cracked: counts.cracked } : null,
+    canAddName: !practice && !dayIsOver(run.year, run.door as Door, now),
+  };
+}
+
+/** Who found each door and when: the practice door first while it runs, then today's door and back,
+ *  only doors whose clue 1 is out. Head elves see full names; removed families are left out. */
+export async function getAdminElfFinds(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
+  try {
+    const now = new Date();
+    const { year } = await getElfSettings();
+    const [runs, practice] = await Promise.all([loadDoorRuns(year, now), loadPractice(now)]);
+    const started = (r: DoorRun) => now.getTime() >= r.facts.clue1At.getTime();
+    const shown = [...(practice && started(practice) ? [practice] : []), ...runs.filter(started).sort((a, b) => b.door - a.door)];
+    const doors = await Promise.all(shown.map((r) => findRow(r, now)));
+    return res.status(200).json({ doors });
+  } catch (err) {
+    console.error("admin elf finds failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
   }
 }
@@ -133,6 +195,7 @@ export async function postAdminElfPhotoTakeDown(req: Request, res: Response): Pr
   }
 }
 
+adminElfFindsRouter.get("/api/admin/elf/finds", getAdminElfFinds);
 adminElfFindsRouter.get("/api/admin/elf/photos", getAdminElfPhotos);
 adminElfFindsRouter.get("/api/admin/elf/photos/:id/picture", getAdminElfPhotoPicture);
 adminElfFindsRouter.post("/api/admin/elf/photos/:id/approve", postAdminElfPhotoApprove);

@@ -2531,7 +2531,7 @@
     // drawn big, its picture fetched with the signed in token into a Blob address (never in a link), and
     // that address revoked when the photo is replaced or the part is drawn again. Names, places and
     // reasons go on the page as text. A head elf who is too late sees who checked it and when.
-    var finds = { data: null, seq: 0, picSeq: 0, blob: null, currentId: null, notice: "", queue: null, log: null };
+    var finds = { data: null, seq: 0, picSeq: 0, blob: null, currentId: null, notice: "", queue: null, log: null, tonight: null, doors: null, doorsError: "", tseq: 0 };
     var CHECKS = [
       "Only the family in it",
       "No school uniform or badge",
@@ -2572,6 +2572,8 @@
       finds.queue = el("section", { class: "hq-panel hq-queue", "aria-label": "Photos to check" });
       finds.log = el("section", { class: "hq-panel hq-log", "aria-label": "The photo log" });
       part.appendChild(el("div", { class: "hq-finds" }, [finds.queue, finds.log]));
+      finds.tonight = el("section", { class: "hq-panel hq-tonight", "aria-label": "Tonight and before" });
+      part.appendChild(finds.tonight);
     }
 
     function clearBlob() {
@@ -2608,6 +2610,7 @@
 
     function loadFinds() {
       buildFinds();
+      loadTonight();
       var mine = ++finds.seq;
       return ask("GET", "/api/admin/elf/photos")
         .then(function (d) {
@@ -2624,6 +2627,111 @@
     function drawFinds() {
       drawQueue();
       drawLog();
+      drawTonight();
+    }
+
+    // ---- Finds: Tonight and before, who found each door and when ----
+    // Read with the photos (src/routes/admin-elf-finds.ts, /api/admin/elf/finds). Head elves see the
+    // finders' full names; the place is for staff only. A name that counts can be added until midnight at
+    // the end of the door's day, by someone who may edit.
+    function loadTonight() {
+      var mine = ++finds.tseq;
+      return ask("GET", "/api/admin/elf/finds")
+        .then(function (d) {
+          if (mine !== finds.tseq) return;
+          finds.doors = d && Array.isArray(d.doors) ? d.doors : [];
+          finds.doorsError = "";
+          drawTonight();
+        })
+        .catch(function (e) {
+          if (mine !== finds.tseq) return;
+          finds.doorsError = e.message;
+          drawTonight();
+        });
+    }
+
+    /** "Sam Twinkle and Kim Twinkle", or "A, B and C". */
+    function joinNames(names) {
+      return names.length < 2 ? names.join("") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+    }
+
+    function foundWords(f) {
+      return "Found by " + joinNames(f.detectives) + " (" + f.grownUpName + "'s family) at " + timeShort(f.at);
+    }
+
+    /** The one line that says how a door stands. */
+    function standingWords(r) {
+      if (r.found) return foundWords(r.found);
+      if (r.state === "snow") return "Snow day";
+      if (r.state === "found" || r.state === "found-hidden") return "Found.";
+      return "Not found yet. " + r.cluesOut + " of 3 clues out.";
+    }
+
+    /** The field and button that add a name that counts to one door. */
+    function addNameBox(r) {
+      var id = "hqFind-name-" + r.door;
+      var said = el("p", { class: "hq-status", role: "status" });
+      var field = el("input", { type: "text", id: id, name: "name", maxlength: 80, autocomplete: "off" });
+      var add = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Add" });
+      add.addEventListener("click", function () {
+        if (!field.value.trim()) return;
+        add.disabled = true;
+        say(said, "", null);
+        ask("POST", "/api/admin/elf/doors/" + r.door + "/names", { name: field.value })
+          .then(function () {
+            add.disabled = false;
+            field.value = "";
+            say(said, "Added. Guesses are checked against it from now.", true);
+          })
+          .catch(function (e) {
+            add.disabled = false;
+            say(said, e.message, false);
+          });
+      });
+      return el("div", { class: "hq-field hq-tadd" }, [
+        el("label", { for: id, text: "Add a name that counts" }),
+        el("div", { class: "hq-addname" }, [field, add]),
+        said,
+      ]);
+    }
+
+    function tonightCard(r, canEdit) {
+      var lines = [];
+      if (r.placeName) lines.push(el("p", { class: "hq-words", text: r.placeName + (r.placeTown ? ", " + r.placeTown : "") }));
+      lines.push(el("p", { class: "hq-words", text: standingWords(r) }));
+      if (r.counts) {
+        var n = r.counts.families;
+        lines.push(el("p", { class: "hq-words hq-soft", text: n + plural(n, " family has", " families have") + " visited and " + r.counts.cracked + " cracked it with a guess" }));
+      }
+      if (canEdit && r.canAddName) lines.push(addNameBox(r));
+      return el("li", { class: "hq-row" }, [
+        el("p", { class: "hq-what" }, [el("b", { text: r.practice ? "The practice door" : "Door " + r.door + " \u00b7 " + r.day })]),
+        el("div", { class: "hq-tlines" }, lines),
+      ]);
+    }
+
+    function drawTonight() {
+      var box = finds.tonight;
+      if (!box || finds.doors === null) return;
+      var canEdit = !!(finds.data && finds.data.canEdit);
+      // Keep what is being typed when the photos arrive after the doors.
+      var kept = {};
+      Array.prototype.forEach.call(box.querySelectorAll("input[name=name]"), function (i) { kept[i.id] = i.value; });
+      box.textContent = "";
+      box.appendChild(
+        el("div", { class: "hq-phead" }, [
+          el("h2", { class: "hq-h2", text: "Tonight and before" }),
+          el("p", { class: "hq-soft", text: "Who found each door and when. Today's door first." }),
+        ]),
+      );
+      if (finds.doorsError) box.appendChild(el("p", { class: "hq-status is-error", role: "status", text: finds.doorsError }));
+      var list = el("ul", { class: "hq-rows" });
+      finds.doors.forEach(function (r) {
+        list.appendChild(tonightCard(r, canEdit));
+      });
+      if (!finds.doors.length) list.appendChild(el("li", { class: "hq-words hq-soft", text: "No door has started yet." }));
+      box.appendChild(list);
+      Array.prototype.forEach.call(box.querySelectorAll("input[name=name]"), function (i) { if (kept[i.id]) i.value = kept[i.id]; });
     }
 
     /** One decision's request, then the queue again. A head elf who was too late is shown the step that

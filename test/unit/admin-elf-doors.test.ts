@@ -257,6 +257,17 @@ describe("names", () => {
     expect(doors.addElfDoorName).toHaveBeenCalledWith(2026, 7, "The Pine Cone", ACTOR);
   });
 
+  it("fixes names at midnight at the end of the door's day: 409 for door 6 and 201 for door 7", async () => {
+    const late = await add("6", { name: "The Pine Cone" });
+    expect(late.statusCode).toBe(409);
+    expect(body(late)).toEqual({ error: "Door 6's day is over, so its names are fixed now." });
+    expect(doors.addElfDoorName).not.toHaveBeenCalled();
+    vi.setSystemTime(new Date("2026-12-07T23:59:30Z"));
+    expect((await add("7", { name: "The Pine Cone" })).statusCode).toBe(201);
+    vi.setSystemTime(new Date("2026-12-08T00:00:00Z"));
+    expect((await add("7", { name: "The Pine Cone" })).statusCode).toBe(409);
+  });
+
   it("refuses a name with no letter or number, and one already counting", async () => {
     for (const name of ["!!!", "The", "  ", ""]) {
       const res = await add("8", { name });

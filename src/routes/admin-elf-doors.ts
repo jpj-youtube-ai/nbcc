@@ -42,6 +42,7 @@ import { makeTagWord } from "../elf/door-codes";
 import {
   doorPicture,
   doorSeason,
+  dayIsOver,
   doorsSummary,
   doorWeekday,
   prizeListText,
@@ -149,12 +150,6 @@ function sheetOf(year: number, d: DoorSetup, now: Date): DoorSheet {
     goneHome: d.goneHomeAt ? { at: new Date(d.goneHomeAt).toISOString(), by: d.goneHomeBy ?? "" } : null,
     dayOver: dayIsOver(year, d.door, now),
   };
-}
-
-/** Midnight at the end of the door's day: when gone home can first be ticked. */
-function dayIsOver(year: number, door: Door, now: Date): boolean {
-  const last = doorInstant(doorSeason(year), door, "23:59");
-  return !last || now.getTime() >= last.getTime() + 60_000;
 }
 
 /** The sentence for a zod failure: our own message, never zod's ("Required", "Unrecognized key(s) ..."). */
@@ -315,6 +310,7 @@ export const postAdminElfDoorName = guarded("name add", "edit", async ({ req, re
   const parsed = nameSchema.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]) });
   if (normalisePlaceName(parsed.data.name) === "") return res.status(400).json({ error: "A name needs at least one letter or number." });
+  if (dayIsOver(year, door, now)) return res.status(409).json({ error: `Door ${door}'s day is over, so its names are fixed now.` });
   const d = await addElfDoorName(year, door, parsed.data.name, actor);
   if (d === "taken") return res.status(409).json({ error: "That name already counts for this door." });
   return d ? res.status(201).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);

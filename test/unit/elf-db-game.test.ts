@@ -27,6 +27,7 @@ import {
   familyPhoto,
   familyVisits,
   familyWordTries,
+  finderOf,
   finderParts,
   giveBackWordTry,
   loadDoorRun,
@@ -955,5 +956,43 @@ describe("visitElf, cluePicture and the switch", () => {
     expect(query.mock.calls[0][1][0]).toBe(2026);
     expect(sqls().some((q) => /DELETE FROM elf_practice/.test(q))).toBe(true);
     expect(sqls().some((q) => /DELETE FROM elf_guesses/.test(q) && /year = 0/.test(q))).toBe(true);
+  });
+});
+
+describe("finderOf", () => {
+  it("reads a real door's find and its finding family's detectives by full name, leaving a removed family out", async () => {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_doors/.test(s)) return { rows: [{ found_at: at("2026-12-06T18:10:00Z"), found_family_id: 3 }] };
+      if (/FROM elf_families/.test(s)) return { rows: [{ grown_up_name: "Alex Example", email: "alex@example.org" }] };
+      return { rows: [{ first_name: "Sam", surname: "Twinkle" }, { first_name: "Kim", surname: "Twinkle" }] };
+    });
+    const found = await finderOf(2026, 6);
+    expect(found).toEqual({ detectives: ["Sam Twinkle", "Kim Twinkle"], grownUpName: "Alex Example", email: "alex@example.org", at: at("2026-12-06T18:10:00Z") });
+    const sqls = query.mock.calls.map((c) => String(c[0]));
+    expect(sqls.some((s) => /FROM elf_doors/.test(s))).toBe(true);
+    expect(sqls.filter((s) => /elf_families/.test(s)).every((s) => s.includes("removed_at IS NULL"))).toBe(true);
+  });
+
+  it("reads door 0 from the practice row", async () => {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_practice/.test(s)) return { rows: [{ found_at: at("2026-12-07T18:05:00Z"), found_family_id: 5 }] };
+      if (/FROM elf_families/.test(s)) return { rows: [{ grown_up_name: "Kim Example", email: "kim@example.org" }] };
+      return { rows: [{ first_name: "Pip", surname: "Twinkle" }] };
+    });
+    const found = await finderOf(0, 0);
+    expect(found?.detectives).toEqual(["Pip Twinkle"]);
+    expect(query.mock.calls.some((c) => /FROM elf_practice/.test(String(c[0])))).toBe(true);
+    expect(query.mock.calls.every((c) => !/FROM elf_doors/.test(String(c[0])))).toBe(true);
+  });
+
+  it("is null when nobody has found it, or the finding family has been removed", async () => {
+    query.mockResolvedValue({ rows: [] });
+    expect(await finderOf(2026, 6)).toBeNull();
+    query.mockImplementation(async (sql: string) =>
+      /FROM elf_doors/.test(String(sql)) ? { rows: [{ found_at: at("2026-12-06T18:10:00Z"), found_family_id: 3 }] } : { rows: [] },
+    );
+    expect(await finderOf(2026, 6)).toBeNull();
   });
 });

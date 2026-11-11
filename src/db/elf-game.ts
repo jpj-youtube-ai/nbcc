@@ -410,6 +410,43 @@ export async function finderParts(year: number, door: number): Promise<Detective
   return r.rows.map((row) => ({ firstName: row.first_name, surname: row.surname, approved: row.name_approved === true }));
 }
 
+export interface Finder {
+  /** The finding family's detectives, by full name (head elves only). */
+  detectives: string[];
+  grownUpName: string;
+  email: string;
+  at: Date;
+}
+
+/** Who found the door's elf and when, for head elves: the finding family's detectives by full name and
+ *  the grown up. Door 0 reads the practice row. Null while nobody has found it, or when the finding
+ *  family has been removed. */
+export async function finderOf(year: number, door: number): Promise<Finder | null> {
+  const found = await pool.query<{ found_at: Date | null; found_family_id: number | null }>(
+    door === 0
+      ? "SELECT found_at, found_family_id FROM elf_practice"
+      : "SELECT found_at, found_family_id FROM elf_doors WHERE year = $1 AND door = $2",
+    door === 0 ? [] : [year, door],
+  );
+  const row = found.rows[0];
+  if (!row || !row.found_at || row.found_family_id === null) return null;
+  const familyId = Number(row.found_family_id);
+  const family = await pool.query<{ grown_up_name: string; email: string }>(
+    "SELECT grown_up_name, email FROM elf_families WHERE id = $1 AND removed_at IS NULL",
+    [familyId],
+  );
+  const f = family.rows[0];
+  if (!f) return null;
+  const names = await pool.query<{ first_name: string; surname: string }>(
+    `SELECT d.first_name, d.surname FROM elf_visits v
+       JOIN elf_detectives d ON d.id = v.detective_id
+      WHERE v.year = $1 AND v.door = $2 AND v.found AND v.family_id = $3
+      ORDER BY d.id`,
+    [door === 0 ? 0 : year, door, familyId],
+  );
+  return { detectives: names.rows.map((n) => `${n.first_name} ${n.surname}`), grownUpName: f.grown_up_name, email: f.email, at: row.found_at };
+}
+
 // ---- doors done ---------------------------------------------------------------------------------------
 
 function crackedBy(run: DoorRun, guess: SavedGuess | undefined, now: Date): boolean {

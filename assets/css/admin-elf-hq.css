@@ -440,6 +440,11 @@
 @container (min-width: 1040px) { .hq-finds { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
 .hq-queue { display: grid; gap: var(--hq-space-lg); container-type: inline-size; align-content: start; }
 .hq-log { display: grid; gap: var(--hq-space-lg); align-content: start; }
+.hq-tonight { display: grid; gap: var(--hq-space-lg); align-content: start; margin-top: var(--hq-space-xl); }
+.hq-tonight .hq-row { grid-template-columns: minmax(0, 1fr); }
+.hq-tlines { display: grid; gap: var(--hq-space-xs); min-width: 0; }
+.hq-tlines .hq-words { overflow-wrap: anywhere; }
+.hq-tadd { margin-top: var(--hq-space-sm); }
 .hq-phead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-xs) var(--hq-space-md); }
 .hq-phead p { margin: 0; }
 .hq-chip--long { white-space: normal; text-align: left; max-width: 18ch; }

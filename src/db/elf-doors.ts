@@ -415,6 +415,52 @@ export async function saveElfClue(year: number, door: Door, n: ClueN, words: str
   );
 }
 
+/** The picture made for a clue (already shrunk and drawn again by processPicture). */
+export interface CluePicture {
+  mime: string;
+  bytes: Buffer;
+  width: number;
+  height: number;
+}
+
+/** Puts a picture on a clue, with the words that describe it; the clue's own words stay as they are. */
+export async function saveElfCluePicture(year: number, door: Door, n: ClueN, picture: CluePicture, alt: string, actor: string): Promise<DoorSetup | null> {
+  return audited(
+    async (client) => {
+      await lockedDoor(client, year, door);
+      await client.query(
+        `INSERT INTO elf_clues (year, door, n, picture, picture_mime, picture_width, picture_height, picture_alt, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (year, door, n) DO UPDATE SET picture = EXCLUDED.picture, picture_mime = EXCLUDED.picture_mime,
+           picture_width = EXCLUDED.picture_width, picture_height = EXCLUDED.picture_height,
+           picture_alt = EXCLUDED.picture_alt, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+        [year, door, n, picture.bytes, picture.mime, picture.width, picture.height, alt, actor],
+      );
+      return (await readDoor(client, year, door)) as DoorSetup;
+    },
+    () => ({ actor, action: "elf.clue.picture", entity: "elf_door", entityId: door, data: { year, door, n } }),
+  );
+}
+
+/** Takes a clue's picture off. The clue's row goes too when it has no words either. */
+export async function removeElfCluePicture(year: number, door: Door, n: ClueN, actor: string): Promise<DoorSetup | null> {
+  return audited(
+    async (client) => {
+      await lockedDoor(client, year, door);
+      // The row with no words goes whole (the table refuses a row with neither), then a row with words only loses its picture.
+      await client.query("DELETE FROM elf_clues WHERE year = $1 AND door = $2 AND n = $3 AND words IS NULL", [year, door, n]);
+      await client.query(
+        `UPDATE elf_clues SET picture = NULL, picture_mime = NULL, picture_width = NULL, picture_height = NULL, picture_alt = NULL,
+                updated_at = now(), updated_by = $4
+          WHERE year = $1 AND door = $2 AND n = $3 AND words IS NOT NULL`,
+        [year, door, n, actor],
+      );
+      return (await readDoor(client, year, door)) as DoorSetup;
+    },
+    () => ({ actor, action: "elf.clue.picture", entity: "elf_door", entityId: door, data: { year, door, n } }),
+  );
+}
+
 /** Saves a pasted file's clues for several doors in one go: all of them or none. */
 export async function savePastedClues(year: number, doors: PastedDoor[], actor: string): Promise<{ doors: number; clues: number }> {
   return writeWithAudit(

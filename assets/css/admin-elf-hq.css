@@ -341,6 +341,14 @@
 .hq-clue textarea:disabled, .hq-clue textarea:read-only { background: #FBF7F0; color: var(--hq-soft); }
 .hq-count-words { margin-left: auto; }
 .hq-count-words.is-error { color: var(--hq-crimson); font-weight: 700; }
+/* a clue's picture: shown whole, never cropped or scrolled, and the way to change it */
+.hq-clue-pic { display: grid; gap: var(--hq-space-xs); margin: 0; min-width: 0; }
+.hq-clue-pic__img, .hq-pic-preview img { display: block; max-width: 100%; height: auto; border: 2px solid var(--hq-ink); border-radius: 12px; background: #FBF7F0; }
+.hq-clue-pic figcaption { overflow-wrap: anywhere; }
+.hq-clue-pic-edit { display: grid; gap: var(--hq-space-sm); min-width: 0; }
+.hq-clue-pic-edit input[type="file"], .hq-clue-pic-edit input[type="text"] { width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px; border: 2px solid var(--hq-ink); border-radius: 12px; background: var(--hq-card); font: inherit; color: var(--hq-text); }
+.hq-clue-pic-edit .hq-field { min-width: 0; }
+.hq-clue-pic-edit .hq-hint { overflow-wrap: anywhere; }
 @container (max-width: 420px) {
   .hq-clue { grid-template-columns: minmax(0, 1fr); }
 }

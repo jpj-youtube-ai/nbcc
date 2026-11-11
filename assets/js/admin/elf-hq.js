@@ -104,6 +104,7 @@
               var failure = new Error((d && d.error) || WORDS.didNotWork);
               failure.status = res.status;
               failure.problems = (d && d.problems) || null; // a paste that has problems says which
+              failure.fields = (d && d.fields) || null; // a picture the server would not take says which part and why
               failure.printed = !!(d && d.printed); // a tag word asked for again after its tag was printed
               throw failure;
             }
@@ -1207,12 +1208,248 @@
       return "The staff card names the day and the tag carries the word, so both are for " + (d.placeName || "this place") + " only.";
     }
 
+    // ---- a clue's picture ----
+    var PIC_TYPES = ["image/jpeg", "image/png", "image/webp"];
+    var PIC_MAX_BYTES = 2 * 1024 * 1024;
+    var PIC_MAX_PX = 1600;
+    var PIC_QUALITY = 0.86;
+    var PIC_LOWER_QUALITY = 0.7; // one more try if the first drawing is over 2 MB
+    var PIC_WORDS = {
+      type: "That picture is not one we can use. Try a JPG, PNG or WebP photo.",
+      size: "That picture is too big. Try a smaller one.",
+      read: "That picture could not be opened. Please try another.",
+      choose: "Choose a picture first.",
+      alt: "Describe the picture in a few words, for anyone who cannot see it.",
+    };
+    // The browser addresses made for each clue's pictures: the stored picture fetched for the sheet and the
+    // one just chosen. Each is let go of when it is replaced or when the clue is drawn again.
+    var clueBlobs = { 1: [], 2: [], 3: [] };
+    var clueDraws = { 1: 0, 2: 0, 3: 0 };
+
+    function freeAddress(url) {
+      if (url && win.URL && typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
+    }
+    /** Lets go of every address made for one clue's picture. */
+    function freeClueBlobs(n) {
+      clueBlobs[n].forEach(freeAddress);
+      clueBlobs[n] = [];
+    }
+    function keepAddress(n, url) {
+      clueBlobs[n].push(url);
+    }
+    function dropAddress(n, url) {
+      clueBlobs[n] = clueBlobs[n].filter(function (u) { return u !== url; });
+      freeAddress(url);
+    }
+
+    // The chosen file read into something the page can show, and drawn again smaller as a fresh JPEG.
+    // Both can be replaced through opts.read and opts.make (the unit tests have no canvas).
+    var readPicture =
+      opts.read ||
+      function (file) {
+        return new Promise(function (done) {
+          if (!win.URL || !win.URL.createObjectURL || typeof win.Image !== "function") return done(null);
+          var src = win.URL.createObjectURL(file);
+          var img = new win.Image();
+          img.onload = function () {
+            done({ src: src, width: img.naturalWidth, height: img.naturalHeight, img: img });
+          };
+          img.onerror = function () {
+            freeAddress(src);
+            done(null);
+          };
+          img.src = src;
+        });
+      };
+    var makePicture =
+      opts.make ||
+      function (pic, quality) {
+        return new Promise(function (done) {
+          try {
+            var canvas = doc.createElement("canvas");
+            if (!canvas.getContext || !pic || !pic.img) return done(null);
+            var scale = Math.min(1, PIC_MAX_PX / Math.max(pic.width, pic.height));
+            canvas.width = Math.max(1, Math.round(pic.width * scale));
+            canvas.height = Math.max(1, Math.round(pic.height * scale));
+            var ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(pic.img, 0, 0, canvas.width, canvas.height);
+            var url = canvas.toDataURL("image/jpeg", quality || PIC_QUALITY);
+            var comma = url.indexOf(",");
+            if (comma === -1 || url.indexOf("data:image/jpeg") !== 0) return done(null);
+            done({ mime: "image/jpeg", base64: url.slice(comma + 1) });
+          } catch (e) {
+            done(null);
+          }
+        });
+      };
+    function base64Bytes(b64) {
+      var pad = /==$/.test(b64) ? 2 : /=$/.test(b64) ? 1 : 0;
+      return Math.floor((b64.length * 3) / 4) - pad;
+    }
+    /** A file as it is, in base64, for a browser that cannot draw the picture again. */
+    function rawBase64(file) {
+      return new Promise(function (done) {
+        if (typeof win.FileReader !== "function") return done(null);
+        var reader = new win.FileReader();
+        reader.onload = function () {
+          var url = String(reader.result || "");
+          var comma = url.indexOf(",");
+          done(comma === -1 ? null : url.slice(comma + 1));
+        };
+        reader.onerror = function () {
+          done(null);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    /** The picture to send: { mime, base64 } drawn again smaller, the file as it came if it cannot be, or { error }. */
+    function preparePicture(file, pic) {
+      var made = pic ? makePicture(pic) : Promise.resolve(null);
+      return made
+        .then(function (small) {
+          if (small && small.base64 && base64Bytes(small.base64) > PIC_MAX_BYTES) {
+            return makePicture(pic, PIC_LOWER_QUALITY).then(function (lower) {
+              return lower && lower.base64 ? lower : small;
+            });
+          }
+          return small;
+        })
+        .then(function (small) {
+          if (small && small.base64) return small;
+          if (PIC_TYPES.indexOf(file.type) === -1) return { error: PIC_WORDS.type };
+          if (file.size > PIC_MAX_BYTES) return { error: PIC_WORDS.size };
+          return rawBase64(file).then(function (b64) {
+            return b64 ? { mime: file.type, base64: b64 } : { error: PIC_WORDS.read };
+          });
+        });
+    }
+
+    /** The picture on a clue, fetched with the bearer token into a Blob address, as the prints are. */
+    function cluePictureView(n, d, alt) {
+      var draw = clueDraws[n];
+      var img = el("img", { class: "hq-clue-pic__img", alt: alt || "A picture for this clue", width: 480, height: 360 });
+      win
+        .fetch("/api/admin/elf/doors/" + d.door + "/clues/" + n + "/picture", { headers: { Authorization: "Bearer " + token() } })
+        .then(function (res) {
+          if (!res.ok) throw new Error("no picture");
+          return res.blob();
+        })
+        .then(function (blob) {
+          if (!win.URL || typeof win.URL.createObjectURL !== "function") return;
+          var url = win.URL.createObjectURL(blob);
+          if (draw !== clueDraws[n]) return freeAddress(url); // the clue was drawn again while this was on its way
+          keepAddress(n, url);
+          img.setAttribute("src", url);
+        })
+        .catch(function () { /* the words say there is a picture; the image stays empty */ });
+      return el("figure", { class: "hq-clue-pic" }, [img, el("figcaption", { class: "hq-hint", text: alt ? "Described as: " + alt : "No description" })]);
+    }
+
+    /** Add a picture, and Take the picture off, for a clue that is not out. */
+    function cluePictureEditor(n, d, stored, said, key) {
+      var chosen = null; // the picture read from the chosen file
+      var picturing = Promise.resolve();
+      var previewUrl = null;
+      var draw = clueDraws[n];
+      var file = el("input", { type: "file", id: "hqDoor-" + key + "-picture", accept: PIC_TYPES.join(","), "aria-describedby": "hqDoor-" + key + "-alt-hint" });
+      var preview = el("div", { class: "hq-pic-preview", hidden: true });
+      var alt = el("input", { type: "text", id: "hqDoor-" + key + "-alt", maxlength: 200, autocomplete: "off", "aria-describedby": "hqDoor-" + key + "-alt-hint" });
+      if (stored && stored.pictureAlt) alt.value = stored.pictureAlt;
+      var send = el("button", { class: "hq-btn hq-btn--small hq-btn--go", type: "button", text: "Save the picture", "aria-label": "Save the picture for clue " + n });
+      var take = stored && stored.hasPicture ? el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Take the picture off", "aria-label": "Take the picture off clue " + n }) : null;
+
+      function letGoOfPreview() {
+        if (previewUrl) dropAddress(n, previewUrl);
+        previewUrl = null;
+        preview.textContent = "";
+        preview.hidden = true;
+      }
+      file.addEventListener("change", function () {
+        var f = file.files && file.files.length ? file.files[0] : null;
+        chosen = null;
+        letGoOfPreview();
+        if (!f) return;
+        picturing = Promise.resolve(readPicture(f)).then(function (pic) {
+          if (draw !== clueDraws[n]) {
+            if (pic && pic.src) freeAddress(pic.src);
+            return;
+          }
+          chosen = pic;
+          if (pic && pic.src) {
+            previewUrl = pic.src;
+            keepAddress(n, pic.src);
+            preview.appendChild(el("img", { src: pic.src, alt: "", width: 240, height: 180 }));
+            preview.hidden = false;
+          }
+        });
+      });
+      send.addEventListener("click", function () {
+        var f = file.files && file.files.length ? file.files[0] : null;
+        if (!f) return say(said, PIC_WORDS.choose, false);
+        var words = alt.value.trim();
+        if (words === "" || words.length > 200) return say(said, PIC_WORDS.alt, false);
+        send.disabled = true;
+        say(said, "Sending the picture…", null);
+        picturing
+          .then(function () { return preparePicture(f, chosen); })
+          .then(function (out) {
+            if (out.error) throw new Error(out.error);
+            return ask("PUT", "/api/admin/elf/doors/" + d.door + "/clues/" + n + "/picture", { mime: out.mime, dataBase64: out.base64, alt: words });
+          })
+          .then(function (r) {
+            takeDoor(r.door, { rebuild: [key], say: [key, "Picture saved."], focus: key });
+          })
+          .catch(function (e) {
+            say(said, (e.fields && e.fields.photo) || e.message, false);
+            send.disabled = false;
+            if (e.status === 409) reopenAfterClueOut(d.door, key, e.message);
+          });
+      });
+      if (take) {
+        take.addEventListener("click", function () {
+          take.disabled = true;
+          ask("DELETE", "/api/admin/elf/doors/" + d.door + "/clues/" + n + "/picture")
+            .then(function (r) {
+              takeDoor(r.door, { rebuild: [key], say: [key, "Picture taken off."], focus: key });
+            })
+            .catch(function (e) {
+              say(said, e.message, false);
+              take.disabled = false;
+              if (e.status === 409) reopenAfterClueOut(d.door, key, e.message);
+            });
+        });
+      }
+      var buttons = el("div", { class: "hq-actions" }, [send, take]);
+      return el("div", { class: "hq-clue-pic-edit" }, [
+        el("div", { class: "hq-field" }, [el("label", { for: "hqDoor-" + key + "-picture", text: "Add a picture" }), file]),
+        preview,
+        el("div", { class: "hq-field" }, [
+          el("label", { for: "hqDoor-" + key + "-alt", text: "What is in the picture" }),
+          alt,
+          el("span", { class: "hq-hint", id: "hqDoor-" + key + "-alt-hint", text: "Say what is in it, for anyone who cannot see it." }),
+        ]),
+        buttons,
+      ]);
+    }
+
+    /** The clue went out while it was being worked on: the door is read again, so it shows read only. */
+    function reopenAfterClueOut(door, key, words) {
+      openDoor(door, false).then(function () {
+        if (doors.open === door && partLine(key)) say(partLine(key), words, false);
+      });
+    }
+
     function clueItem(n) {
       var d = doors.sheet;
       var key = "clue" + n;
       var out = !!(d.clueOut && d.clueOut[n - 1]);
       var time = clockWords(d.evening && d.evening[key]);
       var stored = (d.clues || []).filter(function (c) { return c.n === n; })[0];
+      // Drawn again: the addresses made for the last drawing of this clue's picture are let go of.
+      freeClueBlobs(n);
+      clueDraws[n]++;
       var was = stored && stored.words ? stored.words : "";
       var box = doorInput(key, was, null, "area", out);
       box.setAttribute("placeholder", "Not written yet");
@@ -1265,6 +1502,8 @@
         }
         kids.push(row);
       }
+      if (stored && stored.hasPicture) kids.push(cluePictureView(n, d, stored.pictureAlt));
+      if (!out && doors.canEdit) kids.push(cluePictureEditor(n, d, stored, said, key));
       kids.push(said);
       return el("li", { class: "hq-clue hq-clue--" + n, "data-part": key }, [el("span", { class: "hq-clue__n", "aria-hidden": "true", text: String(n) }), el("div", { class: "hq-clue__body" }, kids)]);
     }

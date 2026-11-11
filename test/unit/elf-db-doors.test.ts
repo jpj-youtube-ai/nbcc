@@ -20,8 +20,10 @@ import {
   getElfDoorByPosterCode,
   listElfDoors,
   markElfTagPrinted,
+  removeElfCluePicture,
   removeElfDoorName,
   saveElfClue,
+  saveElfCluePicture,
   savePastedClues,
   setElfTagWord,
   tickElfDoor,
@@ -337,6 +339,55 @@ describe("saveElfClue", () => {
     expect(String(clear[0])).toContain("words = NULL");
     expect(String(clear[0])).toContain("picture IS NOT NULL");
     expect(String(call(/DELETE FROM elf_clues/)![0])).toContain("picture IS NULL");
+  });
+});
+
+describe("saveElfCluePicture", () => {
+  const made = { mime: "image/jpeg" as const, bytes: Buffer.from([1, 2, 3]), width: 4, height: 4 };
+
+  it("upserts the picture columns and leaves the words alone", async () => {
+    fakeClient();
+    await saveElfCluePicture(2026, 7, 2, made, "A red door", ACTOR);
+    const up = call(/INSERT INTO elf_clues/)!;
+    const sql = String(up[0]);
+    expect(sql).toContain("picture");
+    expect(sql).toContain("ON CONFLICT (year, door, n) DO UPDATE");
+    expect(sql.split("DO UPDATE")[1]).not.toMatch(/words\s*=/);
+    expect(up[1]).toEqual([2026, 7, 2, made.bytes, "image/jpeg", 4, 4, "A red door", ACTOR]);
+  });
+
+  it("audits year, door and n and never the alt words", async () => {
+    fakeClient();
+    await saveElfCluePicture(2026, 7, 2, made, "A red door", ACTOR);
+    const audit = JSON.stringify(call(/INSERT INTO audit_log/)![1]);
+    expect(audit).toContain("elf.clue.picture");
+    expect(audit).toContain('"n":2');
+    expect(audit).not.toContain("A red door");
+  });
+
+  it("answers null for a door with no row", async () => {
+    fakeClient({ door: null });
+    expect(await saveElfCluePicture(2026, 7, 1, made, "x", ACTOR)).toBeNull();
+  });
+});
+
+describe("removeElfCluePicture", () => {
+  it("deletes the row when it has no words, and otherwise only clears the picture", async () => {
+    fakeClient();
+    await removeElfCluePicture(2026, 7, 2, ACTOR);
+    const del = call(/DELETE FROM elf_clues/)!;
+    expect(String(del[0])).toContain("words IS NULL");
+    expect(del[1]).toEqual([2026, 7, 2]);
+    const clear = call(/UPDATE elf_clues/)!;
+    expect(String(clear[0])).toContain("picture = NULL");
+    expect(String(clear[0])).toContain("words IS NOT NULL");
+    expect(sqls().findIndex((q) => /DELETE FROM elf_clues/.test(q))).toBeLessThan(sqls().findIndex((q) => /UPDATE elf_clues/.test(q)));
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.clue.picture");
+  });
+
+  it("answers null for a door with no row", async () => {
+    fakeClient({ door: null });
+    expect(await removeElfCluePicture(2026, 7, 1, ACTOR)).toBeNull();
   });
 });
 

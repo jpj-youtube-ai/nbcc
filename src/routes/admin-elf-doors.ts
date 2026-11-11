@@ -9,6 +9,9 @@ import { isUsableSecretWord } from "../elf/claim";
 import { renderElfPoster, renderElfTag, renderPlacesList, renderStaffCard } from "../elf/print";
 import { materialsMessagePage } from "../fundraising/materials";
 import { getElfSettings, type ElfSettings } from "../db/elf";
+import { cluePicture } from "../db/elf-game";
+import { checkPictureUpload, decodeBase64 } from "../fundraising/pictures";
+import { processPicture } from "../fundraising/picture-process";
 import {
   addElfDoorName,
   changeElfDoor,
@@ -16,8 +19,10 @@ import {
   getElfDoor,
   listElfDoors,
   markElfTagPrinted,
+  removeElfCluePicture,
   removeElfDoorName,
   saveElfClue,
+  saveElfCluePicture,
   savePastedClues,
   setElfTagWord,
   tickElfDoor,
@@ -54,6 +59,7 @@ import { longDayWords } from "../elf/words";
 //   POST|DELETE  .../snow-day                             call a door off, or take that back, before its clue 1 (edit)
 //   POST|DELETE  .../gone-home                            the place has stopped hosting the elf, once the door's day is over (edit)
 //   PUT    /api/admin/elf/doors/:door/clues/:n            one clue (edit)
+//   PUT|DELETE|GET .../clues/:n/picture                   a clue's picture: put it on, take it off, look at it (edit, edit, view)
 //   POST   /api/admin/elf/clues/check and /save           every clue pasted at once (edit)
 //   GET    /api/admin/elf/doors/:door/poster|staff-card|tag, and /api/admin/elf/places-list
 //                                                         the prints: whole secret HTML pages (view)
@@ -403,6 +409,83 @@ export const putAdminElfDoorClue = guarded("clue", "edit", async ({ req, res, ac
   return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
 }, true);
 
+// ---- one clue's picture ----------------------------------------------------------------------------
+
+/** The address of a clue's picture. The 4 MB JSON limit for the PUT is set on it in src/app.ts. */
+export const ELF_CLUE_PICTURE_PATH = "/api/admin/elf/doors/:door/clues/:n/picture";
+
+const ALT_WORDS = "Describe the picture in a few words, for anyone who cannot see it.";
+const ALT_MAX = 200;
+// The same sentences the fundraisers' picture route gives for a picture that will not do.
+const LOOK_AGAIN = "Your picture needs another look";
+const PHOTO_TYPE = "That picture is not one we can use. Try a JPG, PNG or WebP photo.";
+const PHOTO_SIZE = "That picture is too big. Try a smaller one.";
+const PHOTO_READ = "We could not open that picture. Please try a different photo.";
+const PHOTO_BUSY = "Lots of pictures arriving just now. Please try again in a minute.";
+
+const picturePutSchema = z
+  .object({
+    mime: z.string({ invalid_type_error: BAD_REQUEST }).min(1).max(100),
+    dataBase64: z.string({ invalid_type_error: BAD_REQUEST }).min(1),
+    alt: z.string({ required_error: ALT_WORDS, invalid_type_error: ALT_WORDS }),
+  })
+  .strict();
+
+/** The clue number in the address (1, 2 or 3), or null. */
+function clueNOf(req: Request): ClueN | null {
+  const raw = String((req.params as Record<string, unknown> | undefined)?.n ?? "");
+  return raw === "1" || raw === "2" || raw === "3" ? (Number(raw) as ClueN) : null;
+}
+
+export const putAdminElfDoorCluePicture = guarded("clue picture", "edit", async ({ req, res, actor, year, now, door }) => {
+  const n = clueNOf(req);
+  if (n === null) return res.status(400).json({ error: BAD_REQUEST });
+  const parsed = picturePutSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const missing = parsed.error.issues.some((i) => i.path[0] === "alt");
+    return res.status(400).json({ error: missing ? ALT_WORDS : sentenceOr(parsed.error.issues[0]) });
+  }
+  const alt = parsed.data.alt.trim();
+  if (alt === "") return res.status(400).json({ error: ALT_WORDS });
+  if (alt.length > ALT_MAX) return res.status(400).json({ error: `Keep the description to ${ALT_MAX} characters or fewer.` });
+  const stored = await getElfDoor(year, door);
+  if (!stored) return noDoor(res, door);
+  if (eveningState(year, stored, now).clueOut[n - 1]) return res.status(409).json({ error: clueOutWords(door, n) });
+  const bytes = decodeBase64(parsed.data.dataBase64);
+  const check = checkPictureUpload(parsed.data.mime, bytes);
+  if (!check.ok) {
+    const size = check.reason === "size";
+    return res.status(size ? 413 : 400).json({ error: LOOK_AGAIN, fields: { photo: size ? PHOTO_SIZE : PHOTO_TYPE } });
+  }
+  const made = await processPicture("main", bytes);
+  if (!made.ok && made.reason === "busy") return res.status(503).json({ error: PHOTO_BUSY });
+  if (!made.ok && made.reason === "size") return res.status(413).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_SIZE } });
+  if (!made.ok) return res.status(400).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_READ } });
+  const d = await saveElfCluePicture(year, door, n, { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height }, alt, actor);
+  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+});
+
+export const deleteAdminElfDoorCluePicture = guarded("clue picture off", "edit", async ({ req, res, actor, year, now, door }) => {
+  const n = clueNOf(req);
+  if (n === null) return res.status(400).json({ error: BAD_REQUEST });
+  const stored = await getElfDoor(year, door);
+  if (!stored) return noDoor(res, door);
+  if (eveningState(year, stored, now).clueOut[n - 1]) return res.status(409).json({ error: clueOutWords(door, n) });
+  const d = await removeElfCluePicture(year, door, n, actor);
+  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+});
+
+export const getAdminElfDoorCluePicture = guarded("clue picture look", "view", async ({ req, res, year, door }) => {
+  const n = clueNOf(req);
+  if (n === null) return res.status(400).json({ error: BAD_REQUEST });
+  const found = await cluePicture(year, door, n);
+  if (!found) return res.status(404).json({ error: "There is no picture on that clue." });
+  res.setHeader("Content-Type", found.mime);
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  return res.status(200).send(found.bytes);
+});
+
 // ---- every clue pasted at once ---------------------------------------------------------------------
 
 const pasteSchema = z.object({ text: z.string({ invalid_type_error: BAD_REQUEST }).max(60000, "The text can be up to 60,000 characters.") }).strict();
@@ -550,6 +633,9 @@ adminElfDoorsRouter.delete("/api/admin/elf/doors/:door/snow-day", deleteAdminElf
 adminElfDoorsRouter.post("/api/admin/elf/doors/:door/gone-home", postAdminElfDoorGoneHome);
 adminElfDoorsRouter.delete("/api/admin/elf/doors/:door/gone-home", deleteAdminElfDoorGoneHome);
 adminElfDoorsRouter.put("/api/admin/elf/doors/:door/clues/:n", putAdminElfDoorClue);
+adminElfDoorsRouter.put(ELF_CLUE_PICTURE_PATH, putAdminElfDoorCluePicture);
+adminElfDoorsRouter.delete(ELF_CLUE_PICTURE_PATH, deleteAdminElfDoorCluePicture);
+adminElfDoorsRouter.get(ELF_CLUE_PICTURE_PATH, getAdminElfDoorCluePicture);
 adminElfDoorsRouter.post("/api/admin/elf/clues/check", postAdminElfCluesCheck);
 adminElfDoorsRouter.post("/api/admin/elf/clues/save", postAdminElfCluesSave);
 adminElfDoorsRouter.get("/api/admin/elf/doors/:door/poster", getAdminElfDoorPoster);

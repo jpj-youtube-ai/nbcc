@@ -50,7 +50,7 @@ describe("the rules page", () => {
     const deleted = safe.indexOf("All photos come down, and children's details are deleted, at the end of January.");
     expect(deleted).toBeGreaterThan(-1);
     expect(safe[deleted + 1]).toBe(
-      "The mobile number you give when you enrol is only for ringing the grand prize winner, and it is deleted at the end of January with everything else.",
+      "The mobile number you give when you enrol is only for ringing the grand prize winner, and we delete it at the end of January.",
     );
   });
 

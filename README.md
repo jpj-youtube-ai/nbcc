@@ -11930,7 +11930,7 @@ spaces allowed) and keeps `+447` and nine digits. A missing or wrong one is refu
 other refusals: "Please type a UK mobile number, like 07700 900 123." Only head elves see it, on a
 family's sheet in Head Elf HQ. It is never public, never in an email to anyone else, and never in a log
 line. The rules' **Keeping everyone safe** says "The mobile number you give when you enrol is only for
-ringing the grand prize winner, and it is deleted at the end of January with everything else." That
+ringing the grand prize winner, and we delete it at the end of January." That
 is the only place the site says what is deleted when: the join form asks the grown up to agree to the
 rules. The end of January clear out, still to be built before 31 January 2027, must take
 `elf_families.mobile` with it.

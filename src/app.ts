@@ -62,7 +62,7 @@ import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
 import { createSiteRouter } from "./routes/site";
 import { elfPhotoBodyGuard, elfRouter, ELF_PHOTO_POST_PATH } from "./routes/elf";
 import { adminElfRouter } from "./routes/admin-elf";
-import { adminElfDoorsRouter, ELF_CLUE_PICTURE_PATH } from "./routes/admin-elf-doors";
+import { adminElfDoorsRouter, ELF_CLUE_PICTURE_PATH, elfCluePictureBodyWanted } from "./routes/admin-elf-doors";
 
 export function createApp() {
   const app = express();
@@ -108,7 +108,8 @@ export function createApp() {
   app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
   // Elf Detective School: a clue's picture from Head Elf HQ (shrunk in the browser first). Only on the admin's own
   // address; the route itself checks the bearer token and the elf permission.
-  app.use(ELF_CLUE_PICTURE_PATH, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
+  const cluePictureJson = express.json({ limit: PICTURE_JSON_BODY_LIMIT });
+  app.use(ELF_CLUE_PICTURE_PATH, (req, res, next) => (elfCluePictureBodyWanted(req) ? cluePictureJson(req, res, next) : next()));
   // Hosted-document uploads (TASK-265): same problem, bigger files — the 10 MB document cap is
   // ~13.7 MB base64-encoded, so without this the parser 413s a real certificate BEFORE auth runs
   // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the

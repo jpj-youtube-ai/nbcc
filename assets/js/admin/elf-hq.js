@@ -2140,6 +2140,11 @@
     /** The whole sheet, drawn when a door is opened. */
     function drawDoorSheet() {
       var d = doors.sheet;
+      // The sheet is cleared (a door closed, or another opened): every picture address it made is let go of.
+      [1, 2, 3].forEach(function (n) {
+        freeClueBlobs(n);
+        clueDraws[n]++;
+      });
       doorsSheet.textContent = "";
       if (!d) return;
       sheetHead = el("div", { class: "hq-door-head" });

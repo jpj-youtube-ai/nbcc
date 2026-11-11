@@ -352,6 +352,15 @@ describe("a clue's picture", () => {
     expect(revoked).toContain(fetched);
   });
 
+  it("lets go of the picture's address when the sheet is closed for another door", async () => {
+    await openDoor7({ "GET /api/admin/elf/doors/7": { body: { door: withPicture(), canEdit: true } }, "GET /api/admin/elf/doors/8": { body: { door: sheet({ door: 8 }), canEdit: true } } });
+    const url = created[0];
+    expect(revoked).not.toContain(url);
+    doorsPart().querySelector<HTMLButtonElement>('.hq-door[data-door="8"]')!.click();
+    await flush();
+    expect(revoked).toContain(url);
+  });
+
   it("shows the picture read only once the clue is out, with no way to change it", async () => {
     await openDoor7({ "GET /api/admin/elf/doors/7": { body: { door: withPicture({ clueOut: [false, true, false] }), canEdit: true } } });
     expect(clueItem(2).querySelector("img")!.getAttribute("alt")).toBe("A red door");

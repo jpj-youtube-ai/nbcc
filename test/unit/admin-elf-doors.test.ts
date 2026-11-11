@@ -436,10 +436,29 @@ describe("a clue's picture", () => {
   });
 
   it("takes a picture off a clue that is not out", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8, { clues: [1, 2, 3].map((n) => ({ n: n as 1 | 2 | 3, words: null, hasPicture: n === 3, pictureAlt: n === 3 ? "A red door" : null })) }));
     const res = await pic("del", "8", "3");
     expect(res.statusCode).toBe(200);
     expect(doors.removeElfCluePicture).toHaveBeenCalledWith(2026, 8, 3, ACTOR);
     expect(res.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("answers 200 with the door as it is, and writes nothing, when the clue has no picture", async () => {
+    const res = await pic("del", "8", "3");
+    expect(res.statusCode).toBe(200);
+    expect(body(res).door).toMatchObject({ door: 8 });
+    expect(doors.removeElfCluePicture).not.toHaveBeenCalled();
+  });
+
+  it("reads a big body only for a PUT that carries a bearer token", () => {
+    const want = (method: string, authorization?: string) => routes.elfCluePictureBodyWanted({ method, headers: authorization === undefined ? {} : { authorization } } as never);
+    expect(want("PUT", "Bearer abc.def")).toBe(true);
+    expect(want("PUT")).toBe(false);
+    expect(want("PUT", "Bearer")).toBe(false);
+    expect(want("PUT", "Basic abc")).toBe(false);
+    expect(want("DELETE", "Bearer abc")).toBe(false);
+    expect(want("GET", "Bearer abc")).toBe(false);
+    expect(want("POST", "Bearer abc")).toBe(false);
   });
 
   it("answers 500 when the database fails", async () => {

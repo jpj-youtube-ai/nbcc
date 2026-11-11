@@ -10,7 +10,15 @@ import { renderElfPoster, renderElfTag, renderPlacesList, renderStaffCard } from
 import { materialsMessagePage } from "../fundraising/materials";
 import { getElfSettings, type ElfSettings } from "../db/elf";
 import { cluePicture } from "../db/elf-game";
-import { checkPictureUpload, decodeBase64 } from "../fundraising/pictures";
+import {
+  checkPictureUpload,
+  decodeBase64,
+  PICTURE_BUSY_WORDS,
+  PICTURE_LOOK_AGAIN,
+  PICTURE_READ_WORDS,
+  PICTURE_SIZE_WORDS,
+  PICTURE_TYPE_WORDS,
+} from "../fundraising/pictures";
 import { processPicture } from "../fundraising/picture-process";
 import {
   addElfDoorName,
@@ -414,14 +422,23 @@ export const putAdminElfDoorClue = guarded("clue", "edit", async ({ req, res, ac
 /** The address of a clue's picture. The 4 MB JSON limit for the PUT is set on it in src/app.ts. */
 export const ELF_CLUE_PICTURE_PATH = "/api/admin/elf/doors/:door/clues/:n/picture";
 
+/** Before the 4 MB parser on the picture's address (src/app.ts): a big body is read only for a PUT that
+ *  carries a bearer token. Anything else gets the ordinary small parser, and the route answers it as
+ *  always. Whether the token is real is checked by the route, after the body is read. */
+export function elfCluePictureBodyWanted(req: Pick<Request, "method" | "headers">): boolean {
+  if (req.method !== "PUT") return false;
+  const header = req.headers.authorization;
+  return typeof header === "string" && /^Bearer\s+\S+$/i.test(header.trim());
+}
+
 const ALT_WORDS = "Describe the picture in a few words, for anyone who cannot see it.";
 const ALT_MAX = 200;
-// The same sentences the fundraisers' picture route gives for a picture that will not do.
-const LOOK_AGAIN = "Your picture needs another look";
-const PHOTO_TYPE = "That picture is not one we can use. Try a JPG, PNG or WebP photo.";
-const PHOTO_SIZE = "That picture is too big. Try a smaller one.";
-const PHOTO_READ = "We could not open that picture. Please try a different photo.";
-const PHOTO_BUSY = "Lots of pictures arriving just now. Please try again in a minute.";
+// The sentences for a picture that will not do, one set shared with the fundraisers' and the families' routes.
+const LOOK_AGAIN = PICTURE_LOOK_AGAIN;
+const PHOTO_TYPE = PICTURE_TYPE_WORDS;
+const PHOTO_SIZE = PICTURE_SIZE_WORDS;
+const PHOTO_READ = PICTURE_READ_WORDS;
+const PHOTO_BUSY = PICTURE_BUSY_WORDS;
 
 const picturePutSchema = z
   .object({
@@ -471,6 +488,8 @@ export const deleteAdminElfDoorCluePicture = guarded("clue picture off", "edit",
   const stored = await getElfDoor(year, door);
   if (!stored) return noDoor(res, door);
   if (eveningState(year, stored, now).clueOut[n - 1]) return res.status(409).json({ error: clueOutWords(door, n) });
+  // Nothing to take off: the door as it is, and no audit row.
+  if (!stored.clues.some((c) => c.n === n && c.hasPicture)) return res.status(200).json({ door: sheetOf(year, stored, now) });
   const d = await removeElfCluePicture(year, door, n, actor);
   return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
 });

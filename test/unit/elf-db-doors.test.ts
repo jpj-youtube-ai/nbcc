@@ -382,7 +382,9 @@ describe("removeElfCluePicture", () => {
     expect(String(clear[0])).toContain("picture = NULL");
     expect(String(clear[0])).toContain("words IS NOT NULL");
     expect(sqls().findIndex((q) => /DELETE FROM elf_clues/.test(q))).toBeLessThan(sqls().findIndex((q) => /UPDATE elf_clues/.test(q)));
-    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.clue.picture");
+    const audit = JSON.stringify(call(/INSERT INTO audit_log/)![1]);
+    expect(audit).toContain("elf.clue.picture");
+    expect(audit).toContain('"removed":true');
   });
 
   it("answers null for a door with no row", async () => {

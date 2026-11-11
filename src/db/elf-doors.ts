@@ -457,7 +457,7 @@ export async function removeElfCluePicture(year: number, door: Door, n: ClueN, a
       );
       return (await readDoor(client, year, door)) as DoorSetup;
     },
-    () => ({ actor, action: "elf.clue.picture", entity: "elf_door", entityId: door, data: { year, door, n } }),
+    () => ({ actor, action: "elf.clue.picture", entity: "elf_door", entityId: door, data: { year, door, n, removed: true } }),
   );
 }
 

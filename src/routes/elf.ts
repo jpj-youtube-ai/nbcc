@@ -90,7 +90,15 @@ import {
   readCode,
   sentFromOurOwnPage,
 } from "../fundraising/sign-in";
-import { checkPictureUpload, decodeBase64 } from "../fundraising/pictures";
+import {
+  checkPictureUpload,
+  decodeBase64,
+  PICTURE_BUSY_WORDS,
+  PICTURE_LOOK_AGAIN,
+  PICTURE_READ_WORDS,
+  PICTURE_SIZE_WORDS,
+  PICTURE_TYPE_WORDS,
+} from "../fundraising/pictures";
 import { processPicture } from "../fundraising/picture-process";
 import { currentCardFee } from "./api";
 
@@ -1141,13 +1149,12 @@ export function elfPhotoBodyGuard(req: Request, res: Response, next: NextFunctio
 const NOT_VISITED = { error: "Type the word on the elf's tag first." };
 const NO_CONSENT = { error: "Tick the box to say we can show this photo." };
 const PHOTO_LIMIT = { error: "You have sent 5 photos today. Please try again tomorrow." };
-// The fundraisers' answers for a picture that cannot be used (src/routes/fundraiser-pictures.ts), kept
-// here as the game's own words, so either can change without the other.
-const LOOK_AGAIN = "Your picture needs another look";
-const PHOTO_TYPE = "That picture is not one we can use. Try a JPG, PNG or WebP photo.";
-const PHOTO_SIZE = "That picture is too big. Try a smaller one.";
-const PHOTO_READ = "We could not open that picture. Please try a different photo.";
-const PHOTO_BUSY = { error: "Lots of photos arriving just now. Please try again in a minute." };
+// The answers for a picture that cannot be used, one set shared with the fundraisers (src/fundraising/pictures.ts).
+const LOOK_AGAIN = PICTURE_LOOK_AGAIN;
+const PHOTO_TYPE = PICTURE_TYPE_WORDS;
+const PHOTO_SIZE = PICTURE_SIZE_WORDS;
+const PHOTO_READ = PICTURE_READ_WORDS;
+const PHOTO_BUSY = { error: PICTURE_BUSY_WORDS };
 const PHOTO_TOO_MANY_TRIES = { error: "You have tried to send a lot of photos today. Please try again tomorrow." };
 
 export async function postPhoto(req: Request, res: Response): Promise<Response | void> {

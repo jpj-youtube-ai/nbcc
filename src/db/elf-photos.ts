@@ -263,9 +263,17 @@ function stepsOf(r: LogSql, name: (actor: string | null) => string): { at: Date;
   return steps;
 }
 
-/** Every photo, newest first, as the lines the log shows. */
+/** The photos, newest first, as the lines the log shows: every photo that is up, however old, since its line
+ *  is the only place a head elf can take it down; and the newest `limit` of the rest. One statement, so the
+ *  answer is one moment's. */
 export async function photoLog(limit: number): Promise<PhotoLogRow[]> {
-  const res = await pool.query<LogSql>(`${LOG_SELECT} ORDER BY p.sent_at DESC, p.id DESC LIMIT $1`, [limit]);
+  const res = await pool.query<LogSql>(
+    `${LOG_SELECT}
+      WHERE p.status = 'approved'
+         OR p.id IN (SELECT q.id FROM elf_photos q WHERE q.status <> 'approved' ORDER BY q.sent_at DESC, q.id DESC LIMIT $1)
+      ORDER BY p.sent_at DESC, p.id DESC`,
+    [limit],
+  );
   const name = await namesOf(res.rows);
   return res.rows.map((r) => ({
     id: r.id,

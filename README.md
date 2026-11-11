@@ -12094,9 +12094,10 @@ Two rules keep a face from being matched to a name: a family has at most one pho
 (approving one replaces that family's other approved photo there), and a door's photos stay hidden
 until photos from at least two families are approved on it (until then an approved photo reads as
 waiting to its family, is never served, and the check says so beside it). A photo sent before its door's
-place is shown waits until then, even once approved. The photo log, newest first (200 lines), gives
-each photo's steps with who and when: Sent; Approved by, or Declined by with the reason; Taken down by
-the family, or by a head elf with the reason; Deleted. Photos that are up have Take it down. A head elf
+place is shown waits until then, even once approved. The photo log, newest first (every photo that is up,
+however old, and the newest 200 other lines, in one statement), gives each photo's steps with who and
+when: Sent; Approved by, or Declined by with the reason; Taken down by the family, or by a head elf with
+the reason; Deleted. Photos that are up have Take it down, so none ever falls off the log. A head elf
 is named by their `users.full_name` (the email only when it is blank), looked up from the `admin:<email>`
 the decision was made under. Each decision is audited (`elf.photo.decided`, `elf.photo.taken_down`)
 with no place and no photo.

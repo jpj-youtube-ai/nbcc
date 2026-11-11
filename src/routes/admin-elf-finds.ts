@@ -49,6 +49,8 @@ const NO_PHOTO = { error: "That photo is not there." };
 const BAD_REQUEST = { error: "That request could not be read." };
 const SAY_WHY = { error: "Say why in a few words. Only head elves see it." };
 const ALREADY = "Someone has already checked this photo.";
+/** The log's newest lines of photos that are not up. Every photo that is up is listed however old (photoLog),
+ *  so each keeps its Take it down. */
 const LOG_LINES = 200;
 
 const idOf = (req: Request): number | null => {

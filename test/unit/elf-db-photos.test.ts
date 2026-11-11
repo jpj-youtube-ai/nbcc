@@ -316,6 +316,21 @@ describe("photoLog", () => {
     expect(query.mock.calls.find((c) => /FROM elf_photos/.test(String(c[0])))![1]).toEqual([200]);
   });
 
+  // A head elf can take a photo down only from its log line: so a photo that is up is always listed, however
+  // many lines are newer, and only the photos that are not up are cut to the newest `limit`.
+  it("lists every photo that is up however old, and caps only the other lines", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await photoLog(200);
+    const [sql, params] = query.mock.calls.find((c) => /FROM elf_photos/.test(String(c[0])))!;
+    const s = String(sql).replace(/\s+/g, " ").trim();
+    expect(s).toContain(
+      "WHERE p.status = 'approved' OR p.id IN (SELECT q.id FROM elf_photos q WHERE q.status <> 'approved' ORDER BY q.sent_at DESC, q.id DESC LIMIT $1)",
+    );
+    // Nothing caps the whole answer.
+    expect(s).toMatch(/ORDER BY p\.sent_at DESC, p\.id DESC$/);
+    expect(params).toEqual([200]);
+  });
+
   it("falls back to the email when there is no users row, and a blank name uses the email too", async () => {
     query.mockImplementation(async (sql: string) => {
       if (/FROM users/.test(String(sql))) return { rows: [{ full_name: "  ", email: "sam@example.org" }] };

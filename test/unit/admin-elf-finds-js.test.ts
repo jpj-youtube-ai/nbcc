@@ -342,6 +342,23 @@ describe("the photo log", () => {
     expect(env.calls.filter((c) => c.method === "GET" && c.url === "/api/admin/elf/photos")).toHaveLength(2);
   });
 
+  // The server lists every photo that is up however old, beside the newest 200 other lines
+  // (src/db/elf-photos.ts photoLog): the oldest of 201 is still there, and can still be taken down.
+  it("draws Take it down on a photo that is up at the end of a long log", async () => {
+    const newer = Array.from({ length: 200 }, (_, i) => ({ ...LOG[1], id: 1000 + i }));
+    const oldest = { ...LOG[0], id: 7, steps: [{ at: "2026-12-01T17:40:00.000Z", words: "Sent" }, { at: "2026-12-01T18:02:00.000Z", words: "Approved by Alex Example" }] };
+    const env = await openFinds({ "GET /api/admin/elf/photos": { ...PHOTOS, log: [...newer, oldest] }, "POST /api/admin/elf/photos/7/take-down": { ok: true } });
+    const rows = [...part().querySelectorAll<HTMLElement>(".hq-log .hq-row")];
+    expect(rows).toHaveLength(201);
+    const last = rows[200];
+    expect(last.querySelector(".hq-chip")!.textContent).toBe("Up");
+    expect(rows.filter((r) => buttonIn(r, "Take it down"))).toEqual([last]);
+    buttonIn(last, "Take it down")!.click();
+    buttonIn(last, "Yes, take it down")!.click();
+    await flush();
+    expect(posts(env).map((c) => c.url)).toEqual(["/api/admin/elf/photos/7/take-down"]);
+  });
+
   it("posts an empty body when no reason is given", async () => {
     const env = await openFinds({ "POST /api/admin/elf/photos/40/take-down": { ok: true } });
     const row = part().querySelectorAll<HTMLElement>(".hq-log .hq-row")[0];

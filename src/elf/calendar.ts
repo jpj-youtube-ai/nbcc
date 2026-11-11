@@ -67,11 +67,17 @@ export function doorOn(season: Pick<ElfSeason, "year">, londonDate: string): Doo
   return isDoor(day) ? day : null;
 }
 
-/** A school day, a weekend, or a weekday staff have marked as a holiday. A weekend is always a weekend. */
+/** Christmas Eve's door. Places close early that day, so it is a morning door (TASK-613). */
+const CHRISTMAS_EVE: Door = 24;
+
+/** A school day, a weekend, or a weekday staff have marked as a holiday. A weekend is always a weekend.
+ *  Christmas Eve on a weekday is a holiday whether or not staff marked it (Jaimie, 11 November 2026: its
+ *  clue comes out at 10am, because places close early), so its clue starts at the morning time unless
+ *  a head elf sets the door's own. */
 export function dayKind(season: ElfSeason, door: Door): DayKind {
   const weekday = new Date(Date.UTC(season.year, 11, door)).getUTCDay(); // 0 is Sunday, 6 is Saturday
   if (weekday === 0 || weekday === 6) return "weekend";
-  return season.holidayDoors.includes(door) ? "holiday" : "school";
+  return door === CHRISTMAS_EVE || season.holidayDoors.includes(door) ? "holiday" : "school";
 }
 
 /** The clue time a door starts with, before staff change it. Always a real "HH:MM". */

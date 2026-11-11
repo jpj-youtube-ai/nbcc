@@ -2033,7 +2033,8 @@
       return makePart(
         "evening",
         "Its evening",
-        "Usual weekday times. Staff can change any of them.",
+        // TASK-613: Christmas Eve's door starts in the morning (src/elf/calendar.ts), so say why.
+        d.door === 24 ? "In the morning on Christmas Eve, because places close early. Staff can change any of them." : "Usual weekday times. Staff can change any of them.",
         [
           timeBox,
           d.started ? el("p", { class: "hq-words hq-soft", text: "This door's evening has started." }) : null,

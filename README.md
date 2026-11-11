@@ -11997,6 +11997,16 @@ preview link stay admins only, whoever holds the section.
   prizes. The poster, staff card and elf tag open as pages for head elves, never cached or indexed; the
   prize list is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
   saved after clue 1 is out. Once a door's first clue is out, its times and tag word are locked. Nothing in Doors is ever seen by families.
+  **Christmas Eve in the morning (TASK-613).** A door's clue 1 starts at 5:30pm on a school day and
+  10am at a weekend or on a weekday marked a holiday (`dayKind` and `defaultClueTime`,
+  `src/elf/calendar.ts`), and door 24 is now a holiday whether or not anyone marked it, because places
+  close early on Christmas Eve. Unless a head elf sets its own times, its clues come out at 10am,
+  10:30am and 11am and its place is shown at 11:30am. One rule feeds the calendar, the clue emails and
+  the worker as well as Doors. Door 24's evening says "In the morning on Christmas Eve, because places
+  close early. Staff can change any of them." The rules end their clue times sentence "...and at
+  10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve." The calendar's first step
+  says "It comes out after school on school days, and in the morning at weekends, in the holidays and
+  on Christmas Eve." Both say so with December's doors off too, the one change to wave 1's words.
 - **Finds** (after Doors, its count the photos waiting): the photo check, the photo log, and Tonight and
   before, who found each door and when (see **Photos, alerts, emails, the worker and Finds** below).
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every

@@ -76,10 +76,11 @@ describe("how the hunt works, with December's doors off and on", () => {
   const hunt = (d: Document) =>
     [...d.querySelectorAll('[aria-labelledby="elf-rules-how"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim());
 
-  it("reads exactly as wave 1's did while December's doors are off", () => {
+  // TASK-613 changed one line with the doors off too: Christmas Eve's clues come in the morning.
+  it("reads as wave 1's did while December's doors are off, with Christmas Eve's clues in the morning", () => {
     expect(hunt(page(false))).toEqual([
       "Each day from 1 to 24 December, one elf hides in a local shop, cafe or business. Where it hides is a secret.",
-      "Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends and in the holidays.",
+      "Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve.",
       "Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.",
       "The first detective to reach the elf and type the secret word on its tag wins that elf's prize. Each family can win one elf.",
       "Visit a place after its elf is found to collect a candy cane stamp.",
@@ -94,6 +95,7 @@ describe("how the hunt works, with December's doors off and on", () => {
     );
     expect(on.join(" ")).not.toContain("win one elf");
     expect(on.join(" ")).not.toContain("secret word");
+    expect(on[1]).toMatch(/and at 10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve\.$/);
   });
 
   it("uses no dashes either way", () => {

@@ -161,6 +161,17 @@ describe("one door's sheet", () => {
     expect(body(other).door).toMatchObject({ started: false, clueOut: [false, false, false] });
   });
 
+  // TASK-613: places close early on Christmas Eve, so door 24 is a morning door unless a head elf sets
+  // its own times. Head Elf HQ > Doors shows those morning times as the door's own.
+  it("shows Christmas Eve's door at the morning times, and keeps times a head elf set", async () => {
+    const res = await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "24" } }));
+    expect(body(res).door).toMatchObject({ door: 24, day: "Thursday 24 December", started: false });
+    expect(body(res).door.evening).toEqual({ clue1: "10:00", clue2: "10:30", clue3: "11:00", reveal: "11:30", problems: [] });
+    doors.getElfDoor.mockResolvedValue(doorOf(24, { clue1Time: "16:00:00" }));
+    const set = await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "24" } }));
+    expect(body(set).door.evening).toMatchObject({ clue1: "16:00", clue2: "16:30", clue3: "17:00", reveal: "17:30" });
+  });
+
   it("refuses a door that is not 1 to 24, and one with no row", async () => {
     for (const door of ["25", "0", "x", "07", "1.5"]) {
       const res = await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door } }));

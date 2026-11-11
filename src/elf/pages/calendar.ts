@@ -111,14 +111,16 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
   };
 }
 
+// When the clue comes out, as the rules say it (src/elf/pages/rules.ts). TASK-613: Christmas Eve's door is
+// a morning door (src/elf/calendar.ts), because places close early, and this says so with the doors off too.
 const FIRST_STEP = {
   title: "A clue comes out",
   words:
-    "Every day from 1 to 24 December, a clue tells detectives where one elf is hiding. It comes out after school on school days and in the morning at weekends.",
+    "Every day from 1 to 24 December, a clue tells detectives where one elf is hiding. It comes out after school on school days, and in the morning at weekends, in the holidays and on Christmas Eve.",
 } as const;
 
 /** How it works while December's doors are off: wave 1's four steps, word for word, so no new words go
- *  live before the doors do. */
+ *  live before the doors do. The one exception is TASK-613's Christmas Eve, in the first step. */
 const WAVE_ONE_STEPS: readonly { title: string; words: string }[] = [
   FIRST_STEP,
   {

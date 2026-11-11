@@ -236,6 +236,24 @@ describe("a door's sheet", () => {
     expect(items.map((li) => li.classList.contains("is-done"))).toEqual([true, true, false, true, false, false]);
   });
 
+  // TASK-613: Christmas Eve's door is a morning door unless a head elf sets its own times, and the sheet
+  // says why, so nobody "puts it right" to the weekday times.
+  it("shows Christmas Eve's door at its morning times, saying why, and other doors as before", async () => {
+    const eve = sheet({ door: 24, day: "Thursday 24 December", evening: { clue1: "10:00", clue2: "10:30", clue3: "11:00", reveal: "11:30", problems: [] } });
+    page({ "GET /api/admin/elf/doors/24": { body: { door: eve, canEdit: true } } });
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    tile(24).click();
+    await flush();
+    expect(field("clue1Time").value).toBe("10:00");
+    expect(field("revealTime").value).toBe("11:30");
+    const soft = partOf("evening").querySelector("header .hq-soft")!;
+    expect(soft.textContent).toBe("In the morning on Christmas Eve, because places close early. Staff can change any of them.");
+    tile(7).click();
+    await flush();
+    expect(partOf("evening").querySelector("header .hq-soft")!.textContent).toBe("Usual weekday times. Staff can change any of them.");
+  });
+
   it("fills the place and the evening from the door", async () => {
     await openDoors();
     tile(7).click();

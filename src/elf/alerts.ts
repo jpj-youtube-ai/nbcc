@@ -57,15 +57,17 @@ export interface HeadElf {
   alertsOn: boolean;
 }
 
-/** Users who are not disabled and may see the Elf Detective School, joined to their mobile and tick
- *  (no row: no mobile, alerts on), in name order. */
+/** Users whose account is active and who may see the Elf Detective School, joined to their mobile and tick
+ *  (no row: no mobile, alerts on), in name order. An account is active once its invite is accepted (the
+ *  first password set, src/db/admin-users.ts): someone invited who has not yet signed in is not a head elf
+ *  here, so no alert, with its full names, goes to an address that may not be theirs. */
 export function headElvesOf(
   users: ManagedUser[],
   rows: { userId: number; mobile: string | null; alertsOn: boolean }[],
 ): HeadElf[] {
   const byUser = new Map(rows.map((r) => [r.userId, r]));
   return users
-    .filter((u) => u.status !== "disabled" && can(effectivePermissions(u), "elf", "view"))
+    .filter((u) => u.status === "active" && can(effectivePermissions(u), "elf", "view"))
     .map((u): HeadElf => {
       const row = byUser.get(u.id);
       return { userId: u.id, name: headElfName(u), email: u.email, mobile: row?.mobile ?? null, alertsOn: row ? row.alertsOn : true };

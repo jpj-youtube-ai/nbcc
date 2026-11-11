@@ -12102,9 +12102,11 @@ is named by their `users.full_name` (the email only when it is blank), looked up
 the decision was made under. Each decision is audited (`elf.photo.decided`, `elf.photo.taken_down`)
 with no place and no photo.
 
-**Alerts** (Head Elf HQ > Settings > Alerts). Every head elf (everyone not disabled who holds the `elf`
-section at view or more), with their email, a mobile if they have given one (shown as 07700 900123) and
-alerts on or off. A head elf changes only their own mobile and tick (`elf.alerts.changed`, field names
+**Alerts** (Head Elf HQ > Settings > Alerts). Every head elf (everyone whose account is active, so who
+has accepted their invite, and who holds the `elf` section at view or more), with their email, a mobile
+if they have given one (shown as 07700 900123) and alerts on or off. Someone invited who has not yet
+signed in is not a head elf here: they are not listed, and get no photo alert, no find alert and no 8am
+email. A head elf changes only their own mobile and tick (`elf.alerts.changed`, field names
 only, never the number). The rules (`photoAlertDue`):
 
 - one at a time: when photos start waiting, one email to every head elf with alerts on and one text to

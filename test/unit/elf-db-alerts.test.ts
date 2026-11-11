@@ -35,6 +35,15 @@ describe("the head elves", () => {
     expect(String(query.mock.calls[0][0])).toContain("FROM elf_head_elves");
     expect(elves).toEqual([{ userId: 4, name: "Alex Example", email: "alex@example.org", mobile: "+447700900123", alertsOn: false }]);
   });
+
+  it("leaves out an admin who has been invited but has not yet signed in, so the alerts never reach them", async () => {
+    vi.mocked(listUsers).mockResolvedValue([
+      { id: 4, email: "alex@example.org", full_name: "Alex Example", role: "admin", status: "active", invited_at: null, last_login_at: new Date("2026-11-01T10:00:00Z"), permissions: {} },
+      { id: 5, email: "jo@example.org", full_name: "Jo Example", role: "admin", status: "invited", invited_at: new Date("2026-11-10T10:00:00Z"), last_login_at: null, permissions: {} },
+    ]);
+    query.mockResolvedValue({ rows: [] });
+    expect((await listHeadElves()).map((e) => e.email)).toEqual(["alex@example.org"]);
+  });
 });
 
 describe("setMyAlerts", () => {

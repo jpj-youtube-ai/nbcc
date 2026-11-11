@@ -116,6 +116,19 @@ describe("who the head elves are", () => {
     expect(elves[0]).toEqual({ userId: 4, name: "Alex Example", email: "u4@example.org", mobile: "+447700900123", alertsOn: false });
     expect(elves[1]).toMatchObject({ userId: 1, mobile: null, alertsOn: true });
   });
+
+  // An invite is accepted by setting a password, which makes the account active (src/db/admin-users.ts): until
+  // then the address may not be the person's, so it gets no photo alert and no find alert, with its full names.
+  it("leaves out someone invited who has not yet accepted their invite and signed in", () => {
+    const users = [
+      user(1, { role: "admin", full_name: "Alex Example" }),
+      user(2, { role: "admin", status: "invited", full_name: "Jo Example" }),
+      user(3, { role: "editor", status: "invited", permissions: { elf: "view" }, full_name: "Kim Example" }),
+    ];
+    const elves = headElvesOf(users, [{ userId: 2, mobile: "+447700900123", alertsOn: true }]);
+    expect(elves.map((e) => e.userId)).toEqual([1]);
+    expect(alertRecipients(elves)).toEqual({ emails: [elves[0]], texts: [] });
+  });
 });
 
 describe("who an alert goes to", () => {

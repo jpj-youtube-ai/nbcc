@@ -15,7 +15,8 @@ interface HeadElfSql {
   alerts_on: boolean;
 }
 
-/** Every head elf (a user not disabled who may see the school), with their mobile and tick. */
+/** Every head elf (a user whose account is active, so has accepted their invite, and who may see the school),
+ *  with their mobile and tick. */
 export async function listHeadElves(): Promise<HeadElf[]> {
   const [users, res] = await Promise.all([
     listUsers(),

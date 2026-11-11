@@ -209,6 +209,11 @@ a{color:inherit}
 .sl-facts b{display:block;font:800 clamp(28px,3.4vw,38px)/1.05 var(--serif);color:var(--crimson)}
 .sl-facts span{font-size:14px;color:var(--slate-soft)}
 
+/* ---- with the Kilmarnock Santa Sleigh team ---- */
+.sl-partner{max-width:var(--wrap);margin:clamp(48px,7vw,80px) auto 0;padding:0 var(--gutter);display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:center}
+.sl-partner__logo{width:100%;height:auto;border:3px solid var(--ink);border-radius:22px;box-shadow:0 6px 0 var(--ink);transform:rotate(1.5deg);transition:transform .3s var(--ease-out)}
+.sl-partner:hover .sl-partner__logo{transform:rotate(0) translateY(-2px)}
+.sl-partner__words p{margin:12px 0 0;max-width:46ch;font-size:18px;color:var(--slate)}
 .sl-more{max-width:var(--wrap);margin:0 auto;padding:clamp(48px,7vw,80px) var(--gutter) 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .sl-more a{display:block;text-decoration:none;background:var(--card);border:2px solid var(--line);border-radius:20px;padding:20px 22px;transition:transform .2s var(--ease-out),border-color .2s}
 .sl-more a:hover{transform:translateY(-4px);border-color:var(--ink)}
@@ -234,6 +239,8 @@ a{color:inherit}
   .sl-hero__art{max-width:520px;width:100%;justify-self:center;order:-1;margin-bottom:-8px}
   .sl-give__words{position:static}
   .sl-more{grid-template-columns:minmax(0,1fr)}
+  .sl-partner{grid-template-columns:minmax(0,1fr)}
+  .sl-partner__logo{max-width:340px}
   .sl-who__photo{transform:none;box-shadow:8px 8px 0 var(--crimson)}
 }
 /* on a phone the road runs down the page, the houses one under another */

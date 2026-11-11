@@ -202,7 +202,7 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("sleigh_nights");
     expect(main).toContain("sleigh_settings");
     // Elf Detective School's game: guesses, word tries, visits, photos (their bytes stay out of the
-    // dump), photo files and the practice door; 119 since the alerts plan added head elves' mobiles, the alerts sent and the claimed sends.
+    // dump), photo files and the practice door.
     for (const t of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos", "elf_photo_files", "elf_practice"]) {
       expect(main).toContain(t);
     }

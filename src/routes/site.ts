@@ -199,6 +199,12 @@ async function decorateNav(html: string, cookieHeader: string | undefined, after
   return out;
 }
 
+/** The same, for a page drawn outside this router (the Santa Sleigh's, src/routes/sleigh.ts): the
+ *  Ball's moment read from the clock, and no query can move it. */
+export function decorateSitePage(html: string, cookieHeader: string | undefined, now: Date = new Date()): Promise<string> {
+  return decorateNav(html, cookieHeader, showAfterBall(now, undefined));
+}
+
 /**
  * Headers for the files under /assets. Everything is as express.static leaves it (checked with the
  * server on every visit, so a changed stylesheet is picked up at once) except the film folder: the

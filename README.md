@@ -12935,6 +12935,12 @@ Design: `docs/superpowers/specs/2026-11-10-santa-sleigh-design.md`; plan:
   letters on a Deep Crimson sleigh), the year's total over a road with one house per night (the little
   sleigh drives to tonight's), the give form, who NBCC is, other ways in. Motion is transform and
   opacity only and stops for reduced motion.
+- **The site's menu and footer** (TASK-612): the page and its thank you wear the site's own menu bar
+  and footer, taken from `index.html` (so they follow `partials/footer.html`), with `styles.css` and
+  `main.js` loaded before the sleigh's own files. The bar stays solid cream over the night sky; its
+  Donate button goes to the page's own give form, so the gift counts as the sleigh's. As they go out,
+  both pages gain what every page gains (`decorateSitePage` in `src/routes/site.ts`: the menu items that
+  are switched on, the footer's Fill a Red Bag and fundraising links), never waiting more than 1.5s.
 - **The switch** (`src/sleigh/model.ts`, by UK date): before and during the nights the giving page;
   after the last night "Thank you, Kilmarnock" with giving still open; from `sleigh_settings.off_on`
   (31 January 2027 unless changed) a 302 to `/`. `?at=after` previews the thank you state (noindex,

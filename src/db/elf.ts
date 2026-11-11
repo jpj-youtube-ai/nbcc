@@ -61,7 +61,12 @@ export async function getElfSettings(): Promise<ElfSettings> {
   try {
     const r = await pool.query<SettingsRow>(SETTINGS_SQL);
     return settingsFrom(r.rows[0]);
-  } catch {
+  } catch (err) {
+    // Reading as switched off is the safe answer, but it hides a broken database, so it is logged:
+    // one line, the error's own message only. A database that cannot be reached at all fails with no
+    // message (Node's AggregateError for a refused connection), so then its code, or its kind.
+    const said = err instanceof Error ? err.message || String((err as { code?: unknown }).code ?? "") || err.name : String(err);
+    console.error("elf settings could not be read, so the school reads as switched off:", said);
     return { ...ELF_DEFAULTS };
   }
 }

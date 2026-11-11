@@ -153,6 +153,16 @@ describe("the calendar page", () => {
     expect(page(view(AFTERNOON)).querySelector("#elf-board")!.getAttribute("data-now")).toBe("2026-12-07T15:00:00.000Z");
   });
 
+  // Final review, Important 1: the view is built once every 15 seconds and shared, so the time the
+  // script sets its clock by is the time the page is served, while the doors are drawn at the view's.
+  it("tells the script the time the page is served, and draws the doors at the view's time", () => {
+    const served = at("2026-12-07T15:00:12.000Z");
+    const doc = new DOMParser().parseFromString(renderCalendarPage(view(AFTERNOON), served), "text/html");
+    expect(doc.querySelector("#elf-board")!.getAttribute("data-now")).toBe("2026-12-07T15:00:12.000Z");
+    // Door 7's countdown is drawn from the view's 3pm, as every door is.
+    expect(doc.querySelector("#door-7 .elf-cd")!.textContent).toBe("2:30:00");
+  });
+
   it("counts the elves found so far", () => {
     expect(words(page(view(AFTERNOON)).querySelector(".elf-tally"))).toBe("6 of 24 elves found");
     expect(words(page(view(at("2026-12-01T09:00:00.000Z"))).querySelector(".elf-tally"))).toBe("0 of 24 elves found");
@@ -211,6 +221,19 @@ describe("the calendar page", () => {
     expect(all).not.toContain("from the list");
     expect(all).not.toContain("wins the elf");
     expect(all).not.toContain("scan the poster");
+  });
+
+  // Final review, Important 7: while December's doors are off nothing a family sees may differ from
+  // wave 1 (origin/main), so How it works keeps wave 1's four steps, word for word.
+  it("keeps wave 1's four steps, word for word, while December's doors are off", () => {
+    const steps = [...page(view(at("2026-11-20T10:00:00.000Z"), {}, { doorsOn: false })).querySelectorAll(".elf-steps > li")];
+    expect(steps.map((s) => words(s.querySelector("h3")))).toEqual(["A clue comes out", "Lock in your guess", "Race to find it", "Collect your candy canes"]);
+    expect(steps.map((s) => words(s.querySelector("p")))).toEqual([
+      "Every day from 1 to 24 December, a clue tells detectives where one elf is hiding. It comes out after school on school days and in the morning at weekends.",
+      "Pick the hiding place from the list before anyone finds the elf. Get it right and you have cracked the case.",
+      "The first detective to find the elf and type the secret word on its tag wins the elf and a prize.",
+      "Once a door is open, visit its hiding place any day and scan the poster for a candy cane stamp. Every door you crack or visit takes you up the ranks.",
+    ]);
   });
 
   it("can be listed by search engines", () => {
@@ -291,6 +314,15 @@ describe("today's news at the top of the calendar", () => {
     const status = calendarStatus(revealed);
     expect(status.title).toBe("Bauble is still waiting");
     expect(status.html).toContain("The Toy Shop, Troon");
+  });
+
+  // Final review, Important 7, decision 1: the finder wins the prize; the elf stays at its place.
+  it("says the first detective wins the prize, never the elf, while the hunt is on and once the place is shown", () => {
+    const said = (html: string) => words(new DOMParser().parseFromString(html, "text/html").body);
+    const hunting = calendarStatus(view(at("2026-12-07T18:00:00.000Z"), { state: "hunting" }));
+    expect(said(hunting.html)).toBe("Bauble is hiding somewhere in NBCC's area. The first detective to type the word on its tag wins the prize.");
+    const revealed = calendarStatus(view(at("2026-12-07T21:30:00.000Z"), { state: "revealed", place: { name: "The Toy Shop", town: "Snowford" } }));
+    expect(said(revealed.html)).toContain("Nobody found today's elf in time. It is at The Toy Shop, Snowford, and the first detective there still wins the prize.");
   });
 
   it("looks ahead to the next clue on a morning before today's is out, when yesterday's is done", () => {

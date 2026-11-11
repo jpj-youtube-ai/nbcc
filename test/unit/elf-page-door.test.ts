@@ -29,6 +29,8 @@ function door(over: Partial<DoorView> = {}): DoorView {
     collage: [],
     goneHome: false,
     factLine: null,
+    // December's doors on, as every state but a shut one needs.
+    doorsOn: true,
     ...over,
   };
 }
@@ -491,10 +493,27 @@ describe("a door's detail", () => {
     expect(text(html)).toContain("Today's elf is hiding");
     expect(text(html)).toContain("Clue out at 5:30pm");
     expect(dom(html).querySelector(".elf-cd")!.textContent).toBe("2:30:00");
-    expect(text(html)).toContain("secret word");
+    // Decision 1: the finder wins the prize, and the elf stays at its place (final review, Important 7).
+    expect(text(html)).toContain(
+      "Then the race is on. The first detective to find the elf and type the word on its tag wins the prize. The elf stays there for everyone else to find.",
+    );
+    expect(text(html)).not.toContain("wins it");
     // A guess counts until the hiding place is shown, not until the elf is found.
     expect(text(html)).toContain("Type in your guess at Detective HQ before the hiding place is shown. Get it right and you have cracked the case.");
     expect(text(html)).not.toContain("before anyone finds it");
+  });
+
+  // Final review, Important 7: with December's doors off nothing a family sees may differ from wave 1,
+  // and today's door shows on the calendar then too.
+  it("reads exactly as wave 1's today's door did while December's doors are off", () => {
+    const html = doorDetail({ ...TODAY, doorsOn: false }, CTX);
+    expect(text(html)).toContain("Then the race is on. The first detective to find the elf and read its secret word wins it.");
+    expect(text(html)).toContain("Lock in your guess before anyone finds it to crack the case.");
+    expect(text(html)).not.toContain("Type in your guess");
+    expect(text(html)).not.toContain("wins the prize");
+    // Every other part of it is the same as with the doors on.
+    expect(dom(html).querySelector(".elf-cd")!.textContent).toBe("2:30:00");
+    expect(dom(html).querySelector('a[href="/elf/hq"]')).not.toBeNull();
   });
 
   it("says the hunt is on and sends detectives to their clue", () => {
@@ -503,6 +522,13 @@ describe("a door's detail", () => {
     expect(text(html)).toContain("Bauble");
     expect(dom(html).querySelector('a[href="/elf/hq"]')).not.toBeNull();
     expect(dom(html).querySelector('a[href="/elf/join"]')).not.toBeNull();
+  });
+
+  // Final review, Important 7, decision 1: the finder wins the prize; the elf stays at its place.
+  it("says the first detective to type the word wins the prize, and the elf stays there", () => {
+    const said = text(doorDetail(HUNTING, CTX));
+    expect(said).toContain("The first detective to find the elf and type the word on its tag wins the prize. Bauble stays there for everyone else to find.");
+    expect(said).not.toContain("wins it");
   });
 
   it("leaves a place for the family's own line, which the page's script fills in", () => {
@@ -598,14 +624,18 @@ describe("an open door's scrapbook", () => {
     expect(gone).not.toContain("Visit to add your picture");
   });
 
-  it("keeps the counts and the fact for children", () => {
+  // Final review, minor 12: the counts are of families (doorCounts counts a family once, however many
+  // detectives it has), so the words say families.
+  it("keeps the counts, of families, and the fact for children", () => {
     const said = words(book());
-    expect(said).toContain("172 detectives cracked this case");
+    expect(said).toContain("172 families cracked this case");
+    expect(said).not.toContain("detectives cracked");
     expect(said).toContain("51 have been there since");
     expect(said).toContain("Every Red Bag says: you have not been forgotten.");
     const one = words(book({ ...FOUND, counts: { cracked: 1, visited: 1 } }));
-    expect(one).toContain("1 detective cracked this case");
+    expect(one).toContain("1 family cracked this case");
     expect(one).toContain("1 has been there since");
+    expect(words(book({ ...FOUND, counts: { cracked: 0, visited: 0 } }))).toContain("Nobody cracked this case");
   });
 
   it("closes with a torn paper button back to its own door", () => {
@@ -619,14 +649,26 @@ describe("an open door's scrapbook", () => {
     const visited = { ...REVEALED, scrapbook: { elves: [{ ...BOOK.elves[3], found: false }], photos: [], count: 1 } };
     const b = book(visited);
     expect(b.querySelector("section")!.classList.contains("elf-book")).toBe(true);
+    // Decision 1: the prize is what is won (final review, Important 7).
     expect(words(b)).toContain(
-      "Nobody found Holly in time, so here is the hiding place. Holly is still there, and the first detective to type the word on its tag wins.",
+      "Nobody found Holly in time, so here is the hiding place. Holly is still there, and the first detective to type the word on its tag wins the prize.",
     );
     expect(words(b.querySelector("h3"))).toBe("The Seaside Cafe, Largs");
     expect(b.querySelector(".elf-pol--first, .elf-pol__seal")).toBeNull();
     expect(words(b)).not.toContain("Found by");
     // A revealed door with nobody's elf yet has no empty rows.
     expect(book(REVEALED).querySelector(".elf-collage, .elf-photos")).toBeNull();
+  });
+
+  // Final review, minor 11: once its elf has gone home, a revealed door no longer says the elf is still
+  // there to be won: only that nobody found it in time, and that it has gone home.
+  it("leaves the race out of a revealed door whose elf has gone home", () => {
+    const gone = words(book({ ...REVEALED, goneHome: true }));
+    expect(gone).toContain("Nobody found Holly in time, so here is the hiding place.");
+    expect(gone).not.toContain("first detective");
+    expect(gone).not.toContain("is still there");
+    expect(gone).toContain("Holly has gone home now, so there is nothing to find there. The pictures stay.");
+    expect(gone).not.toContain("Visit to add your picture");
   });
 
   it("does without a scrapbook the view did not give", () => {
@@ -656,6 +698,11 @@ describe("a door's version for the live feed", () => {
     expect(doorVersion({ ...FOUND, scrapbook: { ...BOOK, photos: BOOK.photos.slice(0, 1), count: 5 } }, NOW)).not.toBe(base);
     expect(doorVersion({ ...FOUND, prize: "A pretend sledge" }, NOW)).not.toBe(base);
     expect(doorVersion({ ...FOUND, goneHome: true }, NOW)).not.toBe(base);
+  });
+
+  // December's doors switched on change what today's door says, so the feed draws it again.
+  it("changes when December's doors are switched on", () => {
+    expect(doorVersion({ ...TODAY, doorsOn: false }, NOW)).not.toBe(doorVersion(TODAY, NOW));
   });
 
   it("changes when tomorrow becomes today, and not otherwise as time passes", () => {

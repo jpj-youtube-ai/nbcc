@@ -46,8 +46,9 @@ function clueNote(c: TodayView["clues"][number]): string {
 }
 
 /** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),
- *  or, once all three are out, when the hiding place is shown. Only a clue whose time has come is
- *  written, whatever the view holds; with no real clock, no clue at all. */
+ *  or, once all three are out, when the hiding place is shown (as soon as the elf is found, once the
+ *  reveal time has passed with the elf still hiding). Only a clue whose time has come is written,
+ *  whatever the view holds; with no real clock, no clue at all. */
 function clueLadder(today: TodayView, now: Date): string {
   if (!real(now)) return "";
   const out = today.clues.filter((c) => real(c.at) && c.at.getTime() <= now.getTime());
@@ -63,6 +64,9 @@ function clueLadder(today: TodayView, now: Date): string {
   }
   if (next === null && real(today.revealAt)) {
     return notes + line(`The hiding place is shown at ${clockWords(today.revealAt)}`, "elf-ladder__next");
+  }
+  if (next === null && today.state === "hunting") {
+    return notes + line("The hiding place is shown as soon as the elf is found.", "elf-ladder__next");
   }
   return notes;
 }
@@ -101,7 +105,8 @@ function outcomeHtml(today: TodayView): string {
   const place = escapeHtml(outcome.place);
   const where =
     today.state === "revealed"
-      ? line(`Nobody found ${elf} in time. ${elf} is still waiting at ${place}, and the first detective to read the secret word still wins.`)
+      ? // Decision 1: the finder wins the prize, and the elf stays at its place.
+        line(`Nobody found ${elf} in time. ${elf} is still waiting at ${place}, and the first detective to type the word on its tag still wins the prize.`)
       : line(`${elf} was hiding at ${place}.`) +
         (outcome.by ? line(`${icon("rosette", 16)} Found first by ${escapeHtml(outcome.by)}${outcome.at ? ` at ${clockWords(outcome.at)}` : ""}`, "elf-case__by") : "");
   const guess = today.guess ? escapeHtml(today.guess.text) : null;
@@ -221,12 +226,22 @@ function marksBoard(marks: FamilyMarks): string {
     const mark = byDoor.get(door);
     const isCracked = mark?.cracked === true;
     const isVisited = mark?.visited === true;
+    // A snow day counts as done for every detective, though nobody cracked it or went there.
+    const isSnow = mark?.snow === true;
     if (isCracked) cracked += 1;
     if (isVisited) visited += 1;
-    const said = isCracked && isVisited ? "cracked and visited" : isCracked ? "cracked" : isVisited ? "visited" : "not done yet";
+    const said = isSnow
+      ? "snowed in, so it counts as done."
+      : isCracked && isVisited
+        ? "cracked and visited"
+        : isCracked
+          ? "cracked"
+          : isVisited
+            ? "visited"
+            : "not done yet";
     cells +=
       // The words go in the page, not in aria-label: a label on a plain list item is not always read.
-      `<li${isCracked || isVisited ? ' class="is-done"' : ""}><span class="sr-only">Door ${door}: ${said}</span>` +
+      `<li${isCracked || isVisited || isSnow ? ' class="is-done"' : ""}><span class="sr-only">Door ${door}: ${said}</span>` +
       `<span class="elf-marks__num" aria-hidden="true">${door}</span>` +
       (isCracked ? `<span class="elf-mark elf-mark--cracked">${icon("cracked", 14)}</span>` : "") +
       (isVisited ? `<span class="elf-mark">${candyCane(14)}</span>` : "") +

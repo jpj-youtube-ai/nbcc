@@ -104,8 +104,9 @@ export function createApp() {
   // Profile pictures: the page photo and round profile photo an organiser sends, the same way.
   app.use(PICTURE_POST_PATH, newsBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
   // Elf Detective School: a family's photo for a door (shrunk in the browser first), the same way, read
-  // only with a cookie the shape of a signed in family's (elfPhotoBodyGuard).
-  app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
+  // only for a POST with a cookie the shape of a signed in family's (elfPhotoBodyGuard); the take down's
+  // DELETE on the same address gets the usual small parser.
+  app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard(express.json({ limit: PICTURE_JSON_BODY_LIMIT })));
   // Elf Detective School: a clue's picture from Head Elf HQ (shrunk in the browser first). Only on the admin's own
   // address; the route itself checks the bearer token and the elf permission.
   const cluePictureJson = express.json({ limit: PICTURE_JSON_BODY_LIMIT });

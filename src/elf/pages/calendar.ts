@@ -46,7 +46,8 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
     return {
       kind: "hunting",
       title: "The hunt is on!",
-      html: `<p>${escapeHtml(hunting.elfName)} is hiding somewhere in NBCC's area. The first detective to read the secret word wins.</p>`,
+      // Decision 1: the finder wins the prize, and the elf stays at its place.
+      html: `<p>${escapeHtml(hunting.elfName)} is hiding somewhere in NBCC's area. The first detective to type the word on its tag wins the prize.</p>`,
     };
   }
   const today = doors.find((d) => sameDay(d.clueAt, now));
@@ -90,7 +91,7 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
     return {
       kind: "revealed",
       title: `${escapeHtml(today.elfName)} is still waiting`,
-      html: `<p>Nobody found today's elf in time. It is at ${placeOf(today)}, and the first detective there still wins.</p>` + nextClueLine(view),
+      html: `<p>Nobody found today's elf in time. It is at ${placeOf(today)}, and the first detective there still wins the prize.</p>` + nextClueLine(view),
     };
   }
   const next = doors.find((d) => d.state === "shut");
@@ -110,12 +111,34 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
   };
 }
 
-const STEPS: readonly { title: string; words: string }[] = [
+const FIRST_STEP = {
+  title: "A clue comes out",
+  words:
+    "Every day from 1 to 24 December, a clue tells detectives where one elf is hiding. It comes out after school on school days and in the morning at weekends.",
+} as const;
+
+/** How it works while December's doors are off: wave 1's four steps, word for word, so no new words go
+ *  live before the doors do. */
+const WAVE_ONE_STEPS: readonly { title: string; words: string }[] = [
+  FIRST_STEP,
   {
-    title: "A clue comes out",
-    words:
-      "Every day from 1 to 24 December, a clue tells detectives where one elf is hiding. It comes out after school on school days and in the morning at weekends.",
+    title: "Lock in your guess",
+    words: "Pick the hiding place from the list before anyone finds the elf. Get it right and you have cracked the case.",
   },
+  {
+    title: "Race to find it",
+    words: "The first detective to find the elf and type the secret word on its tag wins the elf and a prize.",
+  },
+  {
+    title: "Collect your candy canes",
+    words:
+      "Once a door is open, visit its hiding place any day and scan the poster for a candy cane stamp. Every door you crack or visit takes you up the ranks.",
+  },
+];
+
+/** How it works once December's doors are on. */
+const STEPS: readonly { title: string; words: string }[] = [
+  FIRST_STEP,
   {
     title: "Lock in your guess",
     words: GUESS_LINE,
@@ -132,8 +155,10 @@ const STEPS: readonly { title: string; words: string }[] = [
   },
 ];
 
-/** The whole public calendar page. */
-export function renderCalendarPage(view: CalendarView): string {
+/** The whole public calendar page. `servedAt` is the moment the page is sent: the view is built once
+ *  every 15 seconds and shared, so the script sets its clock by this, while the doors are drawn at the
+ *  view's own time. */
+export function renderCalendarPage(view: CalendarView, servedAt: Date = view.now): string {
   const ctx = { now: view.now, joinUrl: view.joinUrl, hqUrl: view.hqUrl };
   const join = sitePath(view.joinUrl) ?? "/";
   const hq = sitePath(view.hqUrl) ?? "/";
@@ -145,7 +170,7 @@ export function renderCalendarPage(view: CalendarView): string {
   const board = view.doors.map((d) => doorTile(d, view.now) + doorDetail(d, ctx)).join("\n");
 
   // Each step's number on a paper rosette, as the doors' numbers are in the wardrobe.
-  const steps = STEPS.map(
+  const steps = (view.doorsOn ? STEPS : WAVE_ONE_STEPS).map(
     (s, i) =>
       `<li><span class="elf-steps__n" aria-hidden="true">${rosette({ className: "elf-steps__rosette", petals: 14 })}<b>${i + 1}</b></span>` +
       `<h3>${s.title}</h3><p>${s.words}</p></li>`,
@@ -178,7 +203,7 @@ export function renderCalendarPage(view: CalendarView): string {
       </div>
       <div class="elf-advent">
         <span class="elf-advent__card" aria-hidden="true"></span>
-        <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-now="${view.now.toISOString()}" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me">
+        <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-now="${servedAt.toISOString()}" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me">
 ${board}
         </div>
       </div>

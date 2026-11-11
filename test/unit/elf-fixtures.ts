@@ -107,8 +107,8 @@ export const at = (iso: string): Date => new Date(iso);
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 
-/** A calendar on the given day: the doors before it found, the day's own door as asked (shut unless
- *  told otherwise), and the later ones shut. Door 12 is a big prize. */
+/** A calendar on the given day, with December's doors on: the doors before it found, the day's own door
+ *  as asked (shut unless told otherwise), and the later ones shut. Door 12 is a big prize. */
 export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Partial<CalendarView> = {}): CalendarView {
   const dayOfMonth = now.getUTCMonth() === 11 ? now.getUTCDate() : 0;
   const doors: DoorView[] = [];
@@ -131,6 +131,7 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
       collage: [],
       goneHome: false,
       factLine: null,
+      doorsOn: true,
     };
     if (n < dayOfMonth) {
       doors.push({
@@ -160,6 +161,7 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
     price: { from: "£1", suggested: "£5" },
     joinUrl: "/elf/join",
     hqUrl: "/elf/hq",
+    doorsOn: true,
     ...over,
   };
 }

@@ -1,6 +1,6 @@
 import type { DoorRun, FamilyRuns } from "../db/elf-game";
 import { DEFAULT_MORNING_CLUE_TIME, DEFAULT_SCHOOL_CLUE_TIME, DOOR_COUNT, clueTimeFor, doorDate, doorInstant, isDoor, type Door } from "./calendar";
-import { canGuess, cluesOut, doorState, isClaimable, isOpen, nextClueAt, openedAt, shownAt } from "./doors";
+import { canGuess, cluesOut, doorState, isClaimable, isOpen, nextClueAt, openedAt, shownAt, type DoorFacts, type DoorState } from "./doors";
 import { badgeWords } from "./emails";
 import { factFor } from "./facts";
 import { cracked, type SavedGuess } from "./guess";
@@ -80,6 +80,16 @@ function runForToday(runs: readonly DoorRun[], now: Date): DoorRun | null {
   return runs.find((r) => r.door !== 0 && sameDay(r.calendarAt, now)) ?? null;
 }
 
+/** When Detective HQ says the place is shown: the real time once the elf is found before its reveal,
+ *  the staff reveal time while the hunt is on before it, and none once that has passed with the elf
+ *  still hiding (the place is then shown as soon as the elf is found). Never the place's closing time,
+ *  when an unfound elf's place is shown: a family is never told how late a place is open. */
+function revealFor(facts: DoorFacts, state: DoorState, now: Date): Date | null {
+  if (state === "found-hidden") return shownAt(facts);
+  if ((state === "shut" || state === "hunting") && now.getTime() < facts.revealAt.getTime()) return facts.revealAt;
+  return null;
+}
+
 function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>; finders: Map<Door, DetectiveNameParts[]> }): TodayView {
   const state = doorState(run.facts, o.now);
   const out = cluesOut(run.facts, o.now);
@@ -111,7 +121,7 @@ function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>;
         pictureAlt: c.hasPicture && run.door !== 0 ? c.pictureAlt : null,
       })),
     nextClueAt: nextClueAt(run.facts, o.now),
-    revealAt: shownAt(run.facts),
+    revealAt: revealFor(run.facts, state, o.now),
     guess: guess ? { text: guess.text, at: guess.at } : null,
     canGuess: canGuess(state),
     // Only the guess route sets this, when the form sent with no script was refused.
@@ -158,12 +168,18 @@ export function hqViewFor(o: {
   photos: FamilyMarks["photos"];
 }): HqView {
   const real = o.runs.runs.filter((r) => r.door !== 0);
-  // With December's doors off, HQ is wave 1: no case today unless a practice run is going.
+  // With December's doors off, HQ is wave 1: no case today unless a practice run is going, and, as wave
+  // 1's HQ did, a countdown to door 1's first clue and to nothing after it.
   const todayRun = todayRunOf(o);
-  const next = real
-    .map((r) => r.calendarAt)
-    .filter((at) => at.getTime() > o.now.getTime())
-    .sort((x, y) => x.getTime() - y.getTime())[0];
+  const start = firstClueAt(o.settings.year);
+  const next = o.settings.doorsOn
+    ? real
+        .map((r) => r.calendarAt)
+        .filter((at) => at.getTime() > o.now.getTime())
+        .sort((x, y) => x.getTime() - y.getTime())[0]
+    : o.now.getTime() < start.getTime()
+      ? start
+      : undefined;
   return {
     now: o.now,
     familyName: firstWord(o.family.grownUpName),
@@ -257,6 +273,7 @@ function doorViewOf(
     collage: book ? collageOf(book) : [],
     goneHome: run.facts.goneHome,
     factLine: open ? (factFor(run.door)?.doorLine ?? null) : null,
+    doorsOn: o.settings.doorsOn,
   };
 }
 
@@ -285,6 +302,7 @@ export function calendarViewFor(o: {
     price: { from: poundsWords(o.settings.entryFromPence), suggested: poundsWords(o.settings.entrySuggestedPence) },
     joinUrl: "/elf/join",
     hqUrl: "/elf/hq",
+    doorsOn: o.settings.doorsOn,
   };
 }
 

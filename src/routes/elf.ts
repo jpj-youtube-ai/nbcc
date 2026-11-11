@@ -1,4 +1,4 @@
-import express, { Router, type NextFunction, type Request, type Response } from "express";
+import express, { Router, type NextFunction, type Request, type RequestHandler, type Response } from "express";
 import { z } from "zod";
 import { config } from "../config";
 import { readCookie } from "../ball/gate";
@@ -62,7 +62,7 @@ import { renderWardrobePage } from "../elf/pages/wardrobe";
 import { progressOf, promotionsBetween, type DoorsDone, type Rank } from "../elf/progress";
 import { makePublicCalendar } from "../elf/public-calendar";
 import type { Scrapbook } from "../elf/scrapbook";
-import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState } from "../elf/wardrobe";
+import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeState } from "../elf/wardrobe";
 import { calendarViewFor, hqViewFor, lookFromForm, marksOf, posterViewFor, todayRunOf, wardrobeViewFor, type DetectiveRow, type FamilyRow } from "../elf/views";
 import { elfPng, elfPngKey } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
@@ -678,11 +678,14 @@ export function resetPublicCalendar(): void {
   publicCalendar = makePublicCalendar({ load: loadPublicCalendar });
 }
 
+// The calendar is built once every 15 seconds and shared, so its view's time can be 15 seconds old. The
+// page and the feed each tell the script the time of their own answer, which it sets its clock by.
+
 export async function getCalendarPage(_req: Request, res: Response): Promise<Response | void> {
   try {
     const view = await publicCalendar.get(new Date());
     publicCache(res);
-    return res.type("html").send(renderCalendarPage(view));
+    return res.type("html").send(renderCalendarPage(view, new Date()));
   } catch (err) {
     return gameFailed(res, "calendar", err, false);
   }
@@ -693,7 +696,7 @@ export async function getCalendarFeed(_req: Request, res: Response): Promise<Res
     const view = await publicCalendar.get(new Date());
     publicCache(res);
     return res.json({
-      now: view.now.toISOString(),
+      now: new Date().toISOString(),
       // An elf found while its place is still hidden is found, as the page's tally counts it: counted
       // any other way, the calendar's script would set the tally back on its next poll.
       found: view.doors.filter((d) => d.state === "found" || d.state === "found-hidden").length,
@@ -878,12 +881,16 @@ export const WORD_ADDRESS_LIMIT = { max: 300, windowMs: 15 * 60_000 } as const;
  *  anyone from keeping the one picture maker busy. An address gets more, for a shared connection. */
 export const PHOTO_TRIES = { max: 20, windowMs: 24 * 60 * 60_000 } as const;
 const PHOTO_ADDRESS_TRIES = { max: 60, windowMs: PHOTO_TRIES.windowMs } as const;
+/** Guesses each family may send in 15 minutes: every one is saved, so this is plenty for a family
+ *  changing its mind, and far too few for a script to keep the database busy. */
+export const GUESS_LIMIT = { max: 60, windowMs: 15 * 60_000 } as const;
 
 const gameLimits = () => ({
   wordFamily: createRateLimiter(WORD_LIMIT),
   wordAddress: createRateLimiter(WORD_ADDRESS_LIMIT),
   photoFamily: createRateLimiter(PHOTO_TRIES),
   photoAddress: createRateLimiter(PHOTO_ADDRESS_TRIES),
+  guessFamily: createRateLimiter(GUESS_LIMIT),
 });
 let limits = gameLimits();
 
@@ -893,12 +900,18 @@ export function resetElfLimits(): void {
 }
 
 /** May this family, from this address, try once more? The family's own limit comes first, and an
- *  address's allowance is spent only on tries the family's limit lets through. A request made on the box
- *  itself (local development, the pr.yml BDD suite) is never limited, as everywhere in this file. */
-function allowedOnce(req: Request, familyId: number, family: ReturnType<typeof createRateLimiter>, address: ReturnType<typeof createRateLimiter>): boolean {
+ *  address's allowance (where there is one) is spent only on tries the family's limit lets through. A
+ *  request made on the box itself (local development, the pr.yml BDD suite) is never limited, as
+ *  everywhere in this file. */
+function allowedOnce(
+  req: Request,
+  familyId: number,
+  family: ReturnType<typeof createRateLimiter>,
+  address?: ReturnType<typeof createRateLimiter>,
+): boolean {
   if (isLoopbackRequest(req)) return true;
   const t = Date.now();
-  return family.allow(String(familyId), t) && address.allow(req.ip ?? "unknown", t);
+  return family.allow(String(familyId), t) && (!address || address.allow(req.ip ?? "unknown", t));
 }
 
 const NO_DOORS: DoorsDone = { cracked: [], visited: [] };
@@ -1106,10 +1119,22 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
   try {
     const s = await signedInFamily(req);
     if (!s) return json ? res.status(401).json({ error: "Please sign in again." }) : res.redirect(303, "/elf/sign-in");
+    const limited = !allowedOnce(req, s.familyId, limits.guessFamily);
+    if (limited && json) return res.status(429).json({ reason: "too-many-requests", message: ELF_TOO_MANY });
     // The door as it is at this moment, never the calendar's copy: a guess is only taken while it can be.
     const runs = await familyRuns(res, now);
     const run = gameRun(res, runs, doorNumberOf(body.door));
     if (!run) return notFound(res, json);
+    // The plain form has no script to show the words: Detective HQ is drawn again with them in the guess
+    // form's status line (or in the case, once there is no form to say it in).
+    const hqSaying = async (status: number, message: string): Promise<Response | void> => {
+      const family = await familyWithDetectives(s.familyId);
+      if (!family) return res.redirect(303, "/elf/sign-in");
+      const view = await hqViewOf(res, family, now, runs);
+      const today = view.today && view.today.door === run.door ? { ...view.today, guessError: message } : view.today;
+      return res.status(status).type("html").send(renderHqPage({ ...view, today }));
+    };
+    if (limited) return await hqSaying(429, ELF_TOO_MANY);
     const state = doorState(run.facts, now);
     const openPlaces = runs.runs.flatMap((r) => (r.door !== 0 && isOpen(doorState(r.facts, now)) ? [{ door: r.door, names: r.names }] : []));
     const decision = decideGuess({ doorState: state, openPlaces }, body.text);
@@ -1117,13 +1142,7 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
       // A door's elf is named only once the door can be guessed: until then its name stays a surprise.
       const message = wordsForGuessRefusal(decision.reason, canGuess(state) ? run.elfName : "the elf", decision.door);
       if (json) return res.status(400).json({ reason: decision.reason, message, ...(decision.door === undefined ? {} : { door: decision.door }) });
-      // The plain form has no script to show the words: Detective HQ is drawn again with them in the guess
-      // form's status line (or in the case, once there is no form to say it in).
-      const family = await familyWithDetectives(s.familyId);
-      if (!family) return res.redirect(303, "/elf/sign-in");
-      const view = await hqViewOf(res, family, now, runs);
-      const today = view.today && view.today.door === run.door ? { ...view.today, guessError: message } : view.today;
-      return res.status(400).type("html").send(renderHqPage({ ...view, today }));
+      return await hqSaying(400, message);
     }
     await saveGuess(run.year, run.door, s.familyId, { text: decision.text, norm: decision.norm }, now);
     return json ? res.status(200).json({ ok: true, text: decision.text }) : res.redirect(303, "/elf/hq");
@@ -1134,19 +1153,23 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
 
 export const ELF_PHOTO_POST_PATH = "/api/elf/p/:code/photo";
 
-/** Before the bigger body parser on the photo post (src/app.ts): no body is read unless the request
- *  carries a session cookie the shape of one of ours. Whether the session is real is checked by the
- *  route, after the body is read. */
-export function elfPhotoBodyGuard(req: Request, res: Response, next: NextFunction): void {
-  if (req.method !== "POST") return next();
-  if (!sessionIdOf(req)) {
-    res.status(401).json({ error: "Please sign in again." });
-    return;
-  }
-  next();
+/** The photo post's bigger body parser (src/app.ts), behind its guard: only a POST is read with it, and
+ *  only when it carries a session cookie the shape of one of ours. Anything else on the photo's address
+ *  (the take down's DELETE) goes on to the usual small parser. Whether the session is real is checked by
+ *  the route, after the body is read. */
+export function elfPhotoBodyGuard(parser: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    if (req.method !== "POST") return next();
+    if (!sessionIdOf(req)) {
+      res.status(401).json({ error: "Please sign in again." });
+      return;
+    }
+    parser(req, res, next);
+  };
 }
 
 const NOT_VISITED = { error: "Type the word on the elf's tag first." };
+const GONE_HOME_PHOTO = { error: "This elf has gone home, so its door is not taking photos now." };
 const NO_CONSENT = { error: "Tick the box to say we can show this photo." };
 const PHOTO_LIMIT = { error: "You have sent 5 photos today. Please try again tomorrow." };
 // The answers for a picture that cannot be used, one set shared with the fundraisers (src/fundraising/pictures.ts).
@@ -1167,6 +1190,8 @@ export async function postPhoto(req: Request, res: Response): Promise<Response |
     if (!s) return res.status(401).json({ error: "Please sign in again." });
     const run = await runByCode(res, String(req.params.code), now);
     if (!run) return notFound(res, true);
+    // The place has sent its elf home: the door's pictures stay, but it takes no more.
+    if (run.facts.goneHome) return res.status(409).json(GONE_HOME_PHOTO);
     const visits = await familyVisits(run.year, s.familyId);
     if (!visits.some((v) => v.door === run.door)) return res.status(403).json(NOT_VISITED);
     if (body.consent !== true) return res.status(400).json(NO_CONSENT);
@@ -1243,6 +1268,21 @@ export async function getDoorPhoto(req: Request, res: Response): Promise<Respons
   }
 }
 
+/** Every door done: everything in the wardrobe unlocked. A visit's look was made safe against its
+ *  detective's doors when it was stored (postWord), so drawn against this it is drawn exactly as
+ *  stored, and no doors need reading to draw it. */
+const EVERYTHING_UNLOCKED: WardrobeState = { doors: Array.from({ length: DOOR_COUNT }, (_, i) => i + 1) };
+
+/** How many door elves are kept drawn, the most recently asked for: about 100 KB each at 240 pixels,
+ *  so a few tens of megabytes at most. A visit's look never changes, so neither does its picture. */
+export const DOOR_ELVES_KEPT = 200;
+let doorElves = new Map<string, { etag: string; png: Buffer }>();
+
+/** For tests: no door elves kept from before. */
+export function resetDoorElves(): void {
+  doorElves = new Map();
+}
+
 export async function getDoorElf(req: Request, res: Response): Promise<Response | void> {
   // Never kept until there is an elf to serve, so no cache holds a "not yet" from before its visit counts.
   res.setHeader("Cache-Control", "no-store");
@@ -1252,26 +1292,36 @@ export async function getDoorElf(req: Request, res: Response): Promise<Response 
   if (!where || visitId === null) return notFound(res);
   const now = new Date();
   try {
+    // The one read, on every request: the visit, when it counts from, and that its family is still in.
     const visit = await visitElf(where.year, where.door, visitId);
     // An elf goes on its door only once its visit counts (for most visits, once the place is shown).
     if (!visit || !(visit.countsFrom.getTime() <= now.getTime())) return notFound(res);
-    // Drawn in the detective's wardrobe as it stands: this year's doors, never the practice door.
-    const doorsDone = await detectiveDoorsDone(settingsOf(res).year, visit.detectiveId, (await familyRuns(res, now)).runs, now);
-    const state = wardrobeState(doorsDone);
-    const etag = `"${elfPngKey(visit.look, state, 240)}"`;
+    const key = `${where.year}:${where.door}:${visitId}`;
+    let drawn = doorElves.get(key);
+    if (drawn) {
+      // Kept most recently asked for last, so the one asked for longest ago is the one let go.
+      doorElves.delete(key);
+      doorElves.set(key, drawn);
+    }
+    const etag = drawn ? drawn.etag : `"${elfPngKey(visit.look, EVERYTHING_UNLOCKED, 240)}"`;
     const cache = pictureCache(res, where.door, "public, max-age=3600");
     if (String(req.headers["if-none-match"] ?? "") === etag) {
       res.setHeader("Cache-Control", cache);
       res.setHeader("ETag", etag);
       return res.status(304).send();
     }
-    const picture = await elfPng(visit.look, state, 240);
-    if (!picture) {
-      res.setHeader("Retry-After", "2");
-      return res.status(503).type("text/plain").send("Busy. Please try again in a moment.");
+    if (!drawn) {
+      const picture = await elfPng(visit.look, EVERYTHING_UNLOCKED, 240);
+      if (!picture) {
+        res.setHeader("Retry-After", "2");
+        return res.status(503).type("text/plain").send("Busy. Please try again in a moment.");
+      }
+      drawn = { etag, png: picture };
+      doorElves.set(key, drawn);
+      if (doorElves.size > DOOR_ELVES_KEPT) doorElves.delete(doorElves.keys().next().value as string);
     }
-    res.setHeader("ETag", etag);
-    return sendPicture(res, { mime: "image/png", bytes: picture }, cache);
+    res.setHeader("ETag", drawn.etag);
+    return sendPicture(res, { mime: "image/png", bytes: drawn.png }, cache);
   } catch (err) {
     return gameFailed(res, "door elf", err, false);
   }

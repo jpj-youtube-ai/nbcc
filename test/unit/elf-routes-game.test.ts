@@ -76,12 +76,16 @@ vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() }
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
+import { pool } from "../../src/db/pool";
 import {
+  DOOR_ELVES_KEPT,
   doorsOn,
   elfPhotoBodyGuard,
   elfRouter,
   ELF_PHOTO_POST_PATH,
+  GUESS_LIMIT,
   PHOTO_TRIES,
+  resetDoorElves,
   resetElfLimits,
   resetPublicCalendar,
   WORD_ADDRESS_LIMIT,
@@ -215,7 +219,7 @@ beforeAll(async () => {
   // Mounted as src/app.ts mounts it: the photo's bigger body parser first, on its own path.
   const app = express();
   app.set("trust proxy", 1);
-  app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
+  app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard(express.json({ limit: PICTURE_JSON_BODY_LIMIT })));
   app.use(express.json());
   app.use(elfRouter);
   server = app.listen(0);
@@ -231,6 +235,7 @@ beforeEach(() => {
   for (const s of Object.values(spies)) s.mockClear();
   resetPublicCalendar();
   resetElfLimits();
+  resetDoorElves();
   db.getElfSettings.mockResolvedValue(ON);
   db.findElfSession.mockResolvedValue({ familyId: 3 });
   db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? FAMILY : null));
@@ -380,9 +385,11 @@ describe("with December's doors switched off, at 6:10pm on 7 December", () => {
     const runs = waveOneRuns(2026, SIX_10);
     expect(runs.map((run) => run.elfName)).toEqual([...ELF_NAMES]);
     const wave1 = hqViewFor({ family: FAMILY, settings: OFF, now: SIX_10, runs: { runs, practice: null }, guesses: new Map(), doorsDone: new Map(), finders: new Map(), photos: [] });
-    // No case today with the doors off, so no elf is named at all, and the next clue is a default time.
+    // No case today with the doors off, so no elf is named at all, and, door 1's first clue having
+    // passed, no next clue either: wave 1's HQ says every door is open (final review, Important 7).
     expect(wave1.today).toBeNull();
     expect(r.text).toBe(renderHqPage(wave1));
+    expect(r.text).toContain("Every door is open");
   });
 
   it("serves the calendar through runsFor as wave 1: shut doors with the stock elves, never what a head elf typed", async () => {
@@ -582,6 +589,18 @@ describe("the word on the tag", () => {
     expect(r.data.outcome).toBe("visited");
     expect(String(r.data.html)).toContain("It counts from 7pm");
     expect(String(r.data.html)).not.toContain("You're first!");
+  });
+
+  // Final review, Important 4: the family's word for another door won in the same moment, so the
+  // database refuses this claim (one prize a family). Door 7 is still unfound: this word is a visit.
+  it("is a visit when the family's word for another door won in the same moment", async () => {
+    game.recordWord.mockResolvedValue({ won: false, countsFrom: SEVEN, stamped: [100] });
+    const r = await word("SNOWBALL 472");
+    expect(game.recordWord).toHaveBeenCalledWith(expect.objectContaining({ won: true, door: 7 }));
+    expect(r.status).toBe(200);
+    expect(r.data.outcome).toBe("visited");
+    expect(String(r.data.html)).not.toContain("You're first!");
+    expect(String(r.data.html)).toContain("It counts from 7pm");
   });
 
   it("is still the gold card when the family's own first tap won and its second lost the race", async () => {
@@ -948,6 +967,32 @@ describe("the typed guess", () => {
     expect(game.saveGuess).not.toHaveBeenCalled();
   });
 
+  // Final review, minor 8: a guess is saved on every send, so each family may send 60 in 15 minutes
+  // (plenty for changing a mind), counted as the word's limit is, by family.
+  const guessFrom = (address: string, text = "Example Bakes") => call("POST", "/api/elf/guess", { json: { door: 7, text }, headers: { "X-Forwarded-For": address } });
+
+  it("limits each family to 60 guesses in 15 minutes, from whatever address, and holds up no other family", async () => {
+    expect(GUESS_LIMIT).toEqual({ max: 60, windowMs: 900_000 });
+    for (let i = 1; i <= 60; i++) expect((await guessFrom(`203.0.113.${i}`)).status, `guess ${i}`).toBe(200);
+    const r = await guessFrom("203.0.113.61");
+    expect(r.status).toBe(429);
+    expect(r.data).toEqual({ reason: "too-many-requests", message: "Too many tries. Please wait a few minutes and try again." });
+    expect(game.saveGuess).toHaveBeenCalledTimes(60);
+    // Another family is not held up, even at an address the first family used.
+    db.findElfSession.mockResolvedValue({ familyId: 4 });
+    db.familyWithDetectives.mockImplementation(async (id: number) => ({ ...FAMILY, id }));
+    expect((await guessFrom("203.0.113.1")).status).toBe(200);
+  });
+
+  it("draws Detective HQ again for the plain form when the family has sent too many guesses, with the words in its guess form", async () => {
+    for (let i = 1; i <= 60; i++) await guessFrom(`203.0.113.${i}`);
+    const r = await call("POST", "/api/elf/guess", { form: { door: "7", text: "Example Bakes" }, headers: { "X-Forwarded-For": "203.0.113.99" } });
+    expect(r.status).toBe(429);
+    expect(r.headers.get("content-type")).toContain("text/html");
+    expect(r.text).toContain('<p class="elf-guess__status is-error" role="status">Too many tries. Please wait a few minutes and try again.</p>');
+    expect(game.saveGuess).toHaveBeenCalledTimes(60);
+  });
+
   it("says too late on Detective HQ, drawn again, when the plain form arrives after the place is shown", async () => {
     vi.setSystemTime(SEVEN_05);
     doors.listElfDoors.mockResolvedValue([door7({ foundAt: FIVE_47, foundFamilyId: 9 })]);
@@ -1021,6 +1066,21 @@ describe("the family's photo", () => {
     game.sendElfPhoto.mockResolvedValue({ token: TOKEN });
     const r = await photo({}, { headers: from });
     expect(r.status).toBe(202);
+  });
+
+  // Final review, minor 9: once the place has sent its elf home, its door takes no more photos.
+  it("refuses a photo for a door whose elf has gone home, and makes nothing", async () => {
+    vi.setSystemTime(at("2026-12-10T12:00:00.000Z"));
+    doors.findElfDoorByPosterCode.mockResolvedValue({
+      year: 2026,
+      setup: door7({ foundAt: FIVE_47, foundFamilyId: 9, goneHomeAt: at("2026-12-09T10:00:00.000Z"), goneHomeBy: "admin:staff@example.org" }),
+    });
+    game.familyVisits.mockResolvedValue(VISIT);
+    const r = await photo();
+    expect(r.status).toBe(409);
+    expect(r.data).toEqual({ error: "This elf has gone home, so its door is not taking photos now." });
+    expect(spies.processPicture).not.toHaveBeenCalled();
+    expect(game.sendElfPhoto).not.toHaveBeenCalled();
   });
 
   it("says when the family has sent five today", async () => {
@@ -1157,21 +1217,77 @@ describe("a photo on a door", () => {
 
 describe("an elf on a door", () => {
   const LOOK = { ...defaultLook(), costume: "tree" };
+  /** Every door done: everything in the wardrobe unlocked. */
+  const EVERYTHING = { doors: Array.from({ length: 24 }, (_, i) => i + 1) };
+  const poolCalls = () => (pool.query as unknown as Mock).mock.calls.length;
 
-  it("is drawn in the detective's wardrobe as it stands, once the visit counts, for any cache to keep an hour", async () => {
+  // Final review, Important 5: a busy evening asks for many of these. A visit's look was made safe
+  // against its detective's doors when it was stored, so it is drawn as stored, with everything
+  // unlocked: one read (the visit, whether it counts by now, and that its family is still in) and no
+  // doors read at all.
+  it("is drawn from its stored look with one read and no doors read, once the visit counts, for any cache to keep an hour", async () => {
     vi.setSystemTime(SIX_10);
+    const before = poolCalls();
     game.visitElf.mockResolvedValue({ look: LOOK, detectiveId: 100, countsFrom: FIVE_47 });
-    game.detectiveDoorsDone.mockResolvedValue({ cracked: [2], visited: [7], snow: [] });
     const r = await call("GET", "/elf/door/7/elf/5.png", { cookie: null });
     expect(r.status).toBe(200);
     expect(r.bytes).toEqual(Buffer.from("png"));
     expect(r.headers.get("content-type")).toBe("image/png");
     expect(r.headers.get("cache-control")).toBe("public, max-age=3600");
     expect(r.headers.get("etag")).toBe('"k1"');
+    expect(game.visitElf).toHaveBeenCalledTimes(1);
     expect(game.visitElf).toHaveBeenCalledWith(2026, 7, 5);
-    expect(game.detectiveDoorsDone).toHaveBeenCalledWith(2026, 100, expect.any(Array), SIX_10);
-    expect(png.elfPng).toHaveBeenCalledWith(LOOK, { doors: [2, 7] }, 240);
-    expect(png.elfPngKey).toHaveBeenCalledWith(LOOK, { doors: [2, 7] }, 240);
+    expect(png.elfPng).toHaveBeenCalledWith(LOOK, EVERYTHING, 240);
+    expect(png.elfPngKey).toHaveBeenCalledWith(LOOK, EVERYTHING, 240);
+    for (const read of [doors.listElfDoors, doors.getElfDoor, doors.findElfDoorByPosterCode, practice.getPractice, game.detectiveDoorsDone, game.familyDoorsDone, spies.runsFor]) {
+      expect(read).not.toHaveBeenCalled();
+    }
+    expect(poolCalls()).toBe(before);
+  });
+
+  it("draws a visit's elf once and keeps it, still asking on every request whether the visit counts and its family is in", async () => {
+    vi.setSystemTime(SIX_10);
+    game.visitElf.mockResolvedValue({ look: LOOK, detectiveId: 100, countsFrom: FIVE_47 });
+    expect((await call("GET", "/elf/door/7/elf/5.png")).status).toBe(200);
+    const again = await call("GET", "/elf/door/7/elf/5.png");
+    expect(again.status).toBe(200);
+    expect(again.bytes).toEqual(Buffer.from("png"));
+    expect(again.headers.get("etag")).toBe('"k1"');
+    expect(png.elfPng).toHaveBeenCalledTimes(1);
+    expect(game.visitElf).toHaveBeenCalledTimes(2);
+    // Its family removed since: the one read finds nothing, so the kept picture is not served.
+    game.visitElf.mockResolvedValue(null);
+    expect((await call("GET", "/elf/door/7/elf/5.png")).status).toBe(404);
+    // Another visit is drawn for itself.
+    game.visitElf.mockResolvedValue({ look: LOOK, detectiveId: 101, countsFrom: FIVE_47 });
+    expect((await call("GET", "/elf/door/7/elf/6.png")).status).toBe(200);
+    expect(png.elfPng).toHaveBeenCalledTimes(2);
+  });
+
+  it(`keeps at most ${DOOR_ELVES_KEPT} drawn elves, letting the one asked for longest ago go first`, async () => {
+    vi.setSystemTime(SIX_10);
+    game.visitElf.mockImplementation(async () => ({ look: LOOK, detectiveId: 100, countsFrom: FIVE_47 }));
+    for (let id = 1; id <= DOOR_ELVES_KEPT; id++) await call("GET", `/elf/door/7/elf/${id}.png`);
+    // Visit 1 is asked for again, so visit 2 is now the one asked for longest ago.
+    await call("GET", "/elf/door/7/elf/1.png");
+    expect(png.elfPng).toHaveBeenCalledTimes(DOOR_ELVES_KEPT);
+    await call("GET", `/elf/door/7/elf/${DOOR_ELVES_KEPT + 1}.png`);
+    expect(png.elfPng).toHaveBeenCalledTimes(DOOR_ELVES_KEPT + 1);
+    await call("GET", "/elf/door/7/elf/1.png");
+    expect(png.elfPng).toHaveBeenCalledTimes(DOOR_ELVES_KEPT + 1);
+    await call("GET", "/elf/door/7/elf/2.png");
+    expect(png.elfPng).toHaveBeenCalledTimes(DOOR_ELVES_KEPT + 2);
+  });
+
+  it("says busy when the elf cannot be drawn just now, keeps nothing, and draws it when asked again", async () => {
+    game.visitElf.mockResolvedValue({ look: LOOK, detectiveId: 100, countsFrom: FIVE_47 });
+    png.elfPng.mockResolvedValueOnce(null);
+    const busy = await call("GET", "/elf/door/7/elf/5.png");
+    expect(busy.status).toBe(503);
+    expect(busy.headers.get("retry-after")).toBe("2");
+    expect(busy.headers.get("cache-control")).toBe("no-store");
+    expect((await call("GET", "/elf/door/7/elf/5.png")).status).toBe(200);
+    expect(png.elfPng).toHaveBeenCalledTimes(2);
   });
 
   it("answers 'not changed' without drawing it again", async () => {
@@ -1267,6 +1383,23 @@ describe("the public calendar", () => {
     expect(doors.ensureElfDoors).not.toHaveBeenCalled();
   });
 
+  // Final review, Important 1: the calendar is built once every 15 seconds and shared, so the time its
+  // script sets its clock by is the time of each answer, never the time of the build.
+  it("tells the script the time of the answer, not the time the shared calendar was built", async () => {
+    const first = await call("GET", "/api/elf/calendar", { cookie: null });
+    expect(first.data.now).toBe(SIX_10.toISOString());
+    const later = new Date(SIX_10.getTime() + 10_000);
+    vi.setSystemTime(later);
+    const feed = await call("GET", "/api/elf/calendar", { cookie: null });
+    const page = await call("GET", "/elf", { cookie: null });
+    // Still the one build...
+    expect(spies.runsFor).toHaveBeenCalledTimes(1);
+    // ...but each answer carries its own time.
+    expect(feed.data.now).toBe(later.toISOString());
+    expect(page.text).toContain(`data-now="${later.toISOString()}"`);
+    expect(page.text).not.toContain(`data-now="${SIX_10.toISOString()}"`);
+  });
+
   it("is built once for everyone who asks inside 15 seconds", async () => {
     await call("GET", "/elf");
     await call("GET", "/api/elf/calendar", { cookie: PRACTICE_PASS });
@@ -1312,6 +1445,34 @@ describe("Detective HQ with the doors on", () => {
     expect(r.text).toContain("Your guess: Example Bakes.");
     expect(game.familyDoorsDone).toHaveBeenCalledWith(2026, 3, expect.any(Array), SIX_10);
     expect(game.finderParts).not.toHaveBeenCalled();
+  });
+
+  // Final review, Important 2: door 7's place closes at 8:30pm. HQ says the staff reveal time, 7pm, until
+  // it passes, then that the place is shown as soon as the elf is found; never the closing time.
+  it("never prints the place's closing time as when the place is shown, either side of the reveal time", async () => {
+    vi.setSystemTime(at("2026-12-07T18:45:00.000Z"));
+    const before = await call("GET", "/elf/hq");
+    expect(before.status).toBe(200);
+    expect(before.text).toContain("The hiding place is shown at 7pm");
+    expect(before.text).not.toContain("8:30pm");
+    vi.setSystemTime(at("2026-12-07T19:15:00.000Z"));
+    const after = await call("GET", "/elf/hq");
+    expect(after.text).toContain("The hiding place is shown as soon as the elf is found.");
+    expect(after.text).not.toContain("8:30pm");
+    expect(after.text).not.toContain("shown at");
+  });
+
+  it("keeps the same rule for the practice door, which closes an hour after its 6:20pm reveal", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    practice.getPractice.mockResolvedValue(practiceRow());
+    vi.setSystemTime(SIX_10);
+    const before = await call("GET", "/elf/hq", { cookie: PRACTICE_PASS });
+    expect(before.text).toContain("The hiding place is shown at 6:20pm");
+    expect(before.text).not.toContain("7:20pm");
+    vi.setSystemTime(at("2026-12-07T18:30:00.000Z"));
+    const after = await call("GET", "/elf/hq", { cookie: PRACTICE_PASS });
+    expect(after.text).toContain("The hiding place is shown as soon as the elf is found.");
+    expect(after.text).not.toContain("7:20pm");
   });
 
   it("names who found today's elf once its place is shown, building the view once", async () => {
@@ -1363,25 +1524,54 @@ describe("how the app mounts the photo post", () => {
   const where = (s: string) => app.indexOf(s);
 
   it("reads the photo's bigger body only on its own path, behind the cookie guard, before the usual parser", () => {
-    expect(where("app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));")).toBeGreaterThan(-1);
+    expect(where("app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard(express.json({ limit: PICTURE_JSON_BODY_LIMIT })));")).toBeGreaterThan(-1);
     expect(where("app.use(ELF_PHOTO_POST_PATH")).toBeLessThan(where("app.use(express.json());"));
     expect(ELF_PHOTO_POST_PATH).toBe("/api/elf/p/:code/photo");
   });
 
-  it("lets a body through the guard only with a cookie the shape of a signed in family's, and leaves anything but a post alone", () => {
+  // Final review, minor 10: a take down (DELETE) on the photo's own address must never be read by the
+  // photo's 4 MB parser. It goes on to the usual small parser, which refuses a body that big.
+  it("never reads a take down's body with the photo's bigger parser", async () => {
+    // Express's own error handler says why it refused the body; that line is expected here.
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const big = { padding: "x".repeat(200 * 1024) };
+    const down = await call("DELETE", `/api/elf/p/${CODE}/photo`, { json: big });
+    expect(down.status).toBe(413);
+    expect(game.takeDownOwnPhoto).not.toHaveBeenCalled();
+    // A photo of the same size is still read: it reaches the route, which asks for a visit first.
+    const post = await call("POST", `/api/elf/p/${CODE}/photo`, { json: { ...big, mime: "image/jpeg", dataBase64: "AAAA", consent: true } });
+    expect(post.status).toBe(403);
+    expect(post.data).toEqual({ error: "Type the word on the elf's tag first." });
+    // And a take down with no body is taken as before.
+    expect((await call("DELETE", `/api/elf/p/${CODE}/photo`)).data).toEqual({ ok: true });
+    // The error handler writes its line a moment after it answers.
+    await vi.waitFor(() => expect(JSON.stringify(quiet.mock.calls)).toContain("request entity too large"));
+    quiet.mockRestore();
+  });
+
+  it("lets a body through the guard only with a cookie the shape of a signed in family's, and lets only a post reach the parser", () => {
     const guard = (cookie: string | undefined, method = "POST") => {
       let status = 0;
       const next = vi.fn();
+      const parser = vi.fn();
       const res = { status: (c: number) => ((status = c), res), json: () => res };
-      elfPhotoBodyGuard({ method, headers: cookie ? { cookie } : {} } as unknown as Request, res as unknown as Response, next);
-      return { status, next };
+      elfPhotoBodyGuard(parser)({ method, headers: cookie ? { cookie } : {} } as unknown as Request, res as unknown as Response, next);
+      return { status, next, parser };
     };
-    expect(guard(SESSION).next).toHaveBeenCalled();
+    const signedIn = guard(SESSION);
+    expect(signedIn.parser).toHaveBeenCalledTimes(1);
+    // The parser goes on to the route itself.
+    expect(signedIn.parser.mock.calls[0][2]).toBe(signedIn.next);
     for (const bad of [undefined, "other=1", "nbcc_elf_session=not%20ours!", `nbcc_elf_session=${"a".repeat(101)}`]) {
       const g = guard(bad);
+      expect(g.parser, String(bad)).not.toHaveBeenCalled();
       expect(g.next, String(bad)).not.toHaveBeenCalled();
       expect(g.status).toBe(401);
     }
-    expect(guard(undefined, "DELETE").next).toHaveBeenCalled();
+    for (const method of ["DELETE", "GET", "PUT"]) {
+      const g = guard(SESSION, method);
+      expect(g.parser, method).not.toHaveBeenCalled();
+      expect(g.next, method).toHaveBeenCalledTimes(1);
+    }
   });
 });

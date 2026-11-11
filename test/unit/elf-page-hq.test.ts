@@ -105,6 +105,15 @@ describe("the clue ladder", () => {
     expect(doc.querySelector(".elf-case .elf-cd")).toBeNull();
     expect(words(doc.querySelector(".elf-case"))).not.toContain("comes out at");
   });
+
+  // Final review, Important 2: once the reveal time has passed with the elf still hiding, the place is
+  // shown the moment the elf is found (or at closing, which a family is never told).
+  it("says the hiding place is shown as soon as the elf is found, once the reveal time has passed", () => {
+    const doc = page(today({ clues: [CLUE_1, CLUE_2, CLUE_3], nextClueAt: null, revealAt: null }, { now: at("2026-12-07T19:20:00.000Z") }));
+    expect(words(doc.querySelector(".elf-ladder__next"))).toBe("The hiding place is shown as soon as the elf is found.");
+    expect(doc.querySelector(".elf-case .elf-cd")).toBeNull();
+    expect(doc.querySelector("form.elf-guess")).not.toBeNull();
+  });
 });
 
 describe("the guess", () => {
@@ -208,10 +217,13 @@ describe("how an open door turned out", () => {
   });
 
   it("says a revealed elf is still there to be won", () => {
-    const doc = page(today({ state: "revealed", canGuess: false, guess: null, outcome: { place: "The Toy Shop, Troon", by: null, at: null, cracked: false } }));
+    const doc = page(today({ state: "revealed", canGuess: false, guess: null, outcome: { place: "The Toy Shop, Snowford", by: null, at: null, cracked: false } }));
     const card = doc.querySelector(".elf-case")!;
-    expect(words(card)).toContain("Bauble is still waiting at The Toy Shop, Troon");
-    expect(words(card)).toContain("first detective");
+    expect(words(card)).toContain("Bauble is still waiting at The Toy Shop, Snowford");
+    // Decision 1: the prize is what is won (final review, Important 7).
+    expect(words(card)).toContain(
+      "Nobody found Bauble in time. Bauble is still waiting at The Toy Shop, Snowford, and the first detective to type the word on its tag still wins the prize.",
+    );
     expect(words(card)).not.toContain("Found first by");
   });
 });
@@ -334,6 +346,20 @@ describe("the family's marks", () => {
 
   it("adds them up", () => {
     expect(words(page().querySelector(".elf-marks__sum"))).toBe("2 cracked and 2 visited so far");
+  });
+
+  // Final review, Important 3: a snow day counts as done for every detective, so the family's marks
+  // show it done, and say why.
+  it("marks a snowed in door as done, and says so for a screen reader", () => {
+    const view = hqView({ marks: { doors: [...hqView().marks.doors, { door: 5, cracked: false, visited: false, snow: true }], photos: [] } });
+    const cells = [...page(view).querySelectorAll(".elf-marks li")];
+    expect(cells[4].classList.contains("is-done")).toBe(true);
+    expect(words(cells[4].querySelector(".sr-only"))).toBe("Door 5: snowed in, so it counts as done.");
+    // Neither a magnifying glass nor a candy cane: nobody cracked it or went there.
+    expect(cells[4].querySelectorAll(".elf-mark").length).toBe(0);
+    expect(cells[8].classList.contains("is-done")).toBe(false);
+    // The sum still counts only the cases cracked and the places visited.
+    expect(words(page(view).querySelector(".elf-marks__sum"))).toBe("2 cracked and 2 visited so far");
   });
 });
 

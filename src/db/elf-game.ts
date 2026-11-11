@@ -324,10 +324,13 @@ export async function familyHasWon(year: number, familyId: number): Promise<bool
   return r.rows[0]?.won === true;
 }
 
-/** The right word typed at a door: one transaction. When the family `won` a real door, the door's
- *  found time is set once under the row lock (rowCount 0 means a family was first, so this is only a
- *  visit). Then each detective's stamp, counting from `at` for the winner and otherwise from the
- *  later of `at` and the time the place is shown. */
+/** The right word typed at a door: one transaction. The family's row is locked first, so a family's
+ *  words are recorded one at a time. When the family `won` a real door, the door's found time is set
+ *  once under the row lock, and only while the family has won no door this year (one prize a family, even
+ *  for two right words for two doors sent at once). rowCount 0 means a family was first, or this family
+ *  has already won, so this is only a visit. The practice door keeps its own rule. Then each detective's
+ *  stamp, counting from `at` for the winner and otherwise from the later of `at` and the time the place
+ *  is shown. */
 export async function recordWord(o: {
   year: number;
   door: Door | 0;
@@ -339,11 +342,15 @@ export async function recordWord(o: {
   looks: Record<number, unknown>;
 }): Promise<{ won: boolean; countsFrom: Date; stamped: number[] }> {
   return inTransaction(async (client) => {
+    // One of a family's words at a time, as sendElfPhoto sends one photo at a time: the claim below then
+    // sees a win the family's other word has just made.
+    await client.query("SELECT id FROM elf_families WHERE id = $1 FOR UPDATE", [o.familyId]);
     let won = o.won;
     if (won && o.door > 0) {
       const claim = await client.query(
         `UPDATE elf_doors SET found_at = $1, found_family_id = $2, updated_at = now()
-          WHERE year = $3 AND door = $4 AND found_at IS NULL`,
+          WHERE year = $3 AND door = $4 AND found_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM elf_doors won_door WHERE won_door.year = $3 AND won_door.found_family_id = $2)`,
         [o.at, o.familyId, o.year, o.door],
       );
       won = (claim.rowCount ?? 0) > 0;

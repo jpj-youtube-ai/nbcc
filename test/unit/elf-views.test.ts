@@ -301,12 +301,18 @@ describe("the calendar's doors through the evening", () => {
 describe("Detective HQ with December's doors switched off", () => {
   const OFF = { ...SETTINGS, doorsOn: false };
 
-  it("has no case today and no countdown to clue 2 or 3, at 6:10pm and at 10am on 7 December", () => {
-    for (const [now, next] of [[SIX_10, "2026-12-08T17:30:00.000Z"], [at("2026-12-07T10:00:00Z"), "2026-12-07T17:30:00.000Z"]] as const) {
+  // Final review, Important 7: with the doors off, HQ is exactly wave 1's (origin/main), which counts
+  // down to door 1's first clue and to nothing after it ("Every door is open"), never to a clue 2 or 3.
+  it("has no case today, and counts down only to door 1's first clue, as wave 1's HQ did", () => {
+    for (const now of [at("2026-11-13T09:00:00Z"), at("2026-12-01T17:29:00Z")]) {
       const view = hq({ now, settings: OFF, runs: { runs: WAVE_ONE(now), practice: null } });
       expect(view.today).toBeNull();
-      // Always the next clue 1 to come (the calendar's time), never a clue 2 or 3.
-      expect(view.nextClueAt?.toISOString()).toBe(next);
+      expect(view.nextClueAt?.toISOString()).toBe("2026-12-01T17:30:00.000Z");
+    }
+    for (const now of [at("2026-12-01T17:30:00Z"), at("2026-12-07T10:00:00Z"), SIX_10]) {
+      const view = hq({ now, settings: OFF, runs: { runs: WAVE_ONE(now), practice: null } });
+      expect(view.today).toBeNull();
+      expect(view.nextClueAt).toBeNull();
     }
   });
 
@@ -325,6 +331,16 @@ describe("a door's prize words and picture", () => {
     expect(calDoor7({ now: SIX_45 }, { ...found, prizeShowOff: true }).teaser).toBeNull();
     expect(calDoor7({ now: SIX_10 }, { snowDayAt: at("2026-12-07T17:30:00Z"), prizeShowOff: true }).teaser).toBeNull();
     expect(calDoor7({ now: at("2026-12-07T20:30:00Z") }, { prizeShowOff: true }).teaser).toBe("A pretend prize");
+  });
+
+  // Final review, Important 7: the page and each door read wave 1's words while the doors are off.
+  it("carries whether December's doors are on, for the page and for every door", () => {
+    const on = calendarViewFor({ settings: { ...SETTINGS, doorsOn: true }, now: SIX_10, runs: withDoor7(SIX_10), finders: new Map(), counts: new Map(), scrapbooks: new Map() });
+    const off = calendarViewFor({ settings: { ...SETTINGS, doorsOn: false }, now: SIX_10, runs: WAVE_ONE(SIX_10), finders: new Map(), counts: new Map(), scrapbooks: new Map() });
+    expect(on.doorsOn).toBe(true);
+    expect(on.doors.every((d) => d.doorsOn === true)).toBe(true);
+    expect(off.doorsOn).toBe(false);
+    expect(off.doors.every((d) => d.doorsOn === false)).toBe(true);
   });
 
   it("shows a door picture only with the doors switched on, never on a wave 1 run", () => {
@@ -357,13 +373,43 @@ describe("Detective HQ in the evening", () => {
     expect(today.clues[0].words).toBe("Practice clue 1: it lives where the kettle lives");
     expect(today.clues[1]).toMatchObject({ pictureUrl: "/elf/hq/clue/7/2.jpg", pictureAlt: "A pretend picture" });
     expect(today.nextClueAt?.toISOString()).toBe("2026-12-07T18:30:00.000Z");
-    expect(today.revealAt.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+    // The staff reveal time, 7pm, never the place's closing time (8pm).
+    expect(today.revealAt?.toISOString()).toBe("2026-12-07T19:00:00.000Z");
     expect(today.canGuess).toBe(true);
     // Only the route sets a refused guess's words, for the form sent with no script.
     expect(today.guessError).toBeNull();
     expect(JSON.stringify(today)).not.toContain("it whistles");
     expect(JSON.stringify(today)).not.toContain("Toy Shop");
     expect(today.outcome).toBeNull();
+  });
+
+  // Final review, Important 2: an unfound door's place is shown at its closing time, which would tell a
+  // family how late the place is open (a hint) and is wrong once the elf is found. So HQ says the staff
+  // reveal time until it passes, then nothing (the page says "as soon as the elf is found"); a find
+  // before the reveal keeps the real shown time. The place closes at 8:30pm here.
+  it("gives the staff reveal time before it, none after it while the elf hides, and never the closing time", () => {
+    const closing = { closesAt: "20:30" };
+    const hunting = (now: Date) => hq({ now, runs: { runs: withDoor7(now, closing), practice: null } }).today!;
+    expect(hunting(at("2026-12-07T18:45:00Z"))).toMatchObject({ state: "hunting", nextClueAt: null });
+    expect(hunting(at("2026-12-07T18:45:00Z")).revealAt?.toISOString()).toBe("2026-12-07T19:00:00.000Z");
+    expect(hunting(at("2026-12-07T18:59:59Z")).revealAt?.toISOString()).toBe("2026-12-07T19:00:00.000Z");
+    expect(hunting(at("2026-12-07T19:00:00Z")).state).toBe("hunting");
+    expect(hunting(at("2026-12-07T19:00:00Z")).revealAt).toBeNull();
+    expect(hunting(at("2026-12-07T20:15:00Z")).revealAt).toBeNull();
+    const foundHidden = hq({ now: SIX_45, runs: { runs: withDoor7(SIX_45, { ...closing, foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 }), practice: null } }).today!;
+    expect(foundHidden.state).toBe("found-hidden");
+    expect(foundHidden.revealAt?.toISOString()).toBe("2026-12-07T19:00:00.000Z");
+    for (const now of [SIX_10, SIX_45, at("2026-12-07T19:00:00Z"), SEVEN_30, at("2026-12-07T20:15:00Z")]) {
+      expect(JSON.stringify(hunting(now))).not.toContain("2026-12-07T20:30:00.000Z");
+    }
+  });
+
+  it("keeps the same rule for the practice door, which closes an hour after its reveal", () => {
+    const practice = (now: Date): DoorRun => ({ ...run(7, now), door: 0 as const, year: 0 });
+    const today = (now: Date) => hq({ now, runs: { runs: WAVE_ONE(now), practice: practice(now) } }).today!;
+    expect(today(SIX_45).revealAt?.toISOString()).toBe("2026-12-07T19:00:00.000Z");
+    expect(today(SEVEN_30).state).toBe("hunting");
+    expect(today(SEVEN_30).revealAt).toBeNull();
   });
 
   it("gives a snow day no clues and no next clue", () => {

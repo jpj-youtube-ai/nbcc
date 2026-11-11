@@ -31,7 +31,7 @@ const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };
 
-function load(view: HqView = hqView()): Hq {
+function load(view: HqView = hqView(), extra: Record<string, unknown> = {}): Hq {
   document.documentElement.innerHTML = new DOMParser().parseFromString(renderHqPage(view), "text/html").documentElement.innerHTML;
   calls = [];
   clock = 5_000_000;
@@ -43,7 +43,7 @@ function load(view: HqView = hqView()): Hq {
     return Promise.resolve({ ok: a.status >= 200 && a.status < 300, status: a.status, json: () => Promise.resolve(a.body) });
   });
   reloads = 0;
-  hq = initHq(document, window, { now: () => clock, reload: () => (reloads += 1) }) as Hq;
+  hq = initHq(document, window, { now: () => clock, reload: () => (reloads += 1), ...extra }) as Hq;
   return hq;
 }
 
@@ -167,12 +167,55 @@ describe("the countdown to the clue", () => {
   });
 
   it("fetches the page again when the clue comes out, once, because the clue is never in the page before then", () => {
-    const base = hqView();
-    const page = load(hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } }));
-    clock += 2 * 3600 * 1000;
-    page.tick();
-    page.tick();
-    expect(reloads).toBe(1);
+    vi.useFakeTimers();
+    try {
+      const base = hqView();
+      const page = load(hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } }));
+      clock += 2 * 3600 * 1000;
+      page.tick();
+      page.tick();
+      vi.advanceTimersByTime(60_000);
+      expect(reloads).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Final review, Important 5: every family's HQ would fetch itself again in the same second as a clue
+  // comes out. Each page waits a while first, a different while for each: from one second to six.
+  it("waits a second and a random few more before fetching the page again, a different while for each page", () => {
+    vi.useFakeTimers();
+    try {
+      const base = hqView();
+      const view = hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } });
+      for (const [random, wait] of [[0.5, 3500], [0, 1000], [0.9999, 5999]] as const) {
+        const page = load(view, { random: () => random });
+        clock += 2 * 3600 * 1000;
+        page.tick();
+        vi.advanceTimersByTime(wait - 1);
+        expect(reloads, `random ${random}`).toBe(0);
+        vi.advanceTimersByTime(1);
+        expect(reloads, `random ${random}`).toBe(1);
+        page.stop();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fetches nothing once stopped, even with a fetch waiting", () => {
+    vi.useFakeTimers();
+    try {
+      const base = hqView();
+      const page = load(hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } }), { random: () => 0.5 });
+      clock += 2 * 3600 * 1000;
+      page.tick();
+      page.stop();
+      vi.advanceTimersByTime(60_000);
+      expect(reloads).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does nothing on a page with no countdown and no guess to make", () => {

@@ -43,7 +43,7 @@ export interface DoorView {
   found: { at: Date; by: string } | null;
   /** While the elf is found but the place is still hidden: when the place will be shown. */
   revealAt: Date | null;
-  /** How many detectives cracked it and how many have visited. Null until the door is open. */
+  /** How many families cracked it and how many families have visited. Null until the door is open. */
   counts: { cracked: number; visited: number } | null;
   /** The elves and photos on the door. Null until the door is open. */
   scrapbook: Scrapbook | null;
@@ -53,6 +53,9 @@ export interface DoorView {
   goneHome: boolean;
   /** The short NBCC fact for children. Shown once the door is open. */
   factLine: string | null;
+  /** Are December's doors on? Off, the door reads exactly as wave 1's did, today's door's words among
+   *  it: no new words go live with the doors off. */
+  doorsOn: boolean;
 }
 
 export interface CalendarView {
@@ -64,6 +67,8 @@ export interface CalendarView {
   price: { from: string; suggested: string };
   joinUrl: string;
   hqUrl: string;
+  /** Are December's doors on? Off, the page reads exactly as wave 1's did (How it works among it). */
+  doorsOn: boolean;
 }
 
 /** A family's own marks on the calendar. Private and small: the page's script fetches it. */
@@ -104,8 +109,11 @@ export interface TodayView {
   clues: { n: 1 | 2 | 3; at: Date; words: string | null; pictureUrl: string | null; pictureAlt: string | null }[];
   /** When the next clue comes out, or null once all three are out (and on a snow day). */
   nextClueAt: Date | null;
-  /** When the place is shown. */
-  revealAt: Date;
+  /** When the place is shown, when that can be said: the staff reveal time while the hunt is on before
+   *  it, and the real time once the elf is found before it. Null once the reveal time has passed with
+   *  the elf still hiding (the place is then shown as soon as it is found), and once the door is open.
+   *  Never the place's closing time. */
+  revealAt: Date | null;
   /** The guess the family typed, as typed, or null. */
   guess: { text: string; at: Date } | null;
   /** Can the family still type or change a guess? */

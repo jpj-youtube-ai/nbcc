@@ -59,11 +59,43 @@ describe("the school's settings", () => {
   });
 
   it("reads as switched off, at £1 and £5, when anything goes wrong", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     query.mockRejectedValueOnce(new Error("no database"));
     expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null, doorsOn: false });
     query.mockResolvedValueOnce({ rows: [] });
     expect(await getElfSettings()).toEqual(ELF_DEFAULTS);
     expect(ELF_DEFAULTS.schoolOn).toBe(false);
+    logged.mockRestore();
+  });
+
+  // Final review, minor 13: reading as switched off hides a broken database, so it says so in the log,
+  // in one line with the error's own message and nothing else (never a connection string).
+  it("logs one line, the error's message only, when the settings cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const err = Object.assign(new Error("connection lost"), { connectionString: "postgres://user:secret@example.org/db" });
+    query.mockRejectedValueOnce(err);
+    await getElfSettings();
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(logged.mock.calls[0]).toEqual(["elf settings could not be read, so the school reads as switched off:", "connection lost"]);
+    expect(JSON.stringify(logged.mock.calls)).not.toContain("secret");
+    // An empty table is not a failure: nothing is logged.
+    logged.mockClear();
+    query.mockResolvedValueOnce({ rows: [] });
+    await getElfSettings();
+    expect(logged).not.toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  // A database that cannot be reached at all fails with no message of its own (Node's AggregateError
+  // for a refused connection), so its code is logged instead, or failing that its kind.
+  it("logs the error's code, or its kind, when it has no message", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    query.mockRejectedValueOnce(Object.assign(new AggregateError([], ""), { code: "ECONNREFUSED" }));
+    await getElfSettings();
+    query.mockRejectedValueOnce(new AggregateError([], ""));
+    await getElfSettings();
+    expect(logged.mock.calls.map((c) => c[1])).toEqual(["ECONNREFUSED", "AggregateError"]);
+    logged.mockRestore();
   });
 
   it("changes only what it is given, with the row locked, and writes it in the audit log", async () => {

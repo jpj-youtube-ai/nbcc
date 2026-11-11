@@ -529,6 +529,59 @@ describe("recordWord", () => {
     expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.door.visited");
   });
 
+  // Final review, Important 4: one prize a family a year, even for two right words for two doors sent
+  // at once. The family's row is locked first, so a family's words are recorded one at a time, and the
+  // claim also needs the family to have won no door this year.
+  it("locks the family's row first, then claims the door only if the family has won no door this year", async () => {
+    tx({ claimRows: 1 });
+    await recordWord({ ...base, won: true });
+    const s = sqls();
+    expect(s[0]).toBe("BEGIN");
+    expect(s[1]).toBe("SELECT id FROM elf_families WHERE id = $1 FOR UPDATE");
+    expect(clientQuery.mock.calls[1][1]).toEqual([3]);
+    expect(s[2]).toMatch(/^UPDATE elf_doors /);
+    expect(s[2]).toContain("found_at IS NULL");
+    expect(s[2]).toMatch(/AND NOT EXISTS \(SELECT 1 FROM elf_doors (\w+) WHERE \1\.year = \$3 AND \1\.found_family_id = \$2\)/);
+    expect(clientQuery.mock.calls[2][1]).toEqual([base.at, 3, 2026, 7]);
+    expect(s.findIndex((q) => /INSERT INTO elf_visits/.test(q))).toBeGreaterThan(2);
+  });
+
+  it("makes a second claim this year a visit, as a lost race is, leaving the second door unfound", async () => {
+    // The family found door 6 a moment ago; door 7's own claim would win it too without the guard.
+    const foundBy = new Map<number, number>([[6, 3]]);
+    clientQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+      const s = String(sql);
+      if (/UPDATE elf_doors/.test(s)) {
+        const [, family, , door] = params as [Date, number, number, number];
+        const guarded = /NOT EXISTS \(SELECT 1 FROM elf_doors/.test(s);
+        if (foundBy.has(door) || (guarded && [...foundBy.values()].includes(family))) return { rows: [], rowCount: 0 };
+        foundBy.set(door, family);
+        return { rows: [], rowCount: 1 };
+      }
+      if (/INSERT INTO elf_visits/.test(s)) return { rows: [{ detective_id: 10 }, { detective_id: 11 }], rowCount: 2 };
+      return { rows: [], rowCount: 0 };
+    });
+    const r = await recordWord({ ...base, won: true });
+    expect(r.won).toBe(false);
+    expect(foundBy.has(7)).toBe(false);
+    expect(r.countsFrom).toEqual(base.shownAt);
+    expect(call(/INSERT INTO elf_visits/)![1]).toContain(false);
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.door.visited");
+  });
+
+  it("locks the family's row for the practice door too, which keeps its own rule", async () => {
+    clientQuery.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/UPDATE elf_practice/.test(s)) return { rows: [], rowCount: 1 };
+      if (/INSERT INTO elf_visits/.test(s)) return { rows: [{ detective_id: 10 }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const r = await recordWord({ ...base, year: 0, door: 0, detectiveIds: [10], won: true });
+    expect(r.won).toBe(true);
+    expect(sqls()[1]).toBe("SELECT id FROM elf_families WHERE id = $1 FOR UPDATE");
+    expect(call(/UPDATE elf_doors/)).toBeUndefined();
+  });
+
   it("counts a late typer from the time they typed, when that is after the shown time", async () => {
     tx({ claimRows: 0 });
     const late = at("2026-12-07T19:30:00Z");

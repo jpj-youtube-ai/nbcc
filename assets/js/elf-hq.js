@@ -5,7 +5,8 @@
  *
  *   1. The guess is saved without leaving the page, and the page says so, or says plainly why not.
  *   2. The countdown to the clue ticks, by the SERVER's clock, and when it reaches nought the page
- *      is fetched again, because the clue itself is never in the page before it is out.
+ *      is fetched again a few seconds later, because the clue itself is never in the page before it
+ *      is out. Each page waits a different while, so every family's HQ does not ask in one second.
  *
  * Nothing here decides anything: the server says whether a guess is allowed (decideGuess in
  * src/elf/guess.ts), and when it says no, its own words are shown.
@@ -16,6 +17,9 @@
   "use strict";
 
   var NOT_SAVED = "We could not save your guess. Check your signal and try again.";
+  // When a clue comes out, each page waits a second and up to five more before it is fetched again.
+  var RELOAD_AFTER_MS = 1000;
+  var RELOAD_SPREAD_MS = 5000;
 
   /** How long is left: "2:14:09", "14:09", "0:05", and "0:00" once the time has come. The same
    *  words as countdownWords in src/elf/words.ts. */
@@ -32,10 +36,12 @@
   function initHq(doc, win, opts) {
     var clock = opts && opts.now ? opts.now : function () { return Date.now(); };
     var reload = opts && opts.reload ? opts.reload : function () { win.location.reload(); };
+    var random = opts && opts.random ? opts.random : Math.random;
     var card = doc.querySelector(".elf-case");
     var served = card ? Date.parse(card.getAttribute("data-now")) : NaN;
     var skew = isNaN(served) ? 0 : served - clock();
     var fetched = false;
+    var reloading = null;
 
     // ---- the countdown -------------------------------------------------------------------
 
@@ -50,10 +56,11 @@
         // again: it would be drawn the same way, and fetched again, for ever.
         if (!(left > 0) && !(until <= served)) due = true;
       }
-      // The clue is out. It was never in this page, so fetch the page again, once.
+      // The clue is out. It was never in this page, so fetch the page again, once, after a different
+      // short while on each page, so every family's HQ does not ask in the same second.
       if (due && !fetched) {
         fetched = true;
-        reload();
+        reloading = win.setTimeout(reload, RELOAD_AFTER_MS + Math.floor(random() * RELOAD_SPREAD_MS));
       }
     }
 
@@ -129,6 +136,7 @@
       tick: tick,
       stop: function () {
         if (ticker) win.clearInterval(ticker);
+        if (reloading) win.clearTimeout(reloading);
       }
     };
   }

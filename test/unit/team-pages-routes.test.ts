@@ -14,6 +14,9 @@ import { meter, type FundraiserRecord } from "../../src/fundraising/model";
 const state = vi.hoisted(() => ({ fundraisingOn: true, fundraisers: [] as unknown[], members: [] as unknown[] }));
 
 vi.mock("../../src/db/ball", () => ({ getSettings: async () => Promise.reject(new Error("no database")) }));
+// Elf Detective School's card reads the school's switch, which with no database reads off (and says so
+// in the log): off here, without the read.
+vi.mock("../../src/elf/promo", async (original) => ({ ...(await original<Record<string, unknown>>()), elfSchoolIsOn: async () => false }));
 vi.mock("../../src/db/events", () => ({ getEventsSettings: async () => ({ pageOn: true }), listPageEvents: async () => [] }));
 vi.mock("../../src/db/site-pages", () => ({ resolveAlias: async () => null, getSeoOverrides: async () => new Map() }));
 vi.mock("../../src/db/fundraisers", () => ({

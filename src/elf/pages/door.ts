@@ -48,6 +48,16 @@ const CARVING_LINE = "Look at the shape cut out of the door. Can you guess the p
  *  hiding place is shown, not until the elf is found. */
 export const GUESS_LINE = "Type in your guess at Detective HQ before the hiding place is shown. Get it right and you have cracked the case.";
 
+/** Who wins what (decision 1): the finder wins the prize, and the elf stays at its place. */
+const PRIZE_LINE = "The first detective to find the elf and type the word on its tag wins the prize.";
+
+/** Today's door's two lines on the race and the guess while December's doors are off: wave 1's, word
+ *  for word, so no new words go live before the doors do. */
+const WAVE_ONE_TODAY = [
+  "Then the race is on. The first detective to find the elf and read its secret word wins it.",
+  "Lock in your guess before anyone finds it to crack the case.",
+] as const;
+
 /** The painted gold bow on today's door, as on a present. */
 const BOW = "/assets/img/elf/paper/deco/bow-gold.webp";
 
@@ -190,6 +200,8 @@ export function doorVersion(d: DoorView, now: Date): string {
     d.elfName,
     d.found ? [d.found.at.getTime(), d.found.by] : null,
     d.revealAt ? d.revealAt.getTime() : null,
+    // December's doors switched on change what today's door says.
+    d.doorsOn === true,
     open ? [placeWords(d), d.prize, d.collage, d.goneHome, d.factLine] : null,
     book ? [book.count, book.elves.map((e) => [e.pictureUrl, e.found, e.detective ? detectiveName(e.detective) : ""]), book.photos.map((p) => p.url)] : null,
   ];
@@ -230,12 +242,14 @@ export function doorTile(d: DoorView, now: Date): string {
   );
 }
 
+/** How many families cracked the case and have been there since (doorCounts counts a family once,
+ *  however many detectives it has). */
 function countLines(d: DoorView): string {
   if (!d.counts) return "";
   const cracked = count(d.counts.cracked);
   const visited = count(d.counts.visited);
   const crackedWords =
-    cracked === 0 ? "Nobody cracked this case" : `${cracked} ${cracked === 1 ? "detective" : "detectives"} cracked this case`;
+    cracked === 0 ? "Nobody cracked this case" : `${cracked} ${cracked === 1 ? "family" : "families"} cracked this case`;
   const visitedWords =
     visited === 0 ? "Nobody has been there yet" : `${visited} ${visited === 1 ? "has" : "have"} been there since`;
   return (
@@ -298,11 +312,16 @@ function detailParts(d: DoorView, kind: DoorKind, ctx: DoorContext): { meta: str
       body:
         line(`${elf}'s clue came out at ${clock}. ${elf} is hiding somewhere in NBCC's area.`) +
         bigPrize +
-        line("The first detective to find the elf and read its secret word wins it.") +
+        line(`${PRIZE_LINE} ${elf} stays there for everyone else to find.`) +
         `<p class="elf-detail__actions"><a class="elf-btn elf-btn--crimson elf-btn--s" href="${hq}">See the clue</a> ${joinIn}</p>`,
     };
   }
   if (kind === "today") {
+    // Today's door shows with December's doors off too, when it must read exactly as wave 1's did. Its
+    // elf is not named before its clue is out.
+    const race = d.doorsOn
+      ? line(`Then the race is on. ${PRIZE_LINE} The elf stays there for everyone else to find.`) + line(GUESS_LINE)
+      : line(WAVE_ONE_TODAY[0]) + line(WAVE_ONE_TODAY[1]);
     return {
       meta: `Door ${d.door} &middot; ${day} &middot; today`,
       title: "Today's elf is hiding",
@@ -310,8 +329,7 @@ function detailParts(d: DoorView, kind: DoorKind, ctx: DoorContext): { meta: str
       body:
         when(`Clue out at ${clock}, in ${countdown(d, ctx.now)}`) +
         bigPrize +
-        line("Then the race is on. The first detective to find the elf and read its secret word wins it.") +
-        line(GUESS_LINE) +
+        race +
         `<p class="elf-detail__actions"><a class="elf-btn elf-btn--crimson elf-btn--s" href="${hq}">Detective HQ</a> ${joinIn}</p>`,
     };
   }
@@ -376,13 +394,16 @@ function scrapbook(d: DoorView, kind: DoorKind): string {
   const book = d.scrapbook;
   const elves = book ? book.elves : [];
   const photos = book ? book.photos.map(photoPolaroid).filter((html) => html !== "") : [];
+  // A revealed door whose elf has gone home has nothing left to win: its end line says it has gone home.
   const lead =
     kind === "found"
       ? foundLine(d) + prizeLine(d)
-      : line(
-          `Nobody found ${elf} in time, so here is the hiding place. ${elf} is still there, and the first detective to type the word on its tag wins.`,
-          "elf-book__still",
-        );
+      : d.goneHome
+        ? line(`Nobody found ${elf} in time, so here is the hiding place.`, "elf-book__still")
+        : line(
+            `Nobody found ${elf} in time, so here is the hiding place. ${elf} is still there, and the first detective to type the word on its tag wins the prize.`,
+            "elf-book__still",
+          );
   const everyone = elves.length
     ? bookHeading("Everyone who found this elf", `<span class="elf-book__count">${things(count(book?.count), "picture")}</span>`) +
       `<div class="elf-collage">${elves.map(elfPolaroid).join("")}</div>`

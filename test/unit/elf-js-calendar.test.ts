@@ -173,6 +173,33 @@ describe("the countdown", () => {
     expect(counts.map((c) => c.textContent)).toEqual(counts.map(() => "2:29:59"));
   });
 
+  // Final review, Important 1: the browser may keep the feed for 15 seconds, and a kept copy repeats an
+  // earlier time. Setting the clock from it again would make every countdown jump back, so only a newer
+  // time from the server moves the clock.
+  it("follows only a newer time from the feed, so a copy the browser kept never makes a countdown jump", async () => {
+    const calendar = load();
+    await calendar.ready;
+    const cd = () => $("#door-7 .elf-cd").textContent;
+    expect(cd()).toBe("2:30:00");
+    // Ten seconds on, the server answers with its own time.
+    clock += 10_000;
+    server = { ...server, now: new Date(AFTERNOON.getTime() + 10_000) };
+    await calendar.poll();
+    calendar.tick();
+    expect(cd()).toBe("2:29:50");
+    // Five seconds after that, the browser hands back the same answer from its cache.
+    clock += 5_000;
+    await calendar.poll();
+    calendar.tick();
+    expect(cd()).toBe("2:29:45");
+    // A newer answer still moves the clock: this phone's clock has slipped a second behind.
+    clock += 4_000;
+    server = { ...server, now: new Date(AFTERNOON.getTime() + 20_000) };
+    await calendar.poll();
+    calendar.tick();
+    expect(cd()).toBe("2:29:40");
+  });
+
   it("stops at nought and asks for news the moment it gets there", async () => {
     const calendar = load();
     clock += 3 * 3600 * 1000;
@@ -264,6 +291,62 @@ function withPhotos(): CalendarView {
   ];
   return view;
 }
+
+/** The calendar with door 4's elf at its real address, in its room and its scrapbook, and a photo. */
+function withDoorElves(): CalendarView {
+  const view = calendarView(AFTERNOON);
+  const four = view.doors[3];
+  const elf = "/elf/door/4/elf/41.png";
+  four.collage = [elf];
+  four.scrapbook = { elves: [{ ...four.scrapbook!.elves[0], pictureUrl: elf }], photos: [{ token: "k3m9p2x7w4qa", url: "/elf/door/4/photo/k3m9p2x7w4qa.jpg" }], count: 2 };
+  return view;
+}
+
+// Final review, Important 5: the server draws the elves on the doors one at a time and says it is busy
+// (503) when too many are waiting. An elf picture that fails is asked for again a little later, twice
+// at most. A photo is never asked for again: it is there, or it is not.
+describe("a door elf that could not be drawn just now", () => {
+  it("is asked for again after two seconds, then after five more, and then left", () => {
+    vi.useFakeTimers();
+    try {
+      load(withDoorElves());
+      const img = detail(4).querySelector<HTMLImageElement>(".elf-collage img")!;
+      expect(img.getAttribute("src")).toBe("/elf/door/4/elf/41.png");
+      img.dispatchEvent(new Event("error"));
+      vi.advanceTimersByTime(1999);
+      expect(img.getAttribute("src")).toBe("/elf/door/4/elf/41.png");
+      vi.advanceTimersByTime(1);
+      expect(img.getAttribute("src")).toBe("/elf/door/4/elf/41.png?try=1");
+      img.dispatchEvent(new Event("error"));
+      vi.advanceTimersByTime(4999);
+      expect(img.getAttribute("src")).toBe("/elf/door/4/elf/41.png?try=1");
+      vi.advanceTimersByTime(1);
+      expect(img.getAttribute("src")).toBe("/elf/door/4/elf/41.png?try=2");
+      img.dispatchEvent(new Event("error"));
+      vi.advanceTimersByTime(60_000);
+      expect(img.getAttribute("src")).toBe("/elf/door/4/elf/41.png?try=2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is asked for again in an open door's room too, and a photo never is", () => {
+    vi.useFakeTimers();
+    try {
+      load(withDoorElves());
+      const mini = door(4).querySelector<HTMLImageElement>(".elf-mini img")!;
+      mini.dispatchEvent(new Event("error"));
+      vi.advanceTimersByTime(2000);
+      expect(mini.getAttribute("src")).toBe("/elf/door/4/elf/41.png?try=1");
+      const photo = detail(4).querySelector<HTMLImageElement>(".elf-photos img")!;
+      photo.dispatchEvent(new Event("error"));
+      vi.advanceTimersByTime(10_000);
+      expect(photo.getAttribute("src")).toBe("/elf/door/4/photo/k3m9p2x7w4qa.jpg");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe("shutting a door from its scrapbook", () => {
   it("shuts the scrapbook and puts focus back on the door", () => {
@@ -374,6 +457,18 @@ describe("a family's own marks", () => {
     expect([3, 5, 9].map((n) => door(n).classList.contains("is-done"))).toEqual([false, false, false]);
   });
 
+  // Final review, Important 3: a snow day counts as done for everyone, so its door wears the holly too.
+  it("give a snowed in door the painted holly too, with no mark of its own", async () => {
+    const view = calendarView(AFTERNOON);
+    view.doors[4] = { ...view.doors[4], state: "snow", place: null, found: null, scrapbook: null, collage: [], counts: null, factLine: null };
+    me = { status: 200, body: { doors: [{ door: 5, cracked: false, visited: false, snow: true }] } };
+    const calendar = load(view);
+    await calendar.ready;
+    expect(door(5).classList.contains("is-done")).toBe(true);
+    expect(door(5).querySelectorAll(".elf-door__marks .elf-mark").length).toBe(0);
+    expect([3, 6, 9].map((n) => door(n).classList.contains("is-done"))).toEqual([false, false, false]);
+  });
+
   it("are read out with the door", async () => {
     me = { status: 200, body: { doors: [{ door: 1, cracked: true, visited: true }, { door: 2, cracked: true, visited: false }] } };
     const calendar = load();
@@ -391,9 +486,10 @@ describe("a family's own marks", () => {
     await calendar.ready;
     const mine = (n: number) => detail(n).querySelector<HTMLElement>(".elf-detail__mine")!;
     expect(words(mine(1))).toBe("Your family cracked this case and has been there. Both marks collected.");
-    expect(words(mine(2))).toBe("Your family cracked this case. Visit before the Night Before Christmas for your candy cane too.");
+    // Final review, minor 12: an open door can be visited any day in December, as the calendar's steps say.
+    expect(words(mine(2))).toBe("Your family cracked this case. Visit any day in December for your candy cane too.");
     expect(words(mine(4))).toBe("Your family has been there. Candy cane collected.");
-    expect(words(mine(3))).toBe("Not done yet. Visit before the Night Before Christmas for your candy cane.");
+    expect(words(mine(3))).toBe("Not done yet. Visit any day in December for your candy cane.");
     expect(mine(1).hidden).toBe(false);
     expect(mine(9).hidden).toBe(true);
     // The general hint would only repeat the family's own line, so it steps aside.

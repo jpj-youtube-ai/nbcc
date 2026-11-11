@@ -297,3 +297,82 @@ describe("the migration for the game's tables", () => {
     expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf(before));
   });
 });
+
+describe("the migration for the alert and send tables", () => {
+  const FILE = "1791200000450_elf-alerts.js";
+
+  type Call = { fn: string; args: Any[] };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Any = any;
+  function callsOf(way: "up" | "down"): Call[] {
+    const calls: Call[] = [];
+    const pgm: Any = new Proxy(
+      { func: (s: string) => ({ func: s }) },
+      { get: (t: Any, fn: string) => t[fn] ?? ((...args: Any[]) => calls.push({ fn, args })) },
+    );
+    require(resolve(DIR, FILE))[way](pgm);
+    return calls;
+  }
+  const table = (name: string) => callsOf("up").find((c) => c.fn === "createTable" && c.args[0] === name)!;
+  const cols = (name: string) => Object.keys(table(name).args[1]).sort();
+
+  it("creates exactly the three tables, with the agreed columns", () => {
+    const made = callsOf("up").filter((c) => c.fn === "createTable").map((c) => c.args[0]);
+    expect(made).toEqual(["elf_head_elves", "elf_alerts", "elf_sends"]);
+    expect(cols("elf_head_elves")).toEqual(["user_id", "mobile", "alerts_on", "updated_at", "updated_by"].sort());
+    expect(cols("elf_alerts")).toEqual(
+      ["id", "kind", "sent_at", "year", "door", "emails", "texts", "texts_failed"].sort(),
+    );
+    expect(cols("elf_sends")).toEqual(["kind", "key", "claimed_at", "sent_at", "attempts", "last_error"].sort());
+  });
+
+  it("keeps a head elf's mobile as E.164 and the alerts on to start with", () => {
+    const c = table("elf_head_elves").args[1];
+    expect(c.user_id).toMatchObject({ type: "integer", primaryKey: true, references: "users", onDelete: "CASCADE" });
+    expect(c.mobile).toMatchObject({ type: "text", check: "mobile IS NULL OR mobile ~ '^\\+447[0-9]{9}$'" });
+    expect(c.alerts_on).toMatchObject({ type: "boolean", notNull: true, default: true });
+    expect(c.updated_at).toMatchObject({ type: "timestamptz", notNull: true });
+    expect(c.updated_by).toEqual({ type: "text" });
+  });
+
+  it("records each alert with its kind, counts and the names whose text failed", () => {
+    const c = table("elf_alerts").args[1];
+    expect(c.kind).toMatchObject({ type: "text", notNull: true, check: "kind IN ('photo', 'test')" });
+    expect(c.year).toMatchObject({ type: "integer", notNull: true });
+    expect(c.door).toEqual({ type: "integer" });
+    expect(c.emails).toMatchObject({ type: "integer", notNull: true, default: 0 });
+    expect(c.texts).toMatchObject({ type: "integer", notNull: true, default: 0 });
+    expect(c.texts_failed).toMatchObject({ type: "text[]", notNull: true, default: "{}" });
+  });
+
+  it("claims each timed send once, keyed by kind and key", () => {
+    const t = table("elf_sends");
+    expect(t.args[1].kind).toMatchObject({ type: "text", notNull: true });
+    expect(t.args[1].key).toMatchObject({ type: "text", notNull: true });
+    expect(t.args[1].attempts).toMatchObject({ type: "integer", notNull: true, default: 1 });
+    expect(t.args[2].constraints).toMatchObject({ primaryKey: ["kind", "key"] });
+  });
+
+  it("indexes alerts and sends by kind and when sent", () => {
+    const idx = callsOf("up").filter((c) => c.fn === "createIndex").map((c) => [c.args[0], c.args[1]]);
+    expect(idx).toEqual(
+      expect.arrayContaining([
+        ["elf_alerts", ["kind", "sent_at"]],
+        ["elf_sends", ["kind", "sent_at"]],
+      ]),
+    );
+  });
+
+  it("can be taken back", () => {
+    expect(callsOf("down").map((c) => [c.fn, c.args[0]])).toEqual([
+      ["dropTable", "elf_sends"],
+      ["dropTable", "elf_alerts"],
+      ["dropTable", "elf_head_elves"],
+    ]);
+  });
+
+  it("sorts after the game's migration", () => {
+    const before = "1791200000440_elf-game.js";
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf(before));
+  });
+});

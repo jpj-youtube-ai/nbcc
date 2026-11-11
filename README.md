@@ -11871,6 +11871,14 @@ switched on, and only from **10am on Friday 13 November 2026** (TASK-613, below)
   marked "Not live yet" until the school is on, so a code for a letter home can be made before then.
   Its page code carries `utm_campaign=elf`.
 
+**The grand prize on the front page (TASK-613).** Jaimie, 11 November 2026: the grand prize, judged
+by the Head Elf, must be clear on the front page. The calendar's welcome (`/elf`,
+`src/elf/pages/calendar.ts`) has it straight under the lede, in the rules' words, with December's doors
+off too: "Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest
+elf at home for the grand prize, judged by" the Head Elf, named as the rules name her. The Head Elf is a
+real person, so the tests check the line through its other words ("grand prize", "our Head Elf") and
+against the name the rules page gives, and never carry her name.
+
 **Open early, linked from Friday 10am (TASK-613).** Jaimie switches Elf Detective School on the
 evening of 11 November, so a teacher with the link in an email can look around and enrol: every
 `/elf` page answers the moment it is switched on. But nothing on the site links to it until the big

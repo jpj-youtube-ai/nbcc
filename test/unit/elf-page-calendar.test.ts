@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { calendarStatus, renderCalendarPage } from "../../src/elf/pages/calendar";
+import { renderRulesPage } from "../../src/elf/pages/rules";
+import { ELF_DEFAULTS } from "../../src/elf/settings";
 import type { CalendarView } from "../../src/elf/pages/types";
 import { AFTERNOON, at, calendarView as view } from "./elf-fixtures";
 
@@ -243,6 +245,32 @@ describe("the calendar page", () => {
 
   it("can be listed by search engines", () => {
     expect(page(view(AFTERNOON)).querySelector('meta[name="robots"]')).toBeNull();
+  });
+});
+
+// TASK-613 (Jaimie, 11 November 2026): the grand prize, judged by the Head Elf, clear on the front page.
+// The Head Elf is a real person. The product's words name her, as the rules do, but no test carries her
+// name: the line is checked through its other words, and against the name the rules page gives.
+describe("the grand prize on the front page", () => {
+  const LINE = /^Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest elf at home for the grand prize, judged by ([A-Z][a-z]+), our Head Elf\.$/;
+  const prize = (doc: Document) => doc.querySelector(".elf-top__prize");
+
+  it("says how to enter and who judges it, straight under the welcome", () => {
+    const doc = page(view(AFTERNOON));
+    expect(words(prize(doc))).toMatch(LINE);
+    expect(prize(doc)!.previousElementSibling!.classList.contains("lede")).toBe(true);
+    expect(prize(doc)!.closest(".elf-top__words")).not.toBeNull();
+  });
+
+  it("says it with December's doors off too", () => {
+    expect(words(prize(page(view(at("2026-11-20T10:00:00.000Z"), {}, { doorsOn: false }))))).toMatch(LINE);
+  });
+
+  it("names the same Head Elf the rules do", () => {
+    const judge = LINE.exec(words(prize(page(view(AFTERNOON)))))?.[1];
+    const rules = renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } });
+    expect(judge).toBeTruthy();
+    expect(rules).toContain(`judged by ${judge}, Head Elf`);
   });
 });
 

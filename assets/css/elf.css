@@ -82,6 +82,8 @@
 /* The year's class on a torn holly label, tucked under the school's name. */
 .elf-top .elf-top__class { margin: 0 0 0 clamp(20px, 6vw, 46px); }
 .elf-top .lede { margin-top: 18px; }
+/* The grand prize, under the welcome (TASK-613): the lede's measure, in the page's own words size. */
+.elf-top__prize { max-width: 54ch; }
 .elf-top__actions { display: flex; flex-wrap: wrap; gap: 14px 16px; margin: 24px 0 0; }
 @media (min-width: 981px) {
   .elf-top__grid { grid-template-columns: 1.15fr 0.85fr; }

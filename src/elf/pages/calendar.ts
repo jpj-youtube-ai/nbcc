@@ -178,12 +178,15 @@ export function renderCalendarPage(view: CalendarView, servedAt: Date = view.now
       `<h3>${s.title}</h3><p>${s.words}</p></li>`,
   ).join("");
 
+  // The grand prize under the welcome (TASK-613, Jaimie, 11 November 2026: it must be clear on the front
+  // page), in the words the rules use for it (src/elf/pages/rules.ts), with the doors off too.
   const main = `  <section class="page-top elf-top" aria-labelledby="elf-heading">
     <div class="wrap elf-top__grid">
       <div class="elf-top__words">
         <h1 id="elf-heading">${schoolLogo(260, SCHOOL_NAME, "elf-top__logo")}</h1>
         <p class="elf-label elf-top__class">Class of ${view.year}</p>
         <p class="lede">24 cheeky elves have escaped from the Elves' Workshop. Find them all by the Night Before Christmas.</p>
+        <p class="elf-top__prize">Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest elf at home for the grand prize, judged by Jodie, our Head Elf.</p>
         <p class="elf-top__actions">
           <a class="elf-btn elf-btn--crimson" href="${join}">Join Elf Detective School</a>
           <a class="elf-btn" href="${hq}">Detective HQ</a>

@@ -32,6 +32,7 @@ import { lastAlert, listHeadElves, recordAlert, setMyAlerts } from "../db/elf-al
 import { countPhotosWaiting } from "../db/elf-photos";
 import { sendText, smsConfigured } from "../clients/sms";
 import { sendElfTestAlert } from "../clients/email";
+import { realElfDeps, runElfTick } from "../elf/worker";
 import { FESTIVE_SURNAMES } from "../elf/names";
 import { PRACTICE_ELF_NAME } from "../elf/practice-words";
 import { hashElfToken, newElfToken } from "../elf/session";
@@ -62,6 +63,8 @@ function forAdmin(s: ElfSettings) {
 //                                   words of the text and the email as they are sent (elf: view)
 //   PATCH /api/admin/elf/alerts/me  change only my own mobile and tick (elf: view)
 //   POST  /api/admin/elf/alerts/test  send me a test alert, by email and by text (elf: view)
+//   POST  /api/admin/elf/worker/tick  run the elf worker's tick once at { at } (elf: edit; outside
+//                                   production only, 404 in production): how the BDD moves it to midday
 //
 // The school has its own permission section, "elf" (src/admin/permissions.ts): admins by role, a head
 // elf given it from the Team matrix. The screen is assets/js/admin/elf-hq.js. Unit tested in
@@ -650,6 +653,29 @@ export async function postAdminElfAlertsTest(req: Request, res: Response): Promi
   }
 }
 
+// ---- the elf worker's tick, for the BDD (outside production only) ----
+
+const tickSchema = z.object({ at: z.string().refine((s) => !Number.isNaN(Date.parse(s))) }).strict();
+
+/** Runs the elf worker's tick once, at the moment given (elf: edit). Outside production only: in production
+ *  it is not found, for anyone. It is how the BDD moves the worker to midday, so quiet hours never bite; the
+ *  claims in elf_sends keep it and the worker's own timer from ever sending the same thing twice. */
+export async function postAdminElfWorkerTick(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  if (config.NODE_ENV === "production") return res.status(404).json({ error: "Not found" });
+  const claims = await authorizeSection(req, res, "elf", "edit");
+  if (!claims) return;
+  const parsed = tickSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json(BAD_ID);
+  try {
+    await runElfTick(new Date(parsed.data.at), realElfDeps());
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("admin elf worker tick failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
 adminElfRouter.post("/api/admin/elf/preview", postAdminElfPreview);
 adminElfRouter.delete("/api/admin/elf/preview", deleteAdminElfPreview);
 adminElfRouter.get("/api/admin/elf/settings", getAdminElfSettings);
@@ -669,3 +695,4 @@ adminElfRouter.post("/api/admin/elf/families/:id/word-tries/clear", postAdminElf
 adminElfRouter.get("/api/admin/elf/alerts", getAdminElfAlerts);
 adminElfRouter.patch("/api/admin/elf/alerts/me", patchAdminElfAlertsMe);
 adminElfRouter.post("/api/admin/elf/alerts/test", postAdminElfAlertsTest);
+adminElfRouter.post("/api/admin/elf/worker/tick", postAdminElfWorkerTick);

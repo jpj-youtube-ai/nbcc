@@ -9,7 +9,11 @@ const sharp = require("sharp");
 // year's December with December's doors off, and clear the practice door); the staff from "an admin user
 // {string} with role {string} and password {string}" (features/steps/admin-api.steps.js, whose @admin
 // hooks clear them); next year's door rows from "has opened the doors list"
-// (features/steps/elf-admin-doors.steps.js). Every family, person and place here is invented.
+// (features/steps/elf-admin-doors.steps.js); the email log count from "once the request has finished,
+// {int} {string} email(s) went to {string}" (features/steps/elf-admin.steps.js). The elf worker ticks in
+// the app every 30 seconds on the real clock, in CI too; the tick hook (POST /api/admin/elf/worker/tick)
+// runs it once more at a time a step gives, and its claims in elf_sends mean a send goes once whichever
+// tick sends it. Every family, person and place here is invented.
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const nextYear = () => new Date().getFullYear() + 1;
@@ -21,6 +25,11 @@ const nextYear = () => new Date().getFullYear() + 1;
 // year back) leaves nothing of that December behind either.
 Before({ tags: "@elf-game" }, async function () {
   await pool.query("DELETE FROM elf_doors WHERE year = $1", [nextYear()]);
+  // Every scenario starts with no photo alert: when the next one may go is worked out from the last one
+  // (and its claim), and the alerts to this feature's head elf are counted in the email log.
+  await pool.query("DELETE FROM elf_alerts WHERE kind = 'photo'");
+  await pool.query("DELETE FROM elf_sends WHERE kind = 'photo-alert'");
+  await pool.query("DELETE FROM email_log WHERE recipient LIKE '%game.admin.bdd@example.com'");
   const r = await pool.query("SELECT preview_hash FROM elf_settings WHERE id = 1");
   this.gamePreviewBefore = r.rows[0] ? { hash: r.rows[0].preview_hash } : null;
 });
@@ -305,9 +314,11 @@ Then("the word is a visit, and the card says {string}", function (words) {
 When("the family {string} sends a photo to the practice door, saying yes to showing it", async function (email) {
   const practice = await practiceRow();
   const jpeg = await tinyJpeg();
+  this.gamePhotoFrom = email;
   await asFamily(this, familyOf(this, email), "POST", `/api/elf/p/${practice.poster_code}/photo`, { mime: "image/jpeg", dataBase64: jpeg.toString("base64"), consent: true });
 });
 
+// The photo is kept as the family's that sent it, so a scenario with two families' photos can name each.
 Then("the photo is waiting, with a token", async function () {
   assert.equal(this.gameStatus, 202, sentence(this));
   assert.equal(this.gameBody.status, "waiting", sentence(this));
@@ -316,7 +327,16 @@ Then("the photo is waiting, with a token", async function () {
   const r = await pool.query("SELECT id FROM elf_photos WHERE token = $1 AND year = 0 AND door = 0", [this.gamePhotoToken]);
   assert.ok(r.rows[0], "the photo was kept as the practice door's");
   this.gamePhotoId = r.rows[0].id;
+  this.gamePhotos = this.gamePhotos || {};
+  this.gamePhotos[this.gamePhotoFrom] = { token: this.gamePhotoToken, id: this.gamePhotoId };
 });
+
+/** The photo a family sent in this scenario. */
+function photoFrom(world, email) {
+  const photo = (world.gamePhotos || {})[email];
+  assert.ok(photo, `${email} has sent no photo in this scenario`);
+  return photo;
+}
 
 // Asked for by the browser that sent it, holding the preview link, so only the photo's own rules answer:
 // it waits for a head elf, and the practice door's place is still hidden.
@@ -340,6 +360,106 @@ Then("the family's marks are empty: the practice door never counts", function ()
 When("{string} with password {string} clears the practice", async function (email, password) {
   const answer = await asHeadElf(email, password, "DELETE", "/api/admin/elf/practice");
   assert.equal(answer.practice, null, JSON.stringify(answer));
+});
+
+// ---- the photo check, the alerts and the elf worker --------------------------------------------------------
+
+When("{string} with password {string} gives themselves the mobile {string}", async function (email, password, mobile) {
+  const answer = await asHeadElf(email, password, "PATCH", "/api/admin/elf/alerts/me", { mobile });
+  const me = (answer.people || []).find((p) => p.me);
+  assert.ok(me && me.mobile, `no mobile kept: ${JSON.stringify(answer.people)}`);
+});
+
+/** A clock time today in London, as a moment: London is UTC in winter and an hour ahead in summer, so the
+ *  same clock time in UTC is moved by however far London's clock reads from it. For daytime times only. */
+function todayInLondon(clock) {
+  const [hours, minutes] = clock.split(":").map(Number);
+  const partsOf = (format, at) => Object.fromEntries(format.formatToParts(at).map((p) => [p.type, p.value]));
+  const date = partsOf(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }), new Date());
+  const guess = Date.UTC(Number(date.year), Number(date.month) - 1, Number(date.day), hours, minutes);
+  const shown = partsOf(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }), new Date(guess));
+  const drift = Number(shown.hour) * 60 + Number(shown.minute) - (hours * 60 + minutes);
+  return new Date(guess - drift * 60_000);
+}
+
+/** Runs the elf worker's tick once, at a moment of the step's choosing (outside production only). */
+async function tickAt(email, password, at) {
+  const answer = await asHeadElf(email, password, "POST", "/api/admin/elf/worker/tick", { at: at.toISOString() });
+  assert.deepEqual(answer, { ok: true });
+}
+
+When("{string} with password {string} runs the elf worker at {string} today, London time", async function (email, password, clock) {
+  await tickAt(email, password, todayInLondon(clock));
+});
+
+// February is on GMT, so midday in London is midday UTC. 1 February is past the 31 January that clears
+// last year's photos, whatever day this runs.
+When("{string} with password {string} runs the elf worker at midday on 1 February this year", async function (email, password) {
+  await tickAt(email, password, new Date(Date.UTC(new Date().getFullYear(), 1, 1, 12, 0)));
+});
+
+// The alert's record is written just after its emails and texts, by whichever tick sent it: so the last
+// alert is read until it is there.
+Then("{string} with password {string} sees the last photo alert, with no text that failed", async function (email, password) {
+  let answer = {};
+  for (let i = 0; i < 20; i++) {
+    answer = await asHeadElf(email, password, "GET", "/api/admin/elf/alerts");
+    if (answer.lastAlert) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  assert.ok(answer.lastAlert, `no photo alert went: ${JSON.stringify(answer)}`);
+  assert.deepEqual(answer.lastAlert.textsFailed, []);
+});
+
+When("{string} with password {string} reads the photos waiting", async function (email, password) {
+  this.gamePhotosAnswer = await asHeadElf(email, password, "GET", "/api/admin/elf/photos");
+});
+
+Then("the photos waiting are the practice door's, from {string} and {string}", function (one, other) {
+  const waiting = (this.gamePhotosAnswer && this.gamePhotosAnswer.waiting) || [];
+  for (const email of [one, other]) {
+    const photo = photoFrom(this, email);
+    const row = waiting.find((w) => w.id === photo.id);
+    assert.ok(row, `${email}'s photo is not waiting: ${JSON.stringify(waiting.map((w) => w.id))}`);
+    assert.equal(row.token, photo.token);
+    assert.equal(row.door, 0);
+    assert.equal(row.practice, true);
+  }
+});
+
+When("{string} with password {string} approves the photo from {string}", async function (email, password, family) {
+  this.gameHeadElf = { email, password };
+  const answer = await asHeadElf(email, password, "POST", `/api/admin/elf/photos/${photoFrom(this, family).id}/approve`);
+  assert.deepEqual(answer, { ok: true });
+});
+
+Then("the photo log's newest step for the photo from {string} starts {string}", async function (family, words) {
+  assert.ok(this.gameHeadElf, "a head elf checked a photo first");
+  const photo = photoFrom(this, family);
+  const answer = await asHeadElf(this.gameHeadElf.email, this.gameHeadElf.password, "GET", "/api/admin/elf/photos");
+  const row = (answer.log || []).find((r) => r.id === photo.id);
+  assert.ok(row, `the photo log has no line for ${family}'s photo`);
+  const newest = row.steps[row.steps.length - 1];
+  assert.ok(newest && String(newest.words).startsWith(words), JSON.stringify(row.steps));
+});
+
+// Asked for by a browser holding the preview link, so only the photo's own rules answer.
+When("the family {string} asks for the photo from {string}", async function (email, from) {
+  await asFamily(this, familyOf(this, email), "GET", `/elf/door/0/photo/${photoFrom(this, from).token}.jpg`);
+});
+
+When("the family {string} takes its photo down from the practice door's poster", async function (email) {
+  const practice = await practiceRow();
+  await asFamily(this, familyOf(this, email), "DELETE", `/api/elf/p/${practice.poster_code}/photo`);
+});
+
+Then("the photo from {string} is taken down, with its bytes gone", async function (family) {
+  const photo = photoFrom(this, family);
+  const r = await pool.query("SELECT status, taken_down_by FROM elf_photos WHERE id = $1", [photo.id]);
+  assert.equal(r.rows[0].status, "taken-down");
+  assert.equal(r.rows[0].taken_down_by, "family");
+  const files = await pool.query("SELECT count(*)::int AS n FROM elf_photo_files WHERE photo_id = $1", [photo.id]);
+  assert.equal(files.rows[0].n, 0, "the photo's bytes are still there");
 });
 
 // ---- a real door, played in a December that is over ----------------------------------------------------
@@ -437,21 +557,26 @@ When("the family {string} sends a photo to door {int}, saying yes to showing it"
   await asFamily(this, familyOf(this, email), "POST", `/api/elf/p/${await posterCodeOf(door)}/photo`, { mime: "image/jpeg", dataBase64: jpeg.toString("base64"), consent: true });
 });
 
-Then("the photo for door {int} is waiting, with a token", async function (door) {
+// The answer says the photo is waiting. Its row is not checked for that: a December that is over is past
+// its 31 January, so the elf worker's own tick may clear it away the moment it is kept.
+Then("the photo for door {int} was kept, with a token", async function (door) {
   assert.equal(this.gameStatus, 202, sentence(this));
   assert.equal(this.gameBody.status, "waiting", sentence(this));
   assert.match(String(this.gameBody.token), /^[a-km-np-z2-9]{12}$/);
   this.gamePhotoToken = this.gameBody.token;
-  const r = await pool.query("SELECT id, status FROM elf_photos WHERE token = $1 AND year = $2 AND door = $3", [this.gamePhotoToken, await schoolYear(), door]);
+  const r = await pool.query("SELECT id FROM elf_photos WHERE token = $1 AND year = $2 AND door = $3", [this.gamePhotoToken, await schoolYear(), door]);
   assert.ok(r.rows[0], `the photo was not kept as door ${door}'s`);
-  assert.equal(r.rows[0].status, "waiting");
   this.gamePhotoId = r.rows[0].id;
 });
 
-// The photo check is Plan 2b's: a head elf's yes is put in here as it would be kept.
-When("a head elf approves that photo, by SQL", async function () {
+// The January clear out: the row stays for the log, reading deleted, and its bytes are gone.
+Then("that photo has been cleared away, with its bytes gone", async function () {
   assert.ok(this.gamePhotoId, "a photo was sent first");
-  await pool.query("UPDATE elf_photos SET status = 'approved', decided_at = now(), decided_by = $2 WHERE id = $1", [this.gamePhotoId, "admin:alex.game.admin.bdd@example.com"]);
+  const r = await pool.query("SELECT status, deleted_at FROM elf_photos WHERE id = $1", [this.gamePhotoId]);
+  assert.equal(r.rows[0].status, "deleted");
+  assert.ok(r.rows[0].deleted_at, "the photo has no time it was deleted");
+  const files = await pool.query("SELECT count(*)::int AS n FROM elf_photo_files WHERE photo_id = $1", [this.gamePhotoId]);
+  assert.equal(files.rows[0].n, 0, "the photo's bytes are still there");
 });
 
 When("someone signed out asks for that photo at door {int}", async function (door) {
@@ -520,33 +645,10 @@ Then("door {int}'s scrapbook shows {string} first, then {string}", async functio
   assert.ok(collage[1].includes("FOUND FIRST!"));
 });
 
-Then("door {int} on the calendar shows that photo in its row of photos", async function (door) {
-  await asFamily(this, null, "GET", `/api/elf/door/${door}`);
-  const detail = String((this.gameBody && this.gameBody.detail) || "");
-  const row = /<div class="elf-photos">([\s\S]*?)<\/div>/.exec(detail);
-  assert.ok(row, `door ${door} has no row of photos: ${sentence(this)}`);
-  assert.ok(row[1].includes(`/elf/door/${door}/photo/${this.gamePhotoToken}.jpg`), row[1]);
-  // A photo never has a name beside it.
-  assert.doesNotMatch(row[1], /figcaption|Detective/);
-});
-
 Then("door {int} was snowed in automatically", async function (door) {
   const r = await pool.query("SELECT snow_day_at, snow_day_by FROM elf_doors WHERE year = $1 AND door = $2", [await schoolYear(), door]);
   assert.ok(r.rows[0] && r.rows[0].snow_day_at, `door ${door} was not snowed in`);
   assert.equal(r.rows[0].snow_day_by, "automatic");
-});
-
-When("the family {string} takes that photo down from the poster page of door {int}", async function (email, door) {
-  await asFamily(this, familyOf(this, email), "DELETE", `/api/elf/p/${await posterCodeOf(door)}/photo`);
-});
-
-Then("that photo is taken down, with its bytes gone", async function () {
-  assert.ok(this.gamePhotoId, "a photo was sent first");
-  const r = await pool.query("SELECT status, taken_down_by FROM elf_photos WHERE id = $1", [this.gamePhotoId]);
-  assert.equal(r.rows[0].status, "taken-down");
-  assert.equal(r.rows[0].taken_down_by, "family");
-  const files = await pool.query("SELECT count(*)::int AS n FROM elf_photo_files WHERE photo_id = $1", [this.gamePhotoId]);
-  assert.equal(files.rows[0].n, 0, "the photo's bytes are still there");
 });
 
 Then("the family's marks say door {int} is cracked and visited, and door {int} is snowed in", function (done, snowed) {

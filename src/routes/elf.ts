@@ -64,6 +64,7 @@ import { makePublicCalendar } from "../elf/public-calendar";
 import type { Scrapbook } from "../elf/scrapbook";
 import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeState } from "../elf/wardrobe";
 import { calendarViewFor, hqViewFor, lookFromForm, marksOf, posterViewFor, todayRunOf, wardrobeViewFor, type DetectiveRow, type FamilyRow } from "../elf/views";
+import { realElfDeps, sendProudMoments, type WordMoment } from "../elf/worker";
 import { elfPng, elfPngKey } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
@@ -938,9 +939,21 @@ function earnedBy(before: DoorsDone, door: Door | 0): { doorsDone: number; rank:
   };
 }
 
+/** The proud moments after a word (src/elf/worker.ts): only once the word's answer has gone, and best
+ *  effort, so nothing here ever fails the word, holds up its answer, or is left as a promise nobody handles.
+ *  The moment is worked out in here too, so even a failure building it is only logged. */
+async function proudAfterWord(moment: () => WordMoment): Promise<void> {
+  try {
+    await sendProudMoments(moment(), realElfDeps());
+  } catch (err) {
+    console.error("elf proud moments failed:", err instanceof Error ? err.message : err);
+  }
+}
+
 /** The word on the elf's tag, which claims the elf and stamps a visit (src/elf/claim.ts). JSON for the
  *  page's script, or the poster page drawn again for the plain form. Every answer is awaited inside the
- *  try, so a failure while drawing one is a 500, never a promise that nothing handles. */
+ *  try, so a failure while drawing one is a 500, never a promise that nothing handles. After a word that
+ *  stamped someone, the proud moments go once the answer has (proudAfterWord). */
 export async function postWord(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const json = wantsJson(req);
@@ -1048,6 +1061,24 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
     // shown, so the family that loses the race counts from then.
     const shown = shownAt(won ? { ...run.facts, foundAt: now } : run.facts);
     const result = await recordWord({ year, door, familyId: family.id, detectiveIds: chosen.map((d) => d.id), won, shownAt: shown, at: now, looks });
+    // A visit that counts only from later (its place still hidden) promises nothing that unlocks only
+    // then, no promotion and no new things: the "It counts from" line says when it counts.
+    const later = result.countsFrom.getTime() > now.getTime();
+    // What the word gave, for the proud moments: each detective it stamped, with this door counted only
+    // once the visit counts (the sweep sends a promotion that comes from later).
+    const moment = (): WordMoment => ({
+      year,
+      door,
+      elfName: run.elfName,
+      family: { id: family.id, grownUpName: family.grownUpName, email: family.email },
+      won: result.won,
+      stamped: result.stamped.flatMap((id) => {
+        const d = family.detectives.find((x) => x.id === id);
+        if (!d) return [];
+        const was = before.get(id) ?? NO_DOORS;
+        return [{ id, name: nameOf(d), doorsDone: later ? was : { ...was, visited: [...(was.visited ?? []), door] } }];
+      }),
+    });
     let winnerAt: Date | null = result.won ? now : null;
     if (won && !result.won) {
       // Another word was first, in the same moment. If it was this family's own (a double tap), this is
@@ -1055,11 +1086,12 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
       const fresh = door === 0 ? await loadPractice(now) : await loadDoorRun(year, door, now);
       if (fresh && fresh.foundFamilyId === family.id) winnerAt = fresh.facts.foundAt ?? now;
     }
-    if (winnerAt) return await answer(200, goldCard(chosen, before, winnerAt));
+    if (winnerAt) {
+      const sent = await answer(200, goldCard(chosen, before, winnerAt));
+      await proudAfterWord(moment);
+      return sent;
+    }
 
-    // A visit that counts only from later (its place still hidden) promises nothing that unlocks only
-    // then, no promotion and no new things: the "It counts from" line says when it counts.
-    const later = result.countsFrom.getTime() > now.getTime();
     const visit: VisitWin = {
       door,
       placeName: run.placeName ?? "",
@@ -1078,7 +1110,9 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
       calendarUrl: "/elf",
       hqUrl: "/elf/hq",
     };
-    return await answer(200, { form: "word", ok: true, outcome: "visited", visit });
+    const sent = await answer(200, { form: "word", ok: true, outcome: "visited", visit });
+    await proudAfterWord(moment);
+    return sent;
   } catch (err) {
     return gameFailed(res, "word", err, json);
   } finally {

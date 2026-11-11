@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
 // numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf, dbAlerts, dbPhotos, sms, mailer } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf, dbAlerts, dbPhotos, sms, mailer, worker } = vi.hoisted(() => ({
+  worker: { runElfTick: vi.fn(), realElfDeps: vi.fn() },
   dbPhotos: { countPhotosWaiting: vi.fn() },
   dbAlerts: { listHeadElves: vi.fn(), setMyAlerts: vi.fn(), lastAlert: vi.fn(), recordAlert: vi.fn() },
   sms: { sendText: vi.fn(), on: true },
@@ -40,6 +41,8 @@ vi.mock("../../src/db/elf-alerts", () => dbAlerts);
 vi.mock("../../src/db/elf-photos", () => dbPhotos);
 vi.mock("../../src/clients/sms", () => ({ sendText: sms.sendText, get smsConfigured() { return sms.on; } }));
 vi.mock("../../src/clients/email", () => mailer);
+// The elf worker's tick hook runs the worker's own tick; here it is watched, never run.
+vi.mock("../../src/elf/worker", () => worker);
 // No door has a picture on disk in a test; one test gives door 1 its picture.
 vi.mock("../../src/elf/door-setup", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../src/elf/door-setup")>()), doorPicture: pictureOf }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
@@ -73,9 +76,11 @@ import {
   getAdminElfAlerts,
   patchAdminElfAlertsMe,
   postAdminElfAlertsTest,
+  postAdminElfWorkerTick,
 } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
+import { config } from "../../src/config";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 };
 
@@ -116,7 +121,7 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame), ...Object.values(dbAlerts), ...Object.values(dbPhotos), sms.sendText, ...Object.values(mailer)]) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame), ...Object.values(dbAlerts), ...Object.values(dbPhotos), sms.sendText, ...Object.values(mailer), ...Object.values(worker)]) f.mockReset();
   sms.on = true;
   pictureOf.mockReset();
   pictureOf.mockReturnValue(null);
@@ -990,5 +995,64 @@ describe("the alerts in Settings", () => {
     it("is for those given the section", async () => {
       expect((await run(postAdminElfAlertsTest, req("viewer"))).statusCode).toBe(403);
     });
+  });
+});
+
+// ---- the elf worker's tick, for the BDD -----------------------------------------------------------
+//
+// Outside production a head elf who may change the Elf Detective School can run the worker's tick once, at
+// a time they give: it is how the BDD moves the worker to midday, so quiet hours never bite.
+
+describe("the elf worker's tick hook", () => {
+  const DEPS = { the: "real outside calls" };
+  const AT = "2026-12-07T12:00:00.000Z";
+  beforeEach(() => {
+    worker.realElfDeps.mockReturnValue(DEPS);
+    worker.runElfTick.mockResolvedValue(undefined);
+  });
+
+  it("runs one tick at the time it is given, with the real outside calls, never cached", async () => {
+    const res = await run(postAdminElfWorkerTick, req("admin", { at: AT }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(worker.runElfTick).toHaveBeenCalledTimes(1);
+    expect(worker.runElfTick).toHaveBeenCalledWith(new Date(AT), DEPS);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("is not there in production, for anyone", async () => {
+    const was = config.NODE_ENV;
+    (config as { NODE_ENV: string }).NODE_ENV = "production";
+    try {
+      const res = await run(postAdminElfWorkerTick, req("admin", { at: AT }));
+      expect(res.statusCode).toBe(404);
+      expect(worker.runElfTick).not.toHaveBeenCalled();
+    } finally {
+      (config as { NODE_ENV: string }).NODE_ENV = was;
+    }
+  });
+
+  it("is only for those who may change the Elf Detective School", async () => {
+    expect((await run(postAdminElfWorkerTick, req(null, { at: AT }))).statusCode).toBe(401);
+    expect((await run(postAdminElfWorkerTick, req("viewer", { at: AT }, HEAD_ELF))).statusCode).toBe(403);
+    expect(worker.runElfTick).not.toHaveBeenCalled();
+    expect((await run(postAdminElfWorkerTick, req("viewer", { at: AT }, { elf: "edit" }))).statusCode).toBe(200);
+  });
+
+  it("needs a real moment, and nothing else", async () => {
+    for (const body of [{}, { at: "tomorrow" }, { at: 1796664660000 }, { at: AT, door: 7 }]) {
+      const res = await run(postAdminElfWorkerTick, req("admin", body));
+      expect(res.statusCode, JSON.stringify(body)).toBe(400);
+    }
+    expect(worker.runElfTick).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 when the tick fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    worker.runElfTick.mockRejectedValue(new Error("the tick failed"));
+    const res = await run(postAdminElfWorkerTick, req("admin", { at: AT }));
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
+    vi.mocked(console.error).mockRestore();
   });
 });

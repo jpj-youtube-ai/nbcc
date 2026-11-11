@@ -39,9 +39,12 @@ const game = vi.hoisted(() => ({
   cluePicture: vi.fn(),
 }));
 const png = vi.hoisted(() => ({ elfPng: vi.fn(), elfPngKey: vi.fn() }));
+// The claimed sends and the proud email, for the proud moments after a word (src/elf/worker.ts).
+const sends = vi.hoisted(() => ({ claimSend: vi.fn(), markSent: vi.fn(), markSendFailed: vi.fn(), familiesStillToEmail: vi.fn(), familiesToSweep: vi.fn() }));
+const mail = vi.hoisted(() => ({ sendElfProud: vi.fn() }));
 // The real functions, watched: the loader every family route reads through, the word's rule, the
-// picture processing, Detective HQ's view and the gold card.
-const spies = vi.hoisted(() => ({}) as { runsFor: Mock; decideWord: Mock; processPicture: Mock; hqViewFor: Mock; claimWinHtml: Mock });
+// picture processing, Detective HQ's view, the gold card and the proud moments after a word.
+const spies = vi.hoisted(() => ({}) as { runsFor: Mock; decideWord: Mock; processPicture: Mock; hqViewFor: Mock; claimWinHtml: Mock; sendProudMoments: Mock });
 
 vi.mock("../../src/db/elf", () => db);
 vi.mock("../../src/db/elf-doors", () => doors);
@@ -72,6 +75,13 @@ vi.mock("../../src/elf/pages/poster", async (orig) => {
   return { ...real, claimWinHtml: spies.claimWinHtml };
 });
 vi.mock("../../src/elf/elf-png", () => png);
+vi.mock("../../src/db/elf-sends", () => sends);
+vi.mock("../../src/clients/email", async (orig) => ({ ...(await orig<typeof import("../../src/clients/email")>()), sendElfProud: mail.sendElfProud }));
+vi.mock("../../src/elf/worker", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/worker")>();
+  spies.sendProudMoments = vi.fn(real.sendProudMoments);
+  return { ...real, sendProudMoments: spies.sendProudMoments };
+});
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
@@ -231,8 +241,12 @@ afterAll(() => server.close());
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(FIVE_47);
-  for (const group of [db, doors, practice, game, png]) for (const f of Object.values(group)) f.mockReset();
+  for (const group of [db, doors, practice, game, png, sends, mail]) for (const f of Object.values(group)) f.mockReset();
   for (const s of Object.values(spies)) s.mockClear();
+  sends.claimSend.mockResolvedValue(true);
+  sends.markSent.mockResolvedValue(undefined);
+  sends.markSendFailed.mockResolvedValue(undefined);
+  mail.sendElfProud.mockResolvedValue(undefined);
   resetPublicCalendar();
   resetElfLimits();
   resetDoorElves();
@@ -889,6 +903,108 @@ describe("the word on the tag", () => {
     expect(html).toContain("6 doors done");
     expect(html).not.toContain("Promoted");
     expect(html).not.toContain("new thing");
+  });
+});
+
+// ---- the proud moments after a word ------------------------------------------------------------
+//
+// Best effort, after the word's answer has gone: the real sendProudMoments (src/elf/worker.ts) runs with
+// the claimed sends and the proud email mocked, so what it claims and sends is read here.
+
+describe("the proud moments after a word", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.mocked(console.error).mockRestore();
+  });
+
+  const proudClaims = () => sends.claimSend.mock.calls.filter((c) => c[0] === "proud").map((c) => c[1]);
+
+  it("go after a win's answer, once the word is recorded: the won key, and each stamped detective with this door counted", async () => {
+    const r = await word("snowball 472");
+    expect(r.status).toBe(200);
+    expect(r.data.outcome).toBe("won");
+    await vi.waitFor(() => expect(mail.sendElfProud).toHaveBeenCalled());
+    expect(spies.sendProudMoments).toHaveBeenCalledWith(
+      {
+        year: 2026,
+        door: 7,
+        elfName: TYPED_ELF,
+        family: { id: 3, grownUpName: "Sam Example", email: "sam.example@example.com" },
+        won: true,
+        stamped: [{ id: 100, name: "Detective Ruby Tinselfoot", doorsDone: { cracked: [], visited: [7], snow: [] } }],
+      },
+      expect.anything(),
+    );
+    expect(game.recordWord.mock.invocationCallOrder[0]).toBeLessThan(spies.sendProudMoments.mock.invocationCallOrder[0]);
+    expect(proudClaims()).toEqual(["2026:won:3:7"]);
+    expect(mail.sendElfProud).toHaveBeenCalledWith("Sam Example", expect.objectContaining({ email: "sam.example@example.com", subject: `You found ${TYPED_ELF}!` }));
+  });
+
+  it("claim a promotion only once the visit counts: nothing new while the place is hidden, the rank once it is shown", async () => {
+    doors.findElfDoorByPosterCode.mockResolvedValue({ year: 2026, setup: door7({ foundAt: FIVE_47, foundFamilyId: 9 }) });
+    // Door 7 is Ruby's sixth door.
+    game.familyDoorsDone.mockResolvedValue(new Map([[100, { cracked: [1, 2, 3], visited: [4, 5], snow: [] }]]));
+    vi.setSystemTime(SIX_10);
+    expect((await word("SNOWBALL 472", ["100"])).data.outcome).toBe("visited");
+    await vi.waitFor(() => expect(spies.sendProudMoments).toHaveBeenCalledTimes(1));
+    expect(spies.sendProudMoments.mock.calls[0][0]).toMatchObject({ won: false, stamped: [{ id: 100, doorsDone: { cracked: [1, 2, 3], visited: [4, 5], snow: [] } }] });
+    expect(proudClaims()).toEqual([]);
+
+    vi.setSystemTime(SEVEN_05);
+    expect((await word("SNOWBALL 472", ["100"])).data.outcome).toBe("visited");
+    await vi.waitFor(() => expect(mail.sendElfProud).toHaveBeenCalled());
+    expect(proudClaims()).toEqual(["2026:rank:100:Junior Detective"]);
+    expect(mail.sendElfProud).toHaveBeenCalledWith("Sam Example", expect.objectContaining({ subject: "Detective Ruby Tinselfoot is now a Junior Detective" }));
+  });
+
+  it("never fail the word: a throw there leaves the answer 200, and only its message is logged", async () => {
+    spies.sendProudMoments.mockImplementationOnce(() => {
+      throw new Error("the proud moments could not be read");
+    });
+    const r = await word("snowball 472");
+    expect(r.status).toBe(200);
+    expect(r.data.outcome).toBe("won");
+    await vi.waitFor(() => expect(console.error).toHaveBeenCalledWith("elf proud moments failed:", "the proud moments could not be read"));
+  });
+
+  it("never fail the word: a rejection there leaves the answer 200, and is never left unhandled", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      spies.sendProudMoments.mockRejectedValueOnce(new Error("the proud email was refused"));
+      const r = await word("snowball 472");
+      expect(r.status).toBe(200);
+      expect(r.data.outcome).toBe("won");
+      await vi.waitFor(() => expect(console.error).toHaveBeenCalledWith("elf proud moments failed:", "the proud email was refused"));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
+  it("send nothing for the practice door", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    practice.getPractice.mockResolvedValue(practiceRow());
+    vi.setSystemTime(SIX_10);
+    const r = await call("POST", "/api/elf/word", { json: { code: PRACTICE_CODE, detectiveIds: ["100"], word: "tinsel 314" }, cookie: PRACTICE_PASS });
+    expect(r.data.outcome).toBe("won");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sends.claimSend).not.toHaveBeenCalled();
+    expect(mail.sendElfProud).not.toHaveBeenCalled();
+  });
+
+  it("send nothing for a word that stamped nobody", async () => {
+    // The family's own first tap won in the same moment, so this one stamped nobody new.
+    game.recordWord.mockResolvedValue({ won: false, countsFrom: FIVE_47, stamped: [] });
+    doors.getElfDoor.mockResolvedValue(door7({ foundAt: at("2026-12-07T17:46:59.000Z"), foundFamilyId: 3 }));
+    const r = await word("SNOWBALL 472");
+    expect(r.data.outcome).toBe("won");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sends.claimSend).not.toHaveBeenCalled();
+    expect(mail.sendElfProud).not.toHaveBeenCalled();
   });
 });
 

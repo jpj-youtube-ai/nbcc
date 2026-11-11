@@ -80,13 +80,13 @@
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         if (sending) return;
-        var picked = form.querySelector('input[name="placeId"]:checked');
-        if (!picked) {
-          say("Pick a place first.", true);
+        // Stop gap until Task 6 rewrites the typed guess: the guess is one text box.
+        var box = form.querySelector('input[name="guess"]');
+        var place = box ? box.value.trim() : "";
+        if (!place) {
+          say("Type a place first.", true);
           return;
         }
-        var label = form.querySelector('label[for="' + picked.id + '"]');
-        var place = label ? label.textContent : "";
         var door = form.querySelector('input[name="door"]');
         var button = form.querySelector("button");
         sending = true;
@@ -96,7 +96,7 @@
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ door: Number(door ? door.value : 0), placeId: picked.value })
+            body: JSON.stringify({ door: Number(door ? door.value : 0), guess: place })
           })
           .then(function (res) {
             return res

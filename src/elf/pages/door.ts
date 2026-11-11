@@ -78,13 +78,9 @@ function carving(d: DoorView): string {
   return `<span class="elf-carve"${style} aria-hidden="true"><span class="elf-carve__hi"></span><span class="elf-carve__lo"></span></span>`;
 }
 
-/** The picture on an open door: the winner's photo once there is one, their elf until then. */
+/** The picture on an open door: the first elf of its collage. Task 6 draws the scrapbook properly. */
 function winnerPicture(d: DoorView, width: number): string {
-  const photo = sitePath(d.found?.photoUrl);
-  if (photo) {
-    return `<img class="elf-shot elf-shot--photo" src="${photo}" alt="" width="${width}" height="${width}" loading="lazy" decoding="async" />`;
-  }
-  const elf = sitePath(d.found?.elfUrl);
+  const elf = sitePath(d.collage[0]);
   if (elf) {
     const height = Math.round(width * 1.3);
     return `<img class="elf-shot elf-shot--elf" src="${elf}" alt="" width="${width}" height="${height}" loading="lazy" decoding="async" />`;
@@ -142,7 +138,7 @@ export function doorVersion(d: DoorView, now: Date): string {
     d.teaser,
     d.elfName,
     placeWords(d),
-    d.found ? [d.found.at.getTime(), d.found.by, d.found.elfUrl, d.found.photoUrl] : null,
+    d.found ? [d.found.at.getTime(), d.found.by, d.collage] : null,
   ];
   let hash = 0x811c9dc5;
   for (const ch of JSON.stringify(parts)) {

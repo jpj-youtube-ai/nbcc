@@ -3,6 +3,7 @@ import type { Door } from "../calendar";
 import type { WordRefusal } from "../claim";
 import type { DoorState } from "../doors";
 import type { Rank } from "../progress";
+import type { Scrapbook } from "../scrapbook";
 import type { ElfLook, WardrobeState } from "../wardrobe";
 import type { ElfSettings } from "../settings";
 
@@ -20,27 +21,37 @@ import type { ElfSettings } from "../settings";
 export interface DoorView {
   door: Door;
   state: DoorState;
-  /** When the clue comes out. */
+  /** When clue 1 comes out, as the calendar shows it (DoorRun.calendarAt). */
   clueAt: Date;
   /** The picture of the prize shape to carve into the door, as a path on this site, or null for
    *  the mystery star. */
   shapeUrl: string | null;
   /** Staff ticked "Show off": the door wears a Big prize pill and the teaser is shown. */
   bigPrize: boolean;
+  /** The prize words, before the find, only when staff ticked Show off. */
   teaser: string | null;
+  /** The prize words once the elf is found, whatever Show off says. Null until then, and null while
+   *  the place is still hidden (found-hidden). */
+  prize: string | null;
   /** The name of this door's elf. */
   elfName: string;
-  /** Where it was hiding. Pass null until the door is open. The screens also refuse to show it
-   *  before then, whatever is passed in: two locks on the one secret. */
+  /** Where it was hiding. Null until the door is open. The screens also refuse to show it before
+   *  then, whatever is passed in: two locks on the one secret. */
   place: { name: string; town: string } | null;
-  /** Who found it. Null until it is found.
+  /** Who found it, from the moment it is found (even while the place is still hidden), else null.
    *  `by` is PUBLIC: it MUST come from detectiveNames in src/elf/names.ts, which shows a first name
-   *  staff have not ticked yet as its first letter. Never familyDetectiveName: that is for a
-   *  family's own screens and would publish a child's name nobody has checked.
-   *  `photoUrl` only when the grown up said yes for that photo AND staff have checked it. */
-  found: { at: Date; by: string; elfUrl: string; photoUrl: string | null } | null;
+   *  staff have not ticked yet as its first letter. Never familyDetectiveName. */
+  found: { at: Date; by: string } | null;
+  /** While the elf is found but the place is still hidden: when the place will be shown. */
+  revealAt: Date | null;
   /** How many detectives cracked it and how many have visited. Null until the door is open. */
   counts: { cracked: number; visited: number } | null;
+  /** The elves and photos on the door. Null until the door is open. */
+  scrapbook: Scrapbook | null;
+  /** The door tile's mini collage: elf pictures only, never a photo. Empty until the door is open. */
+  collage: string[];
+  /** Has the door's place sent the elves home? */
+  goneHome: boolean;
   /** The short NBCC fact for children. Shown once the door is open. */
   factLine: string | null;
 }
@@ -58,7 +69,9 @@ export interface CalendarView {
 
 /** A family's own marks on the calendar. Private and small: the page's script fetches it. */
 export interface FamilyMarks {
-  doors: { door: Door; cracked: boolean; visited: boolean }[];
+  doors: { door: Door; cracked: boolean; visited: boolean; snow: boolean }[];
+  /** The family's own photos, so it can take one down from the calendar. */
+  photos: { door: Door; token: string; status: "waiting" | "approved" | "declined" }[];
 }
 
 export interface DetectiveView {
@@ -83,17 +96,21 @@ export interface DetectiveView {
 
 /** Today's case, for a family. Built from the door's state at the moment the page is drawn. */
 export interface TodayView {
-  door: Door;
+  /** 1 to 24, or 0 for the practice door. */
+  door: Door | 0;
+  practice: boolean;
   state: DoorState;
-  clueAt: Date;
   elfName: string;
-  /** The clue, once it is out. Never before. */
-  clue: string | null;
-  /** The places a family can still guess from, while the elf is hunted. */
-  options: { id: string; name: string; town: string }[];
-  /** The place the family has guessed, or null. `name` is there so it can be said once the door is
-   *  open and the place is no longer one of the options. */
-  guess: { id: string; name: string; town: string } | null;
+  /** The clues that are out, in order, and no others. None on a snow day. */
+  clues: { n: 1 | 2 | 3; at: Date; words: string | null; pictureUrl: string | null; pictureAlt: string | null }[];
+  /** When the next clue comes out, or null once all three are out (and on a snow day). */
+  nextClueAt: Date | null;
+  /** When the place is shown. */
+  revealAt: Date;
+  /** The guess the family typed, as typed, or null. */
+  guess: { text: string; at: Date } | null;
+  /** Can the family still type or change a guess? */
+  canGuess: boolean;
   /** How it ended, once the door is open: where the elf was, who found it (nobody yet for a revealed
    *  door), and whether this family cracked the case. `by` names ANOTHER family's detectives, so
    *  it is public too: it MUST come from detectiveNames, like DoorView.found.by. */
@@ -140,32 +157,41 @@ export interface WardrobeView {
   saveUrl: string;
 }
 
-/** The page a poster's QR code opens. It is given only what the public calendar already shows about
- *  the place's door (see posterState in poster.ts), never the door's number or its state, so the
- *  page cannot say whether today is the day an elf hides here. */
+/** The page a poster's QR code opens. A shut door and a hunting door give the same view, so the page
+ *  cannot say whether today is the day an elf hides here. `door` is used only in the outcome cards
+ *  and the photo sheet. */
 export interface PosterView {
   /** The place's own code from its poster. */
   code: string;
+  door: Door | 0;
   placeName: string;
   placeTown: string;
-  /** Is this place's door open on the calendar? Then visitors can check in. */
+  /** Is this place's door open? Then visitors can see where it ended up. */
   open: boolean;
-  /** Is the elf still there to be claimed? True unless the door is found. */
+  /** Is the elf still there to be claimed? */
   claimable: boolean;
+  /** The elf is found but the place is still hidden. */
+  foundHidden: boolean;
+  /** While found-hidden: when the place is shown. */
+  revealAt: Date | null;
+  goneHome: boolean;
   signedIn: boolean;
   /** The family's detectives, with who already has this place's candy cane. Empty when nobody is
    *  signed in. Names as the family sees them. */
   detectives: { id: string; name: string; hasStamp: boolean }[];
+  /** The family's own photo for this door, if it sent one. */
+  yourPhoto: { token: string; status: "waiting" | "approved" | "declined" } | null;
   joinUrl: string;
   signInUrl: string;
   calendarUrl: string;
   hqUrl: string;
-  /** Where the two forms post when there is no script. */
-  claimUrl: string;
-  stampUrl: string;
+  /** Where the word form posts when there is no script. */
+  wordUrl: string;
+  /** Where a photo is sent. */
+  photoUrl: string;
 }
 
-/** A claim that won: what the gold "You're first!" card shows the staff. */
+/** A word that won: what the gold "You're first!" card shows the staff. */
 export interface ClaimWin {
   door: Door;
   elfName: string;
@@ -179,9 +205,12 @@ export interface ClaimWin {
   hqUrl: string;
 }
 
-/** A check in that earned candy canes. */
-export interface StampWin {
+/** A word that earned stamps: a visit. */
+export interface VisitWin {
+  door: Door | 0;
   placeName: string;
+  /** When the visit counts from, when that is later than now; else null. */
+  countsFrom: Date | null;
   detectives: {
     name: string;
     doorsDone: number;
@@ -191,6 +220,7 @@ export interface StampWin {
     newThings: number;
     wardrobeUrl: string;
   }[];
+  photo: { door: Door | 0; sendUrl: string };
   calendarUrl: string;
   hqUrl: string;
 }
@@ -198,10 +228,9 @@ export interface StampWin {
 /** What happened to a form that was posted with no script, so the page can be drawn with the
  *  answer in it. With the script, the same answers come back from the API instead. */
 export type PosterOutcome =
-  | { form: "claim"; ok: true; win: ClaimWin }
-  | { form: "claim"; ok: false; reason: WordRefusal; triesLeft?: number }
-  | { form: "stamp"; ok: true; win: StampWin }
-  | { form: "stamp"; ok: false; reason: WordRefusal };
+  | { form: "word"; ok: true; outcome: "won"; win: ClaimWin }
+  | { form: "word"; ok: true; outcome: "visited"; visit: VisitWin }
+  | { form: "word"; ok: false; reason: WordRefusal; triesLeft?: number };
 
 /** The enrol page (wave 1). `values` are what was typed, put back after a refusal, by form field name. */
 export interface JoinView {

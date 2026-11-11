@@ -83,7 +83,8 @@ function findDoorSeven(): void {
   const found: Partial<DoorView> = {
     state: "found",
     place: { name: "The Toy Shop", town: "Troon" },
-    found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Sam Snowsleuth", elfUrl: "/elf/pic/7.svg", photoUrl: null },
+    found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Sam Snowsleuth" },
+    collage: ["/elf/pic/7.svg"],
     counts: { cracked: 31, visited: 1 },
     factLine: "Last Christmas, NBCC's elves sent out 7,657 Red Bags Full of Joy!",
   };

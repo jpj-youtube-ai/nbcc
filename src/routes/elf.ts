@@ -25,6 +25,7 @@ import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
 import { renderHqPage } from "../elf/pages/hq";
 import { renderRulesPage } from "../elf/pages/rules";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
+import { waveOneRuns } from "../db/elf-game";
 import { calendarViewFor, hqViewFor, lookFromForm, wardrobeStateNow, wardrobeViewFor, type FamilyRow } from "../elf/views";
 import { elfPng, elfPngKey } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
@@ -408,11 +409,23 @@ async function familyOr(req: Request, res: Response): Promise<FamilyRow | null> 
   return family;
 }
 
+/** The calendar as wave 1 drew it: the shut doors. Task 7 replaces this with the public calendar built from runsFor. */
+function waveOneCalendar(settings: ElfSettings, now: Date) {
+  return calendarViewFor({ settings, now, runs: waveOneRuns(settings.year, now), finders: new Map(), counts: new Map(), scrapbooks: new Map() });
+}
+
 elfRouter.get("/elf/hq", schoolOn, async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const family = await familyOr(req, res);
   if (!family) return;
-  res.type("html").send(renderHqPage(hqViewFor({ family, settings: settingsOf(res), now: new Date() })));
+  const settings = settingsOf(res);
+  const now = new Date();
+  // Task 7: this is the wave 1 equivalent (no practice, no guesses); Task 7 loads them through runsFor.
+  res.type("html").send(
+    renderHqPage(
+      hqViewFor({ family, settings, now, runs: { runs: waveOneRuns(settings.year, now), practice: null }, guesses: new Map(), doorsDone: new Map(), finders: new Map(), photos: [] }),
+    ),
+  );
 });
 
 elfRouter.get("/elf/hq/wardrobe/:detective", schoolOn, async (req, res) => {
@@ -422,7 +435,7 @@ elfRouter.get("/elf/hq/wardrobe/:detective", schoolOn, async (req, res) => {
   const id = detectiveIdOf(req.params.detective);
   const detective = family.detectives.find((d) => d.id === id);
   if (!detective) return res.status(404).type("text/plain").send("Not found");
-  res.type("html").send(renderWardrobePage(wardrobeViewFor({ detective, settings: settingsOf(res), now: new Date() })));
+  res.type("html").send(renderWardrobePage(wardrobeViewFor({ detective, settings: settingsOf(res), now: new Date(), doorsDone: { cracked: [], visited: [] } /* Task 7 passes the detective's doors */ })));
 });
 
 elfRouter.get("/elf/hq/elf/:file", schoolOn, async (req, res) => {
@@ -495,7 +508,7 @@ function publicCache(res: Response): void {
 
 elfRouter.get("/elf", schoolOn, (_req, res) => {
   publicCache(res);
-  res.type("html").send(renderCalendarPage(calendarViewFor({ settings: settingsOf(res), now: new Date() })));
+  res.type("html").send(renderCalendarPage(waveOneCalendar(settingsOf(res), new Date())));
 });
 
 elfRouter.get("/elf/rules", schoolOn, (_req, res) => {
@@ -505,7 +518,7 @@ elfRouter.get("/elf/rules", schoolOn, (_req, res) => {
 
 elfRouter.get("/api/elf/calendar", schoolOn, (_req, res) => {
   publicCache(res);
-  const view = calendarViewFor({ settings: settingsOf(res), now: new Date() });
+  const view = waveOneCalendar(settingsOf(res), new Date());
   res.json({
     now: view.now.toISOString(),
     found: view.doors.filter((d) => d.state === "found").length,
@@ -516,7 +529,7 @@ elfRouter.get("/api/elf/calendar", schoolOn, (_req, res) => {
 
 elfRouter.get("/api/elf/door/:n", schoolOn, (req, res) => {
   publicCache(res);
-  const view = calendarViewFor({ settings: settingsOf(res), now: new Date() });
+  const view = waveOneCalendar(settingsOf(res), new Date());
   const raw = String(req.params.n);
   const door = /^\d{1,2}$/.test(raw) ? view.doors.find((d) => d.door === Number(raw)) : undefined;
   if (!door) return res.status(404).json({ error: "Not found" });

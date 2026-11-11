@@ -6,7 +6,7 @@ import { renderCalendarPage } from "../../src/elf/pages/calendar";
 import { renderJoinPage } from "../../src/elf/pages/join";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
-import { calendarViewFor } from "../../src/elf/views";
+import { calendarView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the look of nbcc.scot/bag and /fill, brought to the school's screens
 // (wave 1 plan, Task 11): gold sparkles, the red present with the school's elf peeking out, gift
@@ -41,7 +41,7 @@ function outsideMotionBlocks(source: string): string {
 // behind every page replace the gold sparkles, and a torn label sits under the school's name.
 describe("the calendar's top", () => {
   it("is paper: the school's name with a torn label under it, and no gold sparkles", () => {
-    const doc = parse(renderCalendarPage(calendarViewFor({ settings: SETTINGS, now: new Date("2026-11-13T09:00:00.000Z") })));
+    const doc = parse(renderCalendarPage(calendarView(new Date("2026-11-13T09:00:00.000Z"))));
     expect(doc.querySelectorAll(".elf-top .elf-twk").length).toBe(0);
     expect(doc.querySelector(".elf-top h1 + .elf-label")).not.toBeNull();
     expect(doc.querySelectorAll(".elf-sky i").length).toBeGreaterThanOrEqual(10);

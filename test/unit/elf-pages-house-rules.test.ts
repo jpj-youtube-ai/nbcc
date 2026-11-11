@@ -6,7 +6,6 @@ import { renderCalendarPage } from "../../src/elf/pages/calendar";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage } from "../../src/elf/pages/join";
 import { renderRulesPage } from "../../src/elf/pages/rules";
-import { calendarViewFor } from "../../src/elf/views";
 import { renderSignInPage, renderWelcomePage } from "../../src/elf/pages/sign-in";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
@@ -23,8 +22,8 @@ import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, stampWin, wa
 
 const ROOT = resolve(__dirname, "../..");
 const place = { name: "The Toy Shop", town: "Troon" };
-const found = { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Ruby Tinselfoot", elfUrl: "/elf/pic/7.svg", photoUrl: "/elf/photo/7.jpg" };
-const opened = { place, counts: { cracked: 31, visited: 4 }, factLine: "NBCC began with a question from a girl aged 12 in Annbank." };
+const found = { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Ruby Tinselfoot", };
+const opened = { collage: ["/elf/pic/7.svg"], place, counts: { cracked: 31, visited: 4 }, factLine: "NBCC began with a question from a girl aged 12 in Annbank." };
 const today = hqView().today!;
 const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
 const everyoneStamped = posterView({ open: true, claimable: false, detectives: posterView().detectives.map((d) => ({ ...d, hasStamp: true })) });
@@ -37,18 +36,18 @@ const PAGES: [string, string][] = [
   ["calendar, today's elf found", renderCalendarPage(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "found", found, ...opened }))],
   ["calendar, today's place shown", renderCalendarPage(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...opened }))],
   ["calendar, all done", renderCalendarPage(calendarView(at("2026-12-25T10:00:00.000Z")))],
-  ["HQ, before the clue", renderHqPage(hqView({ today: { ...today, state: "shut", clue: null, options: [] } }))],
+  ["HQ, before the clue", renderHqPage(hqView({ today: { ...today, state: "shut", clues: [], canGuess: false } }))],
   ["HQ, the hunt on", renderHqPage(hqView())],
-  ["HQ, a guess locked in", renderHqPage(hqView({ today: { ...today, guess: today.options[1] } }))],
-  ["HQ, found and cracked", renderHqPage(hqView({ today: { ...today, state: "found", options: [], guess: today.options[0], outcome } }))],
-  ["HQ, place shown", renderHqPage(hqView({ today: { ...today, state: "revealed", options: [], outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
+  ["HQ, a guess locked in", renderHqPage(hqView({ today: { ...today, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") } } }))],
+  ["HQ, found and cracked", renderHqPage(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome } }))],
+  ["HQ, place shown", renderHqPage(hqView({ today: { ...today, state: "revealed", canGuess: false, outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
   ["HQ, no door today", renderHqPage(hqView({ now: at("2026-11-20T10:00:00.000Z"), today: null, nextClueAt: at("2026-12-01T17:30:00.000Z") }))],
   ["HQ, all over", renderHqPage(hqView({ now: at("2026-12-26T10:00:00.000Z"), today: null, nextClueAt: null }))],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
   ["rules", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
-  ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z") }))],
+  ["calendar, live before December", renderCalendarPage(calendarView(at("2026-11-13T09:00:00.000Z")))],
   ["sign in, the email", renderSignInPage({ stage: "email" })],
   ["sign in, the code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "If that email has detectives enrolled, we have sent a sign in code to it." })],
   ["sign in, a wrong code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "That code does not work. Check it, or ask for a new one.", error: true })],
@@ -62,10 +61,10 @@ const PAGES: [string, string][] = [
   ["poster, place shown and elf waiting", renderPosterPage(posterView({ open: true, claimable: true }))],
   ["poster, elf found", renderPosterPage(posterView({ open: true, claimable: false }))],
   ["poster, everyone has the candy cane", renderPosterPage(everyoneStamped)],
-  ["poster, a claim that won", renderPosterPage(posterView({ open: true, claimable: false }), { form: "claim", ok: true, win: claimWin() })],
-  ["poster, a claim refused", renderPosterPage(posterView(), { form: "claim", ok: false, reason: "wrong-word", triesLeft: 2 })],
-  ["poster, a check in that counted", renderPosterPage(everyoneStamped, { form: "stamp", ok: true, win: stampWin() })],
-  ["poster, a check in refused", renderPosterPage(posterView({ open: true, claimable: false }), { form: "stamp", ok: false, reason: "too-far" })],
+  ["poster, a claim that won", renderPosterPage(posterView({ open: true, claimable: false }), { form: "word", ok: true, outcome: "won", win: claimWin() })],
+  ["poster, a claim refused", renderPosterPage(posterView(), { form: "word", ok: false, reason: "wrong-word", triesLeft: 2 })],
+  ["poster, a check in that counted", renderPosterPage(everyoneStamped, { form: "word", ok: true, outcome: "visited", visit: stampWin() })],
+  ["poster, a check in refused", renderPosterPage(posterView({ open: true, claimable: false }), { form: "word", ok: false, reason: "nothing-new" })],
 ];
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
@@ -242,12 +241,12 @@ function poisoned<T>(value: T, key = ""): T {
 describe("data that tries to break out of the page", () => {
   const hostile: [string, string][] = [
     ["calendar", renderCalendarPage(poisoned(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "found", found, ...opened, shapeUrl: "/elf/shape/teddy.svg" })))],
-    ["HQ", renderHqPage(poisoned(hqView({ today: { ...today, guess: today.options[1] } })))],
-    ["HQ, found", renderHqPage(poisoned(hqView({ today: { ...today, state: "found", options: [], guess: today.options[0], outcome } })))],
+    ["HQ", renderHqPage(poisoned(hqView({ today: { ...today, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") } } })))],
+    ["HQ, found", renderHqPage(poisoned(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome } })))],
     ["wardrobe", renderWardrobePage(poisoned(wardrobeView()))],
     ["poster", renderPosterPage(poisoned(posterView({ open: true, claimable: true })))],
-    ["poster, a claim that won", renderPosterPage(poisoned(posterView({ open: true, claimable: false })), { form: "claim", ok: true, win: poisoned(claimWin()) })],
-    ["poster, a check in that counted", renderPosterPage(poisoned(everyoneStamped), { form: "stamp", ok: true, win: poisoned(stampWin()) })],
+    ["poster, a claim that won", renderPosterPage(poisoned(posterView({ open: true, claimable: false })), { form: "word", ok: true, outcome: "won", win: poisoned(claimWin()) })],
+    ["poster, a check in that counted", renderPosterPage(poisoned(everyoneStamped), { form: "word", ok: true, outcome: "visited", visit: poisoned(stampWin()) })],
   ];
 
   it.each(hostile)("%s: is shown as words, never run", (_name, html) => {

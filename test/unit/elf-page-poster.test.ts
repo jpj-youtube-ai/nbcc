@@ -90,7 +90,7 @@ describe("claiming an elf", () => {
     const doc = page();
     const form = doc.querySelector<HTMLFormElement>("form.elf-claim")!;
     expect(form.getAttribute("method")).toBe("post");
-    expect(form.getAttribute("action")).toBe("/elf/p/toy-shop-k4f9/claim");
+    expect(form.getAttribute("action")).toBe("/elf/p/toy-shop-k4f9/word");
     expect(form.getAttribute("data-api")).toBe("/api/elf/claim");
     expect(form.querySelector<HTMLInputElement>('input[name="code"]')!.value).toBe("toy-shop-k4f9");
     const ticks = [...form.querySelectorAll<HTMLInputElement>('input[type="checkbox"][name="detective"]')];
@@ -138,7 +138,7 @@ describe("checking in for a candy cane", () => {
     const doc = page(posterView({ open: true, claimable: false }));
     const form = doc.querySelector<HTMLFormElement>("form.elf-stamp")!;
     expect(form.getAttribute("method")).toBe("post");
-    expect(form.getAttribute("action")).toBe("/elf/p/toy-shop-k4f9/stamp");
+    expect(form.getAttribute("action")).toBe("/api/elf/p/toy-shop-k4f9/photo");
     expect(form.getAttribute("enctype")).toBe("multipart/form-data");
     expect(form.getAttribute("data-api")).toBe("/api/elf/stamp");
     expect(form.querySelector<HTMLInputElement>('input[name="code"]')!.value).toBe("toy-shop-k4f9");
@@ -349,13 +349,13 @@ describe("the card for a candy cane", () => {
 
 describe("the page drawn again after a form was posted with no script", () => {
   it("shows the gold card, and no claim form, after a win", () => {
-    const doc = page(posterView({ open: true, claimable: false }), { form: "claim", ok: true, win: claimWin() });
+    const doc = page(posterView({ open: true, claimable: false }), { form: "word", ok: true, outcome: "won", win: claimWin() });
     expect(words(doc.querySelector("#elf-result h2"))).toBe("You're first!");
     expect(doc.querySelector("form.elf-claim")).toBeNull();
   });
 
   it("keeps the claim form and says why after a refusal", () => {
-    const doc = page(posterView(), { form: "claim", ok: false, reason: "wrong-word", triesLeft: 4 });
+    const doc = page(posterView(), { form: "word", ok: false, reason: "wrong-word", triesLeft: 4 });
     const status = doc.querySelector("form.elf-claim .elf-form-status")!;
     expect(words(status)).toBe("That is not the right word. Check the tag and try again. You have 4 tries left here.");
     expect(status.classList.contains("is-error")).toBe(true);
@@ -371,13 +371,13 @@ describe("the page drawn again after a form was posted with no script", () => {
         { id: "d2", name: "Detective Leo Frostwhistle", hasStamp: true },
       ],
     });
-    const doc = page(view, { form: "stamp", ok: true, win: stampWin() });
+    const doc = page(view, { form: "word", ok: true, outcome: "visited", visit: stampWin() });
     expect(words(doc.querySelector("#elf-result h2"))).toBe("Candy cane collected!");
     expect(doc.querySelector("form.elf-stamp")).toBeNull();
   });
 
   it("says why a check in was refused, in its own form", () => {
-    const doc = page(posterView({ open: true, claimable: false }), { form: "stamp", ok: false, reason: "nothing-new" });
+    const doc = page(posterView({ open: true, claimable: false }), { form: "word", ok: false, reason: "nothing-new" });
     expect(words(doc.querySelector("form.elf-stamp .elf-form-status"))).toBe("Everyone ticked already has this candy cane.");
     expect(doc.querySelector("form.elf-stamp .elf-form-status")!.classList.contains("is-error")).toBe(true);
   });
@@ -424,7 +424,7 @@ describe("what comes from data", () => {
   });
 
   it("keeps the forms and links on this site", () => {
-    const doc = page(posterView({ open: true, claimUrl: "https://example.com/x", stampUrl: "//example.com", calendarUrl: "javascript:1", hqUrl: "http://x" }));
+    const doc = page(posterView({ open: true, wordUrl: "https://example.com/x", photoUrl: "//example.com", calendarUrl: "javascript:1", hqUrl: "http://x" }));
     expect(doc.querySelector("form.elf-claim")!.getAttribute("action")).toBe("/");
     expect(doc.querySelector("form.elf-stamp")!.getAttribute("action")).toBe("/");
     for (const a of doc.querySelectorAll("main a")) expect(a.getAttribute("href")).toMatch(/^\/(?!\/)/);

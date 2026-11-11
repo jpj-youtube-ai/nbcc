@@ -31,7 +31,7 @@ describe("Detective HQ", () => {
 
 describe("today's case", () => {
   it("counts down to the clue before it is out, and shows no clue and no guess", () => {
-    const doc = page(today({ state: "shut", clueAt: at("2026-12-07T19:00:00.000Z"), clue: "A clue that must not show yet" }));
+    const doc = page(today({ state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [{ n: 1, at: at("2026-12-07T19:00:00.000Z"), words: "A clue that must not show yet", pictureUrl: null, pictureAlt: null }] }));
     const card = doc.querySelector(".elf-case")!;
     expect(words(card)).toContain("Door 7");
     expect(words(card)).toContain("Clue out at 7pm");
@@ -47,31 +47,25 @@ describe("today's case", () => {
     expect(clue.querySelectorAll("br").length).toBe(1);
   });
 
-  it("offers the places still in play as one choice, with a button to lock it in", () => {
+  // Stop gap until Task 6 draws the typed guess: one text box and a button to lock it in.
+  it("offers one box to type the guess in, with a button to lock it in", () => {
     const form = page().querySelector<HTMLFormElement>("form.elf-guess")!;
     expect(form.getAttribute("method")).toBe("post");
     expect(form.getAttribute("action")).toBe("/elf/hq/guess");
     expect(form.getAttribute("data-api")).toBe("/api/elf/guess");
     expect(form.querySelector<HTMLInputElement>('input[name="door"]')!.value).toBe("7");
-    const radios = [...form.querySelectorAll<HTMLInputElement>('input[type="radio"][name="placeId"]')];
-    expect(radios.map((r) => r.value)).toEqual(["p-toys", "p-books", "p-bakery"]);
-    expect(radios.map((r) => words(form.querySelector(`label[for="${r.id}"]`)))).toEqual([
-      "The Toy Shop, Troon",
-      "The Bookshop, Ayr",
-      "The Corner Bakery, Kilmarnock",
-    ]);
-    expect(radios.every((r) => !r.checked)).toBe(true);
-    expect(radios[0].required).toBe(true);
+    const box = form.querySelector<HTMLInputElement>('input[type="text"][name="guess"]')!;
+    expect(box.value).toBe("");
+    expect(box.required).toBe(true);
     expect(words(form.querySelector("button"))).toBe("Lock in my guess");
-    expect(form.querySelector("fieldset legend")).not.toBeNull();
   });
 
-  it("shows the family's guess, and says it can still be changed", () => {
-    const doc = page(today({ guess: { id: "p-books", name: "The Bookshop", town: "Ayr" } }));
+  it("shows the family's guess as typed, and says it can still be changed", () => {
+    const doc = page(today({ guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") } }));
     const form = doc.querySelector("form.elf-guess")!;
-    expect(form.querySelector<HTMLInputElement>('input[value="p-books"]')!.checked).toBe(true);
+    expect(form.querySelector<HTMLInputElement>('input[name="guess"]')!.value).toBe("The Bookshop");
     expect(words(form.querySelector(".elf-guess__status"))).toBe(
-      "Your guess: The Bookshop, Ayr. You can change it until the elf is found.",
+      "Your guess: The Bookshop. You can change it until the elf is found.",
     );
     expect(words(form.querySelector("button"))).toBe("Change my guess");
   });
@@ -80,8 +74,8 @@ describe("today's case", () => {
     const doc = page(
       today({
         state: "found",
-        options: [],
-        guess: { id: "p-books", name: "The Bookshop", town: "Ayr" },
+        canGuess: false,
+        guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") },
         outcome: { place: "The Bookshop, Ayr", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true },
       }),
     );
@@ -94,16 +88,16 @@ describe("today's case", () => {
 
   it("is kind about a wrong guess, and about no guess at all", () => {
     const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: false };
-    const wrong = page(today({ state: "found", options: [], guess: { id: "p-books", name: "The Bookshop", town: "Ayr" }, outcome }));
-    expect(words(wrong.querySelector(".elf-case"))).toContain("Your guess was The Bookshop, Ayr. Not this time");
-    const none = page(today({ state: "found", options: [], guess: null, outcome }));
+    const wrong = page(today({ state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome }));
+    expect(words(wrong.querySelector(".elf-case"))).toContain("Your guess was The Bookshop. Not this time");
+    const none = page(today({ state: "found", canGuess: false, guess: null, outcome }));
     expect(words(none.querySelector(".elf-case"))).toContain("You did not lock in a guess for this one");
     expect(words(none.querySelector(".elf-case"))).not.toContain("You cracked it");
   });
 
   it("says a revealed elf is still there to be won", () => {
     const doc = page(
-      today({ state: "revealed", options: [], guess: null, outcome: { place: "The Toy Shop, Troon", by: null, at: null, cracked: false } }),
+      today({ state: "revealed", canGuess: false, guess: null, outcome: { place: "The Toy Shop, Troon", by: null, at: null, cracked: false } }),
     );
     const card = doc.querySelector(".elf-case")!;
     expect(words(card)).toContain("Bauble is still waiting at The Toy Shop, Troon");
@@ -206,7 +200,7 @@ describe("the family's marks", () => {
 
 describe("data that is not what it should be", () => {
   it("still draws the page when today's clue time is not a real date", () => {
-    const view = today({ state: "shut", clueAt: new Date("not a date"), clue: null, options: [] });
+    const view = today({ state: "shut", nextClueAt: new Date("not a date"), clues: [], canGuess: false });
     const card = page(view).querySelector(".elf-case")!;
     expect(words(card.querySelector("h2"))).toBe("Today's clue is on its way");
     expect(card.querySelector(".elf-cd")).toBeNull();
@@ -215,7 +209,7 @@ describe("data that is not what it should be", () => {
   });
 
   it("offers no empty form when there is nothing left to guess", () => {
-    const doc = page(today({ options: [] }));
+    const doc = page(today({ canGuess: false }));
     expect(doc.querySelector("form.elf-guess")).toBeNull();
     expect(words(doc.querySelector(".elf-case"))).toContain("nothing left to guess");
   });
@@ -240,7 +234,7 @@ describe("what comes from data", () => {
   it("is escaped wherever it is shown", () => {
     const view = hqView({ familyName: "<b>Sam</b>" });
     view.detectives[0] = { ...view.detectives[0], name: '<img src=x onerror="alert(1)">', badgeNumber: "<i>1</i>" };
-    view.today = { ...view.today!, clue: "<script>alert(1)</script>", elfName: "<u>Elf</u>", options: [{ id: '"><script>', name: "<b>Shop</b>", town: "<i>Ayr</i>" }] };
+    view.today = { ...view.today!, clues: [{ n: 1, at: at("2026-12-07T17:30:00.000Z"), words: "<script>alert(1)</script>", pictureUrl: null, pictureAlt: null }], elfName: "<u>Elf</u>", guess: { text: "<b>Shop</b>", at: at("2026-12-07T17:45:00.000Z") } };
     const doc = page(view);
     expect(doc.querySelector("script:not([src])")).toBeNull();
     expect(doc.querySelector("main u, main i, [onerror]")).toBeNull();
@@ -264,7 +258,7 @@ describe("Detective HQ, in paper", () => {
   it("puts the day's case on a taped note, in every state", () => {
     const states: HqView[] = [
       hqView(),
-      today({ state: "shut", clue: null, options: [] }),
+      today({ state: "shut", clues: [], canGuess: false }),
       today({ state: "found", outcome: { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true } }),
       hqView({ today: null }),
     ];
@@ -276,7 +270,7 @@ describe("Detective HQ, in paper", () => {
   });
 
   it("counts down on the candy cane strip, to the clue and to the next day's", () => {
-    expect(page(today({ state: "shut", clue: null, options: [] })).querySelector(".elf-case .elf-cane-strip .elf-cd")).not.toBeNull();
+    expect(page(today({ state: "shut", clues: [], canGuess: false })).querySelector(".elf-case .elf-cane-strip .elf-cd")).not.toBeNull();
     expect(words(page(hqView({ today: null })).querySelector(".elf-case .elf-cane-strip"))).toBe("1 sleep to go");
   });
 

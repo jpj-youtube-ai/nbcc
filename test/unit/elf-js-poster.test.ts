@@ -324,7 +324,7 @@ describe("things that only go wrong on a real phone", () => {
 
   it("ticks the gold card's clock by itself", () => {
     vi.useFakeTimers();
-    load(posterView(OPEN), {}, { form: "claim", ok: true, win: claimWin() });
+    load(posterView(OPEN), {}, { form: "word", ok: true, outcome: "won", win: claimWin() });
     clock += 5000;
     vi.advanceTimersByTime(1000);
     expect(words($(".elf-clock"))).toBe("5:47:18pm");
@@ -334,7 +334,7 @@ describe("things that only go wrong on a real phone", () => {
 
 describe("a page that already holds an answer", () => {
   it("starts the clock on a gold card the server drew into the page", () => {
-    load(posterView(OPEN), {}, { form: "claim", ok: true, win: claimWin() });
+    load(posterView(OPEN), {}, { form: "word", ok: true, outcome: "won", win: claimWin() });
     expect($(".elf-win__now").hidden).toBe(false);
     expect(words($(".elf-clock"))).toBe("5:47:13pm");
   });

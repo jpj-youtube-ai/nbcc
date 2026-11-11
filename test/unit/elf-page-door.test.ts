@@ -18,10 +18,15 @@ function door(over: Partial<DoorView> = {}): DoorView {
     shapeUrl: null,
     bigPrize: false,
     teaser: null,
+    prize: null,
     elfName: "Snowdrop",
     place: null,
     found: null,
+    revealAt: null,
     counts: null,
+    scrapbook: null,
+    collage: [],
+    goneHome: false,
     factLine: null,
     ...over,
   };
@@ -36,7 +41,8 @@ const FOUND = door({
   clueAt: at("2026-12-04T17:30:00.000Z"),
   elfName: "Pudding",
   place: { name: "The Leisure Centre", town: "Irvine" },
-  found: { at: at("2026-12-04T17:52:00.000Z"), by: "Detectives Finn Hollyhunt and Mia Gingersnap", elfUrl: "/elf/pic/d-41.svg", photoUrl: null },
+  found: { at: at("2026-12-04T17:52:00.000Z"), by: "Detectives Finn Hollyhunt and Mia Gingersnap" },
+  collage: ["/elf/pic/d-41.svg"],
   counts: { cracked: 172, visited: 51 },
   factLine: "Every Red Bag says: you have not been forgotten.",
 });
@@ -232,9 +238,9 @@ describe("a door on the board", () => {
     expect(tile.querySelector(".elf-carve")).toBeNull();
   });
 
-  it("shows the winner's photo instead once there is one", () => {
-    const withPhoto = { ...FOUND, found: { ...FOUND.found!, photoUrl: "/elf/photo/88.jpg" } };
-    expect(dom(doorTile(withPhoto, NOW)).querySelector("img")!.getAttribute("src")).toBe("/elf/photo/88.jpg");
+  it("shows an elf from the door's collage, never a photo, even when the scrapbook holds one", () => {
+    const withPhoto = { ...FOUND, scrapbook: { elves: [], photos: [{ token: "tok88", url: "/elf/door/4/photo/tok88.jpg" }], count: 1 } };
+    expect(dom(doorTile(withPhoto, NOW)).querySelector("img")!.getAttribute("src")).toBe("/elf/pic/d-41.svg");
   });
 
   it("opens a revealed door too, with the place and the elf still to find", () => {
@@ -258,7 +264,8 @@ describe("a door on the board", () => {
       state: "found",
       elfName: "<b>Elf</b>",
       place: { name: '<img src=x onerror="alert(1)">', town: "A&B" },
-      found: { at: NOW, by: "<script>alert(1)</script>", elfUrl: '/elf/pic/x.svg"><script>', photoUrl: null },
+      found: { at: NOW, by: "<script>alert(1)</script>" },
+      collage: ['/elf/pic/x.svg"><script>'],
       counts: { cracked: 1, visited: 1 },
       factLine: "<i>fact</i>",
       teaser: "<u>tease</u>",
@@ -382,12 +389,12 @@ describe("a door's detail", () => {
 });
 
 describe("a door's version for the live feed", () => {
-  it("changes when the door changes state, is found, or gains a photo", () => {
+  it("changes when the door changes state, is found, or its collage changes", () => {
     const versions = [
       doorVersion(TODAY, NOW),
       doorVersion(HUNTING, NOW),
       doorVersion({ ...FOUND, door: 7 }, NOW),
-      doorVersion({ ...FOUND, door: 7, found: { ...FOUND.found!, photoUrl: "/elf/photo/88.jpg" } }, NOW),
+      doorVersion({ ...FOUND, door: 7, collage: ["/elf/pic/other.svg"] }, NOW),
       doorVersion({ ...REVEALED, door: 7 }, NOW),
     ];
     expect(new Set(versions).size).toBe(versions.length);

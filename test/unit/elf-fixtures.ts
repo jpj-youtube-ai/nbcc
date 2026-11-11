@@ -1,16 +1,20 @@
 import { isDoor } from "../../src/elf/calendar";
 import { ELF_NAMES } from "../../src/elf/names";
-import type { CalendarView, ClaimWin, DoorView, HqView, PosterView, StampWin, WardrobeView } from "../../src/elf/pages/types";
+import type { CalendarView, ClaimWin, DoorView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
 
 /** The page a family sees after scanning the poster at an invented shop. Signed in, two detectives,
  *  and the shop's door still shut on the calendar unless told otherwise. */
 export function posterView(over: Partial<PosterView> = {}): PosterView {
   return {
     code: "toy-shop-k4f9",
+    door: 7,
     placeName: "The Toy Shop",
     placeTown: "Troon",
     open: false,
     claimable: true,
+    foundHidden: false,
+    revealAt: null,
+    goneHome: false,
     signedIn: true,
     detectives: [
       { id: "d1", name: "Detective Ruby Tinselfoot", hasStamp: false },
@@ -20,8 +24,9 @@ export function posterView(over: Partial<PosterView> = {}): PosterView {
     signInUrl: "/elf/sign-in",
     calendarUrl: "/elf",
     hqUrl: "/elf/hq",
-    claimUrl: "/elf/p/toy-shop-k4f9/claim",
-    stampUrl: "/elf/p/toy-shop-k4f9/stamp",
+    yourPhoto: null,
+    wordUrl: "/elf/p/toy-shop-k4f9/word",
+    photoUrl: "/api/elf/p/toy-shop-k4f9/photo",
     ...over,
   };
 }
@@ -42,13 +47,16 @@ export function claimWin(over: Partial<ClaimWin> = {}): ClaimWin {
 }
 
 /** Ruby and Leo have checked in. The visit took Ruby to six doors and a promotion. */
-export function stampWin(over: Partial<StampWin> = {}): StampWin {
+export function stampWin(over: Partial<VisitWin> = {}): VisitWin {
   return {
+    door: 7,
     placeName: "The Toy Shop",
+    countsFrom: null,
     detectives: [
       { name: "Detective Ruby Tinselfoot", doorsDone: 6, promotedTo: "Junior Detective", newThings: 4, wardrobeUrl: "/elf/hq/wardrobe/d1" },
       { name: "Detective Leo Frostwhistle", doorsDone: 1, promotedTo: null, newThings: 0, wardrobeUrl: "/elf/hq/wardrobe/d2" },
     ],
+    photo: { door: 7, sendUrl: "/api/elf/p/toy-shop-k4f9/photo" },
     calendarUrl: "/elf",
     hqUrl: "/elf/hq",
     ...over,
@@ -110,10 +118,15 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
       shapeUrl: null,
       bigPrize: n === 12,
       teaser: n === 12 ? "Something with two wheels" : null,
+      prize: null,
       elfName: ELF_NAMES[n - 1],
       place: null,
       found: null,
+      revealAt: null,
       counts: null,
+      scrapbook: null,
+      collage: [],
+      goneHome: false,
       factLine: null,
     };
     if (n < dayOfMonth) {
@@ -121,8 +134,10 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
         ...base,
         state: "found",
         place: { name: `Shop number ${n}`, town: "Ayr" },
-        found: { at: at(`2026-12-${pad(n)}T18:05:00.000Z`), by: "Detective Ruby Tinselfoot", elfUrl: `/elf/pic/${n}.svg`, photoUrl: null },
+        found: { at: at(`2026-12-${pad(n)}T18:05:00.000Z`), by: "Detective Ruby Tinselfoot" },
         counts: { cracked: 10 + n, visited: n },
+        scrapbook: { elves: [], photos: [], count: 0 },
+        collage: [`/elf/pic/${n}.svg`],
         factLine: "NBCC began with a question from a girl aged 12 in Annbank.",
       });
     } else if (n === dayOfMonth) {
@@ -184,25 +199,24 @@ export function hqView(over: Partial<HqView> = {}): HqView {
     ],
     today: {
       door: 7,
+      practice: false,
       state: "hunting",
-      clueAt: at("2026-12-07T17:30:00.000Z"),
       elfName: "Bauble",
-      clue: "I am hiding where stories sleep on shelves.\nLook up, not down!",
-      options: [
-        { id: "p-toys", name: "The Toy Shop", town: "Troon" },
-        { id: "p-books", name: "The Bookshop", town: "Ayr" },
-        { id: "p-bakery", name: "The Corner Bakery", town: "Kilmarnock" },
-      ],
+      clues: [{ n: 1, at: at("2026-12-07T17:30:00.000Z"), words: "I am hiding where stories sleep on shelves.\nLook up, not down!", pictureUrl: null, pictureAlt: null }],
+      nextClueAt: at("2026-12-07T18:00:00.000Z"),
+      revealAt: at("2026-12-07T20:00:00.000Z"),
       guess: null,
+      canGuess: true,
       outcome: null,
     },
     nextClueAt: at("2026-12-08T17:30:00.000Z"),
     marks: {
       doors: [
-        { door: 1, cracked: true, visited: true },
-        { door: 2, cracked: true, visited: false },
-        { door: 4, cracked: false, visited: true },
+        { door: 1, cracked: true, visited: true, snow: false },
+        { door: 2, cracked: true, visited: false, snow: false },
+        { door: 4, cracked: false, visited: true, snow: false },
       ],
+      photos: [],
     },
     calendarUrl: "/elf",
     guessUrl: "/elf/hq/guess",

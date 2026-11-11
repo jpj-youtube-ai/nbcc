@@ -227,7 +227,8 @@ describe("today's news at the top of the calendar", () => {
     const found = view(at("2026-12-07T19:00:00.000Z"), {
       state: "found",
       place: { name: "The Toy Shop", town: "Troon" },
-      found: { at: at("2026-12-07T17:52:00.000Z"), by: "Detective Sam Snowsleuth", elfUrl: "/elf/pic/9.svg", photoUrl: null },
+      found: { at: at("2026-12-07T17:52:00.000Z"), by: "Detective Sam Snowsleuth" },
+    collage: ["/elf/pic/9.svg"],
       counts: { cracked: 3, visited: 1 },
     });
     const status = calendarStatus(found);
@@ -255,7 +256,8 @@ describe("today's news at the top of the calendar", () => {
       ...d,
       state: "found" as const,
       place: { name: "Shop", town: "Ayr" },
-      found: { at: d.clueAt, by: "Detective Ruby Tinselfoot", elfUrl: "/elf/pic/1.svg", photoUrl: null },
+      found: { at: d.clueAt, by: "Detective Ruby Tinselfoot" },
+    collage: ["/elf/pic/1.svg"],
       counts: { cracked: 1, visited: 1 },
     }));
     expect(calendarStatus(done).title).toBe("Every elf is home");

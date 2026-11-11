@@ -3,7 +3,9 @@ import { isOpen, type DoorState } from "../doors";
 import { clockWords, listWords, longDayWords, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { elfPage, escapeHtml, sitePath } from "./shell";
-import type { ClaimWin, PosterOutcome, PosterView, StampWin } from "./types";
+// Task 6 rewrites this page for the word, the visit card and the photo sheet; until then the one word
+// form still draws its two old cards.
+import type { ClaimWin, PosterOutcome, PosterView, VisitWin } from "./types";
 
 // NBCC Elf Detective School: the page a poster's QR code opens. The plan is
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
@@ -102,7 +104,7 @@ export function claimWinHtml(win: ClaimWin): string {
 }
 
 /** The card for a check in that earned candy canes. */
-export function stampWinHtml(win: StampWin): string {
+export function stampWinHtml(win: VisitWin): string {
   const names = listWords(win.detectives.map((d) => d.name));
   const rows = win.detectives
     .map((d) => {
@@ -149,7 +151,7 @@ function claimCard(view: PosterView, refusal: string): string {
     `<div class="elf-case elf-claim-card">` +
     `<h2>Found the elf?</h2>` +
     `<p>${intro}</p>` +
-    `<form class="elf-claim" method="post" action="${sitePath(view.claimUrl) ?? "/"}" data-api="/api/elf/claim">` +
+    `<form class="elf-claim" method="post" action="${sitePath(view.wordUrl) ?? "/"}" data-api="/api/elf/claim">` +
     `<input type="hidden" name="code" value="${escapeHtml(view.code)}" />` +
     ticks("claim", "Who found it?", view.detectives) +
     `<div class="elf-field"><label for="elf-word">The secret word on the elf's tag</label>` +
@@ -168,7 +170,7 @@ function stampCard(view: PosterView, refusal: string): string {
     ? `<p class="elf-stamp__have">${icon("tick", 16)} ${escapeHtml(listWords(have.map((d) => d.name)))} already ${have.length === 1 ? "has" : "have"} this candy cane.</p>`
     : "";
   const form = need.length
-    ? `<form class="elf-stamp" method="post" action="${sitePath(view.stampUrl) ?? "/"}" enctype="multipart/form-data" data-api="/api/elf/stamp">` +
+    ? `<form class="elf-stamp" method="post" action="${sitePath(view.photoUrl) ?? "/"}" enctype="multipart/form-data" data-api="/api/elf/stamp">` +
       `<input type="hidden" name="code" value="${escapeHtml(view.code)}" />` +
       ticks("stamp", "Who is here?", need) +
       // The phone's location can only be read by the script, which shows this part.
@@ -197,10 +199,9 @@ function stampCard(view: PosterView, refusal: string): string {
 export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): string {
   const place = escapeHtml(view.placeName);
   const calendar = sitePath(view.calendarUrl) ?? "/";
-  const won = outcome?.ok === true;
-  const result = !outcome || !outcome.ok ? "" : outcome.form === "claim" ? claimWinHtml(outcome.win) : stampWinHtml(outcome.win);
-  const claimRefusal = outcome && !outcome.ok && outcome.form === "claim" ? claimRefusalWords(outcome.reason, outcome.triesLeft) : "";
-  const stampRefusal = outcome && !outcome.ok && outcome.form === "stamp" ? stampRefusalWords(outcome.reason) : "";
+  const wonElf = outcome?.ok === true && outcome.outcome === "won";
+  const result = !outcome || !outcome.ok ? "" : outcome.outcome === "won" ? claimWinHtml(outcome.win) : stampWinHtml(outcome.visit);
+  const refusal = outcome && !outcome.ok ? claimRefusalWords(outcome.reason, outcome.triesLeft) : "";
 
   let lede: string;
   let body: string;
@@ -220,16 +221,16 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
       `<p>Your family has no detectives yet. Add one at Detective HQ, then scan this poster again.</p>` +
       `<p class="elf-poster__actions">${link(view.hqUrl, "Detective HQ", "btn btn-primary")}</p></div>`;
   } else {
-    const claiming = view.claimable && !(won && outcome?.form === "claim");
+    const claiming = view.claimable && !wonElf;
     lede = !view.open
       ? "Have you found an elf here? Or are you here for a candy cane?"
       : view.claimable
         ? "The elf that hid here has not been found yet, and you can collect your candy cane."
         : "The elf that hid here has been found. You can still collect your candy cane.";
     body =
-      (claiming ? claimCard(view, claimRefusal) : "") +
+      (claiming ? claimCard(view, refusal) : "") +
       (view.open
-        ? stampCard(view, stampRefusal)
+        ? stampCard(view, claiming ? "" : refusal)
         : `<div class="elf-poster__later"><h2>Here for a candy cane?</h2>` +
           `<p>You can check in at ${place} once its door has opened on the calendar. A door opens when its elf is found, or when the place closes for the day.</p></div>`);
   }

@@ -37,26 +37,16 @@ function clueHtml(clue: string): string {
   return escapeHtml(clue).replace(/\r?\n/g, "<br />\n");
 }
 
+// Stop gap: Task 6 rewrites this page for the typed guess and the clues. Until then the guess is a
+// plain text box and each clue that is out is one note.
 function guessForm(today: TodayView, guessUrl: string): string {
-  if (today.options.length === 0) return line("There is nothing left to guess just now. Keep an eye on the calendar.");
-  const choices = today.options
-    .map((place, i) => {
-      const id = `guess-${i + 1}`;
-      const checked = today.guess?.id === place.id ? " checked" : "";
-      const required = i === 0 ? " required" : "";
-      return (
-        `<li><input type="radio" name="placeId" id="${id}" value="${escapeHtml(place.id)}"${checked}${required} />` +
-        `<label for="${id}">${escapeHtml(`${place.name}, ${place.town}`)}</label></li>`
-      );
-    })
-    .join("");
-  const status = today.guess
-    ? `Your guess: ${escapeHtml(`${today.guess.name}, ${today.guess.town}`)}. You can change it until the elf is found.`
-    : "";
+  if (!today.canGuess) return line("There is nothing left to guess just now. Keep an eye on the calendar.");
+  const status = today.guess ? `Your guess: ${escapeHtml(today.guess.text)}. You can change it until the elf is found.` : "";
   return (
     `<form class="elf-guess" method="post" action="${sitePath(guessUrl) ?? "/"}" data-api="/api/elf/guess">` +
     `<input type="hidden" name="door" value="${count(today.door)}" />` +
-    `<fieldset><legend>Where is ${escapeHtml(today.elfName)} hiding?</legend><ul class="elf-guess__choices">${choices}</ul></fieldset>` +
+    `<div class="elf-field"><label for="guess-text">Where is ${escapeHtml(today.elfName)} hiding?</label>` +
+    `<input id="guess-text" name="guess" type="text" required maxlength="80" autocomplete="off" value="${escapeHtml(today.guess?.text ?? "")}" /></div>` +
     `<p class="elf-guess__status" role="status">${status}</p>` +
     `<button class="elf-btn elf-btn--crimson" type="submit">${today.guess ? "Change my guess" : "Lock in my guess"}</button>` +
     `</form>`
@@ -74,7 +64,7 @@ function outcomeHtml(today: TodayView): string {
       ? line(`Nobody found ${elf} in time. ${elf} is still waiting at ${place}, and the first detective to read the secret word still wins.`)
       : line(`${elf} was hiding at ${place}.`) +
         (outcome.by ? line(`${icon("rosette", 16)} Found first by ${escapeHtml(outcome.by)}${outcome.at ? ` at ${clockWords(outcome.at)}` : ""}`, "elf-case__by") : "");
-  const guess = today.guess ? escapeHtml(`${today.guess.name}, ${today.guess.town}`) : null;
+  const guess = today.guess ? escapeHtml(today.guess.text) : null;
   const verdict = outcome.cracked
     ? line(`<span class="elf-mark elf-mark--cracked">${icon("cracked", 16)}</span> <b>You cracked it!</b> Your guess was right.`, "elf-case__verdict is-cracked")
     : guess
@@ -99,15 +89,16 @@ function caseCard(view: HqView): string {
   const head = `<p class="elf-case__door">Door ${count(today.door)}</p>`;
   if (today.state === "shut") {
     // A door whose clue time is not a real date stays shut (src/elf/doors.ts). Say so plainly.
-    if (!real(today.clueAt) || !real(view.now)) {
+    const clueAt = today.nextClueAt ?? new Date(NaN);
+    if (!real(clueAt) || !real(view.now)) {
       return head + `<h2 id="elf-case-heading">Today's clue is on its way</h2>` + line("Come back later to read it and lock in your guess.");
     }
-    const left = today.clueAt.getTime() - view.now.getTime();
+    const left = clueAt.getTime() - view.now.getTime();
     return (
       head +
       `<h2 id="elf-case-heading">Today's clue is on its way</h2>` +
-      line(`Clue out at ${clockWords(today.clueAt)}`) +
-      `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>` +
+      line(`Clue out at ${clockWords(clueAt)}`) +
+      `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${clueAt.toISOString()}">${countdownWords(left)}</span></p>` +
       line("Come back then to read it and lock in your guess.")
     );
   }
@@ -115,7 +106,7 @@ function caseCard(view: HqView): string {
     return (
       head +
       `<h2 id="elf-case-heading">The hunt is on!</h2>` +
-      (today.clue ? `<blockquote class="elf-clue">${clueHtml(today.clue)}</blockquote>` : "") +
+      today.clues.map((c) => (c.words ? `<blockquote class="elf-clue">${clueHtml(c.words)}</blockquote>` : "")).join("") +
       guessForm(today, view.guessUrl)
     );
   }

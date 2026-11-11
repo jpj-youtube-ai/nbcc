@@ -1,48 +1,50 @@
-import type { ClaimRefusal } from "../claim";
-import { isOpen, type DoorState } from "../doors";
-import type { StampRefusal } from "../stamps";
+import type { WordRefusal } from "../claim";
 import { clockWords, listWords, longDayWords, things } from "../words";
 import { candyCane, icon } from "./icons";
-import { elfPage, escapeHtml, sitePath } from "./shell";
-import type { ClaimWin, PosterOutcome, PosterView, StampWin } from "./types";
+import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
+import type { ClaimWin, PosterOutcome, PosterView, VisitWin } from "./types";
 
 // NBCC Elf Detective School: the page a poster's QR code opens. The plan is
-// docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
+// docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md; the doors in December are
+// docs/superpowers/plans/2026-11-10-elf-wave-2-game-1.md (Task 6).
 //
-// Every hiding place keeps its poster up all month. Scanning it does one of three things:
+// Every hiding place keeps its poster up all month, and its elf stays beside it all December
+// (decision 1). Scanning it does one of these:
 //   - someone who has not joined is asked to join;
-//   - a family claims the elf, by ticking who found it and typing the secret word on its tag;
-//   - once the place's door is open on the calendar, a family checks in for a candy cane, with
-//     the phone's location (the page's script) or a photo taken there (works with no script).
+//   - a family types the word on the elf's tag, ticking who is here. The first family to do so wins
+//     the prize (one prize per family a year); every family after that, and a family that has won
+//     already, collects a candy cane for each detective ticked and puts their elves on the door
+//     (decision 3: the word is the proof of a visit, with no location and no photo needed);
+//   - after a visit, a family can add a photo to the door. A head elf checks every photo first.
 //
 // ONE RULE SHAPES THIS PAGE. A poster is only a link, so anyone can open any place's page from
-// home. The page must therefore look exactly the same on the day an elf hides at a place as on
-// every day before it, or opening all 24 pages would give the day's place away. So the page is
-// told only what the public calendar already shows (posterState below): never the door's number,
-// its state or its clue time. The words for a refused claim keep the same secret: a wrong word is
-// answered the same way everywhere (see src/elf/claim.ts).
+// home. Before its door is open, the page must therefore look exactly the same on the day an elf
+// hides at a place as on every day before it, or opening all 24 pages would give the day's place
+// away. So the page is told only what the public calendar already shows (posterViewFor), and until
+// the elf is found or the door is open it never writes the door's number, its elf's name or its
+// state, whatever else the view holds (a gone home flag or an approved photo included). The words for
+// a refused word keep the same secret: a wrong word is answered the same way everywhere (see
+// src/elf/claim.ts).
 //
-// Both forms post to the server like any form. The page's script (assets/js/elf-poster.js) sends
-// them without leaving the page and shows the answer, which the server draws with claimWinHtml and
-// stampWinHtml here, so the card is the same with or without the script.
+// The form posts to the server like any form. The page's script (assets/js/elf-poster.js) sends it
+// without leaving the page and shows the answer, which the server draws with claimWinHtml and
+// visitWinHtml here, so the card is the same with or without the script.
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-page-poster.test.ts.
 
-/** What the poster page may know about its place's door: only what the calendar shows everyone.
- *  A shut door and a door whose elf is being hunted give the same answer, on purpose. */
-export function posterState(doorState: DoorState): Pick<PosterView, "open" | "claimable"> {
-  return { open: isOpen(doorState), claimable: doorState !== "found" };
-}
-
 const UNKNOWN = "Something went wrong. Refresh the page and try again.";
 
-const real = (d: Date): boolean => d instanceof Date && Number.isFinite(d.getTime());
-/** A count as a whole number that is safe to write into the page, whatever a database hands over. */
-const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
+/** "door 7", or "the practice door" for door 0, for the middle of a sentence. */
+const doorWords = (door: unknown): string => (count(door) === 0 ? "the practice door" : `door ${count(door)}`);
+/** The same at the start of a sentence: "Door 7", "The practice door". */
+const startDoorWords = (door: unknown): string => {
+  const words = doorWords(door);
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
 
-/** What to tell a family whose claim was refused. `triesLeft` is how many wrong words they may
- *  still type at this place, when the server knows. */
-export function claimRefusalWords(reason: ClaimRefusal, triesLeft?: number): string {
+/** What to tell a family whose word was refused. `triesLeft` is how many wrong words they may still
+ *  type at this place, when the server knows. */
+export function wordRefusalWords(reason: WordRefusal, triesLeft?: number): string {
   switch (reason) {
     case "wrong-word": {
       const left = typeof triesLeft === "number" && Number.isFinite(triesLeft) ? Math.max(0, Math.floor(triesLeft)) : null;
@@ -54,32 +56,12 @@ export function claimRefusalWords(reason: ClaimRefusal, triesLeft?: number): str
       return "That is too many wrong words here. If you are holding the elf, show it to the staff: they can phone NBCC and we will sort it out.";
     case "too-early":
       return "That is the right word, but this elf is not out yet. Come back once its clue is on the calendar to claim it.";
-    case "already-found":
-      return "This elf has already been found.";
-    case "already-won":
-      return "Well spotted! Your family has already won an elf this year, and it is one elf for each family. Please leave this one hiding for the next detective.";
-    case "no-detectives":
-      return "Tick who found the elf.";
-    default:
-      return UNKNOWN;
-  }
-}
-
-/** What to tell a family whose check in was refused. */
-export function stampRefusalWords(reason: StampRefusal): string {
-  switch (reason) {
-    case "door-not-open":
-      return "This place's door has not opened yet. Come back once it has.";
-    case "no-detectives":
-      return "Tick who is here.";
+    case "gone-home":
+      return "This elf has gone home, so its word no longer gives a stamp. Thank you for calling in!";
     case "nothing-new":
       return "Everyone ticked already has this candy cane.";
-    case "too-far":
-      return "Your phone looks too far from here. Move closer and try again, or take a photo here instead.";
-    case "place-unknown":
-      return "We cannot check locations at this place yet. Please take a photo here instead.";
-    case "no-proof":
-      return "We need your location or a photo taken here.";
+    case "no-detectives":
+      return "Tick who is here.";
     default:
       return UNKNOWN;
   }
@@ -103,43 +85,77 @@ export function claimWinHtml(win: ClaimWin): string {
     .join("");
   return (
     `<section class="elf-win" aria-labelledby="elf-win-heading">` +
-    `<p class="elf-win__door">${icon("rosette", 18)} Door ${count(win.door)}</p>` +
+    `<p class="elf-win__door">${icon("rosette", 18)} ${startDoorWords(win.door)}</p>` +
     `<h2 id="elf-win-heading">You're first!</h2>` +
     `<p class="elf-win__who">${names ? `${escapeHtml(names)} found ${elf}` : `${elf} has been found`} at ${escapeHtml(win.placeName)}.</p>` +
     `<ul class="elf-win__badges">${badges}</ul>` +
     (real(win.at) ? `<p class="elf-win__when">Found at ${clockWords(win.at)} on ${longDayWords(win.at)}</p>` : "") +
     // A clock that ticks tells the real card from a picture of one. The script shows it.
     (real(win.now) ? `<p class="elf-win__now" hidden>The time now is <b class="elf-clock" data-now="${win.now.toISOString()}"></b></p>` : "") +
-    `<p class="elf-win__staff"><b>Show this screen to the staff.</b> They will hand over ${elf} and the prize.</p>` +
+    // Decision 1: the elf stays at its place all December, and the finder is given the prize.
+    `<p class="elf-win__staff"><b>Show this screen to the staff.</b> They will give you the prize. ${elf} stays here for everyone else to find.</p>` +
     `<p class="elf-win__note">Your candy cane for this place has been added too.</p>` +
-    `<p class="elf-win__links">${link(win.hqUrl, "Back to Detective HQ", "btn btn-primary")} ${link(win.calendarUrl, "See the calendar")}</p>` +
+    `<p class="elf-win__links">${link(win.hqUrl, "Back to Detective HQ", "elf-btn elf-btn--crimson")} ${link(win.calendarUrl, "See the calendar")}</p>` +
     `</section>`
   );
 }
 
-/** The card for a check in that earned candy canes. */
-export function stampWinHtml(win: StampWin): string {
+/** The sheet for adding a photo to a door: a file to take or pick, the grown up's yes for this one
+ *  photo (unticked until they tick it), and the promise. `prefix` keeps its ids apart from another
+ *  sheet's on the same page. */
+function photoSheet(o: { prefix: string; door: unknown; sendUrl: string; calendarUrl: string }): string {
+  const door = doorWords(o.door);
+  const send = sitePath(o.sendUrl) ?? "/";
+  const id = (part: string): string => `${o.prefix}-${part}`;
+  return (
+    `<div class="elf-photo-sheet elf-note">` +
+    `<span class="elf-tape" aria-hidden="true"></span>` +
+    `<h3>Add a photo to ${door}</h3>` +
+    line(`It goes behind ${door} on the calendar, in a row of photos with no names.`) +
+    `<form class="elf-photo-sheet__form" method="post" action="${send}" enctype="multipart/form-data" data-api="${send}">` +
+    // The picture the family has chosen, shown by the page's script before it is sent.
+    `<figure class="elf-pol elf-photo-sheet__preview" hidden><span class="elf-pol__shot"></span><figcaption>Your photo</figcaption></figure>` +
+    `<div class="elf-field"><label for="${id("photo")}">Take a photo here</label>` +
+    `<input id="${id("photo")}" name="photo" type="file" accept="image/*" capture="environment" required /></div>` +
+    `<div class="elf-consent elf-tick"><input id="${id("consent")}" name="consent" type="checkbox" value="yes" required />` +
+    `<label for="${id("consent")}"><b>Yes, show this photo on ${door}</b> <span>Anyone looking at the calendar will see it. No names go with a photo.</span></label></div>` +
+    `<p class="elf-form-status" role="status"></p>` +
+    `<button class="elf-btn elf-btn--crimson" type="submit">Send it to the head elves</button>` +
+    `</form>` +
+    `<p class="elf-photo-sheet__links"><a class="elf-link elf-photo-sheet__skip" href="${sitePath(o.calendarUrl) ?? "/"}">Not this time</a></p>` +
+    line("A head elf looks at every photo before anyone else can see it. We take out where and when it was taken. Every photo comes down at the end of January.", "elf-photo-sheet__promise") +
+    `</div>`
+  );
+}
+
+/** The card for a word that earned candy canes: a visit. Their elves are on the door, and they can
+ *  add a photo. */
+export function visitWinHtml(win: VisitWin): string {
   const names = listWords(win.detectives.map((d) => d.name));
+  const door = doorWords(win.door);
   const rows = win.detectives
     .map((d) => {
       const bits = [`<b>${escapeHtml(d.name)}</b>: ${things(count(d.doorsDone), "door")} done.`];
-      if (d.promotedTo) bits.push(`<span class="elf-stamped__up">Promoted to ${escapeHtml(d.promotedTo)}!</span>`);
+      if (d.promotedTo) bits.push(`<span class="elf-visit__up">Promoted to ${escapeHtml(d.promotedTo)}!</span>`);
       if (count(d.newThings) > 0) bits.push(`${things(count(d.newThings), "new thing")} in the wardrobe. ${link(d.wardrobeUrl, "Dress the elf")}`);
       return `<li>${bits.join(" ")}</li>`;
     })
     .join("");
   return (
-    `<section class="elf-stamped" aria-labelledby="elf-stamped-heading">` +
-    `<span class="elf-stamped__cane">${candyCane(56)}</span>` +
-    `<h2 id="elf-stamped-heading">Candy cane collected!</h2>` +
-    `<p>${escapeHtml(names)} ${win.detectives.length === 1 ? "has" : "have"} visited ${escapeHtml(win.placeName)}.</p>` +
-    `<ul class="elf-stamped__who">${rows}</ul>` +
-    `<p class="elf-stamped__links">${link(win.hqUrl, "Back to Detective HQ", "btn btn-primary")} ${link(win.calendarUrl, "See the calendar")}</p>` +
+    `<section class="elf-visit elf-card elf-card--holly" aria-labelledby="elf-visit-heading">` +
+    `<span class="elf-visit__cane">${candyCane(56)}</span>` +
+    `<h2 id="elf-visit-heading">${startDoorWords(win.door)} done!</h2>` +
+    (names ? line(`${escapeHtml(names)} ${win.detectives.length === 1 ? "has" : "have"} a candy cane stamp for visiting ${escapeHtml(win.placeName)}.`) : "") +
+    (real(win.countsFrom) ? line(`It counts from ${clockWords(win.countsFrom)}, when the hiding place is shown.`, "elf-visit__from") : "") +
+    `<ul class="elf-visit__who">${rows}</ul>` +
+    line(`Your elves are on ${door}.`, "elf-visit__door") +
+    photoSheet({ prefix: "elf-visit", door: win.photo.door, sendUrl: win.photo.sendUrl, calendarUrl: win.calendarUrl }) +
+    `<p class="elf-visit__links">${link(win.hqUrl, "Back to Detective HQ", "elf-btn elf-btn--s")} ${link(win.calendarUrl, "See the calendar")}</p>` +
     `</section>`
   );
 }
 
-// ---- the forms ------------------------------------------------------------------------------
+// ---- the page's own parts --------------------------------------------------------------------
 
 /** One tick box for each detective. A family with only one to tick has it ticked for them. */
 function ticks(prefix: string, legend: string, detectives: PosterView["detectives"]): string {
@@ -157,97 +173,106 @@ function ticks(prefix: string, legend: string, detectives: PosterView["detective
 
 const status = (words = ""): string => `<p class="elf-form-status${words ? " is-error" : ""}" role="status">${escapeHtml(words)}</p>`;
 
-function claimCard(view: PosterView, refusal: string): string {
-  const intro = view.open
-    ? "Nobody found this elf in time, so it is still waiting here. The first detective to read its secret word wins it."
-    : "Tick who found it, then type the secret word on its tag.";
-  return (
-    `<div class="elf-case elf-claim-card">` +
-    `<h2>Found the elf?</h2>` +
-    `<p>${intro}</p>` +
-    `<form class="elf-claim" method="post" action="${sitePath(view.claimUrl) ?? "/"}" data-api="/api/elf/claim">` +
-    `<input type="hidden" name="code" value="${escapeHtml(view.code)}" />` +
-    ticks("claim", "Who found it?", view.detectives) +
-    `<div class="elf-field"><label for="elf-word">The secret word on the elf's tag</label>` +
-    `<input class="elf-word" id="elf-word" name="word" type="text" required maxlength="60" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="elf-word-hint" />` +
-    `<p class="elf-hint" id="elf-word-hint">A word and a number, like SNOWBALL 472.</p></div>` +
-    status(refusal) +
-    `<button class="btn btn-primary" type="submit">We found the elf!</button>` +
-    `</form></div>`
-  );
-}
+/** A card on a taped note. */
+const note = (cls: string, html: string): string => `<div class="elf-case elf-note ${cls}"><span class="elf-tape" aria-hidden="true"></span>${html}</div>`;
 
-function stampCard(view: PosterView, refusal: string): string {
+/** The one form: who is here, and the word on the elf's tag. Only the detectives who have not got
+ *  this place's candy cane are offered; once everyone has it, there is nothing left to ask. */
+function wordCard(view: PosterView, refusal: string): string {
   const have = view.detectives.filter((d) => d.hasStamp);
   const need = view.detectives.filter((d) => !d.hasStamp);
   const haveLine = have.length
-    ? `<p class="elf-stamp__have">${icon("tick", 16)} ${escapeHtml(listWords(have.map((d) => d.name)))} already ${have.length === 1 ? "has" : "have"} this candy cane.</p>`
+    ? `<p class="elf-word__have">${icon("tick", 16)} ${escapeHtml(listWords(have.map((d) => d.name)))} already ${have.length === 1 ? "has" : "have"} this candy cane.</p>`
     : "";
   const form = need.length
-    ? `<form class="elf-stamp" method="post" action="${sitePath(view.stampUrl) ?? "/"}" enctype="multipart/form-data" data-api="/api/elf/stamp">` +
+    ? `<form class="elf-word" method="post" action="${sitePath(view.wordUrl) ?? "/"}" data-api="/api/elf/word">` +
       `<input type="hidden" name="code" value="${escapeHtml(view.code)}" />` +
-      ticks("stamp", "Who is here?", need) +
-      // The phone's location can only be read by the script, which shows this part.
-      `<div class="elf-stamp__location" hidden>` +
-      `<button class="btn btn-primary" type="button">Check in with my location</button>` +
-      `<p class="elf-hint">We look at where your phone is once, to see that you are here. Nothing is kept.</p>` +
-      `<p class="elf-stamp__or">Rather not share it?</p></div>` +
-      `<div class="elf-field"><label for="elf-photo">Take a photo here</label>` +
-      `<input id="elf-photo" name="photo" type="file" accept="image/*" capture="environment" required aria-describedby="elf-photo-hint" />` +
-      `<p class="elf-hint" id="elf-photo-hint">Only NBCC's team sees it, to check the visit. It is never shown on the website, and it is deleted at the end of January.</p></div>` +
+      ticks("word", "Who is here?", need) +
+      `<div class="elf-field"><label for="elf-word-input">The secret word on the elf's tag</label>` +
+      `<input class="elf-word__input" id="elf-word-input" name="word" type="text" required maxlength="60" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="elf-word-hint" />` +
+      `<p class="elf-hint" id="elf-word-hint">A word and a number, like SNOWBALL 472.</p></div>` +
       status(refusal) +
-      `<button class="btn btn-ghost" type="submit">Check in with a photo</button>` +
+      `<button class="elf-btn elf-btn--crimson" type="submit">Type in the word</button>` +
       `</form>`
     : "";
-  return (
-    `<div class="elf-case elf-stamp-card">` +
-    `<h2>Collect your candy cane</h2>` +
-    (need.length ? `<p>Every hiding place you visit earns a candy cane on your calendar.</p>` : "") +
-    haveLine +
-    form +
-    `</div>`
+  return note("elf-word-card", haveLine + form);
+}
+
+/** The family's own photo for this door: waiting, up, or not used, with Take it down (the page's
+ *  script sends it) and Send another (opens the sheet again, with no script). Before the door is open
+ *  the card never names it: an approved photo reads as waiting until the place is shown (as the photo
+ *  itself does), and Send another, whose sheet names the door, waits too. Once the elves have gone home
+ *  there is nothing to send, so only Take it down stays. */
+function yourPhoto(view: PosterView): string {
+  const photo = view.yourPhoto;
+  if (!photo) return "";
+  const status = !view.open && photo.status === "approved" ? "waiting" : photo.status;
+  const said =
+    status === "waiting"
+      ? "Thank you! A head elf will look at your photo soon."
+      : status === "approved"
+        ? `Your photo is on ${doorWords(view.door)}.`
+        : status === "declined"
+          ? "We could not use that photo this time. You are welcome to send another."
+          : null;
+  if (!said) return "";
+  return note(
+    "elf-your-photo",
+    `<h2>Your photo</h2>` +
+      line(said, `elf-your-photo__said${status === "approved" ? " is-ok" : ""}`) +
+      (status === "declined" ? "" : `<p class="elf-your-photo__actions"><button class="elf-btn elf-btn--s elf-your-photo__down" type="button">Take it down</button></p>`) +
+      (view.open && !view.goneHome
+        ? `<details class="elf-your-photo__again"><summary class="elf-btn elf-btn--s">Send another</summary>` +
+          photoSheet({ prefix: "elf-again", door: view.door, sendUrl: view.photoUrl, calendarUrl: view.calendarUrl }) +
+          `</details>`
+        : ""),
   );
 }
 
 /** The whole poster page. `outcome` is the answer to a form that was posted with no script. */
 export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): string {
   const place = escapeHtml(view.placeName);
+  const elf = escapeHtml(view.elfName);
   const calendar = sitePath(view.calendarUrl) ?? "/";
-  const won = outcome?.ok === true;
-  const result = !outcome || !outcome.ok ? "" : outcome.form === "claim" ? claimWinHtml(outcome.win) : stampWinHtml(outcome.win);
-  const claimRefusal = outcome && !outcome.ok && outcome.form === "claim" ? claimRefusalWords(outcome.reason, outcome.triesLeft) : "";
-  const stampRefusal = outcome && !outcome.ok && outcome.form === "stamp" ? stampRefusalWords(outcome.reason) : "";
+  const result = !outcome || !outcome.ok ? "" : outcome.outcome === "won" ? claimWinHtml(outcome.win) : visitWinHtml(outcome.visit);
+  // A refused word says why; so does a form sent too often (the server's words, the same at every place).
+  const refusal = outcome && !outcome.ok ? wordRefusalWords(outcome.reason, outcome.triesLeft) : typeof view.wordError === "string" ? view.wordError : "";
 
   let lede: string;
   let body: string;
   if (!view.signedIn) {
     lede = `${place}, ${escapeHtml(view.placeTown)}, is one of this year's hiding places in NBCC Elf Detective School.`;
-    body =
-      `<div class="elf-case elf-join-card">` +
+    body = note(
+      "elf-join-card",
       `<h2>Want to join the hunt?</h2>` +
-      `<p>From 1 to 24 December a cheeky elf hides at a different place each day. Detectives crack the clue, race to find the elf, and collect a candy cane at every place they visit.</p>` +
-      `<p class="elf-poster__actions">${link(view.joinUrl, "Join Elf Detective School", "btn btn-primary")} ${link(view.signInUrl, "I am already a detective", "btn btn-ghost")}</p>` +
-      `</div>`;
+        `<p>From 1 to 24 December a cheeky elf hides at a different place each day. Detectives crack the clue, race to find the elf, and collect a candy cane at every place they visit.</p>` +
+        `<p class="elf-poster__actions">${link(view.joinUrl, "Join Elf Detective School", "elf-btn elf-btn--crimson")} ${link(view.signInUrl, "I am already a detective", "elf-btn")}</p>`,
+    );
   } else if (view.detectives.length === 0) {
-    // Signed in, but nobody to tick: the forms would be empty.
+    // Signed in, but nobody to tick: the form would be empty.
     lede = `${place} is one of this year's hiding places.`;
-    body =
-      `<div class="elf-case elf-join-card"><h2>Add a detective first</h2>` +
-      `<p>Your family has no detectives yet. Add one at Detective HQ, then scan this poster again.</p>` +
-      `<p class="elf-poster__actions">${link(view.hqUrl, "Detective HQ", "btn btn-primary")}</p></div>`;
+    body = note(
+      "elf-join-card",
+      `<h2>Add a detective first</h2>` +
+        `<p>Your family has no detectives yet. Add one at Detective HQ, then scan this poster again.</p>` +
+        `<p class="elf-poster__actions">${link(view.hqUrl, "Detective HQ", "elf-btn elf-btn--crimson")}</p>`,
+    );
+  } else if (view.goneHome && view.open) {
+    // Only an open door's elves can have gone home as far as this page is concerned: a gone home flag on
+    // a door that is not open changes nothing, so the page still names nothing before its time.
+    lede = `${elf} has gone home, so there is nothing to find here now. Thank you for calling in!`;
+    body = yourPhoto(view);
   } else {
-    const claiming = view.claimable && !(won && outcome?.form === "claim");
-    lede = !view.open
-      ? "Have you found an elf here? Or are you here for a candy cane?"
-      : view.claimable
-        ? "The elf that hid here has not been found yet, and you can collect your candy cane."
-        : "The elf that hid here has been found. You can still collect your candy cane.";
-    body =
-      (claiming ? claimCard(view, claimRefusal) : "") +
-      (view.open
-        ? stampCard(view, stampRefusal)
-        : `<div class="elf-poster__later"><h2>Here for a candy cane?</h2>` +
-          `<p>You can check in at ${place} once its door has opened on the calendar. A door opens when its elf is found, or when the place closes for the day.</p></div>`);
+    // The elf is named only once it is found or its door is open: before then the name would tie this
+    // place to a door on the calendar, and so to its day.
+    const reveal = real(view.revealAt) ? clockWords(view.revealAt) : "";
+    lede = view.foundHidden
+      ? `${elf} has been found! Type the word on its tag${reveal ? ` and your candy canes count from ${reveal}` : ""}.`
+      : view.open
+        ? `${elf} is here all December. Type the word on its tag for a candy cane.`
+        : "Found the elf? Or here for a candy cane?";
+    // An answer that counted brings its own card and its own way on, so the form steps aside.
+    body = (outcome?.ok === true ? "" : wordCard(view, refusal)) + yourPhoto(view);
   }
 
   const main = `  <section class="page-top elf-top elf-poster-top" aria-labelledby="elf-poster-heading">
@@ -258,18 +283,18 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
     </div>
   </section>
 
-  <section class="elf-poster" aria-label="${view.signedIn ? "Claim an elf or check in" : "Join in"}">
+  <div class="elf-poster">
     <div class="wrap">
       <div id="elf-result" class="elf-result" tabindex="-1" aria-live="polite">${result}</div>
       ${body}
       <p class="elf-grown-up">Under 16? Bring a grown up with you to every hiding place.</p>
       <p class="elf-poster__links"><a class="elf-link" href="${calendar}">See the calendar</a>${view.signedIn ? ` ${link(view.hqUrl, "Detective HQ")}` : ""}</p>
     </div>
-  </section>`;
+  </div>`;
 
   return elfPage({
     title: view.placeName,
-    description: "A hiding place in NBCC Elf Detective School: claim the elf with its secret word, or check in for a candy cane.",
+    description: "A hiding place in NBCC Elf Detective School: type the word on the elf's tag to win the prize or collect a candy cane.",
     cta: { href: view.calendarUrl, label: "The calendar" },
     home: view.calendarUrl,
     main,

@@ -120,6 +120,16 @@ describe("comparing what came back with what went in", () => {
     expect(v.discrepancies[0].database).toBe("stories");
   });
 
+  // C12: the photo files table is restored empty on purpose, and the manifest records it as 0.
+  it("passes a table left out of the dump, recorded as 0 rows, and still counts it", () => {
+    const m = manifest({
+      databases: [{ label: "main", dumpBytes: 1, tables: { donors: 14, elf_photo_files: 0 } }],
+    } as Partial<Manifest>);
+    const v = compareRestore(m, { main: { donors: 14, elf_photo_files: 0 } });
+    expect(v.pass).toBe(true);
+    expect(v.tablesChecked).toBe(2);
+  });
+
   it("distinguishes a genuinely empty table from a missing one", () => {
     const empty = manifest({
       databases: [{ label: "main", dumpBytes: 1, tables: { donors: 0 } }],

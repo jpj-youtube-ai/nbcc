@@ -39,6 +39,13 @@ export const PICTURES_PER_DAY = 10;
 /** Where an approved profile photo is served from, by its own id (a uuid) only. */
 export const PROFILE_PHOTO_PREFIX = "/media/fundraiser-profile/";
 
+/** The words for a picture that cannot be used, kept once for the fundraisers' pictures, the game's photos and clue pictures. */
+export const PICTURE_LOOK_AGAIN = "Your picture needs another look";
+export const PICTURE_TYPE_WORDS = "That picture is not one we can use. Try a JPG, PNG or WebP photo.";
+export const PICTURE_SIZE_WORDS = "That picture is too big. Try a smaller one.";
+export const PICTURE_READ_WORDS = "We could not open that picture. Please try a different photo.";
+export const PICTURE_BUSY_WORDS = "Lots of photos arriving just now. Please try again in a minute.";
+
 /** What the upload form sends. The picture is checked once it is decoded. */
 export const pictureUploadSchema = z
   .object({

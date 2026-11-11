@@ -31,7 +31,7 @@ const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };
 
-function load(view: HqView = hqView()): Hq {
+function load(view: HqView = hqView(), extra: Record<string, unknown> = {}): Hq {
   document.documentElement.innerHTML = new DOMParser().parseFromString(renderHqPage(view), "text/html").documentElement.innerHTML;
   calls = [];
   clock = 5_000_000;
@@ -43,12 +43,12 @@ function load(view: HqView = hqView()): Hq {
     return Promise.resolve({ ok: a.status >= 200 && a.status < 300, status: a.status, json: () => Promise.resolve(a.body) });
   });
   reloads = 0;
-  hq = initHq(document, window, { now: () => clock, reload: () => (reloads += 1) }) as Hq;
+  hq = initHq(document, window, { now: () => clock, reload: () => (reloads += 1), ...extra }) as Hq;
   return hq;
 }
 
-async function choose(placeId: string): Promise<void> {
-  $<HTMLInputElement>(`input[value="${placeId}"]`).checked = true;
+async function choose(guess: string): Promise<void> {
+  $<HTMLInputElement>('input[name="text"]').value = guess;
   $("form.elf-guess").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await flush();
 }
@@ -56,7 +56,7 @@ async function choose(placeId: string): Promise<void> {
 describe("things that only go wrong on a real phone", () => {
   it("ticks by itself, a second at a time", () => {
     vi.useFakeTimers();
-    load(hqView({ today: { ...hqView().today!, state: "shut", clueAt: at("2026-12-07T19:00:00.000Z"), clue: null, options: [] } }));
+    load(hqView({ today: { ...hqView().today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [], canGuess: false } }));
     const before = words($(".elf-cd"));
     clock += 3000;
     vi.advanceTimersByTime(1000);
@@ -65,7 +65,7 @@ describe("things that only go wrong on a real phone", () => {
   });
 
   it("does not fetch the page again and again when the clue time had passed before the page was drawn", () => {
-    const h = load(hqView({ today: { ...hqView().today!, state: "shut", clueAt: at("2026-12-07T17:00:00.000Z"), clue: null, options: [] } }));
+    const h = load(hqView({ today: { ...hqView().today!, state: "shut", nextClueAt: at("2026-12-07T17:00:00.000Z"), clues: [], canGuess: false } }));
     h.tick();
     h.tick();
     expect(reloads).toBe(0);
@@ -75,7 +75,7 @@ describe("things that only go wrong on a real phone", () => {
     load();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.reject(new Error("not json")) }));
-    await choose("p-books");
+    await choose("The Bookshop");
     expect(words($(".elf-guess__status"))).toBe("We could not save your guess. Check your signal and try again.");
   });
 });
@@ -90,58 +90,59 @@ describe("locking in a guess", () => {
   it("sends the door and the place, and stays on the page", async () => {
     load();
     const event = new Event("submit", { bubbles: true, cancelable: true });
-    $<HTMLInputElement>('input[value="p-books"]').checked = true;
+    $<HTMLInputElement>('input[name="text"]').value = "The Bookshop";
     $("form.elf-guess").dispatchEvent(event);
     await flush();
     expect(event.defaultPrevented).toBe(true);
-    expect(calls).toEqual([{ url: "/api/elf/guess", body: { door: 7, placeId: "p-books" } }]);
+    expect(calls).toEqual([{ url: "/api/elf/guess", body: { door: 7, text: "The Bookshop" } }]);
   });
 
   it("says the guess is locked in, names the place, and offers to change it", async () => {
     load();
-    await choose("p-books");
-    expect(words($(".elf-guess__status"))).toBe("Guess locked in: The Bookshop, Ayr. You can change it until the elf is found.");
+    await choose("The Bookshop");
+    expect(words($(".elf-guess__status"))).toBe("Your guess: The Bookshop. You can change it until the hiding place is shown.");
     expect(words($("form.elf-guess button"))).toBe("Change my guess");
     expect($(".elf-guess__status").classList.contains("is-error")).toBe(false);
   });
 
-  it("asks for a place when none is picked, and sends nothing", async () => {
+  it("asks for a place when none is typed, and sends nothing", async () => {
     load();
     $("form.elf-guess").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flush();
     expect(calls).toEqual([]);
-    expect(words($(".elf-guess__status"))).toBe("Pick a place first.");
+    expect(words($(".elf-guess__status"))).toBe("Type a place first.");
   });
 
-  it("says when the door has just opened and guessing is over", async () => {
-    answer = { status: 409, body: { ok: false, reason: "not-hunting" } };
+  it("says when the door has just opened and guessing is over, in the server's words", async () => {
+    answer = { status: 409, body: { ok: false, reason: "not-hunting", message: "Too late: the hiding place is shown now. Have a look at the calendar." } };
     load();
-    await choose("p-books");
-    expect(words($(".elf-guess__status"))).toBe("Too late: this door has just opened. Have a look at the calendar.");
+    await choose("The Bookshop");
+    expect(words($(".elf-guess__status"))).toBe("Too late: the hiding place is shown now. Have a look at the calendar.");
     expect($(".elf-guess__status").classList.contains("is-error")).toBe(true);
   });
 
-  it("says when the place has just been taken off the list", async () => {
-    answer = { status: 409, body: { ok: false, reason: "place-already-open" } };
+  it("names the door when the place typed was already found", async () => {
+    answer = { status: 409, body: { ok: false, reason: "place-already-open", door: 3, message: "That elf was already found behind door 3. Try again!" } };
     load();
-    await choose("p-books");
-    expect(words($(".elf-guess__status"))).toBe("That place is no longer on the list. Pick another.");
+    await choose("The Bookshop");
+    expect(words($(".elf-guess__status"))).toContain("already found behind door 3");
+    expect($(".elf-guess__status").classList.contains("is-error")).toBe(true);
   });
 
   it("says so plainly when the guess could not be saved, and lets the family try again", async () => {
     answer = "offline";
     load();
-    await choose("p-books");
+    await choose("The Bookshop");
     expect(words($(".elf-guess__status"))).toBe("We could not save your guess. Check your signal and try again.");
     expect($<HTMLButtonElement>("form.elf-guess button").disabled).toBe(false);
-    answer = { status: 200, body: { ok: true } };
-    await choose("p-toys");
-    expect(words($(".elf-guess__status"))).toContain("Guess locked in: The Toy Shop, Troon.");
+    answer = { status: 200, body: { ok: true, text: "The Toy Shop" } };
+    await choose("The Toy Shop");
+    expect(words($(".elf-guess__status"))).toContain("Your guess: The Toy Shop.");
   });
 
   it("does not send twice while the first is still on its way", async () => {
     load();
-    $<HTMLInputElement>('input[value="p-books"]').checked = true;
+    $<HTMLInputElement>('input[name="text"]').value = "The Bookshop";
     const form = $("form.elf-guess");
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -153,7 +154,7 @@ describe("locking in a guess", () => {
 describe("the countdown to the clue", () => {
   it("ticks down by the server's clock, and stops at nought", () => {
     const base = hqView();
-    const view = hqView({ today: { ...base.today!, state: "shut", clueAt: at("2026-12-07T19:00:00.000Z"), clue: null } });
+    const view = hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } });
     const page = load(view);
     expect($(".elf-cd").textContent).toBe("1:20:00");
     clock += 1000;
@@ -166,12 +167,55 @@ describe("the countdown to the clue", () => {
   });
 
   it("fetches the page again when the clue comes out, once, because the clue is never in the page before then", () => {
-    const base = hqView();
-    const page = load(hqView({ today: { ...base.today!, state: "shut", clueAt: at("2026-12-07T19:00:00.000Z"), clue: null } }));
-    clock += 2 * 3600 * 1000;
-    page.tick();
-    page.tick();
-    expect(reloads).toBe(1);
+    vi.useFakeTimers();
+    try {
+      const base = hqView();
+      const page = load(hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } }));
+      clock += 2 * 3600 * 1000;
+      page.tick();
+      page.tick();
+      vi.advanceTimersByTime(60_000);
+      expect(reloads).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Final review, Important 5: every family's HQ would fetch itself again in the same second as a clue
+  // comes out. Each page waits a while first, a different while for each: from one second to six.
+  it("waits a second and a random few more before fetching the page again, a different while for each page", () => {
+    vi.useFakeTimers();
+    try {
+      const base = hqView();
+      const view = hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } });
+      for (const [random, wait] of [[0.5, 3500], [0, 1000], [0.9999, 5999]] as const) {
+        const page = load(view, { random: () => random });
+        clock += 2 * 3600 * 1000;
+        page.tick();
+        vi.advanceTimersByTime(wait - 1);
+        expect(reloads, `random ${random}`).toBe(0);
+        vi.advanceTimersByTime(1);
+        expect(reloads, `random ${random}`).toBe(1);
+        page.stop();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fetches nothing once stopped, even with a fetch waiting", () => {
+    vi.useFakeTimers();
+    try {
+      const base = hqView();
+      const page = load(hqView({ today: { ...base.today!, state: "shut", nextClueAt: at("2026-12-07T19:00:00.000Z"), clues: [] } }), { random: () => 0.5 });
+      clock += 2 * 3600 * 1000;
+      page.tick();
+      page.stop();
+      vi.advanceTimersByTime(60_000);
+      expect(reloads).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does nothing on a page with no countdown and no guess to make", () => {

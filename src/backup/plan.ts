@@ -56,3 +56,21 @@ export function tablesIn(root: string, migrationsDir: string): string[] {
 export function expectedTableCount(root: string): number {
   return BACKUP_DATABASES.reduce((n, db) => n + tablesIn(root, db.migrationsDir).length, 0);
 }
+
+/**
+ * Tables whose rows are never dumped or exported (C12). Elf Detective School's photo bytes live only
+ * in elf_photo_files: a family's photo of a child's evening must not sit in a nightly archive. The
+ * table itself is still dumped (empty) and still listed in the manifest, as 0 rows, so a restore
+ * has the table and compares equal.
+ */
+export const BACKUP_TABLE_DATA_LEFT_OUT: readonly string[] = ["elf_photo_files"];
+
+/** The pg_dump arguments, with each left-out table's data excluded. */
+export function dumpArgs(leftOut: readonly string[]): string[] {
+  return ["--format=custom", "--no-owner", ...leftOut.map((t) => `--exclude-table-data=${t}`)];
+}
+
+/** The tables that get a CSV and a row count read from the database: all but the left-out ones. */
+export function csvTables(all: string[], leftOut: readonly string[]): string[] {
+  return all.filter((t) => !leftOut.includes(t));
+}

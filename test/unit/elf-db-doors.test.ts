@@ -17,10 +17,13 @@ import {
   changeElfDoor,
   ensureElfDoors,
   getElfDoor,
+  getElfDoorByPosterCode,
   listElfDoors,
   markElfTagPrinted,
+  removeElfCluePicture,
   removeElfDoorName,
   saveElfClue,
+  saveElfCluePicture,
   savePastedClues,
   setElfTagWord,
   tickElfDoor,
@@ -141,9 +144,9 @@ describe("listElfDoors and getElfDoor", () => {
     expect(seven.tagPrintedAt).toEqual(new Date("2026-11-10T10:00:00Z"));
     expect(seven.names).toEqual([{ id: 4, name: "Pine Cone Cafe" }, { id: 9, name: "The Cone" }]);
     expect(seven.clues).toEqual([
-      { n: 1, words: "First" },
-      { n: 2, words: null },
-      { n: 3, words: "Third" },
+      { n: 1, words: "First", hasPicture: false, pictureAlt: null },
+      { n: 2, words: null, hasPicture: false, pictureAlt: null },
+      { n: 3, words: "Third", hasPicture: false, pictureAlt: null },
     ]);
     expect(doors[1].names).toEqual([]);
     expect(doors[1].clues.map((c) => c.words)).toEqual([null, null, null]);
@@ -162,7 +165,7 @@ describe("listElfDoors and getElfDoor", () => {
     });
     const d = await getElfDoor(2026, 7);
     expect(d?.names).toEqual([{ id: 1, name: "Cone" }]);
-    expect(d?.clues[1]).toEqual({ n: 2, words: "Two" });
+    expect(d?.clues[1]).toEqual({ n: 2, words: "Two", hasPicture: false, pictureAlt: null });
   });
 });
 
@@ -312,6 +315,146 @@ describe("saveElfClue", () => {
     fakeClient({ door: null });
     expect(await saveElfClue(2026, 7, 1, "x", ACTOR)).toBeNull();
   });
+
+  it("audits removed only when the clue's row was deleted", async () => {
+    fakeClient();
+    await saveElfClue(2026, 7, 2, null, ACTOR);
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain('"removed":true');
+    clientQuery.mockReset();
+    clientQuery.mockImplementation(async (sql: string) => {
+      const q = String(sql);
+      if (/DELETE FROM elf_clues/.test(q)) return { rows: [], rowCount: 0 };
+      if (/FROM elf_doors/.test(q) && /^\s*SELECT/.test(q)) return { rows: [doorRow(7)] };
+      if (/^\s*SELECT/.test(q)) return { rows: [] };
+      return { rows: [], rowCount: 1 };
+    });
+    await saveElfClue(2026, 7, 2, null, ACTOR);
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain('"removed":false');
+  });
+
+  it("clears the words of a clue that has a picture, and deletes the row only when it has none", async () => {
+    fakeClient();
+    await saveElfClue(2026, 7, 2, null, ACTOR);
+    const clear = call(/UPDATE elf_clues/)!;
+    expect(String(clear[0])).toContain("words = NULL");
+    expect(String(clear[0])).toContain("picture IS NOT NULL");
+    expect(String(call(/DELETE FROM elf_clues/)![0])).toContain("picture IS NULL");
+  });
+});
+
+describe("saveElfCluePicture", () => {
+  const made = { mime: "image/jpeg" as const, bytes: Buffer.from([1, 2, 3]), width: 4, height: 4 };
+
+  it("upserts the picture columns and leaves the words alone", async () => {
+    fakeClient();
+    await saveElfCluePicture(2026, 7, 2, made, "A red door", ACTOR);
+    const up = call(/INSERT INTO elf_clues/)!;
+    const sql = String(up[0]);
+    expect(sql).toContain("picture");
+    expect(sql).toContain("ON CONFLICT (year, door, n) DO UPDATE");
+    expect(sql.split("DO UPDATE")[1]).not.toMatch(/words\s*=/);
+    expect(up[1]).toEqual([2026, 7, 2, made.bytes, "image/jpeg", 4, 4, "A red door", ACTOR]);
+  });
+
+  it("audits year, door and n and never the alt words", async () => {
+    fakeClient();
+    await saveElfCluePicture(2026, 7, 2, made, "A red door", ACTOR);
+    const audit = JSON.stringify(call(/INSERT INTO audit_log/)![1]);
+    expect(audit).toContain("elf.clue.picture");
+    expect(audit).toContain('"n":2');
+    expect(audit).not.toContain("A red door");
+  });
+
+  it("answers null for a door with no row", async () => {
+    fakeClient({ door: null });
+    expect(await saveElfCluePicture(2026, 7, 1, made, "x", ACTOR)).toBeNull();
+  });
+});
+
+describe("removeElfCluePicture", () => {
+  it("deletes the row when it has no words, and otherwise only clears the picture", async () => {
+    fakeClient();
+    await removeElfCluePicture(2026, 7, 2, ACTOR);
+    const del = call(/DELETE FROM elf_clues/)!;
+    expect(String(del[0])).toContain("words IS NULL");
+    expect(del[1]).toEqual([2026, 7, 2]);
+    const clear = call(/UPDATE elf_clues/)!;
+    expect(String(clear[0])).toContain("picture = NULL");
+    expect(String(clear[0])).toContain("words IS NOT NULL");
+    expect(sqls().findIndex((q) => /DELETE FROM elf_clues/.test(q))).toBeLessThan(sqls().findIndex((q) => /UPDATE elf_clues/.test(q)));
+    const audit = JSON.stringify(call(/INSERT INTO audit_log/)![1]);
+    expect(audit).toContain("elf.clue.picture");
+    expect(audit).toContain('"removed":true');
+  });
+
+  it("answers null for a door with no row", async () => {
+    fakeClient({ door: null });
+    expect(await removeElfCluePicture(2026, 7, 1, ACTOR)).toBeNull();
+  });
+});
+
+describe("the game's columns on a door", () => {
+  it("reads found, snow day and gone home, and a clue's picture flag and alt text", async () => {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_door_names/.test(s)) return { rows: [] };
+      if (/FROM elf_clues/.test(s)) return { rows: [{ door: 7, n: 1, words: null, has_picture: true, picture_alt: "A pretend picture" }] };
+      return {
+        rows: [
+          doorRow(7, {
+            found_at: new Date("2026-12-07T18:00:00Z"),
+            found_family_id: 12,
+            snow_day_at: new Date("2026-12-07T17:30:00Z"),
+            snow_day_by: "automatic",
+            gone_home_at: new Date("2026-12-08T09:00:00Z"),
+            gone_home_by: ACTOR,
+          }),
+        ],
+      };
+    });
+    const [d] = await listElfDoors(2026);
+    expect(d.foundAt).toEqual(new Date("2026-12-07T18:00:00Z"));
+    expect(d.foundFamilyId).toBe(12);
+    expect(d.snowDayAt).toEqual(new Date("2026-12-07T17:30:00Z"));
+    expect(d.snowDayBy).toBe("automatic");
+    expect(d.goneHomeAt).toEqual(new Date("2026-12-08T09:00:00Z"));
+    expect(d.goneHomeBy).toBe(ACTOR);
+    expect(d.clues[0]).toEqual({ n: 1, words: null, hasPicture: true, pictureAlt: "A pretend picture" });
+  });
+
+  it("reads all of them as empty when the columns are null", async () => {
+    query.mockImplementation(async (sql: string) => (/FROM elf_door_names|FROM elf_clues/.test(String(sql)) ? { rows: [] } : { rows: [doorRow(7)] }));
+    const [d] = await listElfDoors(2026);
+    expect([d.foundAt, d.foundFamilyId, d.snowDayAt, d.snowDayBy, d.goneHomeAt, d.goneHomeBy]).toEqual([null, null, null, null, null, null]);
+  });
+
+  it("ticks snow day and gone home, in their own columns and audit actions", async () => {
+    fakeClient();
+    await tickElfDoor(2026, 7, "snowDay", true, ACTOR);
+    expect(String(call(/UPDATE elf_doors/)![0])).toContain("snow_day_at = now()");
+    expect(String(call(/UPDATE elf_doors/)![0])).toContain("snow_day_by = $1");
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.door.snow_day");
+    clientQuery.mockReset();
+    fakeClient();
+    await tickElfDoor(2026, 7, "goneHome", false, ACTOR);
+    expect(String(call(/UPDATE elf_doors/)![0])).toContain("gone_home_at = NULL");
+    expect(String(call(/UPDATE elf_doors/)![0])).toContain("gone_home_by = NULL");
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain("elf.door.gone_home");
+  });
+
+  it("finds a door by its poster code, and answers null for none", async () => {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_door_names|FROM elf_clues/.test(s)) return { rows: [] };
+      return { rows: [doorRow(9, { poster_code: "abcdefghijkm" })] };
+    });
+    const d = await getElfDoorByPosterCode("abcdefghijkm");
+    expect(d?.door).toBe(9);
+    expect(query.mock.calls[0][1]).toEqual(["abcdefghijkm"]);
+    query.mockReset();
+    query.mockResolvedValue({ rows: [] });
+    expect(await getElfDoorByPosterCode("zzzzzzzzzzzz")).toBeNull();
+  });
 });
 
 describe("savePastedClues", () => {
@@ -334,6 +477,18 @@ describe("savePastedClues", () => {
     expect(text).toContain("elf.clues.paste");
     expect(text).toContain("[3,9]");
     expect(text).not.toContain('"a"');
+  });
+
+  it("locks the doors' rows first, in ascending door order, whatever order they came in", async () => {
+    clientQuery.mockResolvedValue({ rows: [], rowCount: 1 });
+    await savePastedClues(2026, [doors[1], doors[0]], ACTOR);
+    const s = sqls();
+    expect(s[0]).toBe("BEGIN");
+    expect(s[1]).toContain("FROM elf_doors");
+    expect(s[1]).toContain("ORDER BY door");
+    expect(s[1]).toContain("FOR UPDATE");
+    expect(clientQuery.mock.calls[1][1]).toEqual([2026, [3, 9]]);
+    expect(s.findIndex((q) => /INSERT INTO elf_clues/.test(q))).toBeGreaterThan(1);
   });
 
   it("rolls everything back when an upsert throws", async () => {

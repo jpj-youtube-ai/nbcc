@@ -1,14 +1,17 @@
 /* NBCC Elf Detective School: the public calendar comes alive.
  *
  * The calendar page (src/elf/pages/calendar.ts) already works with no script: every door is a link
- * to its own detail. This only makes it nicer, in four ways:
+ * to its own detail. This only makes it nicer, in six ways:
  *
  *   1. A tap opens a door's detail in place, under the door's own row, and a second tap shuts it.
  *   2. Countdowns tick, by the SERVER's clock: a phone with the wrong time still counts down right.
  *   3. Every few seconds it asks a small feed whether any door has changed, and fetches only the
  *      doors that have. The server draws them, with the same code that drew the page, so this file
  *      never builds a door itself and the two can never show a door differently.
- *   4. For a family that is signed in, it lays their own marks over the board.
+ *   4. For a family that is signed in, it lays their own marks over the board, and marks the
+ *      family's own photo in an open door's scrapbook, with a button to take it down.
+ *   5. "Close door n" in a scrapbook shuts it and puts focus back on the door.
+ *   6. An elf on a door that could not be drawn just now (the server was busy) is asked for again.
  *
  * Nothing here decides anything. If every request fails, the page stays exactly as it was served.
  *
@@ -45,15 +48,23 @@
     var meUrl = board.getAttribute("data-me");
     var skew = 0;
     var marks = {};
+    // The family's own photo at each door: its token.
+    var photos = {};
     var signedIn = false;
     var failures = 0;
     var stopped = false;
     var ticker = null;
     var pollTimer = null;
 
+    // The newest time the server has given. The browser may keep a copy of the feed for 15 seconds, and a
+    // kept copy repeats an older time: setting the clock from it again would make every countdown jump
+    // back, so only a newer time moves the clock.
+    var serverTime = -Infinity;
     function setSkew(iso) {
       var t = Date.parse(iso);
-      if (!isNaN(t)) skew = t - clock();
+      if (isNaN(t) || t <= serverTime) return;
+      serverTime = t;
+      skew = t - clock();
     }
     function now() {
       return clock() + skew;
@@ -119,7 +130,30 @@
       return door && board.contains(door) ? door : null;
     }
 
+    // The scrapbook's own "Close door n": shut the detail and give focus back to the door.
+    function closeFrom(target) {
+      var link = target && target.closest ? target.closest(".elf-book__close a") : null;
+      var detail = link && link.closest ? link.closest(".elf-detail") : null;
+      var n = detail ? /^case-(\d+)$/.exec(detail.id || "") : null;
+      return n ? n[1] : null;
+    }
+    function shut(n) {
+      var detail = detailOf(n);
+      var door = doorOf(n);
+      if (detail) detail.classList.remove("is-open");
+      if (door) {
+        door.setAttribute("aria-expanded", "false");
+        if (door.focus) door.focus();
+      }
+    }
+
     board.addEventListener("click", function (event) {
+      var closing = closeFrom(event.target);
+      if (closing) {
+        event.preventDefault();
+        shut(closing);
+        return;
+      }
       var door = doorFrom(event.target);
       if (!door) return;
       event.preventDefault();
@@ -161,11 +195,12 @@
       return null;
     }
 
+    // An open door can be visited any day in December, as the calendar's steps say.
     function mineWords(mark) {
       if (mark.cracked && mark.visited) return "Your family cracked this case and has been there. Both marks collected.";
-      if (mark.cracked) return "Your family cracked this case. Visit before the Night Before Christmas for your candy cane too.";
+      if (mark.cracked) return "Your family cracked this case. Visit any day in December for your candy cane too.";
       if (mark.visited) return "Your family has been there. Candy cane collected.";
-      return "Not done yet. Visit before the Night Before Christmas for your candy cane.";
+      return "Not done yet. Visit any day in December for your candy cane.";
     }
 
     function applyMarks(n) {
@@ -173,9 +208,11 @@
       var door = doorOf(n);
       var detail = detailOf(n);
       if (!door || !detail) return;
-      var mark = marks[n] || { cracked: false, visited: false };
-      // A door the family has done, cracked or visited, wears the painted holly.
-      door.classList.toggle("is-done", mark.cracked || mark.visited);
+      applyPhoto(n);
+      var mark = marks[n] || { cracked: false, visited: false, snow: false };
+      // A door the family has done, cracked or visited, wears the painted holly. So does a snow day,
+      // which counts as done for every detective.
+      door.classList.toggle("is-done", mark.cracked || mark.visited || mark.snow);
       var holder = door.querySelector(".elf-door__marks");
       if (holder) {
         holder.textContent = "";
@@ -200,6 +237,104 @@
       }
     }
 
+    // The family's own photo in an open door's scrapbook wears "Your photo" and a way to take it down.
+    function applyPhoto(n) {
+      var token = photos[n];
+      var detail = detailOf(n);
+      if (!token || !detail) return;
+      var list = detail.querySelectorAll("figure[data-token]");
+      var figure = null;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].getAttribute("data-token") === token) figure = list[i];
+      }
+      if (!figure || figure.querySelector(".elf-photo-down")) return;
+      figure.classList.add("elf-pol--mine");
+      var caption = doc.createElement("figcaption");
+      caption.textContent = "Your photo";
+      figure.appendChild(caption);
+      var button = doc.createElement("button");
+      button.type = "button";
+      button.className = "elf-btn elf-btn--s elf-photo-down";
+      button.textContent = "Take it down";
+      figure.appendChild(button);
+    }
+
+    function takeDown(button) {
+      var figure = button.closest ? button.closest("figure[data-token]") : null;
+      var detail = button.closest ? button.closest(".elf-detail") : null;
+      var n = detail ? /^case-(\d+)$/.exec(detail.id || "") : null;
+      if (!figure || !n || button.disabled) return;
+      var door = n[1];
+      button.disabled = true;
+      function note(words, isError) {
+        var status = figure.querySelector(".elf-form-status");
+        if (!status) {
+          status = doc.createElement("p");
+          status.className = "elf-form-status";
+          status.setAttribute("role", "status");
+          figure.appendChild(status);
+        }
+        status.textContent = words;
+        if (isError) status.classList.add("is-error");
+        else status.classList.remove("is-error");
+      }
+      // The photo is down once the server says so. If the door cannot be drawn again just now, the
+      // page says so and leaves the door as it is; the next news from the feed will redraw it.
+      function downButStillShown() {
+        if (!doc.contains(figure)) return;
+        if (button.parentNode) button.parentNode.removeChild(button);
+        note("Your photo has been taken down.", false);
+      }
+      win
+        .fetch(doorApi + door + "/photo", { method: "DELETE", credentials: "same-origin" })
+        .then(
+          function (res) {
+            if (!res.ok) throw new Error("not taken down");
+            delete photos[door];
+            return refresh(door).then(downButStillShown, downButStillShown);
+          },
+          function () {
+            throw new Error("not taken down");
+          }
+        )
+        .catch(function () {
+          button.disabled = false;
+          note("We could not take your photo down just now. Please try again.", true);
+        });
+    }
+
+    board.addEventListener("click", function (event) {
+      var button = event.target && event.target.closest ? event.target.closest(".elf-photo-down") : null;
+      if (!button || !board.contains(button)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      takeDown(button);
+    });
+
+    // ---- a door elf that could not be drawn just now ---------------------------------------
+
+    // The server draws the elves on the doors one at a time, and says it is busy (503) when too many are
+    // waiting. An elf picture that fails is asked for again a little later, twice at most. A photo is
+    // never asked for again: it is there, or it is not.
+    var ELF_PICTURE = /^\/elf\/door\/\d+\/elf\/\d+\.png$/;
+    var AGAIN_MS = [2000, 5000];
+    board.addEventListener(
+      "error",
+      function (event) {
+        var img = event.target;
+        if (!img || img.tagName !== "IMG") return;
+        var src = String(img.getAttribute("src") || "").split("?")[0];
+        var tries = Number(img.getAttribute("data-tries") || "0");
+        if (!ELF_PICTURE.test(src) || !(tries < AGAIN_MS.length)) return;
+        img.setAttribute("data-tries", String(tries + 1));
+        win.setTimeout(function () {
+          // A door drawn again since has pictures of its own.
+          if (doc.contains(img)) img.setAttribute("src", src + "?try=" + (tries + 1));
+        }, AGAIN_MS[tries]);
+      },
+      true
+    );
+
     function loadMarks() {
       if (!meUrl) return Promise.resolve();
       return win
@@ -211,8 +346,16 @@
           if (!body || !body.doors) return;
           // Signed in, even with no marks yet: every open door then says what is left to do.
           signedIn = true;
+          var mine = body.photos || [];
+          for (var p = 0; p < mine.length; p++) {
+            if (mine[p] && typeof mine[p].token === "string") photos[mine[p].door] = mine[p].token;
+          }
           for (var i = 0; i < body.doors.length; i++) {
-            marks[body.doors[i].door] = { cracked: body.doors[i].cracked === true, visited: body.doors[i].visited === true };
+            marks[body.doors[i].door] = {
+              cracked: body.doors[i].cracked === true,
+              visited: body.doors[i].visited === true,
+              snow: body.doors[i].snow === true
+            };
           }
           eachDoor(function (door) {
             applyMarks(door.getAttribute("data-door"));

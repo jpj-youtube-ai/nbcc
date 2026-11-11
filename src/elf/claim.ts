@@ -1,7 +1,7 @@
 import { allInFamily, chosenDetectives } from "./detectives";
-import { isClaimable, type DoorState } from "./doors";
+import type { DoorState } from "./doors";
 
-// NBCC Elf Detective School: claiming an elf. The design is
+// NBCC Elf Detective School: the word on an elf's tag, which both claims the prize and stamps a visit. The design is
 // docs/superpowers/specs/2026-10-04-elf-detective-school-design.md ("Rules, precisely").
 //
 // Each elf wears a tag with a secret word. The finder scans the business's poster and types the
@@ -48,40 +48,40 @@ export function isUsableSecretWord(word: string): boolean {
   return /[a-z]/.test(tidy) && (tidy.match(/[0-9]/g) ?? []).length >= 3;
 }
 
-export type ClaimRefusal =
-  | "already-found"
+export type WordRefusal =
   | "no-detectives"
   | "not-your-detective"
   | "too-many-tries"
   | "wrong-word"
   | "too-early"
-  | "already-won";
-export type ClaimDecision = { ok: true; detectiveIds: string[] } | { ok: false; reason: ClaimRefusal };
+  | "gone-home"
+  | "nothing-new";
+export type WordDecision =
+  | { ok: true; outcome: "won"; detectiveIds: string[] }
+  | { ok: true; outcome: "visited"; detectiveIds: string[]; countsFromReveal: boolean }
+  | { ok: false; reason: WordRefusal };
 
-export interface ClaimContext {
-  /** The state of the place's door, worked out at the moment of the claim. */
+export interface WordContext {
+  /** The state of the place's door, worked out at the moment the word is typed. A snow day door is
+   *  given an empty `secretWord` by its caller, so it reads as a wrong word like any other place. */
   doorState: DoorState;
+  /** Has the elf gone home (a head elf's switch)? */
+  goneHome: boolean;
   /** The word on this elf's tag. */
   secretWord: string;
-  /** Every detective in the claiming family. */
+  /** Every detective in the family. */
   familyDetectiveIds: readonly (string | number)[];
   /** Has this family already won an elf this year? */
   familyHasWon: boolean;
   /** How many wrong words this family has already typed at this place. */
   wrongTries: number;
+  /** The detectives who already hold a stamp from this door. */
+  alreadyStamped: readonly (string | number)[];
 }
 
-export interface ClaimAttempt {
-  /** The detectives ticked on the form, as it arrived. Made safe by chosenDetectives. */
-  detectiveIds: unknown;
-  /** The word they typed. */
-  word: string;
-}
-
-/** Is this claim valid? When it is, the answer names the detectives who made it, as text ids, each once. */
-export function decideClaim(ctx: ClaimContext, attempt: ClaimAttempt): ClaimDecision {
-  // A found door is public knowledge, so saying so gives nothing away.
-  if (ctx.doorState === "found") return { ok: false, reason: "already-found" };
+/** The word on the tag is both the claim and the stamp. The checks run in this order, so a wrong
+ *  word gets the same answer on every door: no tag word is ever confirmed or denied by timing. */
+export function decideWord(ctx: WordContext, attempt: { detectiveIds: unknown; word: string }): WordDecision {
   const chosen = chosenDetectives(attempt.detectiveIds);
   if (chosen.length === 0) return { ok: false, reason: "no-detectives" };
   if (!allInFamily(chosen, ctx.familyDetectiveIds)) return { ok: false, reason: "not-your-detective" };
@@ -93,8 +93,13 @@ export function decideClaim(ctx: ClaimContext, attempt: ClaimAttempt): ClaimDeci
   // The word comes before the door's state: see the note at the top of this file.
   const want = normaliseWord(ctx.secretWord);
   if (want === "" || normaliseWord(attempt.word) !== want) return { ok: false, reason: "wrong-word" };
-  // A found door was answered above, so a door that cannot be claimed here is one still shut.
-  if (!isClaimable(ctx.doorState)) return { ok: false, reason: "too-early" };
-  if (ctx.familyHasWon) return { ok: false, reason: "already-won" };
-  return { ok: true, detectiveIds: chosen };
+  if (ctx.doorState === "shut") return { ok: false, reason: "too-early" };
+  if (ctx.goneHome) return { ok: false, reason: "gone-home" };
+  if ((ctx.doorState === "hunting" || ctx.doorState === "revealed") && !ctx.familyHasWon) {
+    return { ok: true, outcome: "won", detectiveIds: chosen };
+  }
+  const stamped = new Set(ctx.alreadyStamped.map((id) => String(id)));
+  const fresh = chosen.filter((id) => !stamped.has(id));
+  if (fresh.length === 0) return { ok: false, reason: "nothing-new" };
+  return { ok: true, outcome: "visited", detectiveIds: fresh, countsFromReveal: ctx.doorState === "found-hidden" };
 }

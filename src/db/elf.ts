@@ -4,8 +4,9 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { ELF_DEFAULTS, type ElfSettings } from "../elf/settings";
 import type { JoinBody } from "../elf/join";
-import { wardrobeStateNow, type FamilyRow } from "../elf/views";
-import { normaliseFavourites, normaliseLook, type ElfLook } from "../elf/wardrobe";
+import type { FamilyRow } from "../elf/views";
+import type { DoorsDone } from "../elf/progress";
+import { normaliseFavourites, normaliseLook, wardrobeState, type ElfLook } from "../elf/wardrobe";
 
 // NBCC Elf Detective School: the data layer (tables in migrations/1791200000310_elf-school.js).
 // Designs: docs/superpowers/specs/2026-10-04-elf-detective-school-design.md and
@@ -20,9 +21,10 @@ interface SettingsRow {
   entry_suggested_pence: number;
   preview_hash?: string | null;
   place_phone?: string | null;
+  doors_on?: boolean;
 }
 
-const SETTINGS_SQL = "SELECT school_on, year, entry_from_pence, entry_suggested_pence, preview_hash, place_phone FROM elf_settings WHERE id = 1";
+const SETTINGS_SQL = "SELECT school_on, year, entry_from_pence, entry_suggested_pence, preview_hash, place_phone, doors_on FROM elf_settings WHERE id = 1";
 
 function settingsFrom(row: SettingsRow | undefined): ElfSettings {
   if (!row) return { ...ELF_DEFAULTS };
@@ -33,6 +35,7 @@ function settingsFrom(row: SettingsRow | undefined): ElfSettings {
     entrySuggestedPence: row.entry_suggested_pence,
     previewHash: row.preview_hash ?? null,
     placePhone: row.place_phone ?? null,
+    doorsOn: row.doors_on === true,
   };
 }
 
@@ -58,7 +61,12 @@ export async function getElfSettings(): Promise<ElfSettings> {
   try {
     const r = await pool.query<SettingsRow>(SETTINGS_SQL);
     return settingsFrom(r.rows[0]);
-  } catch {
+  } catch (err) {
+    // Reading as switched off is the safe answer, but it hides a broken database, so it is logged:
+    // one line, the error's own message only. A database that cannot be reached at all fails with no
+    // message (Node's AggregateError for a refused connection), so then its code, or its kind.
+    const said = err instanceof Error ? err.message || String((err as { code?: unknown }).code ?? "") || err.name : String(err);
+    console.error("elf settings could not be read, so the school reads as switched off:", said);
     return { ...ELF_DEFAULTS };
   }
 }
@@ -68,6 +76,7 @@ const SETTING_COLUMNS = {
   entryFromPence: "entry_from_pence",
   entrySuggestedPence: "entry_suggested_pence",
   placePhone: "place_phone",
+  doorsOn: "doors_on",
 } as const;
 
 /** Change some settings, with the row locked, and say so in the audit log. The admin route checks
@@ -394,6 +403,8 @@ export async function saveLook(o: {
   look: unknown;
   tried: unknown[];
   favourites?: unknown[];
+  /** The doors this detective has done: the server's, never the page's. */
+  doors: DoorsDone;
 }): Promise<{ look: ElfLook; favourites: ElfLook[] } | "not-found"> {
   const client = await pool.connect();
   try {
@@ -406,7 +417,7 @@ export async function saveLook(o: {
       await client.query("ROLLBACK");
       return "not-found";
     }
-    const state = wardrobeStateNow();
+    const state = wardrobeState(o.doors);
     const look = normaliseLook(o.look, state);
     const tried = new Set(o.tried.filter((t): t is string => typeof t === "string"));
     const fresh = (r.rows[0].fresh ?? []).filter((k) => !tried.has(k));

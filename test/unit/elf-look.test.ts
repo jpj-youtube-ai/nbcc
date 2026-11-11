@@ -1,18 +1,23 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+// The real calendar view is built from wave 1's runs; the database is never reached.
+vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { waveOneRuns } from "../../src/db/elf-game";
+import { calendarViewFor } from "../../src/elf/views";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
 import { renderJoinPage } from "../../src/elf/pages/join";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
-import { calendarViewFor } from "../../src/elf/views";
 
 // NBCC Elf Detective School: the look of nbcc.scot/bag and /fill, brought to the school's screens
 // (wave 1 plan, Task 11): gold sparkles, the red present with the school's elf peeking out, gift
 // tags, taped paper. All motion plays only for someone who has not asked for less.
 
 const SETTINGS = { ...ELF_DEFAULTS, schoolOn: true };
+const NOV = new Date("2026-11-13T09:00:00.000Z");
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
 const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
 
@@ -41,7 +46,7 @@ function outsideMotionBlocks(source: string): string {
 // behind every page replace the gold sparkles, and a torn label sits under the school's name.
 describe("the calendar's top", () => {
   it("is paper: the school's name with a torn label under it, and no gold sparkles", () => {
-    const doc = parse(renderCalendarPage(calendarViewFor({ settings: SETTINGS, now: new Date("2026-11-13T09:00:00.000Z") })));
+    const doc = parse(renderCalendarPage(calendarViewFor({ settings: SETTINGS, now: NOV, runs: waveOneRuns(2026, NOV), finders: new Map(), counts: new Map(), scrapbooks: new Map() })));
     expect(doc.querySelectorAll(".elf-top .elf-twk").length).toBe(0);
     expect(doc.querySelector(".elf-top h1 + .elf-label")).not.toBeNull();
     expect(doc.querySelectorAll(".elf-sky i").length).toBeGreaterThanOrEqual(10);

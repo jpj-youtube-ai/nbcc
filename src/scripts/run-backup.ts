@@ -4,7 +4,13 @@ import { mkdtemp, rm, mkdir, writeFile, readFile, stat } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { config } from "../config";
-import { expectedTableCount, tablesIn } from "../backup/plan";
+import {
+  BACKUP_TABLE_DATA_LEFT_OUT,
+  csvTables,
+  dumpArgs,
+  expectedTableCount,
+  tablesIn,
+} from "../backup/plan";
 import { runBackup, type BackupSeams } from "../backup/run";
 import { libpqEnvFromUrl, scrubConnectionStrings } from "../backup/pg-tools";
 import type { Manifest } from "../backup/manifest";
@@ -103,10 +109,14 @@ async function main(): Promise<void> {
         await mkdir(dir, { recursive: true });
 
         const dumpPath = join(dir, `${db.label}.dump`);
-        await run("pg_dump", ["--format=custom", "--no-owner", "--file", dumpPath], { env: pgEnv });
+        await run("pg_dump", [...dumpArgs(BACKUP_TABLE_DATA_LEFT_OUT), "--file", dumpPath], { env: pgEnv });
 
         const tables: Record<string, number> = {};
-        for (const table of tablesIn(APP_ROOT, db.migrationsDir)) {
+        const allTables = tablesIn(APP_ROOT, db.migrationsDir);
+        // C12: a left-out table (photo bytes) has no CSV and no count read; the manifest records 0,
+        // which is what a restore of the dump (table present, data excluded) will hold.
+        for (const table of allTables.filter((t) => BACKUP_TABLE_DATA_LEFT_OUT.includes(t))) tables[table] = 0;
+        for (const table of csvTables(allTables, BACKUP_TABLE_DATA_LEFT_OUT)) {
           await run(
             "psql",
             ["-c", `\\copy (SELECT * FROM ${table}) TO '${join(dir, `${table}.csv`)}' WITH CSV HEADER`],

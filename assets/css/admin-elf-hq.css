@@ -127,6 +127,8 @@
 .hq-lever[aria-checked="true"] { background: #CFE5C8; }
 .hq-lever[aria-checked="true"] .hq-lever__words { justify-content: flex-start; color: var(--hq-holly); }
 .hq-lever[aria-checked="true"] .hq-lever__knob { transform: translateX(68px); }
+.hq-lever--doors { background: #F3E3C3; }
+.hq-lever--doors[aria-checked="true"] { background: #CFE5C8; }
 .hq-confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-md); padding: 12px 14px; border: 2px dashed var(--hq-crimson); border-radius: 14px; background: #FFF3F4; }
 .hq-confirm p { flex: 1 1 220px; }
 .hq-clock { display: grid; justify-items: center; align-content: center; gap: 4px; text-align: center; }
@@ -289,8 +291,20 @@
 .hq-hint { font-size: 0.8rem; color: var(--hq-soft); }
 .hq-hint.is-ok { color: var(--hq-holly); font-weight: 600; }
 .hq-hint.is-error { color: var(--hq-crimson); font-weight: 700; }
+/* `.hq-field > span` (the field's own bold words) is more specific than `.hq-hint`, so a hint inside a field
+ * is named the same way, and reads as a hint. */
+.hq-field > .hq-hint { font-family: inherit; font-size: 0.8rem; font-weight: 400; color: var(--hq-soft); }
+.hq-field > .hq-hint.is-ok { color: var(--hq-holly); font-weight: 600; }
+.hq-field > .hq-hint.is-error { color: var(--hq-crimson); font-weight: 700; }
 .hq-dpart .hq-field input:disabled, .hq-dpart .hq-field input:read-only, .hq-dpart .hq-field textarea:disabled, .hq-dpart .hq-field textarea:read-only { background: #FBF7F0; color: var(--hq-soft); }
 .hq-dpart .hq-field textarea { display: block; width: 100%; min-height: 44px; padding: 8px 12px; border: 2px solid var(--hq-ink); border-radius: 12px; background: var(--hq-card); font: inherit; line-height: 1.4; color: var(--hq-text); resize: none; overflow: hidden; overflow-wrap: break-word; }
+.hq-snow .hq-confirm { grid-column: auto; }
+.hq-snow .hq-confirm p { flex-basis: 100%; }
+.hq-snow .hq-actions { align-items: flex-start; }
+.hq-tries { display: grid; gap: var(--hq-space-sm); margin-top: var(--hq-space-lg); min-width: 0; }
+.hq-tries__list { display: grid; gap: var(--hq-space-sm); margin: 0; padding: 0; list-style: none; }
+.hq-tries__list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--hq-space-sm) var(--hq-space-md); min-width: 0; }
+.hq-tries__list li span { min-width: 0; overflow-wrap: break-word; }
 .hq-names { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .hq-names .hq-chip { white-space: normal; max-width: 100%; min-width: 0; overflow-wrap: break-word; }
 .hq-chip__x { padding: 0 4px; border: 0; background: none; cursor: pointer; font: inherit; font-weight: 700; color: var(--hq-crimson); }
@@ -327,6 +341,14 @@
 .hq-clue textarea:disabled, .hq-clue textarea:read-only { background: #FBF7F0; color: var(--hq-soft); }
 .hq-count-words { margin-left: auto; }
 .hq-count-words.is-error { color: var(--hq-crimson); font-weight: 700; }
+/* a clue's picture: shown whole, never cropped or scrolled, and the way to change it */
+.hq-clue-pic { display: grid; gap: var(--hq-space-xs); margin: 0; min-width: 0; }
+.hq-clue-pic__img, .hq-pic-preview img { display: block; max-width: 100%; height: auto; border: 2px solid var(--hq-ink); border-radius: 12px; background: #FBF7F0; }
+.hq-clue-pic figcaption { overflow-wrap: anywhere; }
+.hq-clue-pic-edit { display: grid; gap: var(--hq-space-sm); min-width: 0; }
+.hq-clue-pic-edit input[type="file"], .hq-clue-pic-edit input[type="text"] { width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px; border: 2px solid var(--hq-ink); border-radius: 12px; background: var(--hq-card); font: inherit; color: var(--hq-text); }
+.hq-clue-pic-edit .hq-field { min-width: 0; }
+.hq-clue-pic-edit .hq-hint { overflow-wrap: anywhere; }
 @container (max-width: 420px) {
   .hq-clue { grid-template-columns: minmax(0, 1fr); }
 }
@@ -365,6 +387,21 @@
 .hq-stepper output { text-align: center; font-family: var(--hq-head); font-weight: 800; font-size: 1.8rem; line-height: 1; color: var(--hq-ink); font-variant-numeric: lining-nums; }
 .hq-field > label { font-family: var(--hq-head); font-weight: 700; color: var(--hq-ink); }
 .hq-preview .hq-field input { background: var(--hq-cream); font-size: 0.95rem; }
+
+/* ---- Settings: the practice door, a pretend evening played through the preview link. The fields wrap
+   to one column on a phone; long names wrap rather than run past the panel. ---- */
+.hq-practice { display: grid; gap: var(--hq-space-md); align-content: start; }
+.hq-root .hq-practice .hq-h2 { margin: 0; }
+.hq-practice p { overflow-wrap: anywhere; }
+/* The site wide form rule (styles.css) draws every form as a card; this one sits in a panel that already is one. */
+.hq-practice__form { display: grid; gap: var(--hq-space-md); min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.hq-practice__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: var(--hq-space-md) var(--hq-space-lg); align-items: start; min-width: 0; }
+.hq-practice__fields .hq-field { min-width: 0; }
+.hq-practice__times { display: grid; gap: var(--hq-space-xs); margin: 0; padding: 0; list-style: none; }
+.hq-practice__times li { display: flex; align-items: center; gap: var(--hq-space-sm); font-weight: 500; }
+.hq-practice__times li::before { content: ""; flex: none; width: 10px; height: 10px; border: 2px solid var(--hq-ink); border-radius: 50%; background: var(--hq-gold-soft); }
+.hq-practice .hq-tagword { justify-self: start; max-width: 100%; }
+.hq-practice .hq-tagword b { overflow-wrap: anywhere; }
 
 @media (prefers-reduced-motion: no-preference) {
   .hq-lever__knob { transition: transform 0.28s var(--hq-ease); }

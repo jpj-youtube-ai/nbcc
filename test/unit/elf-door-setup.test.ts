@@ -22,9 +22,9 @@ function fullDoor(): DoorSetup {
     elfName: "Twinkle",
     tagWord: "SNOWBALL 472",
     clues: [
-      { n: 1, words: "One" },
-      { n: 2, words: "Two" },
-      { n: 3, words: "Three" },
+      { n: 1, words: "One", hasPicture: false, pictureAlt: null },
+      { n: 2, words: "Two", hasPicture: false, pictureAlt: null },
+      { n: 3, words: "Three", hasPicture: false, pictureAlt: null },
     ],
     droppedOffAt: new Date("2026-12-01T10:00:00Z"),
   };
@@ -54,7 +54,16 @@ describe("door setup", () => {
     const find = (d: DoorSetup, k: string) => readinessOf(d, true).items.find((i) => i.key === k)?.done;
     expect(find({ ...fullDoor(), placeAddress: null }, "place")).toBe(false);
     expect(find({ ...fullDoor(), tagWord: "SNOWBALL" }, "elf")).toBe(false);
-    expect(find({ ...fullDoor(), clues: [{ n: 1, words: "   " }, { n: 2, words: "a" }, { n: 3, words: "b" }] }, "clues")).toBe(false);
+    expect(find({ ...fullDoor(), clues: [{ n: 1, words: "   ", hasPicture: false, pictureAlt: null }, { n: 2, words: "a", hasPicture: false, pictureAlt: null }, { n: 3, words: "b", hasPicture: false, pictureAlt: null }] }, "clues")).toBe(false);
+    // a clue that is a picture only is done
+    const pictureOne = { n: 1 as const, words: null, hasPicture: true, pictureAlt: "A pretend picture" };
+    expect(find({ ...fullDoor(), clues: [pictureOne, ...fullDoor().clues.slice(1)] }, "clues")).toBe(true);
+  });
+
+  it("starts with nothing found, snowed in or gone home", () => {
+    const d = emptyDoor(7, "abc");
+    expect([d.foundAt, d.foundFamilyId, d.snowDayAt, d.snowDayBy, d.goneHomeAt, d.goneHomeBy]).toEqual([null, null, null, null, null, null]);
+    expect(d.clues[0]).toEqual({ n: 1, words: null, hasPicture: false, pictureAlt: null });
   });
 
   it("summarises", () => {

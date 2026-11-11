@@ -1,18 +1,22 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+// The real calendar view is built from wave 1's runs; the database is never reached.
+vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { waveOneRuns } from "../../src/db/elf-game";
+import { calendarViewFor } from "../../src/elf/views";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage } from "../../src/elf/pages/join";
 import { renderRulesPage } from "../../src/elf/pages/rules";
-import { calendarViewFor } from "../../src/elf/views";
 import { renderSignInPage, renderWelcomePage } from "../../src/elf/pages/sign-in";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
-import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, stampWin, wardrobeView } from "./elf-fixtures";
+import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the house rules every elf screen must keep.
 //
@@ -23,11 +27,28 @@ import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, stampWin, wa
 
 const ROOT = resolve(__dirname, "../..");
 const place = { name: "The Toy Shop", town: "Troon" };
-const found = { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Ruby Tinselfoot", elfUrl: "/elf/pic/7.svg", photoUrl: "/elf/photo/7.jpg" };
-const opened = { place, counts: { cracked: 31, visited: 4 }, factLine: "NBCC began with a question from a girl aged 12 in Annbank." };
+const found = { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Ruby Tinselfoot" };
+/** Door 7's scrapbook: the finder's elf, one more family's elf and one photo. */
+const scrapbook = {
+  elves: [
+    { visitId: 71, detective: { firstName: "Ruby", surname: "Tinselfoot", approved: true }, countsFrom: at("2026-12-07T19:00:00.000Z"), found: true, pictureUrl: "/elf/door/7/elf/71.png" },
+    { visitId: 72, detective: { firstName: "Leo", surname: "Frostwhistle", approved: false }, countsFrom: at("2026-12-07T19:20:00.000Z"), found: false, pictureUrl: "/elf/door/7/elf/72.png" },
+  ],
+  photos: [{ token: "k3m9p2x7w4qa", url: "/elf/door/7/photo/k3m9p2x7w4qa.jpg" }],
+  count: 3,
+};
+const opened = {
+  collage: ["/elf/door/7/elf/71.png", "/elf/door/7/elf/72.png"],
+  scrapbook,
+  place,
+  prize: "A pretend prize",
+  counts: { cracked: 31, visited: 4 },
+  factLine: "NBCC began with a question from a girl aged 12 in Annbank.",
+};
 const today = hqView().today!;
 const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
 const everyoneStamped = posterView({ open: true, claimable: false, detectives: posterView().detectives.map((d) => ({ ...d, hasStamp: true })) });
+const twoClues = [today.clues[0], { n: 2 as const, at: at("2026-12-07T18:00:00.000Z"), words: "Practice clue 2: it has a lid.", pictureUrl: "/elf/hq/clue/7/2.jpg", pictureAlt: "A pretend drawing of a lid" }];
 
 /** Every screen in every state, as [what it is, the page]. */
 const PAGES: [string, string][] = [
@@ -35,20 +56,27 @@ const PAGES: [string, string][] = [
   ["calendar, today's door shut", renderCalendarPage(calendarView(AFTERNOON))],
   ["calendar, the hunt on", renderCalendarPage(calendarView(at("2026-12-07T17:40:00.000Z"), { state: "hunting" }))],
   ["calendar, today's elf found", renderCalendarPage(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "found", found, ...opened }))],
-  ["calendar, today's place shown", renderCalendarPage(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...opened }))],
+  ["calendar, today's place shown", renderCalendarPage(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...opened, prize: null }))],
+  ["calendar, found and hidden", renderCalendarPage(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "found-hidden", found, revealAt: at("2026-12-07T19:00:00.000Z") }))],
+  ["calendar, a snow day", renderCalendarPage(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "snow" }))],
+  ["calendar, a door whose elves have gone home", renderCalendarPage(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "found", found, ...opened, goneHome: true }))],
   ["calendar, all done", renderCalendarPage(calendarView(at("2026-12-25T10:00:00.000Z")))],
-  ["HQ, before the clue", renderHqPage(hqView({ today: { ...today, state: "shut", clue: null, options: [] } }))],
+  ["HQ, before the clue", renderHqPage(hqView({ today: { ...today, state: "shut", clues: [], canGuess: false } }))],
   ["HQ, the hunt on", renderHqPage(hqView())],
-  ["HQ, a guess locked in", renderHqPage(hqView({ today: { ...today, guess: today.options[1] } }))],
-  ["HQ, found and cracked", renderHqPage(hqView({ today: { ...today, state: "found", options: [], guess: today.options[0], outcome } }))],
-  ["HQ, place shown", renderHqPage(hqView({ today: { ...today, state: "revealed", options: [], outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
+  ["HQ, two clues out", renderHqPage(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } }))],
+  ["HQ, the practice door", renderHqPage(hqView({ today: { ...today, door: 0, practice: true } }))],
+  ["HQ, found and hidden", renderHqPage(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, state: "found-hidden", clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } }))],
+  ["HQ, a snow day", renderHqPage(hqView({ today: { ...today, state: "snow", clues: [], nextClueAt: null, canGuess: false } }))],
+  ["HQ, a guess locked in", renderHqPage(hqView({ today: { ...today, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") } } }))],
+  ["HQ, found and cracked", renderHqPage(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome } }))],
+  ["HQ, place shown", renderHqPage(hqView({ today: { ...today, state: "revealed", canGuess: false, outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
   ["HQ, no door today", renderHqPage(hqView({ now: at("2026-11-20T10:00:00.000Z"), today: null, nextClueAt: at("2026-12-01T17:30:00.000Z") }))],
   ["HQ, all over", renderHqPage(hqView({ now: at("2026-12-26T10:00:00.000Z"), today: null, nextClueAt: null }))],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
   ["rules", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
-  ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z") }))],
+  ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z"), runs: waveOneRuns(2026, at("2026-11-13T09:00:00.000Z")), finders: new Map(), counts: new Map(), scrapbooks: new Map() }))],
   ["sign in, the email", renderSignInPage({ stage: "email" })],
   ["sign in, the code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "If that email has detectives enrolled, we have sent a sign in code to it." })],
   ["sign in, a wrong code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "That code does not work. Check it, or ask for a new one.", error: true })],
@@ -62,10 +90,15 @@ const PAGES: [string, string][] = [
   ["poster, place shown and elf waiting", renderPosterPage(posterView({ open: true, claimable: true }))],
   ["poster, elf found", renderPosterPage(posterView({ open: true, claimable: false }))],
   ["poster, everyone has the candy cane", renderPosterPage(everyoneStamped)],
-  ["poster, a claim that won", renderPosterPage(posterView({ open: true, claimable: false }), { form: "claim", ok: true, win: claimWin() })],
-  ["poster, a claim refused", renderPosterPage(posterView(), { form: "claim", ok: false, reason: "wrong-word", triesLeft: 2 })],
-  ["poster, a check in that counted", renderPosterPage(everyoneStamped, { form: "stamp", ok: true, win: stampWin() })],
-  ["poster, a check in refused", renderPosterPage(posterView({ open: true, claimable: false }), { form: "stamp", ok: false, reason: "too-far" })],
+  ["poster, a claim that won", renderPosterPage(posterView({ open: true, claimable: false }), { form: "word", ok: true, outcome: "won", win: claimWin() })],
+  ["poster, a claim refused", renderPosterPage(posterView(), { form: "word", ok: false, reason: "wrong-word", triesLeft: 2 })],
+  ["poster, a visit that counted", renderPosterPage(everyoneStamped, { form: "word", ok: true, outcome: "visited", visit: visitWin() })],
+  ["poster, a visit before the place is shown", renderPosterPage(posterView({ foundHidden: true, claimable: false, revealAt: at("2026-12-07T19:00:00.000Z") }), { form: "word", ok: true, outcome: "visited", visit: visitWin({ countsFrom: at("2026-12-07T19:00:00.000Z") }) })],
+  ["poster, a visit refused", renderPosterPage(posterView({ open: true, claimable: false }), { form: "word", ok: false, reason: "nothing-new" })],
+  ["poster, found and hidden", renderPosterPage(posterView({ foundHidden: true, claimable: false, revealAt: at("2026-12-07T19:00:00.000Z") }))],
+  ["poster, the elves gone home", renderPosterPage(posterView({ open: true, claimable: false, goneHome: true }))],
+  ["poster, your photo waiting", renderPosterPage(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "waiting" } }))],
+  ["poster, your photo declined", renderPosterPage(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "declined" } }))],
 ];
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
@@ -226,7 +259,7 @@ describe.each(PAGES)("%s", (_name, html) => {
 
 const POISON = `<img src=x onerror="alert(1)"><script>alert(2)</script>"'&`;
 // Fields that choose between fixed answers. They are looked up or switched on, never written out.
-const CHOICES = new Set(["state", "skin", "hair", "hairStyle", "form", "reason", "fresh"]);
+const CHOICES = new Set(["state", "status", "skin", "hair", "hairStyle", "form", "reason", "fresh"]);
 
 /** The same view with every word swapped for markup, and every address pointed off the site. */
 function poisoned<T>(value: T, key = ""): T {
@@ -242,12 +275,15 @@ function poisoned<T>(value: T, key = ""): T {
 describe("data that tries to break out of the page", () => {
   const hostile: [string, string][] = [
     ["calendar", renderCalendarPage(poisoned(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "found", found, ...opened, shapeUrl: "/elf/shape/teddy.svg" })))],
-    ["HQ", renderHqPage(poisoned(hqView({ today: { ...today, guess: today.options[1] } })))],
-    ["HQ, found", renderHqPage(poisoned(hqView({ today: { ...today, state: "found", options: [], guess: today.options[0], outcome } })))],
+    ["HQ", renderHqPage(poisoned(hqView({ today: { ...today, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") } } })))],
+    ["HQ, found", renderHqPage(poisoned(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome } })))],
     ["wardrobe", renderWardrobePage(poisoned(wardrobeView()))],
+    ["calendar, a scrapbook's photos", renderCalendarPage(poisoned(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...opened })))],
+    ["HQ, two clues out", renderHqPage(poisoned(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } })))],
     ["poster", renderPosterPage(poisoned(posterView({ open: true, claimable: true })))],
-    ["poster, a claim that won", renderPosterPage(poisoned(posterView({ open: true, claimable: false })), { form: "claim", ok: true, win: poisoned(claimWin()) })],
-    ["poster, a check in that counted", renderPosterPage(poisoned(everyoneStamped), { form: "stamp", ok: true, win: poisoned(stampWin()) })],
+    ["poster, your photo", renderPosterPage(poisoned(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "approved" } })))],
+    ["poster, a claim that won", renderPosterPage(poisoned(posterView({ open: true, claimable: false })), { form: "word", ok: true, outcome: "won", win: poisoned(claimWin()) })],
+    ["poster, a visit that counted", renderPosterPage(poisoned(everyoneStamped), { form: "word", ok: true, outcome: "visited", visit: poisoned(visitWin()) })],
   ];
 
   it.each(hostile)("%s: is shown as words, never run", (_name, html) => {

@@ -5,10 +5,11 @@
  *
  *   1. The guess is saved without leaving the page, and the page says so, or says plainly why not.
  *   2. The countdown to the clue ticks, by the SERVER's clock, and when it reaches nought the page
- *      is fetched again, because the clue itself is never in the page before it is out.
+ *      is fetched again a few seconds later, because the clue itself is never in the page before it
+ *      is out. Each page waits a different while, so every family's HQ does not ask in one second.
  *
  * Nothing here decides anything: the server says whether a guess is allowed (decideGuess in
- * src/elf/guess.ts).
+ * src/elf/guess.ts), and when it says no, its own words are shown.
  *
  * Tested in test/unit/elf-js-hq.test.ts against the real page.
  */
@@ -16,11 +17,9 @@
   "use strict";
 
   var NOT_SAVED = "We could not save your guess. Check your signal and try again.";
-  var REFUSED = {
-    "not-hunting": "Too late: this door has just opened. Have a look at the calendar.",
-    "place-already-open": "That place is no longer on the list. Pick another.",
-    "unknown-place": "That place is no longer on the list. Pick another."
-  };
+  // When a clue comes out, each page waits a second and up to five more before it is fetched again.
+  var RELOAD_AFTER_MS = 1000;
+  var RELOAD_SPREAD_MS = 5000;
 
   /** How long is left: "2:14:09", "14:09", "0:05", and "0:00" once the time has come. The same
    *  words as countdownWords in src/elf/words.ts. */
@@ -37,10 +36,12 @@
   function initHq(doc, win, opts) {
     var clock = opts && opts.now ? opts.now : function () { return Date.now(); };
     var reload = opts && opts.reload ? opts.reload : function () { win.location.reload(); };
+    var random = opts && opts.random ? opts.random : Math.random;
     var card = doc.querySelector(".elf-case");
     var served = card ? Date.parse(card.getAttribute("data-now")) : NaN;
     var skew = isNaN(served) ? 0 : served - clock();
     var fetched = false;
+    var reloading = null;
 
     // ---- the countdown -------------------------------------------------------------------
 
@@ -55,10 +56,11 @@
         // again: it would be drawn the same way, and fetched again, for ever.
         if (!(left > 0) && !(until <= served)) due = true;
       }
-      // The clue is out. It was never in this page, so fetch the page again, once.
+      // The clue is out. It was never in this page, so fetch the page again, once, after a different
+      // short while on each page, so every family's HQ does not ask in the same second.
       if (due && !fetched) {
         fetched = true;
-        reload();
+        reloading = win.setTimeout(reload, RELOAD_AFTER_MS + Math.floor(random() * RELOAD_SPREAD_MS));
       }
     }
 
@@ -80,13 +82,12 @@
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         if (sending) return;
-        var picked = form.querySelector('input[name="placeId"]:checked');
-        if (!picked) {
-          say("Pick a place first.", true);
+        var box = form.querySelector('input[name="text"]');
+        var place = box ? box.value.trim() : "";
+        if (!place) {
+          say("Type a place first.", true);
           return;
         }
-        var label = form.querySelector('label[for="' + picked.id + '"]');
-        var place = label ? label.textContent : "";
         var door = form.querySelector('input[name="door"]');
         var button = form.querySelector("button");
         sending = true;
@@ -96,7 +97,7 @@
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ door: Number(door ? door.value : 0), placeId: picked.value })
+            body: JSON.stringify({ door: Number(door ? door.value : 0), text: place })
           })
           .then(function (res) {
             return res
@@ -105,15 +106,16 @@
                 return {};
               })
               .then(function (body) {
-                return { saved: res.ok && !!body && body.ok === true, reason: body ? body.reason : null };
+                var said = body && typeof body === "object" ? body : {};
+                return { saved: res.ok && said.ok === true, text: typeof said.text === "string" && said.text ? said.text : place, message: typeof said.message === "string" ? said.message : "" };
               });
           })
           .then(function (answer) {
             if (answer.saved) {
-              say("Guess locked in: " + place + ". You can change it until the elf is found.", false);
+              say("Your guess: " + answer.text + ". You can change it until the hiding place is shown.", false);
               if (button) button.textContent = "Change my guess";
             } else {
-              say(REFUSED[answer.reason] || NOT_SAVED, true);
+              say(answer.message || NOT_SAVED, true);
             }
           })
           .catch(function () {
@@ -134,6 +136,7 @@
       tick: tick,
       stop: function () {
         if (ticker) win.clearInterval(ticker);
+        if (reloading) win.clearTimeout(reloading);
       }
     };
   }

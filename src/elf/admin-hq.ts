@@ -24,7 +24,7 @@ export interface HqNumbers {
 
 /** One line of Needs you: something waiting for a person, and where to sort it. */
 export interface Quest {
-  id: "names" | "doors" | "preview" | "waiting";
+  id: "doors-soon" | "names" | "doors" | "preview" | "waiting";
   count: number | null;
   title: string;
   words: string;
@@ -34,9 +34,27 @@ export interface Quest {
   filter: "check" | null;
 }
 
-/** Needs you, in order, each only when it applies. */
-export function questsFor(n: HqNumbers, previewOn: boolean, notReady: { door: Door; toDo: number }[]): Quest[] {
+/** A door whose first clue is within the next three days and that is not ready: its weekday and what is left. */
+export interface SoonNotReady {
+  door: Door;
+  day: string;
+  toDo: number;
+}
+
+/** Needs you, in order, each only when it applies. Doors that are soon and not ready come first. */
+export function questsFor(n: HqNumbers, previewOn: boolean, notReady: { door: Door; toDo: number }[], soon: SoonNotReady[]): Quest[] {
   const quests: Quest[] = [];
+  for (const s of soon) {
+    quests.push({
+      id: "doors-soon",
+      count: null,
+      title: `Door ${s.door} is on ${s.day} and is not ready`,
+      words: `${s.toDo} to do.`,
+      go: "doors",
+      button: "Open Doors",
+      filter: null,
+    });
+  }
   if (n.namesToCheck > 0) {
     quests.push({
       id: "names",

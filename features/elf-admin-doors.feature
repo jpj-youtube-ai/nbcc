@@ -20,7 +20,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
   Scenario: Typing in a place and a prize shows on the door's tile
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends PATCH to "/api/admin/elf/doors/7" with:
       """
-      { "placeName": "Pine Cone Café", "placeTown": "Ayr", "placeAddress": "1 Example Street", "prize": "A cake for the family" }
+      { "placeName": "Pine Cone Café", "placeTown": "Exampleton", "placeAddress": "1 Example Street", "prize": "A cake for the family" }
       """
     Then the doors answer is 200
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends GET to "/api/admin/elf/doors"
@@ -58,7 +58,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends PATCH to "/api/admin/elf/doors/24" with:
       """
       {
-        "placeName": "Holly Berry Books", "placeTown": "Ayr", "placeAddress": "2 Example Street",
+        "placeName": "Holly Berry Books", "placeTown": "Exampleton", "placeAddress": "2 Example Street",
         "contactName": "Sam Example", "contactPhone": "01632 960 123", "contactEmail": "sam@example.org",
         "closesAt": "21:00", "elfSpot": "On the top shelf by the window", "agreedBy": "Alex Example",
         "prize": "A book token", "prizeShowOff": true, "elfName": "Twinkle",
@@ -70,7 +70,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
     Then the door has these details
       """
       {
-        "placeName": "Holly Berry Books", "placeTown": "Ayr", "placeAddress": "2 Example Street",
+        "placeName": "Holly Berry Books", "placeTown": "Exampleton", "placeAddress": "2 Example Street",
         "contactName": "Sam Example", "contactPhone": "01632 960 123", "contactEmail": "sam@example.org",
         "closesAt": "21:00", "elfSpot": "On the top shelf by the window", "agreedBy": "Alex Example",
         "prize": "A book token", "prizeShowOff": true, "elfName": "Twinkle",
@@ -128,7 +128,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
     Given NBCC's phone number for places is set
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends PATCH to "/api/admin/elf/doors/7" with:
       """
-      { "placeName": "Pine Cone Café", "placeTown": "Ayr", "elfName": "Pip" }
+      { "placeName": "Pine Cone Café", "placeTown": "Exampleton", "elfName": "Pip" }
       """
     Then the doors answer is 200
     When "look.doors.admin.bdd@example.com" with password "Elf-Doors-Viewer-1" sends GET to "/api/admin/elf/doors/7/staff-card"

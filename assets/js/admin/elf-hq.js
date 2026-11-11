@@ -104,6 +104,7 @@
               var failure = new Error((d && d.error) || WORDS.didNotWork);
               failure.status = res.status;
               failure.problems = (d && d.problems) || null; // a paste that has problems says which
+              failure.fields = (d && d.fields) || null; // a picture the server would not take says which part and why
               failure.printed = !!(d && d.printed); // a tag word asked for again after its tag was printed
               throw failure;
             }
@@ -175,6 +176,8 @@
       remember(TAB_KEY, id);
       if (id === "families" && data) loadFamilies();
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
+      if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
+      if (id === "settings" && data) loadPractice();
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -199,12 +202,17 @@
     function plural(n, one, many) {
       return n === 1 ? one : many;
     }
+    /** A moment's time in London as people say it: "5:30pm". */
+    function timeWords(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Europe/London" }).format(d).replace(/\s/g, "").toLowerCase();
+    }
     function whenWords(iso) {
       var d = new Date(iso);
       if (isNaN(d.getTime())) return "";
       var day = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" }).format(d).replace(/,/g, "");
-      var time = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Europe/London" }).format(d).replace(/\s/g, "").toLowerCase();
-      return day + ", " + time;
+      return day + ", " + timeWords(iso);
     }
     /** A paper rosette with a number or a word on it: the scallops in `ring`, the middle in `disc`. */
     function rosette(ring, disc, words) {
@@ -218,7 +226,7 @@
     }
 
     // ---- HQ ----
-    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", doors: PAPER + "icons/icon-frame.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
+    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", doors: PAPER + "icons/icon-frame.webp", "doors-soon": PAPER + "icons/icon-frame.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
     var familyFilter = "all";
     var confirming = null; // the lever's second ask, while it is showing
 
@@ -237,40 +245,90 @@
       box.appendChild(words);
       if (!data.canSwitch) box.appendChild(el("p", { class: "hq-words hq-soft hq-switchbox__who", text: "Only an admin can switch Elf Detective School on or off." }));
       lever.addEventListener("click", function () {
-        if (confirming) return;
-        var turnOn = !on;
-        var yes = el("button", { class: "hq-btn hq-btn--small " + (turnOn ? "hq-btn--go" : "hq-btn--danger"), type: "button", text: turnOn ? "Yes, switch it on" : "Yes, switch it off" });
-        var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: turnOn ? "Not yet" : "Keep it on" });
-        confirming = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
-          el("p", { class: "hq-words", text: turnOn ? "Switch it on for everyone? Sign ups open straight away and anyone can find Elf Detective School." : "Switch it off? Families cannot see Elf Detective School or sign in while it is off." }),
-          yes,
-          no,
-        ]);
-        box.appendChild(confirming);
-        yes.focus();
-        no.addEventListener("click", function () {
-          confirming.remove();
-          confirming = null;
-          lever.focus();
+        pullLever(box, lever, {
+          turnOn: !on,
+          field: "schoolOn",
+          question: [
+            "Switch it on for everyone? Sign ups open straight away and anyone can find Elf Detective School.",
+            "Switch it off? Families cannot see Elf Detective School or sign in while it is off.",
+          ],
+          yes: ["Yes, switch it on", "Yes, switch it off"],
+          no: ["Not yet", "Keep it on"],
+          done: ["Elf Detective School is live.", "Elf Detective School is switched off."],
+          id: "hqLever",
         });
-        yes.addEventListener("click", function () {
-          yes.disabled = true;
-          no.disabled = true;
-          ask("PATCH", "/api/admin/elf/settings", { schoolOn: turnOn })
-            .then(function (d) {
-              data.settings = d.settings;
-              confirming = null;
-              draw();
-              say(status, turnOn ? "Elf Detective School is live." : "Elf Detective School is switched off.", true);
-              var again = doc.getElementById("hqLever");
-              if (again) again.focus();
-            })
-            .catch(function (e) {
-              if (confirming) confirming.remove();
-              confirming = null;
-              say(status, e.message, false);
-            });
+      });
+    }
+
+    /** December's doors: a second lever, on the same panel, for admins; words for anyone else. */
+    function drawDoorsSwitch(box) {
+      var on = !!(data.settings && data.settings.doorsOn);
+      var line = "Switched on, every door runs by itself from its first clue. Switched off, the doors stay shut with their countdowns.";
+      if (!data.canSwitch) {
+        box.appendChild(el("div", { class: "hq-switchbox__who" }, [el("p", { class: "hq-words", text: "December's doors: " + (on ? "On" : "Off") }), el("p", { class: "hq-words hq-soft", text: line })]));
+        return;
+      }
+      var lever = el("button", { class: "hq-lever hq-lever--doors", type: "button", role: "switch", id: "hqDoorsLever", "aria-checked": String(on), "aria-label": "December's doors switch" }, [
+        el("span", { class: "hq-lever__words", "aria-hidden": "true", text: on ? "ON" : "OFF" }),
+        el("span", { class: "hq-lever__knob" }, [el("img", { src: PAPER + "deco/bauble.webp", alt: "", width: 52, height: 52 })]),
+      ]);
+      box.appendChild(lever);
+      box.appendChild(
+        el("div", {}, [
+          el("h2", { class: "hq-h2", text: on ? "December's doors are switched on" : "December's doors are switched off" }),
+          el("p", { class: "hq-words hq-soft", text: line }),
+        ]),
+      );
+      lever.addEventListener("click", function () {
+        pullLever(box, lever, {
+          turnOn: !on,
+          field: "doorsOn",
+          question: [
+            "Switch December's doors on? Families will see the clues, guess, type the word and send photos from door 1's first clue.",
+            "Switch December's doors off? The doors go back to being shut, with their countdowns.",
+          ],
+          yes: ["Yes, switch them on", "Yes, switch them off"],
+          no: ["Not yet", "Keep them on"],
+          done: ["December's doors are switched on.", "December's doors are switched off."],
+          id: "hqDoorsLever",
         });
+      });
+    }
+
+    /** A lever pulled: the second ask, then the change. `o` holds the words for on (0) and off (1). */
+    function pullLever(box, lever, o) {
+      if (confirming) return;
+      var turnOn = o.turnOn;
+      var at = turnOn ? 0 : 1;
+      var yes = el("button", { class: "hq-btn hq-btn--small " + (turnOn ? "hq-btn--go" : "hq-btn--danger"), type: "button", text: o.yes[at] });
+      var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: o.no[at] });
+      confirming = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [el("p", { class: "hq-words", text: o.question[at] }), yes, no]);
+      box.appendChild(confirming);
+      yes.focus();
+      no.addEventListener("click", function () {
+        confirming.remove();
+        confirming = null;
+        lever.focus();
+      });
+      yes.addEventListener("click", function () {
+        yes.disabled = true;
+        no.disabled = true;
+        var sent = {};
+        sent[o.field] = turnOn;
+        ask("PATCH", "/api/admin/elf/settings", sent)
+          .then(function (d) {
+            data.settings = d.settings;
+            confirming = null;
+            draw();
+            say(status, o.done[at], true);
+            var again = doc.getElementById(o.id);
+            if (again) again.focus();
+          })
+          .catch(function (e) {
+            if (confirming) confirming.remove();
+            confirming = null;
+            say(status, e.message, false);
+          });
       });
     }
 
@@ -383,6 +441,7 @@
       var row = el("div", { class: "hq-status-row" });
       var switchBox = el("div", { class: "hq-panel hq-switchbox" });
       drawSwitch(switchBox);
+      drawDoorsSwitch(switchBox);
       row.appendChild(switchBox);
       drawClocks(row);
       part.appendChild(row);
@@ -402,7 +461,7 @@
     // ---- Families: pick a family from the list, and its sheet opens beside it ----
     var FAMILY_KEY = "nbcc_elf_hq_family";
     var FILTER_NAMES = [["all", "All"], ["check", "Names to check"], ["week", "This week"], ["removed", "Removed"]];
-    var fam = { list: null, total: 0, counts: null, sheet: null, surnames: [], q: "", timer: null, built: false, asked: 0 };
+    var fam = { list: null, total: 0, counts: null, sheet: null, tries: [], surnames: [], q: "", timer: null, built: false, asked: 0 };
     var famBox, famSearch, famChips, famList, famMore, famSheet;
 
     function shortDay(iso) {
@@ -517,6 +576,7 @@
       return ask("GET", "/api/admin/elf/families/" + id)
         .then(function (d) {
           fam.sheet = d.family;
+          fam.tries = d.wordTries || [];
           if (d.surnames) fam.surnames = d.surnames;
           drawSheet();
           if (fam.list) drawList();
@@ -704,6 +764,48 @@
         paid.appendChild(el("li", {}, bits));
       });
       famSheet.appendChild(paid);
+      famSheet.appendChild(triesBox(f, mayChange));
+    }
+
+    /** The doors this family has typed wrong words at, each with Clear them (for someone who may edit). */
+    function triesBox(f, mayChange) {
+      var box = el("section", { class: "hq-tries", "aria-label": "Wrong words typed" }, [el("h3", { class: "hq-h3", text: "Wrong words typed" })]);
+      var said = el("p", { class: "hq-status", role: "status" });
+      var tries = (fam.tries || []).filter(function (t) {
+        return t && t.wrong > 0;
+      });
+      if (!tries.length) {
+        box.appendChild(el("p", { class: "hq-words hq-soft", text: "No wrong words typed." }));
+      } else {
+        var list = el("ul", { class: "hq-tries__list" });
+        tries.forEach(function (t) {
+          var item = el("li", {}, [el("span", { text: "Door " + t.door + ": " + t.wrong + (t.wrong === 1 ? " wrong try" : " wrong tries") })]);
+          if (mayChange) {
+            var clear = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Clear them", "aria-label": "Clear door " + t.door + "'s wrong tries" });
+            clear.addEventListener("click", function () {
+              clear.disabled = true;
+              ask("POST", "/api/admin/elf/families/" + f.id + "/word-tries/clear", { door: t.door })
+                .then(function (d) {
+                  if (!fam.sheet || fam.sheet.id !== f.id) return; // another family has been opened since
+                  fam.tries = d.wordTries || fam.tries.filter(function (x) { return x.door !== t.door; });
+                  if (d.family) fam.sheet = d.family;
+                  drawSheet();
+                  var now = famSheet.querySelector(".hq-tries .hq-status");
+                  if (now) say(now, "Cleared. They can try again.", true);
+                })
+                .catch(function (e) {
+                  say(said, e.message, false);
+                  clear.disabled = false;
+                });
+            });
+            item.appendChild(clear);
+          }
+          list.appendChild(item);
+        });
+        box.appendChild(list);
+      }
+      box.appendChild(said);
+      return box;
     }
 
     function detectiveCard(f, d, mayChange) {
@@ -1058,10 +1160,12 @@
             say(said, "Nothing has changed.", null);
             return;
           }
+          // Focus goes to the new Save button only if it was in this part when Save was pressed.
+          var held = !!(part && doc.activeElement && part.contains(doc.activeElement));
           save.disabled = true;
           ask("PATCH", "/api/admin/elf/doors/" + d.door, sent)
             .then(function (r) {
-              takeDoor(r.door, { rebuild: [key], say: [key, "Saved."], focus: key });
+              takeDoor(r.door, { rebuild: [key], say: [key, "Saved."], focus: held ? key : null });
             })
             .catch(function (e) {
               say(said, e.message, false);
@@ -1071,12 +1175,13 @@
         kids.push(el("div", { class: "hq-actions" }, [save]));
       }
       kids.push(said);
-      return el("section", { class: "hq-dpart", "data-part": key }, kids);
+      var part = el("section", { class: "hq-dpart", "data-part": key }, kids);
+      return part;
     }
 
     function buildPart(key) {
       if (/^clue[123]$/.test(key)) return clueItem(Number(key.slice(4)));
-      return { place: placePart, evening: eveningPart, prize: prizePart, elf: elfPart, clues: cluesPart, prints: printsPart }[key]();
+      return { place: placePart, evening: eveningPart, prize: prizePart, elf: elfPart, clues: cluesPart, prints: printsPart, snow: snowPart }[key]();
     }
 
     // ---- the three clues ----
@@ -1103,12 +1208,248 @@
       return "The staff card names the day and the tag carries the word, so both are for " + (d.placeName || "this place") + " only.";
     }
 
+    // ---- a clue's picture ----
+    var PIC_TYPES = ["image/jpeg", "image/png", "image/webp"];
+    var PIC_MAX_BYTES = 2 * 1024 * 1024;
+    var PIC_MAX_PX = 1600;
+    var PIC_QUALITY = 0.86;
+    var PIC_LOWER_QUALITY = 0.7; // one more try if the first drawing is over 2 MB
+    var PIC_WORDS = {
+      type: "That picture is not one we can use. Try a JPG, PNG or WebP photo.",
+      size: "That picture is too big. Try a smaller one.",
+      read: "That picture could not be opened. Please try another.",
+      choose: "Choose a picture first.",
+      alt: "Describe the picture in a few words, for anyone who cannot see it.",
+    };
+    // The browser addresses made for each clue's pictures: the stored picture fetched for the sheet and the
+    // one just chosen. Each is let go of when it is replaced or when the clue is drawn again.
+    var clueBlobs = { 1: [], 2: [], 3: [] };
+    var clueDraws = { 1: 0, 2: 0, 3: 0 };
+
+    function freeAddress(url) {
+      if (url && win.URL && typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
+    }
+    /** Lets go of every address made for one clue's picture. */
+    function freeClueBlobs(n) {
+      clueBlobs[n].forEach(freeAddress);
+      clueBlobs[n] = [];
+    }
+    function keepAddress(n, url) {
+      clueBlobs[n].push(url);
+    }
+    function dropAddress(n, url) {
+      clueBlobs[n] = clueBlobs[n].filter(function (u) { return u !== url; });
+      freeAddress(url);
+    }
+
+    // The chosen file read into something the page can show, and drawn again smaller as a fresh JPEG.
+    // Both can be replaced through opts.read and opts.make (the unit tests have no canvas).
+    var readPicture =
+      opts.read ||
+      function (file) {
+        return new Promise(function (done) {
+          if (!win.URL || !win.URL.createObjectURL || typeof win.Image !== "function") return done(null);
+          var src = win.URL.createObjectURL(file);
+          var img = new win.Image();
+          img.onload = function () {
+            done({ src: src, width: img.naturalWidth, height: img.naturalHeight, img: img });
+          };
+          img.onerror = function () {
+            freeAddress(src);
+            done(null);
+          };
+          img.src = src;
+        });
+      };
+    var makePicture =
+      opts.make ||
+      function (pic, quality) {
+        return new Promise(function (done) {
+          try {
+            var canvas = doc.createElement("canvas");
+            if (!canvas.getContext || !pic || !pic.img) return done(null);
+            var scale = Math.min(1, PIC_MAX_PX / Math.max(pic.width, pic.height));
+            canvas.width = Math.max(1, Math.round(pic.width * scale));
+            canvas.height = Math.max(1, Math.round(pic.height * scale));
+            var ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(pic.img, 0, 0, canvas.width, canvas.height);
+            var url = canvas.toDataURL("image/jpeg", quality || PIC_QUALITY);
+            var comma = url.indexOf(",");
+            if (comma === -1 || url.indexOf("data:image/jpeg") !== 0) return done(null);
+            done({ mime: "image/jpeg", base64: url.slice(comma + 1) });
+          } catch (e) {
+            done(null);
+          }
+        });
+      };
+    function base64Bytes(b64) {
+      var pad = /==$/.test(b64) ? 2 : /=$/.test(b64) ? 1 : 0;
+      return Math.floor((b64.length * 3) / 4) - pad;
+    }
+    /** A file as it is, in base64, for a browser that cannot draw the picture again. */
+    function rawBase64(file) {
+      return new Promise(function (done) {
+        if (typeof win.FileReader !== "function") return done(null);
+        var reader = new win.FileReader();
+        reader.onload = function () {
+          var url = String(reader.result || "");
+          var comma = url.indexOf(",");
+          done(comma === -1 ? null : url.slice(comma + 1));
+        };
+        reader.onerror = function () {
+          done(null);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    /** The picture to send: { mime, base64 } drawn again smaller, the file as it came if it cannot be, or { error }. */
+    function preparePicture(file, pic) {
+      var made = pic ? makePicture(pic) : Promise.resolve(null);
+      return made
+        .then(function (small) {
+          if (small && small.base64 && base64Bytes(small.base64) > PIC_MAX_BYTES) {
+            return makePicture(pic, PIC_LOWER_QUALITY).then(function (lower) {
+              return lower && lower.base64 ? lower : small;
+            });
+          }
+          return small;
+        })
+        .then(function (small) {
+          if (small && small.base64) return small;
+          if (PIC_TYPES.indexOf(file.type) === -1) return { error: PIC_WORDS.type };
+          if (file.size > PIC_MAX_BYTES) return { error: PIC_WORDS.size };
+          return rawBase64(file).then(function (b64) {
+            return b64 ? { mime: file.type, base64: b64 } : { error: PIC_WORDS.read };
+          });
+        });
+    }
+
+    /** The picture on a clue, fetched with the bearer token into a Blob address, as the prints are. */
+    function cluePictureView(n, d, alt) {
+      var draw = clueDraws[n];
+      var img = el("img", { class: "hq-clue-pic__img", alt: alt || "A picture for this clue", width: 480, height: 360 });
+      win
+        .fetch("/api/admin/elf/doors/" + d.door + "/clues/" + n + "/picture", { headers: { Authorization: "Bearer " + token() } })
+        .then(function (res) {
+          if (!res.ok) throw new Error("no picture");
+          return res.blob();
+        })
+        .then(function (blob) {
+          if (!win.URL || typeof win.URL.createObjectURL !== "function") return;
+          var url = win.URL.createObjectURL(blob);
+          if (draw !== clueDraws[n]) return freeAddress(url); // the clue was drawn again while this was on its way
+          keepAddress(n, url);
+          img.setAttribute("src", url);
+        })
+        .catch(function () { /* the words say there is a picture; the image stays empty */ });
+      return el("figure", { class: "hq-clue-pic" }, [img, el("figcaption", { class: "hq-hint", text: alt ? "Described as: " + alt : "No description" })]);
+    }
+
+    /** Add a picture, and Take the picture off, for a clue that is not out. */
+    function cluePictureEditor(n, d, stored, said, key) {
+      var chosen = null; // the picture read from the chosen file
+      var picturing = Promise.resolve();
+      var previewUrl = null;
+      var draw = clueDraws[n];
+      var file = el("input", { type: "file", id: "hqDoor-" + key + "-picture", accept: PIC_TYPES.join(","), "aria-describedby": "hqDoor-" + key + "-alt-hint" });
+      var preview = el("div", { class: "hq-pic-preview", hidden: true });
+      var alt = el("input", { type: "text", id: "hqDoor-" + key + "-alt", maxlength: 200, autocomplete: "off", "aria-describedby": "hqDoor-" + key + "-alt-hint" });
+      if (stored && stored.pictureAlt) alt.value = stored.pictureAlt;
+      var send = el("button", { class: "hq-btn hq-btn--small hq-btn--go", type: "button", text: "Save the picture", "aria-label": "Save the picture for clue " + n });
+      var take = stored && stored.hasPicture ? el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Take the picture off", "aria-label": "Take the picture off clue " + n }) : null;
+
+      function letGoOfPreview() {
+        if (previewUrl) dropAddress(n, previewUrl);
+        previewUrl = null;
+        preview.textContent = "";
+        preview.hidden = true;
+      }
+      file.addEventListener("change", function () {
+        var f = file.files && file.files.length ? file.files[0] : null;
+        chosen = null;
+        letGoOfPreview();
+        if (!f) return;
+        picturing = Promise.resolve(readPicture(f)).then(function (pic) {
+          if (draw !== clueDraws[n]) {
+            if (pic && pic.src) freeAddress(pic.src);
+            return;
+          }
+          chosen = pic;
+          if (pic && pic.src) {
+            previewUrl = pic.src;
+            keepAddress(n, pic.src);
+            preview.appendChild(el("img", { src: pic.src, alt: "", width: 240, height: 180 }));
+            preview.hidden = false;
+          }
+        });
+      });
+      send.addEventListener("click", function () {
+        var f = file.files && file.files.length ? file.files[0] : null;
+        if (!f) return say(said, PIC_WORDS.choose, false);
+        var words = alt.value.trim();
+        if (words === "" || words.length > 200) return say(said, PIC_WORDS.alt, false);
+        send.disabled = true;
+        say(said, "Sending the picture…", null);
+        picturing
+          .then(function () { return preparePicture(f, chosen); })
+          .then(function (out) {
+            if (out.error) throw new Error(out.error);
+            return ask("PUT", "/api/admin/elf/doors/" + d.door + "/clues/" + n + "/picture", { mime: out.mime, dataBase64: out.base64, alt: words });
+          })
+          .then(function (r) {
+            takeDoor(r.door, { rebuild: [key], say: [key, "Picture saved."], focus: key });
+          })
+          .catch(function (e) {
+            say(said, (e.fields && e.fields.photo) || e.message, false);
+            send.disabled = false;
+            if (e.status === 409) reopenAfterClueOut(d.door, key, e.message);
+          });
+      });
+      if (take) {
+        take.addEventListener("click", function () {
+          take.disabled = true;
+          ask("DELETE", "/api/admin/elf/doors/" + d.door + "/clues/" + n + "/picture")
+            .then(function (r) {
+              takeDoor(r.door, { rebuild: [key], say: [key, "Picture taken off."], focus: key });
+            })
+            .catch(function (e) {
+              say(said, e.message, false);
+              take.disabled = false;
+              if (e.status === 409) reopenAfterClueOut(d.door, key, e.message);
+            });
+        });
+      }
+      var buttons = el("div", { class: "hq-actions" }, [send, take]);
+      return el("div", { class: "hq-clue-pic-edit" }, [
+        el("div", { class: "hq-field" }, [el("label", { for: "hqDoor-" + key + "-picture", text: "Add a picture" }), file]),
+        preview,
+        el("div", { class: "hq-field" }, [
+          el("label", { for: "hqDoor-" + key + "-alt", text: "What is in the picture" }),
+          alt,
+          el("span", { class: "hq-hint", id: "hqDoor-" + key + "-alt-hint", text: "Say what is in it, for anyone who cannot see it." }),
+        ]),
+        buttons,
+      ]);
+    }
+
+    /** The clue went out while it was being worked on: the door is read again, so it shows read only. */
+    function reopenAfterClueOut(door, key, words) {
+      openDoor(door, false).then(function () {
+        if (doors.open === door && partLine(key)) say(partLine(key), words, false);
+      });
+    }
+
     function clueItem(n) {
       var d = doors.sheet;
       var key = "clue" + n;
       var out = !!(d.clueOut && d.clueOut[n - 1]);
       var time = clockWords(d.evening && d.evening[key]);
       var stored = (d.clues || []).filter(function (c) { return c.n === n; })[0];
+      // Drawn again: the addresses made for the last drawing of this clue's picture are let go of.
+      freeClueBlobs(n);
+      clueDraws[n]++;
       var was = stored && stored.words ? stored.words : "";
       var box = doorInput(key, was, null, "area", out);
       box.setAttribute("placeholder", "Not written yet");
@@ -1161,6 +1502,8 @@
         }
         kids.push(row);
       }
+      if (stored && stored.hasPicture) kids.push(cluePictureView(n, d, stored.pictureAlt));
+      if (!out && doors.canEdit) kids.push(cluePictureEditor(n, d, stored, said, key));
       kids.push(said);
       return el("li", { class: "hq-clue hq-clue--" + n, "data-part": key }, [el("span", { class: "hq-clue__n", "aria-hidden": "true", text: String(n) }), el("div", { class: "hq-clue__body" }, kids)]);
     }
@@ -1270,6 +1613,103 @@
         ]),
         said,
       ]);
+    }
+
+    /** If the door cannot run: a snow day (before its first clue) and, after its day, gone home. */
+    function snowPart() {
+      var d = doors.sheet;
+      var n = d.door;
+      var edit = doors.canEdit;
+      var said = el("p", { class: "hq-status", role: "status", tabindex: "-1" });
+      var kids = [el("header", {}, [el("h3", { class: "hq-h3", text: "If the door cannot run" })])];
+      var rebuilt = function (r, words) {
+        takeDoor(r.door, { rebuild: ["snow"], say: ["snow", words], focusId: "hqDoor-snowAction" });
+      };
+      if (d.snowDay) {
+        var automatic = d.snowDay.by === "automatic";
+        kids.push(
+          el("p", {
+            class: "hq-words",
+            text: automatic ? "Snow day: the door was not ready at its first clue" : "Snow day called by " + who(d.snowDay.by) + " on " + dayWords(d.snowDay.at),
+          }),
+        );
+        if (edit && !d.started) {
+          var cancel = el("button", { class: "hq-btn hq-btn--small", type: "button", id: "hqDoor-snowAction", text: "Cancel the snow day" });
+          cancel.addEventListener("click", function () {
+            cancel.disabled = true;
+            ask("DELETE", "/api/admin/elf/doors/" + n + "/snow-day")
+              .then(function (r) {
+                rebuilt(r, "The snow day is cancelled.");
+              })
+              .catch(function (e) {
+                say(said, e.message, false);
+                cancel.disabled = false;
+              });
+          });
+          kids.push(el("div", { class: "hq-actions" }, [cancel]));
+        }
+      } else {
+        kids.push(el("p", { class: "hq-words hq-soft", text: d.started ? "No snow day was called." : "A snow day can be called until the first clue is out." }));
+        if (edit && !d.started) {
+          var call = el("button", { class: "hq-btn hq-btn--small", type: "button", id: "hqDoor-snowAction", text: "Call a snow day" });
+          var slot = el("div", {});
+          call.addEventListener("click", function () {
+            if (slot.querySelector(".hq-confirm")) return;
+            var yes = el("button", { class: "hq-btn hq-btn--small hq-btn--danger", type: "button", text: "Yes, call a snow day" });
+            var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Not yet" });
+            var sure = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
+              el("p", { class: "hq-words", text: "Call a snow day for door " + n + "? Its elf will be snowed in, and every detective gets the door done." }),
+              yes,
+              no,
+            ]);
+            no.addEventListener("click", function () {
+              sure.remove();
+              call.focus();
+            });
+            yes.addEventListener("click", function () {
+              yes.disabled = true;
+              no.disabled = true;
+              ask("POST", "/api/admin/elf/doors/" + n + "/snow-day")
+                .then(function (r) {
+                  rebuilt(r, "Snow day called.");
+                })
+                .catch(function (e) {
+                  sure.remove();
+                  say(said, e.message, false);
+                });
+            });
+            slot.appendChild(sure);
+            yes.focus();
+          });
+          kids.push(el("div", { class: "hq-actions" }, [call]));
+          kids.push(slot);
+        }
+      }
+      if (d.dayOver) {
+        var box = el("input", { type: "checkbox", id: "hqDoor-goneHome", name: "goneHome", disabled: !edit });
+        box.checked = !!d.goneHome;
+        box.addEventListener("change", function () {
+          var on = box.checked;
+          box.disabled = true;
+          ask(on ? "POST" : "DELETE", "/api/admin/elf/doors/" + n + "/gone-home")
+            .then(function (r) {
+              takeDoor(r.door, { rebuild: ["snow"], say: ["snow", "Saved."], focusId: "hqDoor-goneHome" });
+            })
+            .catch(function (e) {
+              box.checked = !on;
+              box.disabled = false;
+              say(said, e.message, false);
+            });
+        });
+        kids.push(
+          el("div", { class: "hq-dtick" }, [
+            el("label", { class: "hq-tickbox", for: "hqDoor-goneHome" }, [box, el("span", { text: "Gone home: the place has stopped hosting the elf" })]),
+            d.goneHome ? el("span", { class: "hq-hint", text: "Ticked by " + (who(d.goneHome.by) || "staff") + " on " + dayWords(d.goneHome.at) }) : null,
+          ]),
+        );
+      }
+      kids.push(said);
+      return el("section", { class: "hq-dpart hq-snow", "data-part": "snow" }, kids);
     }
 
     // ---- the tools under the level select: the list of places, the prize list, paste all the clues ----
@@ -1492,7 +1932,7 @@
       var d = doors.sheet;
       var edit = doors.canEdit;
       var placeIn = {
-        placeName: doorInput("placeName", d.placeName, 80),
+        placeName: doorInput("placeName", d.placeName, 80, "area"),
         placeTown: doorInput("placeTown", d.placeTown, 60),
         placeAddress: doorInput("placeAddress", d.placeAddress, 200, "area"),
         contactName: doorInput("contactName", d.contactName, 80),
@@ -1501,6 +1941,16 @@
         elfSpot: doorInput("elfSpot", d.elfSpot, 200, "area"),
         agreedBy: doorInput("agreedBy", d.agreedBy, 80),
       };
+      // One name, however long: it wraps instead of running past its box, and never holds a line break.
+      placeIn.placeName.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") e.preventDefault();
+      });
+      placeIn.placeName.addEventListener("input", function () {
+        if (/[\r\n]/.test(placeIn.placeName.value)) {
+          placeIn.placeName.value = placeIn.placeName.value.replace(/\s*[\r\n]+\s*/g, " ");
+          fitField(placeIn.placeName);
+        }
+      });
       var names = el("div", { class: "hq-names" });
       fillNames(names);
       var newName = doorInput("newName", "", 80);
@@ -1690,6 +2140,11 @@
     /** The whole sheet, drawn when a door is opened. */
     function drawDoorSheet() {
       var d = doors.sheet;
+      // The sheet is cleared (a door closed, or another opened): every picture address it made is let go of.
+      [1, 2, 3].forEach(function (n) {
+        freeClueBlobs(n);
+        clueDraws[n]++;
+      });
       doorsSheet.textContent = "";
       if (!d) return;
       sheetHead = el("div", { class: "hq-door-head" });
@@ -1704,6 +2159,7 @@
       });
       doorsSheet.appendChild(buildPart("clues"));
       doorsSheet.appendChild(buildPart("prints"));
+      doorsSheet.appendChild(buildPart("snow"));
       updateCloseHint();
       fitFields();
     }
@@ -1888,6 +2344,182 @@
       grid.appendChild(preview);
       part.appendChild(grid);
       if (!admin) part.appendChild(el("p", { class: "hq-words hq-soft", text: "Only an admin can change these." }));
+      // Its own panel after the admin only ones: anyone who may edit can start a practice evening.
+      part.appendChild(practicePanel());
+    }
+
+    // ---- Settings: the practice door, a pretend evening played through the preview link ----
+    // Door 0 of year 0 (src/db/elf-practice.ts), read afresh each time Settings opens. A reading takes a
+    // number, and a reading that comes back after anything newer was sent (or came back) is ignored. A start
+    // or a clear is not a reading: its answer is always applied, and it bumps the number so that no older
+    // reading can land on top of it.
+    var NO_PREVIEW_WORDS = "Make a preview link in Settings first: the practice door is played through it.";
+    var practice = { loaded: false, answer: null, error: null, asking: false, seq: 0 };
+
+    /** Takes an answer from the practice door's routes. True when it shows the preview link has come or
+     *  gone since HQ was read, so all of Settings is drawn again rather than only this panel. */
+    function takePractice(d) {
+      practice.answer = d && d.practice ? d.practice : null;
+      practice.error = null;
+      practice.loaded = true;
+      var s = data && data.settings;
+      if (!s || !d || typeof d.previewOn !== "boolean" || d.previewOn === !!s.previewOn) return false;
+      s.previewOn = d.previewOn;
+      return true;
+    }
+
+    /** Draws the practice door's panel again in its place, or all of Settings when `everything`. */
+    function redrawPractice(everything) {
+      if (everything) {
+        drawSettingsPart();
+        return;
+      }
+      var old = parts.settings.querySelector(".hq-practice");
+      if (old && old.parentNode) old.parentNode.replaceChild(practicePanel(), old);
+    }
+
+    /** Says something in the practice panel's status line as it is drawn now (it may have been drawn
+     *  again while a request was on its way). */
+    function practiceSay(words, ok) {
+      var now = parts.settings.querySelector(".hq-practice .hq-status");
+      if (now) say(now, words, ok);
+    }
+
+    function loadPractice() {
+      if (practice.asking) return;
+      practice.asking = true;
+      var mine = ++practice.seq;
+      ask("GET", "/api/admin/elf/practice")
+        .then(function (d) {
+          practice.asking = false;
+          if (mine === practice.seq) redrawPractice(takePractice(d));
+        })
+        .catch(function (e) {
+          practice.asking = false;
+          if (mine !== practice.seq) return;
+          practice.error = e.message;
+          practice.loaded = true;
+          redrawPractice(false);
+        });
+    }
+
+    /** Only the site's own kind of link goes in an href: http(s), or a path on this site. */
+    function linkable(url) {
+      return typeof url === "string" && /^(https?:\/\/|\/(?!\/))/.test(url);
+    }
+
+    /** A field: its label, its box, and a hint in small words (never a span, which the label's own style
+     *  for ".hq-field > span" would make bold). */
+    function practiceField(input, label, hint) {
+      return el("div", { class: "hq-field" }, [el("label", { for: input.id, text: label }), input, hint ? el("small", { class: "hq-hint", text: hint }) : null]);
+    }
+
+    /** The form that starts a practice evening. The server checks every field and says what is wrong. */
+    function practiceForm() {
+      var place = el("input", { id: "hqPracticePlace", name: "placeName", type: "text", maxlength: 80, autocomplete: "off", required: true });
+      var town = el("input", { id: "hqPracticeTown", name: "placeTown", type: "text", maxlength: 60, autocomplete: "off", required: true });
+      var elf = el("input", { id: "hqPracticeElf", name: "elfName", type: "text", maxlength: 30, autocomplete: "off" });
+      var gap = el("input", { id: "hqPracticeGap", name: "minutesApart", type: "number", min: 1, max: 30, step: 1, inputmode: "numeric", required: true });
+      gap.value = "3";
+      var start = el("button", { class: "hq-btn hq-btn--go", type: "submit", text: "Start a practice evening" });
+      var form = el("form", { class: "hq-practice__form", novalidate: true }, [
+        el("div", { class: "hq-practice__fields" }, [
+          practiceField(place, "The pretend place", "The office, say."),
+          practiceField(town, "Its town"),
+          practiceField(elf, "The elf's name", "Leave it empty for the usual practice elf."),
+          practiceField(gap, "Minutes between clues"),
+        ]),
+        el("div", { class: "hq-actions" }, [start]),
+      ]);
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (start.disabled) return;
+        var sent = { placeName: place.value.trim(), placeTown: town.value.trim() };
+        if (elf.value.trim()) sent.elfName = elf.value.trim();
+        if (gap.value.trim()) sent.minutesApart = Number(gap.value);
+        start.disabled = true;
+        practice.seq++;
+        ask("POST", "/api/admin/elf/practice", sent)
+          .then(function (d) {
+            practice.seq++;
+            redrawPractice(takePractice(d));
+            practiceSay("Started. Clue 1 comes out in a minute.", true);
+          })
+          .catch(function (err) {
+            practiceSay(err.message, false);
+            start.disabled = false;
+            if (!practice.loaded) loadPractice();
+          });
+      });
+      return form;
+    }
+
+    /** A practice evening as it runs: where, the times, whether its elf is found, the word on its tag, the
+     *  poster page, and (for someone who may edit) Clear the practice. */
+    function practiceRunning(box, p, mayChange) {
+      box.appendChild(el("p", { class: "hq-words", text: p.elfName + " is hiding at " + p.placeName + ", " + p.placeTown + "." }));
+      box.appendChild(
+        el("ul", { class: "hq-practice__times" }, [
+          el("li", { text: "Clue 1 comes out at " + timeWords(p.clue1At) }),
+          el("li", { text: "Clue 2 comes out at " + timeWords(p.clue2At) }),
+          el("li", { text: "Clue 3 comes out at " + timeWords(p.clue3At) }),
+          el("li", { text: "The place is shown at " + timeWords(p.revealAt) }),
+        ]),
+      );
+      box.appendChild(el("p", { class: "hq-words", text: p.found ? p.elfName + " has been found." : p.elfName + " is still hiding." }));
+      box.appendChild(el("div", { class: "hq-tagword" }, [el("span", { text: "The word on its tag:" }), " ", el("b", { text: p.tagWord })]));
+      var actions = el("div", { class: "hq-actions" });
+      if (linkable(p.posterUrl)) actions.appendChild(el("a", { class: "hq-btn hq-btn--go", href: p.posterUrl, target: "_blank", rel: "noopener noreferrer", text: "Open the poster page" }));
+      if (mayChange) {
+        var clear = el("button", { class: "hq-btn hq-btn--danger", type: "button", text: "Clear the practice" });
+        clear.addEventListener("click", function () {
+          if (clear.disabled) return;
+          clear.disabled = true;
+          practice.seq++;
+          ask("DELETE", "/api/admin/elf/practice")
+            .then(function (d) {
+              practice.seq++;
+              redrawPractice(takePractice(d));
+              practiceSay("The practice is cleared.", true);
+            })
+            .catch(function (err) {
+              practiceSay(err.message, false);
+              clear.disabled = false;
+              if (!practice.loaded) loadPractice();
+            });
+        });
+        actions.appendChild(clear);
+      }
+      if (actions.childNodes.length) box.appendChild(actions);
+    }
+
+    /** The practice door's panel, drawn from what the server last said. */
+    function practicePanel() {
+      var box = el("section", { class: "hq-panel hq-practice", "aria-label": "The practice door" });
+      box.appendChild(el("h2", { class: "hq-h2", text: "The practice door" }));
+      if (!practice.loaded) {
+        box.appendChild(el("p", { class: "hq-loading", text: WORDS.loading }));
+        return box;
+      }
+      var mayChange = !!(data && data.canEdit);
+      var previewOn = !!(data && data.settings && data.settings.previewOn);
+      var said = el("p", { class: "hq-status", role: "status" });
+      box.appendChild(
+        el("p", {
+          class: "hq-words hq-soft",
+          text: "Play a whole evening at a pretend place before December: three clues a few minutes apart, the word on the elf's tag, and the place shown at the end. Families never see it, and nothing from it counts.",
+        }),
+      );
+      if (practice.error) say(said, practice.error, false);
+      else if (practice.answer) practiceRunning(box, practice.answer, mayChange);
+      else if (!mayChange) box.appendChild(el("p", { class: "hq-words", text: "No practice evening is running." }));
+      else if (!previewOn) box.appendChild(el("p", { class: "hq-words", text: NO_PREVIEW_WORDS }));
+      else box.appendChild(practiceForm());
+      box.appendChild(said);
+      if (!mayChange) box.appendChild(el("p", { class: "hq-words hq-soft", text: "Starting or clearing a practice evening needs edit access to Head Elf HQ, which an admin can give in Team." }));
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: "Open the preview link first in the browser you will play on." }));
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: "Make a new preview link if anyone outside the team still has the old one." }));
+      return box;
     }
 
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
@@ -1911,6 +2543,7 @@
           data = d;
           say(status, "", null);
           draw();
+          if (!parts.settings.hidden) loadPractice();
           // A sheet already open was drawn before anyone knew whether this person may change it.
           if (fam.sheet) drawSheet();
           var asked = remembered(FAMILY_KEY);

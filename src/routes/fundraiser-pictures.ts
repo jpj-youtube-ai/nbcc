@@ -23,6 +23,11 @@ import {
   checkPictureUpload,
   decodeBase64,
   organiserPictureView,
+  PICTURE_BUSY_WORDS,
+  PICTURE_LOOK_AGAIN,
+  PICTURE_READ_WORDS,
+  PICTURE_SIZE_WORDS,
+  PICTURE_TYPE_WORDS,
   pictureLimitReached,
   pictureStatusWords,
   pictureUploadSchema,
@@ -75,15 +80,15 @@ export const PICTURE_JSON_BODY_LIMIT = "4mb";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const LOOK_AGAIN = "Your picture needs another look";
-const PHOTO_TYPE = "That picture is not one we can use. Try a JPG, PNG or WebP photo.";
-const PHOTO_SIZE = "That picture is too big. Try a smaller one.";
-const PHOTO_READ = "We could not open that picture. Please try a different photo.";
+const LOOK_AGAIN = PICTURE_LOOK_AGAIN;
+const PHOTO_TYPE = PICTURE_TYPE_WORDS;
+const PHOTO_SIZE = PICTURE_SIZE_WORDS;
+const PHOTO_READ = PICTURE_READ_WORDS;
 const NOT_RUNNING = { error: "Pictures are for a fundraiser that is running with its own page. To change yours, email events@nbcc.scot." };
 const LIMIT = { error: "You have sent 10 pictures in the last day. Please try again tomorrow." };
 const TRY_LATER = { error: "We could not send your picture just now. Please try again in a few minutes." };
 const TOO_MANY_TRIES = { error: "You have tried to send a lot of photos today. Please try again tomorrow." };
-const BUSY = { error: "Lots of photos arriving just now. Please try again in a minute." };
+const BUSY = { error: PICTURE_BUSY_WORDS };
 const MEMORY_NO_ROUND = { error: "A page in memory of someone shows their photo, not a round photo of the organiser." };
 
 // Every try, before anything is opened: per signed in session and per address, in any 24 hours.

@@ -13,6 +13,9 @@ import { isUsableSecretWord } from "./claim";
 export interface DoorClue {
   n: 1 | 2 | 3;
   words: string | null;
+  /** Is the clue a picture (kept with the clue, never in this object)? */
+  hasPicture: boolean;
+  pictureAlt: string | null;
 }
 
 export interface DoorSetup {
@@ -40,6 +43,14 @@ export interface DoorSetup {
   droppedOffBy: string | null;
   thankedAt: Date | null;
   thankedBy: string | null;
+  /** When the elf was found, and by which family; null while it is hiding. */
+  foundAt: Date | null;
+  foundFamilyId: number | null;
+  /** The stored snow day (set by a head elf or automatically), never worked out live. */
+  snowDayAt: Date | null;
+  snowDayBy: string | null;
+  goneHomeAt: Date | null;
+  goneHomeBy: string | null;
   names: { id: number; name: string }[];
   clues: DoorClue[];
 }
@@ -71,11 +82,17 @@ export function emptyDoor(door: Door, posterCode: string): DoorSetup {
     droppedOffBy: null,
     thankedAt: null,
     thankedBy: null,
+    foundAt: null,
+    foundFamilyId: null,
+    snowDayAt: null,
+    snowDayBy: null,
+    goneHomeAt: null,
+    goneHomeBy: null,
     names: [],
     clues: [
-      { n: 1, words: null },
-      { n: 2, words: null },
-      { n: 3, words: null },
+      { n: 1, words: null, hasPicture: false, pictureAlt: null },
+      { n: 2, words: null, hasPicture: false, pictureAlt: null },
+      { n: 3, words: null, hasPicture: false, pictureAlt: null },
     ],
   };
 }
@@ -123,7 +140,10 @@ export function readinessOf(d: DoorSetup, hasPicture: boolean): Readiness {
     prize: filled(d.prize),
     picture: hasPicture,
     elf: filled(d.elfName) && filled(d.tagWord) && isUsableSecretWord(d.tagWord),
-    clues: [1, 2, 3].every((n) => filled(d.clues.find((c) => c.n === n)?.words)),
+    clues: [1, 2, 3].every((n) => {
+      const clue = d.clues.find((c) => c.n === n);
+      return filled(clue?.words) || clue?.hasPicture === true;
+    }),
     droppedOff: d.droppedOffAt !== null,
   };
   const keys: ReadyKey[] = ["place", "prize", "picture", "elf", "clues", "droppedOff"];

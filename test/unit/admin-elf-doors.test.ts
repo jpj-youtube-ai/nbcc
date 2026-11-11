@@ -3,8 +3,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the Doors routes. Every place, prize and
 // name here is invented.
 
-const { getUserAuthRowMock, doors, settingsDb } = vi.hoisted(() => ({
+const { getUserAuthRowMock, doors, settingsDb, processPictureMock, cluePictureMock } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
+  processPictureMock: vi.fn(),
+  cluePictureMock: vi.fn(),
   doors: {
     ensureElfDoors: vi.fn(),
     listElfDoors: vi.fn(),
@@ -16,6 +18,8 @@ const { getUserAuthRowMock, doors, settingsDb } = vi.hoisted(() => ({
     markElfTagPrinted: vi.fn(),
     tickElfDoor: vi.fn(),
     saveElfClue: vi.fn(),
+    saveElfCluePicture: vi.fn(),
+    removeElfCluePicture: vi.fn(),
     savePastedClues: vi.fn(),
   },
   settingsDb: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), setElfPreview: vi.fn() },
@@ -23,6 +27,8 @@ const { getUserAuthRowMock, doors, settingsDb } = vi.hoisted(() => ({
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf-doors", () => doors);
 vi.mock("../../src/db/elf", () => settingsDb);
+vi.mock("../../src/db/elf-game", () => ({ onDoorsSwitchedOn: vi.fn(), familyWordTries: vi.fn(), clearWordTries: vi.fn(), cluePicture: cluePictureMock }));
+vi.mock("../../src/fundraising/picture-process", () => ({ processPicture: processPictureMock }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
   config: {
@@ -40,6 +46,7 @@ import { signAdminSession } from "../../src/admin/session";
 import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
 import { isUsableSecretWord } from "../../src/elf/claim";
 import type { Door } from "../../src/elf/calendar";
+import { tinyJpeg } from "./fixtures/tiny-jpeg";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null };
 const ACTOR = "admin:staff@example.org";
@@ -55,6 +62,7 @@ function mockRes() {
     headers: {} as Record<string, string>,
     status(c: number) { res.statusCode = c; return res; },
     json(b: unknown) { res.body = b; return res; },
+    send(b: unknown) { res.body = b; return res; },
     setHeader(k: string, v: string) { res.headers[k] = v; return res; },
   };
   return res;
@@ -92,6 +100,9 @@ beforeEach(() => {
   for (const f of [doors.changeElfDoor, doors.saveElfClue, doors.setElfTagWord, doors.tickElfDoor, doors.addElfDoorName, doors.removeElfDoorName]) {
     f.mockImplementation(async (_y: number, n: number) => doorOf(n));
   }
+  for (const f of [doors.saveElfCluePicture, doors.removeElfCluePicture]) f.mockImplementation(async (_y: number, n: number) => doorOf(n));
+  processPictureMock.mockReset();
+  cluePictureMock.mockReset();
   doors.savePastedClues.mockResolvedValue({ doors: 1, clues: 3 });
 });
 afterEach(() => vi.useRealTimers());
@@ -261,6 +272,7 @@ describe("names", () => {
   });
 
   it("removes a name before the evening starts, and not after", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { names: [{ id: 3, name: "The Pine Cone" }, { id: 123456789, name: "Another" }] }));
     expect((await remove("8", "3")).statusCode).toBe(200);
     expect(doors.removeElfDoorName).toHaveBeenCalledWith(2026, 8, 3, ACTOR);
     const res = await remove("7", "3");
@@ -269,8 +281,17 @@ describe("names", () => {
   });
 
   it("holds the id to a whole number inside the database's range", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { names: [{ id: 123456789, name: "Another" }] }));
     for (const id of ["0", "01", "x", "1234567890", "-1"]) expect((await remove("8", id)).statusCode, id).toBe(400);
     expect((await remove("8", "123456789")).statusCode).toBe(200);
+  });
+
+  it("answers 404, with no change and no audit, for a name the door does not have", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { names: [{ id: 3, name: "The Pine Cone" }] }));
+    const res = await remove("8", "4");
+    expect(res.statusCode).toBe(404);
+    expect(body(res)).toEqual({ error: "There is no name like that on door 8." });
+    expect(doors.removeElfDoorName).not.toHaveBeenCalled();
   });
 });
 
@@ -349,6 +370,122 @@ describe("one clue", () => {
   });
 });
 
+describe("a clue's picture", () => {
+  const pic = (method: "put" | "del" | "get", door: string, n: string, b: unknown = {}, permissions: object = EDIT) => {
+    const h = { put: routes.putAdminElfDoorCluePicture, del: routes.deleteAdminElfDoorCluePicture, get: routes.getAdminElfDoorCluePicture }[method];
+    return run(h as Handler, ask("viewer", { permissions, params: { door, n }, body: b }));
+  };
+  const send = async (over: Record<string, unknown> = {}) => ({ mime: "image/jpeg", dataBase64: (await tinyJpeg()).toString("base64"), alt: "A red door", ...over });
+  const made = { ok: true, mime: "image/jpeg", bytes: Buffer.from([9, 9]), width: 4, height: 4 };
+  const ALT = "Describe the picture in a few words, for anyone who cannot see it.";
+
+  it("needs alt words, one to 200 characters", async () => {
+    const none = await pic("put", "8", "2", { mime: "image/jpeg", dataBase64: (await tinyJpeg()).toString("base64") });
+    expect(none.statusCode).toBe(400);
+    expect(body(none)).toEqual({ error: ALT });
+    expect(body(await pic("put", "8", "2", await send({ alt: "   " }))).error).toBe(ALT);
+    expect((await pic("put", "8", "2", await send({ alt: "x".repeat(201) }))).statusCode).toBe(400);
+    expect(doors.saveElfCluePicture).not.toHaveBeenCalled();
+    expect(processPictureMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a clue that is out, the same way the words are", async () => {
+    const out = await pic("put", "7", "1", await send());
+    expect(out.statusCode).toBe(409);
+    expect(body(out)).toEqual({ error: "Door 7, clue 1 is already out, so it cannot be changed." });
+    expect((await pic("del", "7", "1")).statusCode).toBe(409);
+    expect(doors.saveElfCluePicture).not.toHaveBeenCalled();
+    expect(doors.removeElfCluePicture).not.toHaveBeenCalled();
+    expect(processPictureMock).not.toHaveBeenCalled();
+  });
+
+  it("makes the picture again and saves it, with the alt words, for a clue not yet out", async () => {
+    processPictureMock.mockResolvedValue(made);
+    const res = await pic("put", "7", "2", await send());
+    expect(res.statusCode).toBe(200);
+    expect(processPictureMock).toHaveBeenCalledWith("main", expect.any(Buffer));
+    expect(doors.saveElfCluePicture).toHaveBeenCalledWith(2026, 7, 2, { mime: "image/jpeg", bytes: made.bytes, width: 4, height: 4 }, "A red door", ACTOR);
+    expect(body(res).door).toMatchObject({ door: 7 });
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("answers a bad picture as the fundraisers route does", async () => {
+    const type = await pic("put", "8", "2", await send({ mime: "image/gif" }));
+    expect(type.statusCode).toBe(400);
+    expect(body(type)).toEqual({ error: "Your picture needs another look", fields: { photo: "That picture is not one we can use. Try a JPG, PNG or WebP photo." } });
+    expect((await pic("put", "8", "2", await send({ dataBase64: "not base64!" }))).statusCode).toBe(400);
+    processPictureMock.mockResolvedValueOnce({ ok: false, reason: "busy" });
+    expect((await pic("put", "8", "2", await send())).statusCode).toBe(503);
+    processPictureMock.mockResolvedValueOnce({ ok: false, reason: "size" });
+    expect((await pic("put", "8", "2", await send())).statusCode).toBe(413);
+    processPictureMock.mockResolvedValueOnce({ ok: false, reason: "unreadable" });
+    const read = await pic("put", "8", "2", await send());
+    expect(read.statusCode).toBe(400);
+    expect(body(read).fields.photo).toBe("We could not open that picture. Please try a different photo.");
+    expect(doors.saveElfCluePicture).not.toHaveBeenCalled();
+  });
+
+  it("is for editing, a real door and clue 1 to 3", async () => {
+    expect((await pic("put", "8", "2", await send(), VIEW)).statusCode).toBe(403);
+    expect((await pic("del", "8", "2", {}, VIEW)).statusCode).toBe(403);
+    expect((await pic("put", "8", "4", await send())).statusCode).toBe(400);
+    expect((await pic("put", "99", "2", await send())).statusCode).toBe(400);
+    doors.getElfDoor.mockResolvedValue(null);
+    expect((await pic("put", "8", "2", await send())).statusCode).toBe(404);
+    expect((await pic("del", "8", "2")).statusCode).toBe(404);
+  });
+
+  it("takes a picture off a clue that is not out", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8, { clues: [1, 2, 3].map((n) => ({ n: n as 1 | 2 | 3, words: null, hasPicture: n === 3, pictureAlt: n === 3 ? "A red door" : null })) }));
+    const res = await pic("del", "8", "3");
+    expect(res.statusCode).toBe(200);
+    expect(doors.removeElfCluePicture).toHaveBeenCalledWith(2026, 8, 3, ACTOR);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("answers 200 with the door as it is, and writes nothing, when the clue has no picture", async () => {
+    const res = await pic("del", "8", "3");
+    expect(res.statusCode).toBe(200);
+    expect(body(res).door).toMatchObject({ door: 8 });
+    expect(doors.removeElfCluePicture).not.toHaveBeenCalled();
+  });
+
+  it("reads a big body only for a PUT that carries a bearer token", () => {
+    const want = (method: string, authorization?: string) => routes.elfCluePictureBodyWanted({ method, headers: authorization === undefined ? {} : { authorization } } as never);
+    expect(want("PUT", "Bearer abc.def")).toBe(true);
+    expect(want("PUT")).toBe(false);
+    expect(want("PUT", "Bearer")).toBe(false);
+    expect(want("PUT", "Basic abc")).toBe(false);
+    expect(want("DELETE", "Bearer abc")).toBe(false);
+    expect(want("GET", "Bearer abc")).toBe(false);
+    expect(want("POST", "Bearer abc")).toBe(false);
+  });
+
+  it("answers 500 when the database fails", async () => {
+    processPictureMock.mockResolvedValue(made);
+    doors.saveElfCluePicture.mockRejectedValue(new Error("db"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await pic("put", "8", "2", await send());
+    expect(res.statusCode).toBe(500);
+    expect(body(res)).toEqual({ error: "Admin is temporarily unavailable" });
+  });
+
+  it("gives the bytes to a head elf who can look, never to be kept or sniffed", async () => {
+    cluePictureMock.mockResolvedValue({ mime: "image/jpeg", bytes: Buffer.from([1, 2, 3]) });
+    const res = await pic("get", "7", "1", {}, VIEW);
+    expect(res.statusCode).toBe(200);
+    expect(cluePictureMock).toHaveBeenCalledWith(2026, 7, 1);
+    expect(res.body).toEqual(Buffer.from([1, 2, 3]));
+    expect(res.headers).toMatchObject({ "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "X-Content-Type-Options": "nosniff", "Content-Type": "image/jpeg" });
+  });
+
+  it("says there is no picture, and is for the elf section only", async () => {
+    cluePictureMock.mockResolvedValue(null);
+    expect((await pic("get", "7", "1", {}, VIEW)).statusCode).toBe(404);
+    expect((await run(routes.getAdminElfDoorCluePicture, ask("editor", { params: { door: "7", n: "1" } }))).statusCode).toBe(403);
+  });
+});
+
 describe("the pasted clues", () => {
   const GOOD = "Door 8\nClue 1: one\nClue 2: two\nClue 3: three";
   const check = (text: unknown) => run(routes.postAdminElfCluesCheck, ask("viewer", { permissions: EDIT, body: { text } }));
@@ -399,5 +536,135 @@ describe("the place phone in the settings", () => {
     expect((await run(patchAdminElfSettings, ask("admin", { body: { placePhone: "call me" } }))).statusCode).toBe(400);
     expect((await run(patchAdminElfSettings, ask("admin", { body: { placePhone: null } }))).statusCode).toBe(200);
     expect(settingsDb.setElfSettings).toHaveBeenLastCalledWith({ placePhone: null }, ACTOR);
+  });
+});
+
+// ---- Task 10: the blank place rule, an empty change, snow days and gone home ----
+
+describe("a change that does nothing, and a place that keeps its name", () => {
+  const patch = (door: string, b: unknown) => run(routes.patchAdminElfDoor, ask("viewer", { permissions: EDIT, params: { door }, body: b }));
+
+  it("writes nothing and audits nothing for an empty change, and answers the door as it is", async () => {
+    for (const b of [{}, { prize: undefined }]) {
+      const res = await patch("8", b);
+      expect(res.statusCode).toBe(200);
+      expect(body(res).door.door).toBe(8);
+    }
+    expect(doors.changeElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("with clue 1 out, will not blank the place's name, but takes a new one", async () => {
+    const blank = await patch("7", { placeName: "" });
+    expect(blank.statusCode).toBe(409);
+    expect(body(blank)).toEqual({ error: "Door 7's evening has started, so its place must keep a name." });
+    expect((await patch("7", { placeName: "   " })).statusCode).toBe(409);
+    expect(doors.changeElfDoor).not.toHaveBeenCalled();
+    expect((await patch("7", { placeName: "Pine Cone Café" })).statusCode).toBe(200);
+    expect(doors.changeElfDoor).toHaveBeenCalledTimes(1);
+  });
+
+  it("before clue 1, still lets the place's name be blanked", async () => {
+    expect((await patch("8", { placeName: "" })).statusCode).toBe(200);
+    expect(doors.changeElfDoor).toHaveBeenCalledWith(2026, 8, { placeName: null }, ACTOR);
+  });
+});
+
+describe("a snow day", () => {
+  const call = (h: Handler, door: string, permissions: object = EDIT) => run(h, ask("viewer", { permissions, params: { door } }));
+
+  it("is called before clue 1, by a head elf who may edit", async () => {
+    const res = await call(routes.postAdminElfDoorSnowDay, "8");
+    expect(res.statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 8, "snowDay", true, ACTOR);
+  });
+
+  it("cannot be called once clue 1 is out", async () => {
+    const res = await call(routes.postAdminElfDoorSnowDay, "7");
+    expect(res.statusCode).toBe(409);
+    expect(body(res)).toEqual({ error: "Door 7's evening has started, so it cannot be called off now." });
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("calling it again changes nothing and keeps who called it", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: "admin:other@example.org" }));
+    const res = await call(routes.postAdminElfDoorSnowDay, "8");
+    expect(res.statusCode).toBe(200);
+    expect(body(res).door.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "admin:other@example.org" });
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("is cancelled before clue 1 only", async () => {
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => doorOf(n, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: ACTOR }));
+    expect((await call(routes.deleteAdminElfDoorSnowDay, "8")).statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 8, "snowDay", false, ACTOR);
+    doors.tickElfDoor.mockClear();
+    const late = await call(routes.deleteAdminElfDoorSnowDay, "7");
+    expect(late.statusCode).toBe(409);
+    expect(body(late)).toEqual({ error: "Door 7's evening has started, so its snow day cannot be cancelled now." });
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("is not for a head elf who may only look, and a door with no row is 404", async () => {
+    expect((await call(routes.postAdminElfDoorSnowDay, "8", VIEW)).statusCode).toBe(403);
+    expect((await call(routes.deleteAdminElfDoorSnowDay, "8", VIEW)).statusCode).toBe(403);
+    doors.getElfDoor.mockResolvedValue(null);
+    expect((await call(routes.postAdminElfDoorSnowDay, "8")).statusCode).toBe(404);
+  });
+
+  it("says whether the door's day is over on the sheet", async () => {
+    const day = async (door: string) => body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door } }))).door.dayOver;
+    expect(await day("6")).toBe(true);
+    expect(await day("7")).toBe(false);
+    expect(await day("8")).toBe(false);
+  });
+
+  it("is on the door's sheet, with who and when", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8, { snowDayAt: new Date("2026-12-06T09:00:00Z"), snowDayBy: "automatic", goneHomeAt: new Date("2026-12-09T09:00:00Z"), goneHomeBy: "admin:staff@example.org" }));
+    const d = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }))).door;
+    expect(d.snowDay).toEqual({ at: "2026-12-06T09:00:00.000Z", by: "automatic" });
+    expect(d.goneHome).toEqual({ at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org" });
+    doors.getElfDoor.mockResolvedValue(doorOf(8));
+    const none = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "8" } }))).door;
+    expect(none.snowDay).toBeNull();
+    expect(none.goneHome).toBeNull();
+  });
+});
+
+describe("gone home", () => {
+  const call = (h: Handler, door: string, permissions: object = EDIT) => run(h, ask("viewer", { permissions, params: { door } }));
+
+  it("is ticked once the door's day has passed", async () => {
+    const res = await call(routes.postAdminElfDoorGoneHome, "6");
+    expect(res.statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 6, "goneHome", true, ACTOR);
+  });
+
+  it("is unticked once the door's day has passed", async () => {
+    const res = await call(routes.deleteAdminElfDoorGoneHome, "6");
+    expect(res.statusCode).toBe(200);
+    expect(doors.tickElfDoor).toHaveBeenCalledWith(2026, 6, "goneHome", false, ACTOR);
+  });
+
+  it("is not for the door's own day, nor a day to come", async () => {
+    for (const door of ["7", "8"]) {
+      const res = await call(routes.postAdminElfDoorGoneHome, door);
+      expect(res.statusCode, door).toBe(409);
+      expect(body(res)).toEqual({ error: `Gone home is for after door ${door}'s day.` });
+    }
+    expect((await call(routes.deleteAdminElfDoorGoneHome, "7")).statusCode).toBe(409);
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+
+  it("starts at midnight at the end of the door's day", async () => {
+    vi.setSystemTime(new Date("2026-12-07T23:59:59Z"));
+    expect((await call(routes.postAdminElfDoorGoneHome, "7")).statusCode).toBe(409);
+    vi.setSystemTime(new Date("2026-12-08T00:00:00Z"));
+    expect((await call(routes.postAdminElfDoorGoneHome, "7")).statusCode).toBe(200);
+  });
+
+  it("is not for a head elf who may only look", async () => {
+    expect((await call(routes.postAdminElfDoorGoneHome, "6", VIEW)).statusCode).toBe(403);
+    expect((await call(routes.deleteAdminElfDoorGoneHome, "6", VIEW)).statusCode).toBe(403);
+    expect(doors.tickElfDoor).not.toHaveBeenCalled();
   });
 });

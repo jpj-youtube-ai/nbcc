@@ -76,6 +76,7 @@ function sheet(over: Record<string, unknown> = {}) {
   };
 }
 
+let extraOpts: Record<string, unknown> = {};
 type Call = { method: string; url: string; body: unknown; headers: Record<string, string> };
 type Answer = { status?: number; body?: unknown; text?: string };
 
@@ -99,10 +100,11 @@ function page(answers: Record<string, Answer | Answer[]> = {}) {
       status,
       json: () => Promise.resolve(JSON.parse(JSON.stringify(a.body ?? {}))),
       text: () => Promise.resolve(a.text ?? (a.body !== undefined ? JSON.stringify(a.body) : "<p>page</p>")),
+      blob: () => Promise.resolve(new Blob(["pic"], { type: "image/jpeg" })),
     });
   });
   window.sessionStorage.setItem("nbcc_admin_token", "tok");
-  const hq = initElfHq(document, window, { confirm: () => true });
+  const hq = initElfHq(document, window, { confirm: () => true, ...extraOpts });
   return { hq, calls };
 }
 
@@ -128,6 +130,7 @@ async function openDoor7(answers: Record<string, Answer | Answer[]> = {}) {
 
 beforeEach(() => {
   window.sessionStorage.clear();
+  extraOpts = {};
 });
 
 // Stand-ins for the clipboard and the tab opener are put back after every test.
@@ -200,6 +203,177 @@ describe("the three clues", () => {
     expect(button(clueItem(1), "Save")).toBeUndefined();
     expect(clueItem(1).textContent).toContain("Out since 5:30pm.");
     expect(button(clueItem(2), "Save")).toBeDefined();
+  });
+});
+
+describe("a clue's picture", () => {
+  const withPicture = (over: Record<string, unknown> = {}) =>
+    sheet({
+      clues: [
+        { n: 1, words: "Saved words one", hasPicture: false, pictureAlt: null },
+        { n: 2, words: null, hasPicture: true, pictureAlt: "A red door" },
+        { n: 3, words: null, hasPicture: false, pictureAlt: null },
+      ],
+      ...over,
+    });
+  const GET2 = "GET /api/admin/elf/doors/7/clues/2/picture";
+  let created: string[];
+  let revoked: string[];
+
+  beforeEach(() => {
+    created = [];
+    revoked = [];
+    let n = 0;
+    (window.URL as unknown as Record<string, unknown>).createObjectURL = () => {
+      const u = `blob:pic-${++n}`;
+      created.push(u);
+      return u;
+    };
+    (window.URL as unknown as Record<string, unknown>).revokeObjectURL = (u: string) => {
+      revoked.push(u);
+    };
+    extraOpts = {
+      read: () => Promise.resolve({ src: "blob:chosen", width: 4000, height: 3000, img: {} }),
+      make: () => Promise.resolve({ mime: "image/jpeg", base64: "c21hbGw=" }),
+    };
+  });
+
+  const fileBox = (n: number) => clueItem(n).querySelector<HTMLInputElement>(`#hqDoor-clue${n}-picture`)!;
+  const altBox = (n: number) => clueItem(n).querySelector<HTMLInputElement>(`#hqDoor-clue${n}-alt`)!;
+  const choose = (n: number, name = "door.jpg") => {
+    const file = new File(["x"], name, { type: "image/jpeg" });
+    Object.defineProperty(fileBox(n), "files", { configurable: true, value: [file] });
+    fileBox(n).dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  it("fetches a clue's picture with the token and shows it with its alt words", async () => {
+    const { calls } = await openDoor7({ "GET /api/admin/elf/doors/7": { body: { door: withPicture(), canEdit: true } } });
+    const get = calls.find((c) => c.url === "/api/admin/elf/doors/7/clues/2/picture")!;
+    expect(get.method).toBe("GET");
+    expect(get.headers.Authorization).toBe("Bearer tok");
+    const img = clueItem(2).querySelector("img")!;
+    expect(img.getAttribute("alt")).toBe("A red door");
+    expect(img.getAttribute("src")).toBe(created[0]);
+    expect(clueItem(1).querySelector("img")).toBeNull();
+    expect(calls.filter((c) => c.url.endsWith("/picture"))).toHaveLength(1);
+  });
+
+  it("offers a file field with the hint, alt words, and Take the picture off", async () => {
+    await openDoor7({ [GET2]: { body: {} }, "GET /api/admin/elf/doors/7": { body: { door: withPicture(), canEdit: true } } });
+    expect(clueItem(2).textContent).toContain("Add a picture");
+    expect(fileBox(2).getAttribute("type")).toBe("file");
+    expect(clueItem(2).textContent).toContain("Say what is in it, for anyone who cannot see it.");
+    expect(button(clueItem(2), "Take the picture off")).toBeDefined();
+    expect(button(clueItem(1), "Take the picture off")).toBeUndefined();
+  });
+
+  it("sends the shrunk picture and the alt words as base64", async () => {
+    const saved = withPicture();
+    const { calls } = await openDoor7({ "PUT /api/admin/elf/doors/7/clues/3/picture": { body: { door: saved } } });
+    choose(3);
+    await flush();
+    type(altBox(3) as unknown as HTMLTextAreaElement, "A red door");
+    button(clueItem(3), "Save the picture")!.click();
+    await flush();
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.url).toBe("/api/admin/elf/doors/7/clues/3/picture");
+    expect(put.body).toEqual({ mime: "image/jpeg", dataBase64: "c21hbGw=", alt: "A red door" });
+  });
+
+  it("draws once more at a lower quality when the first drawing is over 2 MB", async () => {
+    const big = "A".repeat(Math.ceil((2 * 1024 * 1024 * 4) / 3) + 8);
+    const qualities: unknown[] = [];
+    extraOpts.make = (_pic: unknown, quality?: number) => {
+      qualities.push(quality);
+      return Promise.resolve({ mime: "image/jpeg", base64: quality ? "c21hbGw=" : big });
+    };
+    const { calls } = await openDoor7({ "PUT /api/admin/elf/doors/7/clues/3/picture": { body: { door: withPicture() } } });
+    choose(3);
+    await flush();
+    type(altBox(3) as unknown as HTMLTextAreaElement, "A red door");
+    button(clueItem(3), "Save the picture")!.click();
+    await flush();
+    expect(qualities).toHaveLength(2);
+    expect(qualities[1]).toBeLessThan(0.86);
+    expect((calls.find((c) => c.method === "PUT")!.body as { dataBase64: string }).dataBase64).toBe("c21hbGw=");
+  });
+
+  it("sends nothing without a picture or without alt words, and says why", async () => {
+    const { calls } = await openDoor7();
+    button(clueItem(3), "Save the picture")!.click();
+    await flush();
+    expect(clueItem(3).querySelector(".hq-status")!.classList.contains("is-error")).toBe(true);
+    choose(3);
+    await flush();
+    button(clueItem(3), "Save the picture")!.click();
+    await flush();
+    expect(clueItem(3).querySelector(".hq-status")!.textContent).toBe("Describe the picture in a few words, for anyone who cannot see it.");
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+  });
+
+  it("shows the server's own picture sentence", async () => {
+    await openDoor7({ "PUT /api/admin/elf/doors/7/clues/3/picture": { status: 413, body: { error: "Your picture needs another look", fields: { photo: "That picture is too big. Try a smaller one." } } } });
+    choose(3);
+    await flush();
+    type(altBox(3) as unknown as HTMLTextAreaElement, "A red door");
+    button(clueItem(3), "Save the picture")!.click();
+    await flush();
+    expect(clueItem(3).querySelector(".hq-status")!.textContent).toBe("That picture is too big. Try a smaller one.");
+  });
+
+  it("sends DELETE for Take the picture off, and lets go of the picture's address", async () => {
+    const { calls } = await openDoor7({
+      "GET /api/admin/elf/doors/7": { body: { door: withPicture(), canEdit: true } },
+      "DELETE /api/admin/elf/doors/7/clues/2/picture": { body: { door: sheet() } },
+    });
+    const url = created[0];
+    button(clueItem(2), "Take the picture off")!.click();
+    await flush();
+    expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/admin/elf/doors/7/clues/2/picture")).toBe(true);
+    expect(revoked).toContain(url);
+    expect(clueItem(2).querySelector("img")).toBeNull();
+  });
+
+  it("lets go of the preview when another file is chosen, and of the picture when the part is redrawn", async () => {
+    await openDoor7({
+      "GET /api/admin/elf/doors/7": { body: { door: withPicture(), canEdit: true } },
+      "PUT /api/admin/elf/doors/7/clues/2": { body: { door: withPicture() } },
+    });
+    const fetched = created[0];
+    choose(2);
+    await flush();
+    choose(2);
+    await flush();
+    expect(clueItem(2).querySelector(".hq-pic-preview img")).not.toBeNull();
+    expect(revoked).toContain("blob:chosen");
+    type(clueBox(2), "Some words");
+    button(clueItem(2), "Save")!.click();
+    await flush();
+    expect(revoked).toContain(fetched);
+  });
+
+  it("lets go of the picture's address when the sheet is closed for another door", async () => {
+    await openDoor7({ "GET /api/admin/elf/doors/7": { body: { door: withPicture(), canEdit: true } }, "GET /api/admin/elf/doors/8": { body: { door: sheet({ door: 8 }), canEdit: true } } });
+    const url = created[0];
+    expect(revoked).not.toContain(url);
+    doorsPart().querySelector<HTMLButtonElement>('.hq-door[data-door="8"]')!.click();
+    await flush();
+    expect(revoked).toContain(url);
+  });
+
+  it("shows the picture read only once the clue is out, with no way to change it", async () => {
+    await openDoor7({ "GET /api/admin/elf/doors/7": { body: { door: withPicture({ clueOut: [false, true, false] }), canEdit: true } } });
+    expect(clueItem(2).querySelector("img")!.getAttribute("alt")).toBe("A red door");
+    expect(fileBox(2)).toBeNull();
+    expect(button(clueItem(2), "Save the picture")).toBeUndefined();
+    expect(button(clueItem(2), "Take the picture off")).toBeUndefined();
+  });
+
+  it("shows the picture read only to a head elf who cannot edit", async () => {
+    await openDoor7({ "GET /api/admin/elf/doors/7": { body: { door: withPicture(), canEdit: false } } });
+    expect(clueItem(2).querySelector("img")).not.toBeNull();
+    expect(fileBox(2)).toBeNull();
+    expect(button(clueItem(2), "Take the picture off")).toBeUndefined();
   });
 });
 

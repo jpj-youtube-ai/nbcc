@@ -2,7 +2,15 @@ import { describe, it, expect } from "vitest";
 import { readdirSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BACKUP_DATABASES, tablesIn, expectedTableCount } from "../../src/backup/plan";
+import {
+  BACKUP_DATABASES,
+  BACKUP_TABLE_DATA_LEFT_OUT,
+  tablesIn,
+  expectedTableCount,
+  dumpArgs,
+  csvTables,
+} from "../../src/backup/plan";
+import { tinyJpeg } from "./fixtures/tiny-jpeg";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -71,9 +79,11 @@ describe("knowing how many tables to expect", () => {
   // since TASK-596 kept aside the monthly renewals that were recorded twice; 105 since TASK-604 kept
   // uniform payments apart from donations, and the donations moved out to them; 108 since Elf
   // Detective School's Doors added the hiding places, the other names that count for each, and their
-  // clues; 110 since the Santa Sleigh added its nights (with the bucket cash) and its settings.
-  it("counts 110 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(110);
+  // clues; 110 since the Santa Sleigh added its nights (with the bucket cash) and its settings; 116
+  // since Elf Detective School's game added guesses, word tries, visits, photos, photo files and the
+  // practice door.
+  it("counts 116 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(116);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -191,10 +201,40 @@ describe("knowing how many tables to expect", () => {
     // The Santa Sleigh: its nights, with the bucket cash counted for each, and its settings.
     expect(main).toContain("sleigh_nights");
     expect(main).toContain("sleigh_settings");
-    expect(main.length).toBe(107);
+    // Elf Detective School's game: guesses, word tries, visits, photos (their bytes stay out of the
+    // dump), photo files and the practice door.
+    for (const t of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos", "elf_photo_files", "elf_practice"]) {
+      expect(main).toContain(t);
+    }
+    expect(main.length).toBe(113);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {
     expect(tablesIn(ROOT, "migrations-nope")).toEqual([]);
+  });
+});
+
+describe("keeping photo bytes out of the nightly backup (C12)", () => {
+  it("names the photo files table as the one whose data is left out", () => {
+    expect(BACKUP_TABLE_DATA_LEFT_OUT).toEqual(["elf_photo_files"]);
+  });
+
+  it("tells pg_dump to leave that table's data out, and only that", () => {
+    const args = dumpArgs(["elf_photo_files"]);
+    expect(args).toContain("--exclude-table-data=elf_photo_files");
+    expect(args).toContain("--format=custom");
+    expect(dumpArgs([]).some((a) => a.startsWith("--exclude-table-data"))).toBe(false);
+  });
+
+  it("skips those tables when writing the CSVs", () => {
+    expect(csvTables(["a", "elf_photo_files", "b"], ["elf_photo_files"])).toEqual(["a", "b"]);
+    expect(csvTables(["a", "elf_photo_files"], ["elf_photo_files"])).toEqual(["a"]);
+  });
+
+  it("gives tests a real JPEG", async () => {
+    const jpeg = await tinyJpeg();
+    expect(Buffer.isBuffer(jpeg)).toBe(true);
+    expect(jpeg[0]).toBe(0xff);
+    expect(jpeg[1]).toBe(0xd8);
   });
 });

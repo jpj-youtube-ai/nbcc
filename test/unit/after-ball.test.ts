@@ -72,6 +72,9 @@ vi.mock("../../src/db/fundraisers", () => ({
 }));
 vi.mock("../../src/db/donations", () => ({ listPublicSupporters: async () => ({ bronze: [], silver: [], gold: [], platinum: [] }) }));
 vi.mock("../../src/db/red-bag-lists", () => ({ loadPublishedRedBagList: async () => null, readRedBagDraft: async () => null }));
+// Elf Detective School's card reads the school's switch, which with no database reads off (and says so
+// in the log): off here, without the read.
+vi.mock("../../src/elf/promo", async (original) => ({ ...(await original<Record<string, unknown>>()), elfSchoolIsOn: async () => false }));
 vi.mock("../../src/db/fundraising-categories", async () => {
   const c = await import("../../src/fundraising/categories");
   return { loadCategories: async () => c.BUILT_IN_CATEGORIES };

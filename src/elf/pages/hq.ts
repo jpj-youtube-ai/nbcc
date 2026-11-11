@@ -3,61 +3,95 @@ import { FRAMES } from "../wardrobe";
 import { clockWords, countdownWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
-import { elfPage, escapeHtml, sitePath } from "./shell";
+import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
 import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 
 // NBCC Elf Detective School: Detective HQ, a family's own page. The plan is
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md; its paper look is
 // docs/superpowers/specs/2026-11-04-elf-paper-design.md.
 //
-// Three things, in the order a family wants them: today's case (the clue and their guess, on a taped
-// note), their detectives (each on a card sheet: their elf in its frame, rank and progress), and the
-// marks they have collected. It is private, so it shows first names in full and is never listed by
-// search engines.
+// Three things, in the order a family wants them: today's case (on a taped note: the clue ladder, one
+// note a clue as each comes out, and the family's typed guess), their detectives (each on a card
+// sheet: their elf in its frame, rank and progress), and the marks they have collected. It is private,
+// so it shows first names in full and is never listed by search engines.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
-// script only saves the guess without leaving the page.
+// script only saves the guess without leaving the page, and fetches the page again when the next
+// clue is due.
 //
-// One rule is kept here whatever the view holds: the clue is never written before it is out.
+// One rule is kept here whatever the view holds: a clue is never written before it is out. Two locks
+// on the one secret: the view holds only the clues that are out (none on a snow day), and this page
+// writes only the clues whose time has come by the view's own clock (none if that clock is not real).
 //
 // Pure: no pool, no config, no clock (the time is in the view). Unit tested in
 // test/unit/elf-page-hq.test.ts.
-
-const line = (html: string, cls = ""): string => `<p${cls ? ` class="${cls}"` : ""}>${html}</p>`;
-
-/** Is this a real moment? A date built from a missing or mangled value is not, and must never
- *  bring the whole page down. */
-const real = (d: Date): boolean => d instanceof Date && Number.isFinite(d.getTime());
-
-/** A count as a whole number that is safe to write into the page, whatever a database hands over. */
-const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
 
 /** The clue as staff wrote it, with its line breaks kept. */
 function clueHtml(clue: string): string {
   return escapeHtml(clue).replace(/\r?\n/g, "<br />\n");
 }
 
-function guessForm(today: TodayView, guessUrl: string): string {
-  if (today.options.length === 0) return line("There is nothing left to guess just now. Keep an eye on the calendar.");
-  const choices = today.options
-    .map((place, i) => {
-      const id = `guess-${i + 1}`;
-      const checked = today.guess?.id === place.id ? " checked" : "";
-      const required = i === 0 ? " required" : "";
-      return (
-        `<li><input type="radio" name="placeId" id="${id}" value="${escapeHtml(place.id)}"${checked}${required} />` +
-        `<label for="${id}">${escapeHtml(`${place.name}, ${place.town}`)}</label></li>`
-      );
-    })
-    .join("");
-  const status = today.guess
-    ? `Your guess: ${escapeHtml(`${today.guess.name}, ${today.guess.town}`)}. You can change it until the elf is found.`
+/** One clue that is out, on a taped note of its own: its number, its time, its words and its picture. */
+function clueNote(c: TodayView["clues"][number]): string {
+  const at = real(c.at) ? clockWords(c.at) : "";
+  const picture = sitePath(c.pictureUrl);
+  return (
+    `<li class="elf-clue">` +
+    `<span class="elf-tape" aria-hidden="true"></span>` +
+    `<p class="elf-clue__head"><b class="elf-clue__n">Clue ${count(c.n)}</b>${at ? ` <span class="elf-clue__at">${at}</span>` : ""}</p>` +
+    (c.words ? `<p class="elf-clue__words">${clueHtml(c.words)}</p>` : "") +
+    (picture ? `<img class="elf-clue__pic" src="${picture}" alt="${escapeHtml(c.pictureAlt ?? "")}" width="800" height="600" loading="lazy" decoding="async" />` : "") +
+    `</li>`
+  );
+}
+
+/** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),
+ *  or, once all three are out, when the hiding place is shown (as soon as the elf is found, once the
+ *  reveal time has passed with the elf still hiding). Only a clue whose time has come is written,
+ *  whatever the view holds; with no real clock, no clue at all. */
+function clueLadder(today: TodayView, now: Date): string {
+  if (!real(now)) return "";
+  const out = today.clues.filter((c) => real(c.at) && c.at.getTime() <= now.getTime());
+  const notes = out.length ? `<ol class="elf-ladder">${out.map(clueNote).join("")}</ol>` : "";
+  const next = today.nextClueAt;
+  if (real(next)) {
+    const n = Math.min(3, out.length + 1);
+    return (
+      notes +
+      line(`Clue ${n} comes out at ${clockWords(next)}`, "elf-ladder__next") +
+      `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${next.toISOString()}">${countdownWords(next.getTime() - now.getTime())}</span></p>`
+    );
+  }
+  if (next === null && real(today.revealAt)) {
+    return notes + line(`The hiding place is shown at ${clockWords(today.revealAt)}`, "elf-ladder__next");
+  }
+  if (next === null && today.state === "hunting") {
+    return notes + line("The hiding place is shown as soon as the elf is found.", "elf-ladder__next");
+  }
+  return notes;
+}
+
+/** Why a guess sent with no script was not taken (the server's words), as a status line, or nothing. */
+function guessErrorLine(today: TodayView): string {
+  return typeof today.guessError === "string" && today.guessError !== ""
+    ? `<p class="elf-guess__status is-error" role="status">${escapeHtml(today.guessError)}</p>`
     : "";
+}
+
+/** The guess: one box to type the place in. Its legend asks the question; its label says how. A guess
+ *  that was not taken says why in the status line; otherwise the line shows the guess locked in. */
+function guessForm(today: TodayView, guessUrl: string): string {
+  if (!today.canGuess) return guessErrorLine(today) + line("There is nothing left to guess just now. Keep an eye on the calendar.");
+  const locked = today.guess ? `Your guess: ${escapeHtml(today.guess.text)}. You can change it until the hiding place is shown.` : "";
+  const status = guessErrorLine(today) || `<p class="elf-guess__status" role="status">${locked}</p>`;
   return (
     `<form class="elf-guess" method="post" action="${sitePath(guessUrl) ?? "/"}" data-api="/api/elf/guess">` +
     `<input type="hidden" name="door" value="${count(today.door)}" />` +
-    `<fieldset><legend>Where is ${escapeHtml(today.elfName)} hiding?</legend><ul class="elf-guess__choices">${choices}</ul></fieldset>` +
-    `<p class="elf-guess__status" role="status">${status}</p>` +
+    `<fieldset><legend>Where is ${escapeHtml(today.elfName)} hiding?</legend>` +
+    `<label class="elf-guess__hint" for="guess-text">Type the name of the place. Spelling does not have to be perfect.</label>` +
+    `<input class="elf-guess__text" id="guess-text" name="text" type="text" required maxlength="80" autocomplete="off" autocapitalize="words" enterkeyhint="done" value="${escapeHtml(today.guess?.text ?? "")}" />` +
+    `</fieldset>` +
+    status +
     `<button class="elf-btn elf-btn--crimson" type="submit">${today.guess ? "Change my guess" : "Lock in my guess"}</button>` +
     `</form>`
   );
@@ -71,12 +105,17 @@ function outcomeHtml(today: TodayView): string {
   const place = escapeHtml(outcome.place);
   const where =
     today.state === "revealed"
-      ? line(`Nobody found ${elf} in time. ${elf} is still waiting at ${place}, and the first detective to read the secret word still wins.`)
+      ? // Decision 1: the finder wins the prize, and the elf stays at its place.
+        line(`Nobody found ${elf} in time. ${elf} is still waiting at ${place}, and the first detective to type the word on its tag still wins the prize.`)
       : line(`${elf} was hiding at ${place}.`) +
         (outcome.by ? line(`${icon("rosette", 16)} Found first by ${escapeHtml(outcome.by)}${outcome.at ? ` at ${clockWords(outcome.at)}` : ""}`, "elf-case__by") : "");
-  const guess = today.guess ? escapeHtml(`${today.guess.name}, ${today.guess.town}`) : null;
+  const guess = today.guess ? escapeHtml(today.guess.text) : null;
+  // The guess as the family typed it: spelling did not have to be perfect.
   const verdict = outcome.cracked
-    ? line(`<span class="elf-mark elf-mark--cracked">${icon("cracked", 16)}</span> <b>You cracked it!</b> Your guess was right.`, "elf-case__verdict is-cracked")
+    ? line(
+        `<span class="elf-mark elf-mark--cracked">${icon("cracked", 16)}</span> <b>You cracked it!</b> ${guess ? `Your guess was ${guess}.` : "Your guess was right."}`,
+        "elf-case__verdict is-cracked",
+      )
     : guess
       ? line(`Your guess was ${guess}. Not this time, but there is a new clue tomorrow.`, "elf-case__verdict")
       : line("You did not lock in a guess for this one. There is a new clue tomorrow.", "elf-case__verdict");
@@ -96,32 +135,44 @@ function caseCard(view: HqView): string {
       line(`${things(sleepsUntil(view.now, view.nextClueAt), "sleep")} to go`, "elf-case__count elf-cane-strip")
     );
   }
-  const head = `<p class="elf-case__door">Door ${count(today.door)}</p>`;
+  // A practice evening is plainly a practice: never "Door 0".
+  const head = today.practice
+    ? `<p class="elf-case__door elf-practice">The practice door <span class="elf-chip elf-chip--new">Practice</span></p>`
+    : `<p class="elf-case__door">Door ${count(today.door)}</p>`;
+  // Where the case has no guess form, a guess sent with no script that was not taken still says why.
+  const refused = guessErrorLine(today);
   if (today.state === "shut") {
     // A door whose clue time is not a real date stays shut (src/elf/doors.ts). Say so plainly.
-    if (!real(today.clueAt) || !real(view.now)) {
-      return head + `<h2 id="elf-case-heading">Today's clue is on its way</h2>` + line("Come back later to read it and lock in your guess.");
+    const clueAt = today.nextClueAt ?? new Date(NaN);
+    if (!real(clueAt) || !real(view.now)) {
+      return head + `<h2 id="elf-case-heading">Today's clue is on its way</h2>` + line("Come back later to read it and lock in your guess.") + refused;
     }
-    const left = today.clueAt.getTime() - view.now.getTime();
+    const left = clueAt.getTime() - view.now.getTime();
     return (
       head +
       `<h2 id="elf-case-heading">Today's clue is on its way</h2>` +
-      line(`Clue out at ${clockWords(today.clueAt)}`) +
-      `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>` +
-      line("Come back then to read it and lock in your guess.")
+      line(`Clue out at ${clockWords(clueAt)}`) +
+      `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${clueAt.toISOString()}">${countdownWords(left)}</span></p>` +
+      line("Come back then to read it and lock in your guess.") +
+      refused
     );
   }
-  if (today.state === "hunting") {
+  // Found before the place is shown: the clues keep coming and the guessing goes on until then.
+  if (today.state === "hunting" || today.state === "found-hidden") {
     return (
       head +
-      `<h2 id="elf-case-heading">The hunt is on!</h2>` +
-      (today.clue ? `<blockquote class="elf-clue">${clueHtml(today.clue)}</blockquote>` : "") +
+      `<h2 id="elf-case-heading">${today.state === "hunting" ? "The hunt is on!" : `${escapeHtml(today.elfName)} has been found!`}</h2>` +
+      clueLadder(today, view.now) +
       guessForm(today, view.guessUrl)
     );
+  }
+  if (today.state === "snow") {
+    return head + `<h2 id="elf-case-heading">Snow day</h2>` + line(`${escapeHtml(today.elfName)} got snowed in. This door counts as done for everyone.`) + refused;
   }
   return (
     head +
     `<h2 id="elf-case-heading">${today.state === "found" ? "Case closed" : `${escapeHtml(today.elfName)} is still out there`}</h2>` +
+    refused +
     outcomeHtml(today)
   );
 }
@@ -175,12 +226,22 @@ function marksBoard(marks: FamilyMarks): string {
     const mark = byDoor.get(door);
     const isCracked = mark?.cracked === true;
     const isVisited = mark?.visited === true;
+    // A snow day counts as done for every detective, though nobody cracked it or went there.
+    const isSnow = mark?.snow === true;
     if (isCracked) cracked += 1;
     if (isVisited) visited += 1;
-    const said = isCracked && isVisited ? "cracked and visited" : isCracked ? "cracked" : isVisited ? "visited" : "not done yet";
+    const said = isSnow
+      ? "snowed in, so it counts as done."
+      : isCracked && isVisited
+        ? "cracked and visited"
+        : isCracked
+          ? "cracked"
+          : isVisited
+            ? "visited"
+            : "not done yet";
     cells +=
       // The words go in the page, not in aria-label: a label on a plain list item is not always read.
-      `<li${isCracked || isVisited ? ' class="is-done"' : ""}><span class="sr-only">Door ${door}: ${said}</span>` +
+      `<li${isCracked || isVisited || isSnow ? ' class="is-done"' : ""}><span class="sr-only">Door ${door}: ${said}</span>` +
       `<span class="elf-marks__num" aria-hidden="true">${door}</span>` +
       (isCracked ? `<span class="elf-mark elf-mark--cracked">${icon("cracked", 14)}</span>` : "") +
       (isVisited ? `<span class="elf-mark">${candyCane(14)}</span>` : "") +

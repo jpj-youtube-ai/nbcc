@@ -704,6 +704,28 @@ describe("December's doors switch", () => {
     expect(dbGame.onDoorsSwitchedOn).toHaveBeenCalledWith(2026);
   });
 
+  it("makes the doors before it saves the switch, and saves nothing if making them fails", async () => {
+    dbDoors.listElfDoors.mockResolvedValue([await readyDoor1()]);
+    const order: string[] = [];
+    dbGame.onDoorsSwitchedOn.mockImplementation(async () => {
+      order.push("doors");
+    });
+    db.setElfSettings.mockImplementation(async (patch: object) => {
+      order.push("switch");
+      return { ...ON, ...patch };
+    });
+    expect((await run(patchAdminElfSettings, req("admin", { doorsOn: true }))).statusCode).toBe(200);
+    expect(order).toEqual(["doors", "switch"]);
+    db.setElfSettings.mockClear();
+    dbGame.onDoorsSwitchedOn.mockRejectedValue(new Error("no table"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await run(patchAdminElfSettings, req("admin", { doorsOn: true }));
+    spy.mockRestore();
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
+    expect(db.setElfSettings).not.toHaveBeenCalled();
+  });
+
   it("switches off without asking about door 1, and without the switch on work", async () => {
     const res = await run(patchAdminElfSettings, req("admin", { doorsOn: false }));
     expect(res.statusCode).toBe(200);
@@ -810,6 +832,8 @@ describe("a family's wrong tries in the admin", () => {
       const res = await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "42" }, body: { door } }));
       expect(res.statusCode, String(door)).toBe(400);
     }
+    const bad = await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "42" }, body: { door: 25 } }));
+    expect(bad.body).toEqual({ error: "Choose a door from 1 to 24." });
     expect((await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "abc" }, body: { door: 7 } }))).statusCode).toBe(400);
     dbAdmin.elfFamilySheet.mockResolvedValue(null);
     expect((await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "99" }, body: { door: 7 } }))).statusCode).toBe(404);

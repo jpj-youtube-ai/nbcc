@@ -121,9 +121,10 @@ export async function patchAdminElfSettings(req: Request, res: Response): Promis
       const door1 = (await listElfDoors(now.year)).find((d) => d.door === 1) ?? emptyDoor(1, "");
       if (!readinessOf(door1, doorPicture(now.year, 1) !== null).ready) return res.status(409).json({ error: DOOR_1_NOT_READY });
     }
+    // Every door of the year gets its row (so an unready one can be snowed in) and the practice goes,
+    // before the switch is saved: if this fails the switch stays off, and trying again is harmless.
+    if (parsed.data.doorsOn === true) await onDoorsSwitchedOn(now.year);
     const saved = await setElfSettings(parsed.data, actorOf(claims));
-    // Every door of the year gets its row (so an unready one can be snowed in), and the practice goes.
-    if (parsed.data.doorsOn === true) await onDoorsSwitchedOn(saved.year);
     return res.status(200).json({ settings: forAdmin(saved) });
   } catch (err) {
     console.error("admin elf settings change failed:", err instanceof Error ? err.message : err);
@@ -410,7 +411,7 @@ export async function postAdminElfWordTriesClear(req: Request, res: Response): P
   const id = idOf(req);
   if (id === null) return res.status(400).json(BAD_ID);
   const parsed = clearTriesSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json(BAD_ID);
+  if (!parsed.success) return res.status(400).json({ error: "Choose a door from 1 to 24." });
   try {
     const f = await elfFamilySheet(id);
     if (!f) return res.status(404).json(NO_FAMILY);

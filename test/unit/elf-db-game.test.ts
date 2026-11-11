@@ -94,11 +94,12 @@ afterEach(() => vi.useRealTimers());
 
 describe("runOf", () => {
   it("is hunting at 5:31pm with the four instants right and the email and closing time carried", () => {
-    const run = runOf(fullDoor(), true, FIVE_31);
+    const run = runOf(2026, fullDoor(), FIVE_31);
     expect(run.state).toBe("hunting");
     expect(run.year).toBe(2026);
     expect(run.door).toBe(7);
     expect(run.facts.clue1At).toEqual(at("2026-12-07T17:30:00Z"));
+    expect(run.calendarAt).toEqual(run.facts.clue1At);
     expect(run.facts.clue2At).toEqual(at("2026-12-07T18:00:00Z"));
     expect(run.facts.clue3At).toEqual(at("2026-12-07T18:30:00Z"));
     expect(run.facts.revealAt).toEqual(at("2026-12-07T19:00:00Z"));
@@ -117,20 +118,20 @@ describe("runOf", () => {
 
   it("is a snow day once snowDayAt is set: snow at 5:31pm and still shut at 5:29pm", () => {
     const snowy = fullDoor({ snowDayAt: at("2026-12-07T17:30:00Z") });
-    expect(runOf(snowy, true, FIVE_31).state).toBe("snow");
-    expect(runOf(snowy, true, FIVE_29).state).toBe("shut");
+    expect(runOf(2026, snowy, FIVE_31).state).toBe("snow");
+    expect(runOf(2026, snowy, FIVE_29).state).toBe("shut");
   });
 
   it("never guesses a snow day: no tag word and no snowDayAt is still hunting", () => {
-    expect(runOf(fullDoor({ tagWord: null }), true, FIVE_31).state).toBe("hunting");
+    expect(runOf(2026, fullDoor({ tagWord: null }), FIVE_31).state).toBe("hunting");
   });
 
   it("falls back to the elf's stock name", () => {
-    expect(runOf(fullDoor({ elfName: null }), true, FIVE_31).elfName).toBe(ELF_NAMES[6]);
+    expect(runOf(2026, fullDoor({ elfName: null }), FIVE_31).elfName).toBe(ELF_NAMES[6]);
   });
 
   it("carries the found time, found family and gone home", () => {
-    const run = runOf(fullDoor({ foundAt: at("2026-12-07T17:45:00Z"), foundFamilyId: 4, goneHomeAt: at("2026-12-08T09:00:00Z") }), true, at("2026-12-07T17:50:00Z"));
+    const run = runOf(2026, fullDoor({ foundAt: at("2026-12-07T17:45:00Z"), foundFamilyId: 4, goneHomeAt: at("2026-12-08T09:00:00Z") }), at("2026-12-07T17:50:00Z"));
     expect(run.state).toBe("found-hidden");
     expect(run.foundFamilyId).toBe(4);
     expect(run.facts.goneHome).toBe(true);
@@ -139,7 +140,7 @@ describe("runOf", () => {
   it("closes an hour after the reveal when the closing time cannot be read, so a door is never left hunting", () => {
     // Clue 1 at 11:59pm on Christmas Eve leaves no time to hunt: closingInstant answers null.
     const late = { ...fullDoor({ door: 24, clue1Time: "23:59", clue2Time: "23:59", clue3Time: "23:59", revealTime: "23:59" }) };
-    const run = runOf(late, false, at("2026-12-25T00:30:00Z"));
+    const run = runOf(2026, late, at("2026-12-25T00:30:00Z"));
     expect(run.facts.closesAt).toEqual(new Date(run.facts.revealAt.getTime() + 60 * 60 * 1000));
     expect(Number.isNaN(run.facts.closesAt.getTime())).toBe(false);
   });
@@ -206,15 +207,11 @@ function row(door: number, over: Record<string, unknown> = {}) {
 describe("markAutomaticSnowDays", () => {
   it("snows in a started door that cannot run, and leaves a door whose clue is still to come", async () => {
     // Door 7 has a place and a clue but no tag word; door 8 lacks one too, but its clue 1 is tomorrow.
-    listDoors([
-      row(7, { place_name: "Pine Cone Café" }),
-      row(8, { place_name: "Holly Hall" }),
-    ]);
     query.mockImplementation(async (sql: string) => {
       const s = String(sql);
       if (/FROM elf_door_names/.test(s)) return { rows: [] };
       if (/FROM elf_clues/.test(s)) return { rows: [{ door: 7, n: 1, words: "Clue one" }, { door: 8, n: 1, words: "Clue one" }] };
-      return { rows: [row(7, { place_name: "Pine Cone Café" }), row(8, { place_name: "Holly Hall" })] };
+      return { rows: [row(7, { place_name: "Pine Cone Café" }), row(8, { place_name: "Mistletoe Mill" })] };
     });
     clientQuery.mockResolvedValue({ rows: [], rowCount: 1 });
     const marked = await markAutomaticSnowDays(2026, FIVE_31);
@@ -277,6 +274,16 @@ describe("waveOneRuns", () => {
       expect(r.facts.foundAt).toBeNull();
       expect(r.elfName).toBe(ELF_NAMES[r.door - 1]);
     }
+  });
+
+  it("keeps a passed door's real clue 1 time as calendarAt while its facts stay in the far future", () => {
+    const runs = waveOneRuns(2026, SIX_10);
+    // Door 3 (Thursday 3 December): clue 1 at 5:30pm, long past by 7 December.
+    expect(runs[2].calendarAt).toEqual(at("2026-12-03T17:30:00Z"));
+    expect(runs[2].state).toBe("shut");
+    expect(runs[2].facts.clue1At.getTime()).toBeGreaterThan(at("2100-01-01T00:00:00Z").getTime());
+    expect(runs[7].calendarAt).toEqual(runs[7].facts.clue1At);
+    expect(runs[7].calendarAt).toEqual(at("2026-12-08T17:30:00Z"));
   });
 
   it("keeps a door whose default clue 1 is past shut, and one still to come at its default time", () => {
@@ -361,19 +368,21 @@ describe("the loaders", () => {
   });
 
   it("matches a poster code, and never matches an empty one", async () => {
-    expect(await loadDoorRunByPosterCode("", SIX_10)).toBeNull();
+    expect(await loadDoorRunByPosterCode("", 2026, SIX_10)).toBeNull();
     expect(query).not.toHaveBeenCalled();
     query.mockImplementation(async (sql: string) => {
       const s = String(sql);
       if (/FROM elf_door_names|FROM elf_clues/.test(s)) return { rows: [] };
       return { rows: [{ year: 2026, ...row(7, { poster_code: "abcdefghijkm" }) }] };
     });
-    const run = await loadDoorRunByPosterCode("abcdefghijkm", SIX_10);
+    const run = await loadDoorRunByPosterCode("abcdefghijkm", 2026, SIX_10);
     expect(run?.door).toBe(7);
     expect(run?.year).toBe(2026);
+    // another year's door is never matched
+    expect(await loadDoorRunByPosterCode("abcdefghijkm", 2027, SIX_10)).toBeNull();
     query.mockReset();
     query.mockResolvedValue({ rows: [] });
-    expect(await loadDoorRunByPosterCode("zzzzzzzzzzzz", SIX_10)).toBeNull();
+    expect(await loadDoorRunByPosterCode("zzzzzzzzzzzz", 2026, SIX_10)).toBeNull();
   });
 
   it("loads the practice door as door 0 of year 0, with the pretend clues and an hour to close", async () => {
@@ -555,6 +564,7 @@ describe("recordWord", () => {
     });
     await expect(recordWord({ ...base, won: true })).rejects.toThrow("boom");
     expect(sqls()).toContain("ROLLBACK");
+    expect(release).toHaveBeenCalledTimes(1);
     expect(call(/INSERT INTO audit_log/)).toBeUndefined();
   });
 
@@ -583,8 +593,8 @@ describe("visits", () => {
 
 describe("familyDoorsDone and detectiveDoorsDone", () => {
   // Door 7 is open (nobody found it, so the place was shown when it closed, 8:30pm); the family guessed before then.
-  const open = runOf(fullDoor(), true, at("2026-12-07T21:00:00Z"));
-  const snowed = runOf(fullDoor({ door: 8, snowDayAt: at("2026-12-08T17:30:00Z") }), true, at("2026-12-08T19:30:00Z"));
+  const open = runOf(2026, fullDoor(), at("2026-12-07T21:00:00Z"));
+  const snowed = runOf(2026, fullDoor({ door: 8, snowDayAt: at("2026-12-08T17:30:00Z") }), at("2026-12-08T19:30:00Z"));
   const now = at("2026-12-08T19:30:00Z");
 
   function db() {
@@ -614,6 +624,14 @@ describe("familyDoorsDone and detectiveDoorsDone", () => {
     expect(m.get(11)).toEqual({ cracked: [7], visited: [], snow: [8] });
   });
 
+  it("shows no progress from a door the runs say is shut, whatever rows exist", async () => {
+    db();
+    // With the switch off every run is shut: the stamps and the guess count for nothing.
+    const m = await familyDoorsDone(2026, 3, waveOneRuns(2026, now), now);
+    expect(m.get(10)).toEqual({ cracked: [], visited: [], snow: [] });
+    expect(m.get(11)).toEqual({ cracked: [], visited: [], snow: [] });
+  });
+
   it("gives one detective's doors", async () => {
     db();
     expect(await detectiveDoorsDone(2026, 10, [open, snowed], now)).toEqual({ cracked: [7], visited: [7], snow: [8] });
@@ -622,7 +640,7 @@ describe("familyDoorsDone and detectiveDoorsDone", () => {
 
 describe("doorCounts", () => {
   it("counts the families that cracked it and those who visited, leaving removed families out", async () => {
-    const run = runOf(fullDoor(), true, at("2026-12-07T21:00:00Z"));
+    const run = runOf(2026, fullDoor(), at("2026-12-07T21:00:00Z"));
     query.mockImplementation(async (sql: string) => {
       const s = String(sql);
       if (/FROM elf_guesses/.test(s)) {
@@ -694,7 +712,25 @@ describe("photos", () => {
     expect(r).toBe("limit");
     expect(call(/INSERT INTO elf_photos/)).toBeUndefined();
     expect(call(/INSERT INTO elf_photo_files/)).toBeUndefined();
-    expect(sqls()[sqls().length - 1]).toBe("ROLLBACK");
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes the family row lock before the count (the double tap guard)", async () => {
+    photoTx({ sent: 0 });
+    await sendElfPhoto({ year: 2026, door: 7, familyId: 3, picture, at: FIVE_31 });
+    const s = sqls();
+    const lock = s.findIndex((q) => /FROM elf_families/.test(q) && /FOR UPDATE/.test(q));
+    const count = s.findIndex((q) => /count\(\*\)/i.test(q));
+    expect(lock).toBeGreaterThan(0);
+    expect(count).toBeGreaterThan(lock);
+    expect(s[s.length - 1]).toBe("COMMIT");
+  });
+
+  it("sends a photo for the practice door", async () => {
+    photoTx({ sent: 0 });
+    const r = await sendElfPhoto({ year: 0, door: 0, familyId: 3, picture, at: FIVE_31 });
+    expect(typeof r).toBe("object");
+    expect(call(/INSERT INTO elf_photos/)![1].slice(1, 4)).toEqual([0, 0, 3]);
   });
 
   it("replaces the waiting photo for the door, deletes its bytes, and stores the new one under a 12 character token", async () => {
@@ -706,6 +742,9 @@ describe("photos", () => {
     const replace = call(/UPDATE elf_photos/)!;
     expect(String(replace[0])).toContain("'replaced'");
     expect(String(replace[0])).toContain("status = 'waiting'");
+    // a replacement is not a head elf's decision
+    expect(String(replace[0])).not.toContain("decided_at");
+    expect(String(replace[0])).not.toContain("decided_by");
     expect(String(call(/DELETE FROM elf_photo_files/)![0])).toContain("photo_id");
     const ins = call(/INSERT INTO elf_photos/)!;
     expect(ins[1]).toContain(token);
@@ -736,10 +775,12 @@ describe("photos", () => {
 
   it("takes down the family's own photo and deletes its bytes in the same transaction", async () => {
     clientQuery.mockImplementation(async (sql: string) => {
-      if (/UPDATE elf_photos/.test(String(sql))) return { rows: [{ id: 42 }], rowCount: 1 };
+      if (/UPDATE elf_photos/.test(String(sql))) return { rows: [{ id: 42 }, { id: 43 }], rowCount: 2 };
       return { rows: [], rowCount: 0 };
     });
     expect(await takeDownOwnPhoto(2026, 7, 3, FIVE_31)).toBe(true);
+    const audits = clientQuery.mock.calls.filter((c) => /INSERT INTO audit_log/.test(String(c[0])));
+    expect(audits.map((c) => c[1][3])).toEqual([42, 43]);
     const up = call(/UPDATE elf_photos/)!;
     expect(String(up[0])).toContain("'taken-down'");
     expect(String(up[0])).toContain("taken_down_by = 'family'");
@@ -764,6 +805,8 @@ describe("photos", () => {
     const sql = String(query.mock.calls[0][0]);
     expect(sql).toContain("status = 'approved'");
     expect(sql).toContain("elf_photo_files");
+    expect(sql).toContain("deleted_at IS NULL");
+    expect(sql).toContain("removed_at IS NULL");
     query.mockResolvedValueOnce({ rows: [] });
     expect(await approvedPhoto(2026, 7, "bbbbbbbbbbbb")).toBeNull();
   });
@@ -785,8 +828,10 @@ describe("visitElf, cluePicture and the switch", () => {
     expect(await cluePicture(2026, 7, 2)).toBeNull();
   });
 
-  it("clears the practice door when the doors are switched on", async () => {
-    await onDoorsSwitchedOn();
+  it("adds every door's row, then clears the practice door, when the doors are switched on", async () => {
+    await onDoorsSwitchedOn(2026);
+    expect(String(query.mock.calls[0][0])).toContain("INSERT INTO elf_doors");
+    expect(query.mock.calls[0][1][0]).toBe(2026);
     expect(sqls().some((q) => /DELETE FROM elf_practice/.test(q))).toBe(true);
     expect(sqls().some((q) => /DELETE FROM elf_guesses/.test(q) && /year = 0/.test(q))).toBe(true);
   });

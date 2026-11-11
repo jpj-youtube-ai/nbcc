@@ -71,7 +71,8 @@ async function deletePractice(client: Pick<PoolClient, "query">): Promise<void> 
   await client.query("DELETE FROM elf_photos WHERE year = 0");
 }
 
-async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+/** Runs `work` in one transaction: committed when it returns, rolled back when it throws. */
+export async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

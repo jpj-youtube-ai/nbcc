@@ -314,6 +314,22 @@ describe("saveElfClue", () => {
     expect(await saveElfClue(2026, 7, 1, "x", ACTOR)).toBeNull();
   });
 
+  it("audits removed only when the clue's row was deleted", async () => {
+    fakeClient();
+    await saveElfClue(2026, 7, 2, null, ACTOR);
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain('"removed":true');
+    clientQuery.mockReset();
+    clientQuery.mockImplementation(async (sql: string) => {
+      const q = String(sql);
+      if (/DELETE FROM elf_clues/.test(q)) return { rows: [], rowCount: 0 };
+      if (/FROM elf_doors/.test(q) && /^\s*SELECT/.test(q)) return { rows: [doorRow(7)] };
+      if (/^\s*SELECT/.test(q)) return { rows: [] };
+      return { rows: [], rowCount: 1 };
+    });
+    await saveElfClue(2026, 7, 2, null, ACTOR);
+    expect(JSON.stringify(call(/INSERT INTO audit_log/)![1])).toContain('"removed":false');
+  });
+
   it("clears the words of a clue that has a picture, and deletes the row only when it has none", async () => {
     fakeClient();
     await saveElfClue(2026, 7, 2, null, ACTOR);

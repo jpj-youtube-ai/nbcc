@@ -390,22 +390,28 @@ const UPSERT_CLUE_SQL = `INSERT INTO elf_clues (year, door, n, words, updated_by
 
 /** Saves one clue's words. Null clears the words, and removes the clue only when it has no picture. */
 export async function saveElfClue(year: number, door: Door, n: ClueN, words: string | null, actor: string): Promise<DoorSetup | null> {
+  // True only when the clue's row was deleted (a picture clue that only lost its words is not removed).
+  let removedClue = false;
   return audited(
     async (client) => {
       await lockedDoor(client, year, door);
+      let removed = false;
       if (words === null) {
         await client.query(
           `UPDATE elf_clues SET words = NULL, updated_at = now(), updated_by = $4
             WHERE year = $1 AND door = $2 AND n = $3 AND picture IS NOT NULL`,
           [year, door, n, actor],
         );
-        await client.query("DELETE FROM elf_clues WHERE year = $1 AND door = $2 AND n = $3 AND picture IS NULL", [year, door, n]);
+        const gone = await client.query("DELETE FROM elf_clues WHERE year = $1 AND door = $2 AND n = $3 AND picture IS NULL", [year, door, n]);
+        removed = (gone.rowCount ?? 0) > 0;
       } else {
         await client.query(UPSERT_CLUE_SQL, [year, door, n, words, actor]);
       }
-      return (await readDoor(client, year, door)) as DoorSetup;
+      const saved = (await readDoor(client, year, door)) as DoorSetup;
+      removedClue = removed;
+      return saved;
     },
-    () => ({ actor, action: "elf.clue.save", entity: "elf_door", entityId: door, data: { year, n, removed: words === null } }),
+    () => ({ actor, action: "elf.clue.save", entity: "elf_door", entityId: door, data: { year, n, removed: removedClue } }),
   );
 }
 

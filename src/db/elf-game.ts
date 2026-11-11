@@ -1,11 +1,10 @@
-import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit, writeWithAudit } from "./donations";
-import { findElfDoorByPosterCode, getElfDoor, listElfDoors } from "./elf-doors";
-import { getPractice, markPracticeFound, clearPractice } from "./elf-practice";
+import { ensureElfDoors, findElfDoorByPosterCode, getElfDoor, listElfDoors } from "./elf-doors";
+import { getPractice, markPracticeFound, clearPractice, inTransaction } from "./elf-practice";
 import type { MadePicture } from "./fundraiser-pictures";
 import { closingInstant, doorInstant, DOOR_COUNT, eveningFor, type Door } from "../elf/calendar";
-import { doorPicture, doorSeason, emptyDoor, staffEveningOf, type DoorSetup } from "../elf/door-setup";
+import { doorSeason, emptyDoor, staffEveningOf, type DoorSetup } from "../elf/door-setup";
 import { doorState, openedAt, type DoorFacts, type DoorState } from "../elf/doors";
 import { isUsableSecretWord } from "../elf/claim";
 import { cracked, type SavedGuess } from "../elf/guess";
@@ -32,6 +31,9 @@ export interface DoorRun {
   /** 1 to 24, or 0 for the practice door. */
   door: Door | 0;
   facts: DoorFacts;
+  /** The time the calendar shows for the door's first clue: the door's real clue 1 instant on a wave 1
+   *  run (whose facts.clue1At may be held in the far future to keep it shut), facts.clue1At otherwise. */
+  calendarAt: Date;
   /** The door's state at the `now` it was loaded for. */
   state: DoorState;
   placeName: string | null;
@@ -50,37 +52,14 @@ export interface DoorRun {
   foundFamilyId: number | null;
 }
 
-type Querier = Pick<PoolClient, "query">;
-
-async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await work(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
 const filled = (s: string | null | undefined): s is string => typeof s === "string" && s.trim() !== "";
 
 // ---- turning rows into runs ---------------------------------------------------------------------------
 
-/** One door as it runs: its four instants, its state at `now`, and what it may show once open. The
- *  live state never guesses a snow day: only a stored `snowDayAt` makes one. `year` is the December the
- *  door belongs to (loaders always pass it; it defaults to the year of `now`). `hasPicture` (the door's
- *  own picture) is not part of a run; it is taken so every loader calls this the same way. */
-export function runOf(setup: DoorSetup, hasPicture: boolean, now: Date, year: number = now.getUTCFullYear()): DoorRun {
-  void hasPicture;
-  return runFrom(year, setup, now);
-}
-
-function runFrom(year: number, setup: DoorSetup, now: Date): DoorRun {
+/** One door as it runs: its four instants, its state at `now`, and what it may show once open. `year`
+ *  is the December the door belongs to. The live state never guesses a snow day: only a stored
+ *  `snowDayAt` makes one. */
+export function runOf(year: number, setup: DoorSetup, now: Date): DoorRun {
   const season = doorSeason(year);
   const evening = eveningFor(season, setup.door, staffEveningOf(setup));
   const bad = new Date(NaN);
@@ -106,6 +85,7 @@ function runFrom(year: number, setup: DoorSetup, now: Date): DoorRun {
     year,
     door: setup.door,
     facts,
+    calendarAt: clue1At,
     state: doorState(facts, now),
     placeName: setup.placeName,
     placeTown: setup.placeTown,
@@ -139,10 +119,11 @@ export function waveOneRuns(year: number, now: Date): DoorRun[] {
   const FAR_FUTURE = new Date(8.64e15);
   const runs: DoorRun[] = [];
   for (let door = 1; door <= DOOR_COUNT; door++) {
-    const run = runFrom(year, emptyDoor(door as Door, ""), now);
+    const run = runOf(year, emptyDoor(door as Door, ""), now);
     // A default clue 1 that is already past is held shut, so only a countdown can show.
     const facts: DoorFacts = run.facts.clue1At.getTime() <= now.getTime() ? { ...run.facts, clue1At: FAR_FUTURE } : run.facts;
-    runs.push({ ...run, facts, state: doorState(facts, now), clues: [], names: [], tagWord: null });
+    // calendarAt stays the door's real default clue 1 instant, so the calendar can show it.
+    runs.push({ ...run, facts, calendarAt: run.facts.clue1At, state: doorState(facts, now), clues: [], names: [], tagWord: null });
   }
   return runs;
 }
@@ -155,13 +136,11 @@ class AlreadyMarked extends Error {}
 /** Snows in every door whose clue 1 time has come and which cannot run (no place, no usable tag word,
  *  or no first clue), stamped from its clue 1 instant. Answers the doors marked. */
 export async function markAutomaticSnowDays(year: number, now: Date): Promise<Door[]> {
-  const season = doorSeason(year);
   const marked: Door[] = [];
   for (const setup of await listElfDoors(year)) {
     if (setup.snowDayAt !== null) continue;
-    const evening = eveningFor(season, setup.door, staffEveningOf(setup));
-    const clue1 = doorInstant(season, setup.door, evening.clue1);
-    if (!clue1 || clue1.getTime() > now.getTime() || canRun(setup)) continue;
+    const clue1 = runOf(year, setup, now).facts.clue1At;
+    if (Number.isNaN(clue1.getTime()) || clue1.getTime() > now.getTime() || canRun(setup)) continue;
     const done = await writeWithAudit(
       async (client) => {
         const r = await client.query(
@@ -191,7 +170,7 @@ export async function loadDoorRuns(year: number, now: Date): Promise<DoorRun[]> 
   const runs: DoorRun[] = [];
   for (let door = 1; door <= DOOR_COUNT; door++) {
     const setup = have.get(door as Door) ?? emptyDoor(door as Door, "");
-    runs.push(runOf(setup, doorPicture(year, door as Door) !== null, now, year));
+    runs.push(runOf(year, setup, now));
   }
   return runs;
 }
@@ -199,15 +178,16 @@ export async function loadDoorRuns(year: number, now: Date): Promise<DoorRun[]> 
 /** One door; a door with no row reads as an empty door. */
 export async function loadDoorRun(year: number, door: Door, now: Date): Promise<DoorRun> {
   const setup = (await getElfDoor(year, door)) ?? emptyDoor(door, "");
-  return runOf(setup, doorPicture(year, door) !== null, now, year);
+  return runOf(year, setup, now);
 }
 
-/** The door whose poster carries this code, or null. An empty code is never matched. */
-export async function loadDoorRunByPosterCode(code: string, now: Date): Promise<DoorRun | null> {
+/** The door of `year` whose poster carries this code, or null: an empty code, or another year's door,
+ *  is never matched (the practice door's code is matched by loadPractice). */
+export async function loadDoorRunByPosterCode(code: string, year: number, now: Date): Promise<DoorRun | null> {
   if (code === "") return null;
   const found = await findElfDoorByPosterCode(code);
-  if (!found || found.setup.posterCode === "") return null;
-  return runOf(found.setup, doorPicture(found.year, found.setup.door) !== null, now, found.year);
+  if (!found || found.year !== year || found.setup.posterCode === "") return null;
+  return runOf(year, found.setup, now);
 }
 
 /** The practice door as door 0 of year 0, or null when none is set. Its times are absolute. */
@@ -228,6 +208,7 @@ export async function loadPractice(now: Date): Promise<DoorRun | null> {
     year: 0,
     door: 0,
     facts,
+    calendarAt: p.clue1At,
     state: doorState(facts, now),
     placeName: p.placeName,
     placeTown: p.placeTown,
@@ -436,14 +417,16 @@ export async function familyDoorsDone(year: number, familyId: number, runs: Door
     familyGuesses(year, familyId),
     familyVisits(year, familyId),
   ]);
-  const realRuns = runs.filter((r) => r.door > 0);
+  // A door the runs say is shut shows no progress, whatever rows exist (with the switch off every run is shut).
+  const realRuns = runs.filter((r) => r.door > 0 && doorState(r.facts, now) !== "shut");
+  const open = new Set<number>(realRuns.map((r) => r.door));
   const crackedDoors = realRuns.filter((r) => crackedBy(r, guesses.get(r.door), now)).map((r) => r.door);
   const snowDoors = realRuns.filter((r) => doorState(r.facts, now) === "snow").map((r) => r.door);
   const out = new Map<number, DoorsDone>();
   for (const d of detectives.rows) {
     const id = Number(d.id);
     const visited = visits
-      .filter((v) => v.detectiveId === id && v.door > 0 && v.countsFrom.getTime() <= now.getTime())
+      .filter((v) => v.detectiveId === id && open.has(v.door) && v.countsFrom.getTime() <= now.getTime())
       .map((v) => v.door)
       .sort((a, b) => a - b);
     out.set(id, { cracked: crackedDoors, visited, snow: snowDoors });
@@ -505,28 +488,24 @@ export async function doorScrapbook(year: number, door: number, now: Date): Prom
  *  The family's photo still waiting for this door is replaced, and its bytes deleted. */
 export async function sendElfPhoto(o: {
   year: number;
-  door: Door;
+  door: Door | 0;
   familyId: number;
   picture: MadePicture;
   at: Date;
 }): Promise<{ token: string } | "limit"> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return inTransaction(async (client) => {
     // One sender at a time per family, so two at once cannot both slip under the limit.
     await client.query("SELECT id FROM elf_families WHERE id = $1 FOR UPDATE", [o.familyId]);
     const counted = await client.query<{ n: string }>(
       "SELECT count(*) AS n FROM elf_photos WHERE family_id = $1 AND sent_at > $2::timestamptz - interval '24 hours'",
       [o.familyId, o.at],
     );
-    if (Number(counted.rows[0]?.n ?? 0) >= PHOTOS_A_DAY) {
-      await client.query("ROLLBACK");
-      return "limit";
-    }
+    if (Number(counted.rows[0]?.n ?? 0) >= PHOTOS_A_DAY) return "limit" as const;
+    // Replaced, not decided: decided_at and decided_by are a head elf's decision (the photo check).
     const replaced = await client.query<{ id: number }>(
-      `UPDATE elf_photos SET status = 'replaced', decided_at = $4, decided_by = 'family'
+      `UPDATE elf_photos SET status = 'replaced'
         WHERE year = $1 AND door = $2 AND family_id = $3 AND status = 'waiting' RETURNING id`,
-      [o.year, o.door, o.familyId, o.at],
+      [o.year, o.door, o.familyId],
     );
     if (replaced.rows.length > 0) {
       await client.query("DELETE FROM elf_photo_files WHERE photo_id = ANY($1::int[])", [replaced.rows.map((r) => r.id)]);
@@ -545,14 +524,8 @@ export async function sendElfPhoto(o: {
       entityId: ins.rows[0].id,
       data: { year: o.year, door: o.door, familyId: o.familyId, replaced: replaced.rows.length },
     });
-    await client.query("COMMIT");
     return { token };
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /** The family's current photo for a door (not replaced, taken down or deleted). An approved photo reads
@@ -585,7 +558,9 @@ export async function takeDownOwnPhoto(year: number, door: number, familyId: num
     if (r.rows.length === 0) return false;
     const ids = r.rows.map((row) => row.id);
     await client.query("DELETE FROM elf_photo_files WHERE photo_id = ANY($1::int[])", [ids]);
-    await insertAudit(client, { actor: "family", action: "elf.photo.taken_down", entity: "elf_photo", entityId: ids[0], data: { year, door, familyId } });
+    for (const id of ids) {
+      await insertAudit(client, { actor: "family", action: "elf.photo.taken_down", entity: "elf_photo", entityId: id, data: { year, door, familyId } });
+    }
     return true;
   });
 }
@@ -593,8 +568,11 @@ export async function takeDownOwnPhoto(year: number, door: number, familyId: num
 /** The bytes of an approved photo by its token, or null. */
 export async function approvedPhoto(year: number, door: number, token: string): Promise<{ mime: string; bytes: Buffer } | null> {
   const r = await pool.query<{ mime: string; bytes: Buffer }>(
-    `SELECT p.mime, f.bytes FROM elf_photos p JOIN elf_photo_files f ON f.photo_id = p.id
-      WHERE p.year = $1 AND p.door = $2 AND p.token = $3 AND p.status = 'approved'`,
+    `SELECT p.mime, f.bytes FROM elf_photos p
+       JOIN elf_photo_files f ON f.photo_id = p.id
+       JOIN elf_families fam ON fam.id = p.family_id
+      WHERE p.year = $1 AND p.door = $2 AND p.token = $3 AND p.status = 'approved'
+        AND p.deleted_at IS NULL AND fam.removed_at IS NULL`,
     [year, door, token],
   );
   return r.rows[0] ? { mime: r.rows[0].mime, bytes: r.rows[0].bytes } : null;
@@ -622,9 +600,11 @@ export async function cluePicture(year: number, door: number, n: number): Promis
   return r.rows[0] ? { mime: r.rows[0].picture_mime, bytes: r.rows[0].picture } : null;
 }
 
-/** The doors have been switched on: the practice door and everything played at it go. */
-export async function onDoorsSwitchedOn(): Promise<void> {
+/** The doors have been switched on: every door of the year gets its row (so an unready door can be
+ *  snowed in automatically, which only updates rows that exist), and the practice door and everything
+ *  played at it go. */
+export async function onDoorsSwitchedOn(year: number): Promise<void> {
+  await ensureElfDoors(year);
   await clearPractice();
 }
 
-export type { Querier };

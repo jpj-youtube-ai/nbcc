@@ -261,6 +261,16 @@ export function renderSleighPage(o: SleighPageInput): string {
     '<a class="sl-link sl-link--dark" href="/about-us">Find out more about NBCC</a>' +
     "</div></section>";
 
+  // Jaimie, 10 November 2026: the sleigh is run with the Kilmarnock Santa Sleigh team, whose
+  // volunteers build it and give their time for free; the page takes a moment to thank them.
+  const partner =
+    '<section class="sl-partner" aria-labelledby="slPartnerTitle">' +
+    '<img class="sl-partner__logo" src="/assets/img/kilmarnock-santa-sleigh-logo.webp" width="640" height="360" alt="Kilmarnock Santa Sleigh" loading="lazy" decoding="async" />' +
+    '<div class="sl-partner__words">' +
+    '<h2 class="sl-h2" id="slPartnerTitle">With the Kilmarnock Santa Sleigh team</h2>' +
+    "<p>Their volunteers build the sleigh, plan every route and walk the streets alongside ours, all giving their time for free. Thank you.</p>" +
+    "</div></section>";
+
   const more =
     '<nav class="sl-more" aria-label="More ways to help">' +
     '<a href="/fill"><b>Fill a Red Bag</b><span>Choose what goes in, one gift at a time.</span></a>' +
@@ -279,7 +289,7 @@ export function renderSleighPage(o: SleighPageInput): string {
     description: "Santa’s sleigh is coming round Kilmarnock this December. See the nights and give to NBCC before it reaches your street.",
     bodyClass: after ? "sl-page--after" : `sl-page--${o.phase}`,
     index: true,
-    body: `<main class="sl-main" id="main" data-phase="${o.phase}">${hero}${road}${give}${who}${more}${last}</main>`,
+    body: `<main class="sl-main" id="main" data-phase="${o.phase}">${hero}${road}${give}${who}${partner}${more}${last}</main>`,
   });
 }
 

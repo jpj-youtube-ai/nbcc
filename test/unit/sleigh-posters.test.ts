@@ -20,7 +20,7 @@ const NIGHTS: SleighNight[] = [
   ["2026-12-22", "Caprington & Grange"],
 ].map(([nightOn, areas], i) => ({ id: i + 1, nightOn, areas, startsAt: null, endsAt: null }));
 
-const ASSETS = { fontCss: "/* fonts */", art: "data:image/webp;base64,AAAA", logo: "data:image/png;base64,BBBB" };
+const ASSETS = { fontCss: "/* fonts */", art: "data:image/webp;base64,AAAA", logo: "data:image/png;base64,BBBB", partner: "data:image/webp;base64,CCCC" };
 const QR = "https://nbcc.scot/q/c41";
 
 describe("the poster with every night", () => {
@@ -57,6 +57,11 @@ describe("the poster with every night", () => {
     const a3 = renderSleighPoster({ nights: NIGHTS, night: null, size: "a3", qrUrl: QR, assets: ASSETS });
     expect(a3).toMatch(/@page\{size:A3 portrait;margin:0\}/);
     expect(a3).toMatch(/scale\(1\.4142\)/);
+  });
+
+  it("carries the Kilmarnock Santa Sleigh team's logo and thanks them", () => {
+    expect(p).toContain(`<img class="partner" src="${ASSETS.partner}" alt="Kilmarnock Santa Sleigh"`);
+    expect(words(p)).toContain("with the Kilmarnock Santa Sleigh team");
   });
 
   it("is self contained: the picture and the fonts are in the page itself", () => {
@@ -102,5 +107,6 @@ describe("the poster's assets", () => {
     expect(a.art.startsWith("data:image/webp;base64,")).toBe(true);
     expect(a.logo.startsWith("data:image/png;base64,")).toBe(true);
     expect(a.fontCss).toContain("Playfair Display");
+    expect(a.partner.startsWith("data:image/webp;base64,")).toBe(true);
   });
 });

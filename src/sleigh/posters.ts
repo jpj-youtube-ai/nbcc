@@ -27,6 +27,8 @@ export interface PosterAssets {
   art: string;
   /** NBCC's logo with white letters, for the dark band, as a data URI. */
   logo: string;
+  /** The Kilmarnock Santa Sleigh team's logo, as a data URI. */
+  partner: string;
 }
 
 const ROOT = resolve(__dirname, "../..");
@@ -36,7 +38,8 @@ export function sleighPosterAssets(): PosterAssets {
   if (cached) return cached;
   const m = materialAssets();
   const art = readFileSync(resolve(ROOT, "assets/img/santa-sleigh-1340.webp")).toString("base64");
-  cached = { fontCss: m.fontCss, art: `data:image/webp;base64,${art}`, logo: m.logoOnDark };
+  const partner = readFileSync(resolve(ROOT, "assets/img/kilmarnock-santa-sleigh-logo.webp")).toString("base64");
+  cached = { fontCss: m.fontCss, art: `data:image/webp;base64,${art}`, logo: m.logoOnDark, partner: `data:image/webp;base64,${partner}` };
   return cached;
 }
 
@@ -102,7 +105,9 @@ html,body{margin:0;background:#E9E2D6;color:var(--slate);font-family:var(--body)
 .scan svg{width:48mm;height:48mm;display:block;margin:0 auto}
 .scan b{display:block;margin-top:2.4mm;font:800 17pt/1.05 var(--head);color:var(--crimson)}
 .scan span{display:block;margin-top:1mm;font:600 11pt var(--body);color:var(--ink)}
-.foot{position:absolute;left:0;right:0;bottom:0;height:32mm;background:var(--maroon);color:var(--cream);padding:6mm 12mm;display:grid;align-content:center;gap:1.4mm}
+.foot{position:absolute;left:0;right:0;bottom:0;height:32mm;background:var(--maroon);color:var(--cream);padding:5mm 12mm;display:grid;grid-template-columns:minmax(0,1fr) 36mm;gap:1.4mm 7mm;align-content:center;align-items:center}
+.foot .words{display:grid;gap:1.4mm}
+.partner{width:36mm;height:auto;border-radius:2.6mm;border:.6mm solid var(--cream)}
 .foot p{margin:0;font-size:9.5pt;line-height:1.4}
 .foot .small{font-size:7.5pt;opacity:.85}
 @media print{html,body{background:#fff}.bar{display:none}.paper{margin:0;box-shadow:none}}
@@ -165,9 +170,11 @@ export function renderSleighPoster(o: PosterInput): string {
     `<img class="art" src="${o.assets.art}" alt="Santa and an NBCC elf waving from a red sleigh full of presents" />` +
     `<div class="low">${lower}</div>` +
     money +
-    '<div class="foot">' +
-    `<p>${escapeHtml(ABOUT_NBCC_SHORT)}</p>` +
-    '<p class="small">Night Before Christmas Campaign, Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator, OSCR.</p>' +
+    '<div class="foot"><div class="words">' +
+    "<p><b>Brought to you with the Kilmarnock Santa Sleigh team:</b> volunteers who build the sleigh, plan every route and walk the streets with ours, all for free. Thank you!</p>" +
+    `<p class="small">${escapeHtml(ABOUT_NBCC_SHORT)} Night Before Christmas Campaign, Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator, OSCR.</p>` +
+    "</div>" +
+    `<img class="partner" src="${o.assets.partner}" alt="Kilmarnock Santa Sleigh" />` +
     "</div></div>";
 
   const paper = o.size === "a3" ? "A3 portrait" : "A4 portrait";

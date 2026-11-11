@@ -26,7 +26,11 @@ import { doorPicture, doorSeason, emptyDoor, type DoorSetup, readinessOf, staffE
 import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/admin-families";
 import { daysUntil, questsFor, tileFor, type SoonNotReady } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
-import { badgeWords } from "../elf/emails";
+import { badgeWords, buildElfTestAlertEmail, ELF_TEST_TEXT } from "../elf/emails";
+import { normaliseUkMobile } from "../elf/alerts";
+import { lastAlert, listHeadElves, recordAlert, setMyAlerts } from "../db/elf-alerts";
+import { sendText, smsConfigured } from "../clients/sms";
+import { sendElfTestAlert } from "../clients/email";
 import { FESTIVE_SURNAMES } from "../elf/names";
 import { PRACTICE_ELF_NAME } from "../elf/practice-words";
 import { hashElfToken, newElfToken } from "../elf/session";
@@ -53,6 +57,9 @@ function forAdmin(s: ElfSettings) {
 //   POST   /api/admin/elf/practice  start a practice evening at a pretend place (elf: edit; only with a
 //                                   preview link, which is how it is played)
 //   DELETE /api/admin/elf/practice  clear it and everything played at it (elf: edit)
+//   GET   /api/admin/elf/alerts     the head elves, their mobiles and ticks, and the last photo alert (elf: view)
+//   PATCH /api/admin/elf/alerts/me  change only my own mobile and tick (elf: view)
+//   POST  /api/admin/elf/alerts/test  send me a test alert, by email and by text (elf: view)
 //
 // The school has its own permission section, "elf" (src/admin/permissions.ts): admins by role, a head
 // elf given it from the Team matrix. The screen is assets/js/admin/elf-hq.js. Unit tested in
@@ -533,6 +540,104 @@ export async function deleteAdminElfPractice(req: Request, res: Response): Promi
   }
 }
 
+
+// ---- Settings > Alerts (wave 2): who gets a text and an email when a photo is waiting ----
+
+const BAD_MOBILE = "That does not look like a UK mobile number.";
+
+const alertsMeSchema = z
+  .object({ mobile: z.string().max(40).nullable().optional(), alertsOn: z.boolean().optional() })
+  .strict();
+
+/** What Settings > Alerts shows: every head elf (with `me` for the one asking), whether texts are
+ *  switched on, and the last photo alert. */
+async function alertsAnswer(userId: number) {
+  const [people, last] = await Promise.all([listHeadElves(), lastAlert("photo")]);
+  return {
+    people: people.map((p) => ({ ...p, me: p.userId === userId })),
+    textsOn: smsConfigured,
+    lastAlert: last,
+  };
+}
+
+/** The head elves and their alert settings (elf: view). */
+export async function getAdminElfAlerts(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
+  try {
+    return res.status(200).json(await alertsAnswer(claims.sub));
+  } catch (err) {
+    console.error("admin elf alerts failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+/** A head elf changes only their own mobile and tick (elf: view). */
+export async function patchAdminElfAlertsMe(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
+  const parsed = alertsMeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "Those alert settings could not be read." });
+  const change: { mobile?: string | null; alertsOn?: boolean } = {};
+  if (parsed.data.mobile !== undefined) {
+    const typed = parsed.data.mobile === null ? "" : parsed.data.mobile.trim();
+    if (typed === "") change.mobile = null;
+    else {
+      const mobile = normaliseUkMobile(typed);
+      if (!mobile) return res.status(400).json({ error: BAD_MOBILE });
+      change.mobile = mobile;
+    }
+  }
+  if (parsed.data.alertsOn !== undefined) change.alertsOn = parsed.data.alertsOn;
+  try {
+    if (Object.keys(change).length > 0) await setMyAlerts(claims.sub, change, actorOf(claims));
+    return res.status(200).json(await alertsAnswer(claims.sub));
+  } catch (err) {
+    console.error("admin elf alerts save failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+/** Sends the caller a test alert: the email, and the text when they have a mobile and texts are on
+ *  (elf: view). A text that fails never stops the email. */
+export async function postAdminElfAlertsTest(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
+  try {
+    const me = (await listHeadElves()).find((p) => p.userId === claims.sub);
+    const name = me ? me.name : claims.email;
+    const mail = buildElfTestAlertEmail({ name, adminUrl: `${siteOrigin()}/admin` });
+    await sendElfTestAlert(name, { email: claims.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    let text: "sent" | "stubbed" | "failed" | "no-mobile" | "off";
+    if (!me || !me.mobile) text = "no-mobile";
+    else if (!smsConfigured) text = "off";
+    else {
+      try {
+        text = await sendText({ to: me.mobile, text: ELF_TEST_TEXT, senderId: config.SMS_SENDER_ID });
+      } catch (err) {
+        console.error("admin elf test text failed:", err instanceof Error ? err.message : err);
+        text = "failed";
+      }
+    }
+    const settings = await getElfSettings();
+    await recordAlert({
+      kind: "test",
+      year: settings.year,
+      door: null,
+      emails: 1,
+      texts: text === "sent" || text === "stubbed" ? 1 : 0,
+      textsFailed: text === "failed" ? [name] : [],
+    });
+    return res.status(200).json({ email: true, text });
+  } catch (err) {
+    console.error("admin elf test alert failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
 adminElfRouter.post("/api/admin/elf/preview", postAdminElfPreview);
 adminElfRouter.delete("/api/admin/elf/preview", deleteAdminElfPreview);
 adminElfRouter.get("/api/admin/elf/settings", getAdminElfSettings);
@@ -549,3 +654,6 @@ adminElfRouter.post("/api/admin/elf/families/:id/remove", postAdminElfFamilyRemo
 adminElfRouter.post("/api/admin/elf/families/:id/restore", postAdminElfFamilyRestore);
 adminElfRouter.patch("/api/admin/elf/detectives/:id", patchAdminElfDetective);
 adminElfRouter.post("/api/admin/elf/families/:id/word-tries/clear", postAdminElfWordTriesClear);
+adminElfRouter.get("/api/admin/elf/alerts", getAdminElfAlerts);
+adminElfRouter.patch("/api/admin/elf/alerts/me", patchAdminElfAlertsMe);
+adminElfRouter.post("/api/admin/elf/alerts/test", postAdminElfAlertsTest);

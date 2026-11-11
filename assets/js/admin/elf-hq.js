@@ -177,7 +177,7 @@
       if (id === "families" && data) loadFamilies();
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
       if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
-      if (id === "settings" && data) loadPractice();
+      if (id === "settings" && data) { loadPractice(); loadAlerts(); }
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -2346,6 +2346,7 @@
       if (!admin) part.appendChild(el("p", { class: "hq-words hq-soft", text: "Only an admin can change these." }));
       // Its own panel after the admin only ones: anyone who may edit can start a practice evening.
       part.appendChild(practicePanel());
+      part.appendChild(alertsPanel());
     }
 
     // ---- Settings: the practice door, a pretend evening played through the preview link ----
@@ -2522,6 +2523,176 @@
       return box;
     }
 
+    // ---- Settings: Alerts, who gets a text and an email when a photo is waiting ----
+    // Read afresh each time Settings opens (src/routes/admin-elf.ts, /api/admin/elf/alerts). A head elf
+    // changes only their own mobile and tick; the rest are shown as words.
+    var alerts = { loaded: false, answer: null, error: null, asking: false, seq: 0 };
+    var ALERT_TEXT = "Elf Detective School: a photo is waiting for a head elf to check. nbcc.scot/admin";
+    var ALERT_RULES = [
+      "One text and one email when photos start waiting.",
+      "No more until every waiting photo has been checked.",
+      "Nothing between 9pm and 8am. Photos sent overnight are in one alert at 8am.",
+    ];
+    var TEST_WORDS = {
+      sent: "Sent. Check your email and your phone.",
+      stubbed: "Sent. Check your email and your phone.",
+      "no-mobile": "Sent by email. Add a mobile number to get texts too.",
+      failed: "Sent by email. The text did not go.",
+      off: "Sent by email. Texts are not switched on yet.",
+    };
+
+    /** +447700900123 as people write it: 07700 900123. Anything else as it came. */
+    function mobileWords(m) {
+      var t = /^\+44(7\d{3})(\d{6})$/.exec(m || "");
+      return t ? "0" + t[1] + " " + t[2] : m || "";
+    }
+
+    function alertsSay(words, ok) {
+      var now = parts.settings.querySelector(".hq-alerts .hq-alerts__said");
+      if (now) say(now, words, ok);
+    }
+
+    function redrawAlerts() {
+      var old = parts.settings.querySelector(".hq-alerts");
+      if (old && old.parentNode) old.parentNode.replaceChild(alertsPanel(), old);
+    }
+
+    function loadAlerts() {
+      if (alerts.asking) return;
+      alerts.asking = true;
+      var mine = ++alerts.seq;
+      ask("GET", "/api/admin/elf/alerts")
+        .then(function (d) {
+          alerts.asking = false;
+          if (mine !== alerts.seq) return;
+          alerts.answer = d && Array.isArray(d.people) ? d : null;
+          alerts.error = null;
+          alerts.loaded = true;
+          redrawAlerts();
+        })
+        .catch(function (e) {
+          alerts.asking = false;
+          if (mine !== alerts.seq) return;
+          alerts.error = e.message;
+          alerts.loaded = true;
+          redrawAlerts();
+        });
+    }
+
+    /** One head elf: their name, mobile and email, and whether their alerts are on. The signed in head
+     *  elf's own card also has a box for the mobile, Save, and the tick. */
+    function personCard(p) {
+      var li = el("li", { class: "hq-person" + (p.alertsOn ? "" : " is-off") });
+      li.appendChild(
+        el("div", { class: "hq-person__who" }, [
+          el("b", { text: p.name }),
+          el("span", { text: (p.mobile ? mobileWords(p.mobile) : "No mobile number yet") + " · " + p.email }),
+        ]),
+      );
+      li.appendChild(el("span", { class: "hq-person__tick", text: p.alertsOn ? "On" : "Off" }));
+      if (!p.me) return li;
+      var mobile = el("input", { id: "hqAlertMobile", name: "mobile", type: "tel", inputmode: "tel", maxlength: 40, autocomplete: "tel" });
+      mobile.value = p.mobile ? mobileWords(p.mobile) : "";
+      var save = el("button", { class: "hq-btn hq-btn--small", type: "submit", text: "Save my mobile number" });
+      var form = el("form", { class: "hq-alerts__form", novalidate: true }, [
+        el("div", { class: "hq-field" }, [el("label", { for: "hqAlertMobile", text: "Your mobile number" }), mobile, el("small", { class: "hq-hint", text: "A UK mobile, for the text. Leave it empty for emails only." })]),
+        save,
+      ]);
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        change({ mobile: mobile.value }, "Saved.", [save]);
+      });
+      var tick = el("input", { type: "checkbox", id: "hqAlertsOn", name: "alertsOn" });
+      tick.checked = !!p.alertsOn;
+      tick.addEventListener("change", function () {
+        change({ alertsOn: tick.checked }, "Saved.", [tick]);
+      });
+      li.appendChild(form);
+      li.appendChild(el("label", { class: "hq-tickbox is-wide", for: "hqAlertsOn" }, [tick, el("span", { text: "Send me alerts" })]));
+      return li;
+    }
+
+    /** Saves my own mobile or tick, then draws the answer and says so. */
+    function change(body, saidWords, busy) {
+      busy.forEach(function (b) { b.disabled = true; });
+      alerts.seq++;
+      ask("PATCH", "/api/admin/elf/alerts/me", body)
+        .then(function (d) {
+          alerts.answer = d && Array.isArray(d.people) ? d : alerts.answer;
+          alerts.error = null;
+          redrawAlerts();
+          alertsSay(saidWords, true);
+        })
+        .catch(function (e) {
+          busy.forEach(function (b) { b.disabled = false; });
+          alertsSay(e.message, false);
+        });
+    }
+
+    function alertsPanel() {
+      var box = el("section", { class: "hq-panel hq-alerts", "aria-label": "Alerts" });
+      box.appendChild(el("h2", { class: "hq-h2", text: "Alerts" }));
+      if (!alerts.loaded) {
+        box.appendChild(el("p", { class: "hq-loading", text: WORDS.loading }));
+        return box;
+      }
+      if (alerts.error || !alerts.answer) {
+        var failed = el("p", { class: "hq-status", role: "status" });
+        say(failed, alerts.error || "Alerts could not be read.", false);
+        box.appendChild(failed);
+        return box;
+      }
+      var a = alerts.answer;
+      var said = el("p", { class: "hq-status hq-alerts__said", role: "status" });
+      var people = el("ul", { class: "hq-people" }, a.people.map(personCard));
+      var test = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Send me a test alert" });
+      test.addEventListener("click", function () {
+        test.disabled = true;
+        alertsSay("", null);
+        ask("POST", "/api/admin/elf/alerts/test")
+          .then(function (d) {
+            test.disabled = false;
+            var t = d && d.text;
+            alertsSay(TEST_WORDS[t] || TEST_WORDS.sent, t !== "failed");
+          })
+          .catch(function (e) {
+            test.disabled = false;
+            alertsSay(e.message, false);
+          });
+      });
+      var failedTexts = a.lastAlert && a.lastAlert.textsFailed ? a.lastAlert.textsFailed : [];
+      var who = el("div", { class: "hq-alerts__who" }, [
+        el("h3", { class: "hq-h3", text: "Who gets a text and an email when a photo is waiting" }),
+        people,
+        el("p", { class: "hq-words hq-soft", text: "Every head elf is listed here. Whoever gets to a photo first checks it, and the others see it is done." }),
+        a.textsOn ? null : el("p", { class: "hq-words hq-soft", text: "Texts are not switched on yet, so alerts go by email only." }),
+        failedTexts.length ? el("p", { class: "hq-status is-error", text: "The last alert's text did not reach " + failedTexts.join(", ") + "." }) : null,
+        el("div", { class: "hq-rules" }, [
+          el("h4", { class: "hq-h4", text: "When alerts go" }),
+          el("ul", {}, ALERT_RULES.map(function (r) { return el("li", { text: r }); })),
+        ]),
+        test,
+        said,
+      ]);
+      var previews = el("div", { class: "hq-alerts__previews" }, [
+        el("div", { class: "hq-prev" }, [
+          el("h4", { class: "hq-h4", text: "The text" }),
+          el("div", { class: "hq-sms" }, [el("span", { class: "hq-sms__from", text: "From NBCC" }), el("p", { class: "hq-sms__bubble", text: ALERT_TEXT })]),
+        ]),
+        el("div", { class: "hq-prev" }, [
+          el("h4", { class: "hq-h4", text: "The email" }),
+          el("div", { class: "hq-mail" }, [
+            el("p", { class: "hq-mail__head", text: "Subject: A photo is waiting to be checked" }),
+            el("p", { text: "A family has sent a photo from a door of Elf Detective School. Nobody sees it until a head elf approves it." }),
+            el("p", { class: "hq-words hq-soft", text: "You get one of these when photos start waiting, not one for every photo." }),
+          ]),
+        ]),
+        el("p", { class: "hq-words hq-soft", text: "Neither shows the photo or the family's name." }),
+      ]);
+      box.appendChild(el("div", { class: "hq-alerts__grid" }, [who, previews]));
+      return box;
+    }
+
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
     function draw() {
       if (!data) return;
@@ -2543,7 +2714,7 @@
           data = d;
           say(status, "", null);
           draw();
-          if (!parts.settings.hidden) loadPractice();
+          if (!parts.settings.hidden) { loadPractice(); loadAlerts(); }
           // A sheet already open was drawn before anyone knew whether this person may change it.
           if (fam.sheet) drawSheet();
           var asked = remembered(FAMILY_KEY);

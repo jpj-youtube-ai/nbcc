@@ -403,6 +403,38 @@
 .hq-practice .hq-tagword { justify-self: start; max-width: 100%; }
 .hq-practice .hq-tagword b { overflow-wrap: anywhere; }
 
+/* ---- Settings: Alerts, the head elves and what an alert looks like. One column on a phone; the text
+   and the email sit beside the list when the panel is wide. Long emails wrap. ---- */
+.hq-alerts { display: grid; gap: var(--hq-space-lg); align-content: start; }
+.hq-root .hq-alerts .hq-h2 { margin: 0; }
+.hq-root .hq-h4 { margin: 0; font-family: var(--hq-head); font-weight: 700; font-size: 0.95rem; color: var(--hq-maroon); }
+.hq-alerts p { overflow-wrap: anywhere; }
+.hq-alerts__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-xl); }
+@container (min-width: 860px) { .hq-alerts__grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.hq-alerts__who, .hq-alerts__previews { display: grid; gap: var(--hq-space-md); align-content: start; min-width: 0; }
+.hq-alerts__who > .hq-btn { justify-self: start; }
+.hq-people { display: grid; gap: var(--hq-space-sm); margin: 0; padding: 0; list-style: none; }
+.hq-person { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--hq-space-sm) var(--hq-space-md); align-items: center; padding: 10px 14px; border: var(--hq-line); border-radius: 14px; background: var(--hq-card); min-width: 0; }
+.hq-person.is-off { background: var(--hq-cream); }
+.hq-person__who { display: grid; gap: 1px; min-width: 0; }
+.hq-person__who b { font-family: var(--hq-head); font-weight: 800; font-size: 1.05rem; line-height: 1.2; color: var(--hq-maroon); overflow-wrap: anywhere; }
+.hq-person__who span { font-size: 0.84rem; color: var(--hq-soft); overflow-wrap: anywhere; }
+.hq-person__tick { font-family: var(--hq-head); font-weight: 700; color: var(--hq-holly); }
+.hq-person.is-off .hq-person__tick { color: var(--hq-soft); }
+.hq-person .hq-alerts__form, .hq-person .hq-tickbox { grid-column: 1 / -1; }
+/* The site wide form rule (styles.css) draws every form as a card; this one sits in a card already. */
+.hq-alerts__form { display: grid; gap: var(--hq-space-sm); justify-items: start; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.hq-alerts__form .hq-field { width: 100%; min-width: 0; }
+.hq-rules { display: grid; gap: 6px; padding: var(--hq-space-md) var(--hq-space-lg); border: var(--hq-line); border-radius: 16px; background: var(--hq-gold-soft); }
+.hq-rules ul { display: grid; gap: 4px; margin: 0; padding-left: 1.1em; font-size: 0.9rem; }
+.hq-prev { display: grid; gap: 6px; min-width: 0; }
+.hq-sms { display: grid; gap: 6px; justify-items: start; padding: var(--hq-space-md) var(--hq-space-lg) var(--hq-space-lg); border: var(--hq-line); border-radius: 22px; background: #EEE7DD; }
+.hq-sms__from { font-size: 0.78rem; font-weight: 600; color: var(--hq-soft); }
+.hq-sms__bubble { margin: 0; max-width: 36ch; padding: 10px 14px; border: 1.5px solid rgba(58, 11, 11, 0.28); border-radius: 18px 18px 18px 6px; background: var(--hq-card); font-size: 0.92rem; line-height: 1.45; }
+.hq-mail { display: grid; gap: var(--hq-space-sm); padding: var(--hq-space-md) var(--hq-space-lg) var(--hq-space-lg); border: var(--hq-line); border-radius: 14px; background: var(--hq-card); }
+.hq-mail p { margin: 0; }
+.hq-mail__head { font-weight: 700; color: var(--hq-ink); }
+
 @media (prefers-reduced-motion: no-preference) {
   .hq-lever__knob { transition: transform 0.28s var(--hq-ease); }
   .hq-toggle i::after { transition: transform 0.22s var(--hq-ease); }

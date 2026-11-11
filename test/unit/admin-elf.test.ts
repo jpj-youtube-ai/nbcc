@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
 // numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf, dbAlerts, sms, mailer } = vi.hoisted(() => ({
+  dbAlerts: { listHeadElves: vi.fn(), setMyAlerts: vi.fn(), lastAlert: vi.fn(), recordAlert: vi.fn() },
+  sms: { sendText: vi.fn(), on: true },
+  mailer: { sendElfTestAlert: vi.fn() },
   getUserAuthRowMock: vi.fn(),
   db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), setElfPreview: vi.fn() },
   dbAdmin: {
@@ -32,6 +35,9 @@ vi.mock("../../src/elf/sign-in-code", () => signIn);
 vi.mock("../../src/db/elf-doors", () => dbDoors);
 vi.mock("../../src/db/elf-practice", () => dbPractice);
 vi.mock("../../src/db/elf-game", () => dbGame);
+vi.mock("../../src/db/elf-alerts", () => dbAlerts);
+vi.mock("../../src/clients/sms", () => ({ sendText: sms.sendText, get smsConfigured() { return sms.on; } }));
+vi.mock("../../src/clients/email", () => mailer);
 // No door has a picture on disk in a test; one test gives door 1 its picture.
 vi.mock("../../src/elf/door-setup", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../src/elf/door-setup")>()), doorPicture: pictureOf }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
@@ -42,6 +48,8 @@ vi.mock("../../src/config", () => ({
     STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaa",
     STRIPE_WEBHOOK_SECRET: "whsec_x",
     PORTAL_BASE_URL: "https://www.example.org/",
+    BALL_FROM_EMAIL: "events@example.org",
+    SMS_SENDER_ID: "NBCC",
   },
 }));
 
@@ -60,6 +68,9 @@ import {
   postAdminElfPractice,
   postAdminElfSignInCode,
   postAdminElfWordTriesClear,
+  getAdminElfAlerts,
+  patchAdminElfAlertsMe,
+  postAdminElfAlertsTest,
 } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
@@ -103,7 +114,8 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame)]) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame), ...Object.values(dbAlerts), sms.sendText, ...Object.values(mailer)]) f.mockReset();
+  sms.on = true;
   pictureOf.mockReset();
   pictureOf.mockReturnValue(null);
   dbGame.familyWordTries.mockResolvedValue([]);
@@ -838,5 +850,117 @@ describe("a family's wrong tries in the admin", () => {
     dbAdmin.elfFamilySheet.mockResolvedValue(null);
     expect((await run(postAdminElfWordTriesClear, ask("viewer", { permissions: EDIT, params: { id: "99" }, body: { door: 7 } }))).statusCode).toBe(404);
     expect(dbGame.clearWordTries).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Settings > Alerts (wave 2, Task 3) ----
+
+describe("the alerts in Settings", () => {
+  const ALEX = { userId: 1, name: "Alex Example", email: "staff@example.org", mobile: "+447700900123", alertsOn: true };
+  const SAM = { userId: 2, name: "Sam Example", email: "sam@example.org", mobile: null, alertsOn: false };
+
+  it("lists the head elves, with me true for the one asking", async () => {
+    dbAlerts.listHeadElves.mockResolvedValue([ALEX, SAM]);
+    dbAlerts.lastAlert.mockResolvedValue({ at: new Date("2026-12-07T18:04:00Z"), textsFailed: ["Sam Example"] });
+    const res = await run(getAdminElfAlerts, req("viewer", {}, HEAD_ELF));
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+    expect(res.body).toEqual({
+      people: [{ ...ALEX, me: true }, { ...SAM, me: false }],
+      textsOn: true,
+      lastAlert: { at: new Date("2026-12-07T18:04:00Z"), textsFailed: ["Sam Example"] },
+    });
+    expect(dbAlerts.lastAlert).toHaveBeenCalledWith("photo");
+  });
+
+  it("is for those given the section, and says so when texts are off", async () => {
+    expect((await run(getAdminElfAlerts, req("viewer"))).statusCode).toBe(403);
+    expect((await run(getAdminElfAlerts, req(null))).statusCode).toBe(401);
+    dbAlerts.listHeadElves.mockResolvedValue([]);
+    dbAlerts.lastAlert.mockResolvedValue(null);
+    sms.on = false;
+    const res = await run(getAdminElfAlerts, req("viewer", {}, HEAD_ELF));
+    expect(res.body).toEqual({ people: [], textsOn: false, lastAlert: null });
+  });
+
+  it("answers 500 in words when the database fails", async () => {
+    dbAlerts.listHeadElves.mockRejectedValue(new Error("boom"));
+    const res = await run(getAdminElfAlerts, req("viewer", {}, HEAD_ELF));
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
+  });
+
+  it("saves only my own mobile and tick, the mobile kept as +44", async () => {
+    dbAlerts.setMyAlerts.mockResolvedValue(undefined);
+    dbAlerts.listHeadElves.mockResolvedValue([ALEX]);
+    dbAlerts.lastAlert.mockResolvedValue(null);
+    const res = await run(patchAdminElfAlertsMe, req("viewer", { mobile: "07700 900 123", alertsOn: false }, HEAD_ELF));
+    expect(res.statusCode).toBe(200);
+    expect(dbAlerts.setMyAlerts).toHaveBeenCalledWith(1, { mobile: "+447700900123", alertsOn: false }, "admin:staff@example.org");
+    expect((res.body as { people: unknown[] }).people).toHaveLength(1);
+  });
+
+  it("can clear the mobile with an empty box", async () => {
+    dbAlerts.setMyAlerts.mockResolvedValue(undefined);
+    dbAlerts.listHeadElves.mockResolvedValue([ALEX]);
+    dbAlerts.lastAlert.mockResolvedValue(null);
+    await run(patchAdminElfAlertsMe, req("viewer", { mobile: "  " }, HEAD_ELF));
+    expect(dbAlerts.setMyAlerts).toHaveBeenCalledWith(1, { mobile: null }, "admin:staff@example.org");
+  });
+
+  it("refuses a mobile that is not a UK mobile, and anything else in the body", async () => {
+    const res = await run(patchAdminElfAlertsMe, req("viewer", { mobile: "call me" }, HEAD_ELF));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "That does not look like a UK mobile number." });
+    expect((await run(patchAdminElfAlertsMe, req("viewer", { alertsOn: "yes" }, HEAD_ELF))).statusCode).toBe(400);
+    expect((await run(patchAdminElfAlertsMe, req("viewer", { userId: 9 }, HEAD_ELF))).statusCode).toBe(400);
+    expect(dbAlerts.setMyAlerts).not.toHaveBeenCalled();
+    expect((await run(patchAdminElfAlertsMe, req("viewer", { alertsOn: true }))).statusCode).toBe(403);
+  });
+
+  describe("the test alert", () => {
+    beforeEach(() => {
+      dbAlerts.listHeadElves.mockResolvedValue([ALEX, SAM]);
+      dbAlerts.recordAlert.mockResolvedValue(undefined);
+      mailer.sendElfTestAlert.mockResolvedValue(undefined);
+    });
+
+    it("sends the email and the text to the caller and says so", async () => {
+      sms.sendText.mockResolvedValue("sent");
+      const res = await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF));
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ email: true, text: "sent" });
+      expect(mailer.sendElfTestAlert).toHaveBeenCalledTimes(1);
+      expect(mailer.sendElfTestAlert.mock.calls[0][0]).toBe("Alex Example");
+      expect(mailer.sendElfTestAlert.mock.calls[0][1]).toMatchObject({ email: "staff@example.org", from: "events@example.org" });
+      expect(sms.sendText).toHaveBeenCalledTimes(1);
+      expect(sms.sendText).toHaveBeenCalledWith(expect.objectContaining({ to: "+447700900123", senderId: "NBCC" }));
+      expect(dbAlerts.recordAlert).toHaveBeenCalledWith(expect.objectContaining({ kind: "test", emails: 1, texts: 1, textsFailed: [] }));
+    });
+
+    it("answers text: failed when the text throws, and the email still went", async () => {
+      sms.sendText.mockRejectedValue(new Error("SNS publish responded 400"));
+      const res = await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF));
+      expect(res.body).toEqual({ email: true, text: "failed" });
+      expect(dbAlerts.recordAlert).toHaveBeenCalledWith(expect.objectContaining({ kind: "test", emails: 1, texts: 0, textsFailed: ["Alex Example"] }));
+    });
+
+    it("answers text: stubbed outside production", async () => {
+      sms.sendText.mockResolvedValue("stubbed");
+      expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "stubbed" });
+    });
+
+    it("answers no-mobile when the caller has none, and off when texts are off", async () => {
+      dbAlerts.listHeadElves.mockResolvedValue([{ ...ALEX, mobile: null }]);
+      expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "no-mobile" });
+      dbAlerts.listHeadElves.mockResolvedValue([ALEX]);
+      sms.on = false;
+      expect((await run(postAdminElfAlertsTest, req("viewer", {}, HEAD_ELF))).body).toEqual({ email: true, text: "off" });
+      expect(sms.sendText).not.toHaveBeenCalled();
+    });
+
+    it("is for those given the section", async () => {
+      expect((await run(postAdminElfAlertsTest, req("viewer"))).statusCode).toBe(403);
+    });
   });
 });

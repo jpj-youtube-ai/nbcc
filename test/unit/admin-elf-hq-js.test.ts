@@ -1018,3 +1018,114 @@ describe("the practice door's own mutations", () => {
     expect(panelNow().querySelector("form")).not.toBeNull();
   });
 });
+
+// ---- Settings > Alerts (wave 2, Task 3) ----
+
+describe("Alerts in Settings", () => {
+  const ALEX = { userId: 1, name: "Alex Example", email: "alex@example.org", mobile: "+447700900123", alertsOn: true, me: true };
+  const SAM = { userId: 2, name: "Sam Example", email: "sam@example.org", mobile: null, alertsOn: false, me: false };
+  const ALERTS = { people: [ALEX, SAM], textsOn: true, lastAlert: null };
+  const alertsNow = () => settingsPart().querySelector<HTMLElement>(".hq-alerts")!;
+  async function openSettings(answers: Record<string, unknown>) {
+    const env = page({ answers: { "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false }, "GET /api/admin/elf/alerts": ALERTS, ...answers } });
+    await env.hq.open();
+    tabs()[4].click();
+    await flush();
+    return env;
+  }
+
+  it("lists each head elf as a card with their mobile or none, their email and On or Off", async () => {
+    const { calls } = await openSettings({});
+    expect(urls(calls)).toContain("GET /api/admin/elf/alerts");
+    const box = alertsNow();
+    expect(box.querySelector("h2")!.textContent).toBe("Alerts");
+    expect(box.textContent).toContain("Who gets a text and an email when a photo is waiting");
+    const cards = [...box.querySelectorAll<HTMLElement>(".hq-person")];
+    expect(cards).toHaveLength(2);
+    expect(cards[0].textContent).toContain("Alex Example");
+    expect(cards[0].textContent).toContain("alex@example.org");
+    expect(cards[0].textContent).toContain("On");
+    expect(cards[1].textContent).toContain("No mobile number yet");
+    expect(cards[1].textContent).toContain("sam@example.org");
+    expect(cards[1].textContent).toContain("Off");
+    // Only the signed in head elf's own card has a box and a tick.
+    expect(box.querySelectorAll("input")).toHaveLength(2);
+    expect(cards[0].querySelector("#hqAlertMobile")).toBeTruthy();
+    expect(cards[1].querySelector("input")).toBeNull();
+  });
+
+  it("shows the rules, and the text and the email as words", async () => {
+    await openSettings({});
+    const t = alertsNow().textContent!;
+    expect(t).toContain("When alerts go");
+    expect(t).toContain("One text and one email when photos start waiting.");
+    expect(t).toContain("No more until every waiting photo has been checked.");
+    expect(t).toContain("Nothing between 9pm and 8am. Photos sent overnight are in one alert at 8am.");
+    expect(t).toContain("Elf Detective School: a photo is waiting for a head elf to check. nbcc.scot/admin");
+    expect(t).toContain("A photo is waiting to be checked");
+    expect(t).toContain("Neither shows the photo or the family's name.");
+    expect(alertsNow().querySelector(".hq-sms")).toBeTruthy();
+  });
+
+  it("saves my own mobile as typed", async () => {
+    const { calls } = await openSettings({ "PATCH /api/admin/elf/alerts/me": { ...ALERTS, people: [{ ...ALEX, mobile: "+447700900456" }, SAM] } });
+    const box = alertsNow().querySelector<HTMLInputElement>("#hqAlertMobile")!;
+    box.value = "07700 900 123";
+    inPart(alertsNow(), "Save my mobile number")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([{ method: "PATCH", url: "/api/admin/elf/alerts/me", body: { mobile: "07700 900 123" } }]);
+    expect(alertsNow().textContent).toContain("Saved.");
+  });
+
+  it("saves my tick when I change it", async () => {
+    const { calls } = await openSettings({ "PATCH /api/admin/elf/alerts/me": { ...ALERTS, people: [{ ...ALEX, alertsOn: false }, SAM] } });
+    const tick = alertsNow().querySelector<HTMLInputElement>("#hqAlertsOn")!;
+    expect(tick.checked).toBe(true);
+    tick.checked = false;
+    tick.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toEqual([{ alertsOn: false }]);
+  });
+
+  it("sends a test alert and says to check the email and the phone", async () => {
+    const { calls } = await openSettings({ "POST /api/admin/elf/alerts/test": { email: true, text: "sent" } });
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/api/admin/elf/alerts/test"]);
+    const said = alertsNow().querySelector(".hq-status")!;
+    expect(said.textContent).toContain("Check your email and your phone.");
+    expect(said.classList.contains("is-ok")).toBe(true);
+  });
+
+  it("says when only the email went", async () => {
+    await openSettings({ "POST /api/admin/elf/alerts/test": { email: true, text: "no-mobile" } });
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    expect(alertsNow().querySelector(".hq-status")!.textContent).toBe("Sent by email. Add a mobile number to get texts too.");
+  });
+
+  it("says when the text did not go, as an error", async () => {
+    await openSettings({ "POST /api/admin/elf/alerts/test": { email: true, text: "failed" } });
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    const said = alertsNow().querySelector(".hq-status")!;
+    expect(said.textContent).toBe("Sent by email. The text did not go.");
+    expect(said.classList.contains("is-error")).toBe(true);
+  });
+
+  it("says whose text did not reach them at the last alert, as an error", async () => {
+    await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, lastAlert: { at: "2026-12-07T18:04:00.000Z", textsFailed: ["Alex Example"] } } });
+    const line = [...alertsNow().querySelectorAll<HTMLElement>(".is-error")].find((n) => n.textContent!.includes("did not reach"))!;
+    expect(line.textContent).toContain("The last alert's text did not reach Alex Example.");
+  });
+
+  it("shows no failed line when every text went", async () => {
+    await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, lastAlert: { at: "2026-12-07T18:04:00.000Z", textsFailed: [] } } });
+    expect(alertsNow().textContent).not.toContain("did not reach");
+  });
+
+  it("says when texts are not switched on", async () => {
+    await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, textsOn: false } });
+    expect(alertsNow().textContent).toContain("Texts are not switched on yet, so alerts go by email only.");
+  });
+});

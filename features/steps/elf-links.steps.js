@@ -22,6 +22,14 @@ Then("the page links to Elf Detective School only from Friday 13 November at 10a
   assert.equal(this.elfText.includes('href="/elf"'), elfLinksLive(), `a link to /elf ${elfLinksLive() ? "should" : "must not"} be on the page ${when()}`);
 });
 
+const navList = (html) => (html.match(/<ul[^>]*class="nav-links"[\s\S]*?<\/ul>/i) || [""])[0];
+
+Then("the menu offers Elf Detective School only from Friday 13 November at 10am", function () {
+  assert.equal(this.elfStatus, 200, this.elfText.slice(0, 200));
+  const items = navList(this.elfText).split('<a href="/elf">Elf Detective School</a>').length - 1;
+  assert.equal(items, elfLinksLive() ? 1 : 0, `the menu ${elfLinksLive() ? "should offer it once" : "must not offer it"} ${when()}`);
+});
+
 Then("the page does not link to Elf Detective School", function () {
   assert.equal(this.elfStatus, 200, this.elfText.slice(0, 200));
   assert.ok(!this.elfText.includes('href="/elf'), "no link to /elf while Elf Detective School is switched off");

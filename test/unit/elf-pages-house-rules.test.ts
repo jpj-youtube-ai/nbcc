@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+// The real calendar view is built from wave 1's runs; the database is never reached.
+vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { waveOneRuns } from "../../src/db/elf-game";
+import { calendarViewFor } from "../../src/elf/views";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage } from "../../src/elf/pages/join";
@@ -22,7 +27,7 @@ import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, stampWin, wa
 
 const ROOT = resolve(__dirname, "../..");
 const place = { name: "The Toy Shop", town: "Troon" };
-const found = { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Ruby Tinselfoot", };
+const found = { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Ruby Tinselfoot" };
 const opened = { collage: ["/elf/pic/7.svg"], place, counts: { cracked: 31, visited: 4 }, factLine: "NBCC began with a question from a girl aged 12 in Annbank." };
 const today = hqView().today!;
 const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
@@ -47,7 +52,7 @@ const PAGES: [string, string][] = [
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
   ["rules", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
-  ["calendar, live before December", renderCalendarPage(calendarView(at("2026-11-13T09:00:00.000Z")))],
+  ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z"), runs: waveOneRuns(2026, at("2026-11-13T09:00:00.000Z")), finders: new Map(), counts: new Map(), scrapbooks: new Map() }))],
   ["sign in, the email", renderSignInPage({ stage: "email" })],
   ["sign in, the code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "If that email has detectives enrolled, we have sent a sign in code to it." })],
   ["sign in, a wrong code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "That code does not work. Check it, or ask for a new one.", error: true })],

@@ -136,7 +136,11 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
         place: { name: `Shop number ${n}`, town: "Ayr" },
         found: { at: at(`2026-12-${pad(n)}T18:05:00.000Z`), by: "Detective Ruby Tinselfoot" },
         counts: { cracked: 10 + n, visited: n },
-        scrapbook: { elves: [], photos: [], count: 0 },
+        scrapbook: {
+          elves: [{ visitId: n, detective: { firstName: "Ruby", surname: "Tinselfoot", approved: true }, countsFrom: at(`2026-12-${pad(n)}T18:05:00.000Z`), found: true, pictureUrl: `/elf/pic/${n}.svg` }],
+          photos: [],
+          count: 1,
+        },
         collage: [`/elf/pic/${n}.svg`],
         factLine: "NBCC began with a question from a girl aged 12 in Annbank.",
       });

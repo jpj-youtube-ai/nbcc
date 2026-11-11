@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
+import { DOOR_PICTURES } from "../../src/elf/door-setup";
 import { runOf, waveOneRuns, type DoorRun } from "../../src/db/elf-game";
 import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
 import type { Door } from "../../src/elf/calendar";
@@ -72,7 +73,7 @@ const calDoor7 = (o: Omit<CalOver, "runs">, over: Partial<DoorSetup> = {}) => ca
 function hq(over: Partial<Parameters<typeof hqViewFor>[0]> & { now: Date }) {
   return hqViewFor({
     family: FAMILY,
-    settings: SETTINGS,
+    settings: { ...SETTINGS, doorsOn: true },
     runs: { runs: WAVE_ONE(over.now), practice: null },
     guesses: new Map(),
     doorsDone: new Map(),
@@ -294,6 +295,54 @@ describe("the calendar's doors through the evening", () => {
       const text = JSON.stringify(calDoor7({ now }, { ...over, prizeShowOff: false }));
       for (const secret of ["Toy Shop", "Troon", "kettle", "SNOWBALL", "pretend prize", "/elf/door/7/photo"]) expect(text).not.toContain(secret);
     }
+  });
+});
+
+describe("Detective HQ with December's doors switched off", () => {
+  const OFF = { ...SETTINGS, doorsOn: false };
+
+  it("has no case today and no countdown to clue 2 or 3, at 6:10pm and at 10am on 7 December", () => {
+    for (const [now, next] of [[SIX_10, "2026-12-08T17:30:00.000Z"], [at("2026-12-07T10:00:00Z"), "2026-12-07T17:30:00.000Z"]] as const) {
+      const view = hq({ now, settings: OFF, runs: { runs: WAVE_ONE(now), practice: null } });
+      expect(view.today).toBeNull();
+      // Always the next clue 1 to come (the calendar's time), never a clue 2 or 3.
+      expect(view.nextClueAt?.toISOString()).toBe(next);
+    }
+  });
+
+  it("gives the practice run as today for a practice browser, never a wave 1 door", () => {
+    const practice = { ...run(7, SIX_10), door: 0 as const };
+    const view = hq({ now: SIX_10, settings: OFF, runs: { runs: WAVE_ONE(SIX_10), practice } });
+    expect(view.today?.door).toBe(0);
+    expect(view.today?.practice).toBe(true);
+  });
+});
+
+describe("a door's prize words and picture", () => {
+  const found = { foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 };
+
+  it("gives found-hidden and snow doors no teaser, even with Show it off ticked", () => {
+    expect(calDoor7({ now: SIX_45 }, { ...found, prizeShowOff: true }).teaser).toBeNull();
+    expect(calDoor7({ now: SIX_10 }, { snowDayAt: at("2026-12-07T17:30:00Z"), prizeShowOff: true }).teaser).toBeNull();
+    expect(calDoor7({ now: at("2026-12-07T20:30:00Z") }, { prizeShowOff: true }).teaser).toBe("A pretend prize");
+  });
+
+  it("shows a door picture only with the doors switched on, never on a wave 1 run", () => {
+    const pictures = DOOR_PICTURES as Record<string, string>;
+    pictures["2026-7"] = "/elf/shape/pretend.svg";
+    try {
+      const on = calendarViewFor({ settings: { ...SETTINGS, doorsOn: true }, now: SIX_10, runs: withDoor7(SIX_10), finders: new Map(), counts: new Map(), scrapbooks: new Map() });
+      const off = calendarViewFor({ settings: { ...SETTINGS, doorsOn: false }, now: SIX_10, runs: WAVE_ONE(SIX_10), finders: new Map(), counts: new Map(), scrapbooks: new Map() });
+      expect(on.doors[6].shapeUrl).toBe("/elf/shape/pretend.svg");
+      expect(off.doors.every((d) => d.shapeUrl === null)).toBe(true);
+    } finally {
+      delete pictures["2026-7"];
+    }
+  });
+
+  it("says A detective when a found door has no finder rows, never a name", () => {
+    const d = calDoor7({ now: SIX_45 }, found);
+    expect(d.found?.by).toBe("A detective");
   });
 });
 

@@ -149,7 +149,8 @@ export function hqViewFor(o: {
   photos: FamilyMarks["photos"];
 }): HqView {
   const real = o.runs.runs.filter((r) => r.door !== 0);
-  const todayRun = o.runs.practice ?? runForToday(real, o.now);
+  // With December's doors off, HQ is wave 1: no case today unless a practice run is going.
+  const todayRun = o.runs.practice ?? (o.settings.doorsOn ? runForToday(real, o.now) : null);
   const next = real
     .map((r) => r.calendarAt)
     .filter((at) => at.getTime() > o.now.getTime())
@@ -226,7 +227,7 @@ const filled = (s: string | null): s is string => typeof s === "string" && s.tri
 
 function doorViewOf(
   run: DoorRun & { door: Door },
-  o: { now: Date; finders: Map<Door, DetectiveNameParts[]>; counts: Map<Door, { cracked: number; visited: number }>; scrapbooks: Map<Door, Scrapbook> },
+  o: { settings: ElfSettings; now: Date; finders: Map<Door, DetectiveNameParts[]>; counts: Map<Door, { cracked: number; visited: number }>; scrapbooks: Map<Door, Scrapbook> },
 ): DoorView {
   const state = doorState(run.facts, o.now);
   const open = isOpen(state);
@@ -237,9 +238,11 @@ function doorViewOf(
     state,
     // The calendar's clue 1 time, never facts.clue1At: a passed wave 1 door holds that in the far future.
     clueAt: run.calendarAt,
-    shapeUrl: doorPicture(run.year, run.door),
+    // Nothing of the prize shows while December's doors are switched off: a door picture hints at it.
+    shapeUrl: o.settings.doorsOn ? doorPicture(run.year, run.door) : null,
     bigPrize: run.prizeShowOff,
-    teaser: run.prizeShowOff && state !== "found" && filled(run.prize) ? run.prize : null,
+    // Before the find only: not once the elf is found (found-hidden, found) and never on a snow day.
+    teaser: run.prizeShowOff && (state === "shut" || state === "hunting" || state === "revealed") && filled(run.prize) ? run.prize : null,
     prize: state === "found" && filled(run.prize) ? run.prize : null,
     elfName: run.elfName,
     place: open && run.placeName !== null ? { name: run.placeName, town: run.placeTown ?? "" } : null,

@@ -8,7 +8,7 @@
  *      is fetched again, because the clue itself is never in the page before it is out.
  *
  * Nothing here decides anything: the server says whether a guess is allowed (decideGuess in
- * src/elf/guess.ts).
+ * src/elf/guess.ts), and when it says no, its own words are shown.
  *
  * Tested in test/unit/elf-js-hq.test.ts against the real page.
  */
@@ -16,12 +16,7 @@
   "use strict";
 
   var NOT_SAVED = "We could not save your guess. Check your signal and try again.";
-  var REFUSED = {
-    "not-hunting": "Too late: this door has just opened. Have a look at the calendar.",
-    "place-already-open": "That place is no longer on the list. Pick another.",
-    "unknown-place": "That place is no longer on the list. Pick another."
-  };
-
+  
   /** How long is left: "2:14:09", "14:09", "0:05", and "0:00" once the time has come. The same
    *  words as countdownWords in src/elf/words.ts. */
   function countdownWords(ms) {
@@ -80,7 +75,6 @@
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         if (sending) return;
-        // Task 9: the typed guess's box is name="text" since Task 6; Task 9 rewrites what is sent.
         var box = form.querySelector('input[name="text"]');
         var place = box ? box.value.trim() : "";
         if (!place) {
@@ -96,7 +90,7 @@
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ door: Number(door ? door.value : 0), guess: place })
+            body: JSON.stringify({ door: Number(door ? door.value : 0), text: place })
           })
           .then(function (res) {
             return res
@@ -105,15 +99,16 @@
                 return {};
               })
               .then(function (body) {
-                return { saved: res.ok && !!body && body.ok === true, reason: body ? body.reason : null };
+                var said = body && typeof body === "object" ? body : {};
+                return { saved: res.ok && said.ok === true, text: typeof said.text === "string" && said.text ? said.text : place, message: typeof said.message === "string" ? said.message : "" };
               });
           })
           .then(function (answer) {
             if (answer.saved) {
-              say("Guess locked in: " + place + ". You can change it until the elf is found.", false);
+              say("Your guess: " + answer.text + ". You can change it until the hiding place is shown.", false);
               if (button) button.textContent = "Change my guess";
             } else {
-              say(REFUSED[answer.reason] || NOT_SAVED, true);
+              say(answer.message || NOT_SAVED, true);
             }
           })
           .catch(function () {

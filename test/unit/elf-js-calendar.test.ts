@@ -254,6 +254,76 @@ describe("news from the live feed", () => {
   });
 });
 
+/** The calendar with two photos in door 3's scrapbook, "mine0001" and "other002". */
+function withPhotos(): CalendarView {
+  const view = calendarView(AFTERNOON);
+  const three = view.doors[2];
+  three.scrapbook!.photos = [
+    { token: "other002", url: "/elf/door/3/photo/other002.jpg" },
+    { token: "mine0001", url: "/elf/door/3/photo/mine0001.jpg" },
+  ];
+  return view;
+}
+
+describe("shutting a door from its scrapbook", () => {
+  it("shuts the scrapbook and puts focus back on the door", () => {
+    load();
+    click(door(4));
+    expect(detail(4).classList.contains("is-open")).toBe(true);
+    click(detail(4).querySelector(".elf-book__close a")!);
+    expect(detail(4).classList.contains("is-open")).toBe(false);
+    expect(door(4).getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(door(4));
+  });
+});
+
+describe("the family's own photo", () => {
+  const photos = [{ door: 3, token: "mine0001", status: "approved" }];
+
+  it("is marked Your photo in the open door's scrapbook, and no other photo is", async () => {
+    me = { status: 200, body: { doors: [], photos } };
+    const calendar = load(withPhotos());
+    await calendar.ready;
+    const mine = detail(3).querySelector<HTMLElement>('figure[data-token="mine0001"]')!;
+    expect(words(mine)).toContain("Your photo");
+    expect(mine.querySelector("button")!.textContent).toBe("Take it down");
+    const other = detail(3).querySelector<HTMLElement>('figure[data-token="other002"]')!;
+    expect(words(other)).toBe("");
+    expect(other.querySelector("button")).toBeNull();
+  });
+
+  it("is taken down with a DELETE, and the door is fetched again", async () => {
+    me = { status: 200, body: { doors: [], photos } };
+    const calendar = load(withPhotos());
+    await calendar.ready;
+    server.doors[2].scrapbook!.photos = [{ token: "other002", url: "/elf/door/3/photo/other002.jpg" }];
+    const requests: { url: string; method: string }[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const before = (window as any).fetch as (url: string, init?: RequestInit) => Promise<unknown>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn((url: string, init?: RequestInit) => {
+      requests.push({ url, method: init?.method ?? "GET" });
+      if (init?.method === "DELETE") return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
+      return before(url, init);
+    });
+    click(detail(3).querySelector("figure[data-token] button")!);
+    await flush();
+    expect(requests).toEqual([
+      { url: "/api/elf/door/3/photo", method: "DELETE" },
+      { url: "/api/elf/door/3", method: "GET" },
+    ]);
+    expect(detail(3).querySelector('figure[data-token="mine0001"]')).toBeNull();
+    expect(detail(3).querySelector('figure[data-token="other002"]')).not.toBeNull();
+    expect(detail(3).querySelector("figure button")).toBeNull();
+  });
+
+  it("is not marked for a visitor who is not signed in", async () => {
+    const calendar = load(withPhotos());
+    await calendar.ready;
+    expect(detail(3).querySelector("figure[data-token] button")).toBeNull();
+  });
+});
+
 describe("a family's own marks", () => {
   it("are laid over the board for a family that is signed in", async () => {
     me = {

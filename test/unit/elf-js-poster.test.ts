@@ -5,14 +5,14 @@ import { createRequire } from "node:module";
 import { claimWinHtml, renderPosterPage, visitWinHtml, wordRefusalWords } from "../../src/elf/pages/poster";
 import type { PosterOutcome, PosterView } from "../../src/elf/pages/types";
 import { claimWin, posterView, visitWin } from "./elf-fixtures";
+import { tinyJpeg } from "./fixtures/tiny-jpeg";
 
 // NBCC Elf Detective School: the script on the page a poster's QR code opens. It sends the word on
 // the elf's tag without leaving the page and shows the answer the server draws. It runs here against
 // the real page with a pretend server. Every shop and family is invented (see elf-fixtures.ts).
 //
-// Task 6 left the page one form, the word, and the script one selector change to find it; Task 9
-// rewrites the script (the photo sheet, Take it down) and this file with it. The tests of checking in
-// by the phone's location or a photo went with decision 3: a visit is proved by the word alone.
+// The page has one form, the word, and after a visit a photo sheet; a visit is proved by the word
+// alone (decision 3). The tests of checking in by the phone's location went with that decision.
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
@@ -26,6 +26,7 @@ interface Call {
   url: string;
   json: Record<string, unknown> | null;
   type: string | null;
+  method: string | null;
 }
 type Answer = { status: number; body: unknown } | "offline";
 
@@ -50,7 +51,7 @@ function load(view: PosterView = posterView(), opts: Record<string, unknown> = {
   (window as any).fetch = vi.fn((url: string, init?: RequestInit) => {
     const body = init?.body;
     const headers = (init?.headers ?? {}) as Record<string, string>;
-    calls.push({ url, json: typeof body === "string" ? JSON.parse(body) : null, type: headers["Content-Type"] ?? null });
+    calls.push({ url, json: typeof body === "string" ? JSON.parse(body) : null, type: headers["Content-Type"] ?? null, method: init?.method ?? null });
     if (answer === "offline") return Promise.reject(new Error("offline"));
     const a = answer;
     return Promise.resolve({ ok: a.status >= 200 && a.status < 300, status: a.status, json: () => Promise.resolve(a.body) });
@@ -144,7 +145,7 @@ describe("typing the word on the elf's tag", () => {
   it("asks for a tick and a word before it sends anything", async () => {
     load();
     await typeWord("SNOWBALL 472");
-    expect(words($("form.elf-word .elf-form-status"))).toBe("Tick who found the elf.");
+    expect(words($("form.elf-word .elf-form-status"))).toBe("Tick who is here.");
     tick("d2");
     await typeWord("   ");
     expect(words($("form.elf-word .elf-form-status"))).toBe("Type the secret word on the elf's tag.");
@@ -217,5 +218,154 @@ describe("a page that already holds an answer", () => {
   it("does nothing on a page with no forms", () => {
     expect(() => load(posterView({ signedIn: false, detectives: [] }))).not.toThrow();
     expect(calls).toEqual([]);
+  });
+});
+
+// ---- the photo sheet ------------------------------------------------------------------------------
+
+const SHEET = ".elf-photo-sheet__form";
+const click = (el: Element) => el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+async function visited(opts: Record<string, unknown> = {}): Promise<void> {
+  answer = { status: 200, body: { ok: true, html: visitWinHtml(visitWin()) } };
+  load(posterView(OPEN), opts);
+  tick("d1", "d2");
+  await typeWord("SNOWBALL 472");
+  calls = [];
+}
+
+function tickConsent(on: boolean): void {
+  const box = $<HTMLInputElement>(`${SHEET} input[name="consent"]`);
+  box.checked = on;
+  box.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function pick(file: File): Promise<void> {
+  const input = $<HTMLInputElement>(`${SHEET} input[type="file"]`);
+  Object.defineProperty(input, "files", { configurable: true, value: [file] });
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  await flush();
+}
+
+async function submitSheet(): Promise<void> {
+  $(SHEET).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+async function jpegFile(): Promise<File> {
+  return new File([new Uint8Array(await tinyJpeg())], "me.jpg", { type: "image/jpeg" });
+}
+
+describe("the photo sheet after a visit", () => {
+  it("keeps Send it to the head elves off until the tick is ticked", async () => {
+    await visited();
+    const send = $<HTMLButtonElement>(`${SHEET} button[type="submit"]`);
+    expect(send.disabled).toBe(true);
+    tickConsent(true);
+    expect(send.disabled).toBe(false);
+    tickConsent(false);
+    expect(send.disabled).toBe(true);
+  });
+
+  it("shows the chosen photo in the polaroid before it is sent", async () => {
+    await visited();
+    const preview = $(`${SHEET} .elf-photo-sheet__preview`);
+    expect(preview.hidden).toBe(true);
+    await pick(await jpegFile());
+    expect(preview.hidden).toBe(false);
+    expect(words(preview)).toBe("Your photo");
+  });
+
+  it("sends the photo as base64 with the tick, and says a head elf will look", async () => {
+    await visited();
+    tickConsent(true);
+    await pick(await jpegFile());
+    answer = { status: 202, body: { status: "waiting", token: "abc123" } };
+    await submitSheet();
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toBe("/api/elf/p/toy-shop-k4f9/photo");
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].json).toEqual({ mime: "image/jpeg", dataBase64: Buffer.from(await tinyJpeg()).toString("base64"), consent: true });
+    expect(words($("#elf-result"))).toContain("A head elf will look at your photo soon");
+    expect(document.querySelector(SHEET)).toBeNull();
+  });
+
+  it("sends the picture the browser made smaller when it can make one", async () => {
+    const made: unknown[] = [];
+    await visited({
+      read: () => Promise.resolve({ src: "blob:x", width: 4000, height: 3000, img: {} }),
+      make: (pic: unknown) => {
+        made.push(pic);
+        return Promise.resolve({ mime: "image/jpeg", base64: "c21hbGw=" });
+      },
+    });
+    tickConsent(true);
+    await pick(new File([new Uint8Array([1, 2, 3])], "big.jpg", { type: "image/jpeg" }));
+    answer = { status: 202, body: { status: "waiting", token: "abc123" } };
+    await submitSheet();
+    expect(made.length).toBe(1);
+    expect(calls[0].json).toEqual({ mime: "image/jpeg", dataBase64: "c21hbGw=", consent: true });
+  });
+
+  it("shows the server's own error when the photo is refused", async () => {
+    await visited();
+    tickConsent(true);
+    await pick(await jpegFile());
+    answer = { status: 429, body: { error: "You have sent 5 photos today. Please try again tomorrow." } };
+    await submitSheet();
+    const status = $(`${SHEET} .elf-form-status`);
+    expect(words(status)).toBe("You have sent 5 photos today. Please try again tomorrow.");
+    expect(status.classList.contains("is-error")).toBe(true);
+    expect($<HTMLButtonElement>(`${SHEET} button[type="submit"]`).disabled).toBe(false);
+  });
+
+  it("asks for a photo before it sends anything", async () => {
+    await visited();
+    tickConsent(true);
+    await submitSheet();
+    expect(calls).toEqual([]);
+    expect(words($(`${SHEET} .elf-form-status`))).toBe("Choose a photo first.");
+  });
+
+  it("hides the sheet on Not this time", async () => {
+    await visited();
+    const sheet = $(".elf-photo-sheet");
+    click($(".elf-photo-sheet__skip"));
+    expect(sheet.hidden).toBe(true);
+  });
+});
+
+describe("Take it down", () => {
+  it("sends a DELETE for the poster's photo and says it has come down", async () => {
+    load(posterView({ ...OPEN, yourPhoto: { status: "approved", token: "abc123" } }));
+    answer = { status: 200, body: { ok: true } };
+    click($(".elf-your-photo__down"));
+    await flush();
+    expect(calls).toEqual([{ url: "/api/elf/p/toy-shop-k4f9/photo", json: null, type: null, method: "DELETE" }]);
+    expect(words($(".elf-your-photo"))).toContain("Your photo has been taken down.");
+    expect(document.querySelector(".elf-your-photo__down")).toBeNull();
+  });
+
+  it("shows the server's error and keeps the button when it fails", async () => {
+    load(posterView({ ...OPEN, yourPhoto: { status: "waiting", token: "abc123" } }));
+    answer = { status: 500, body: { error: "Something broke." } };
+    click($(".elf-your-photo__down"));
+    await flush();
+    expect(words($(".elf-your-photo"))).toContain("Something broke.");
+    expect($(".elf-your-photo__down")).not.toBeNull();
+  });
+
+  it("sends the photo's Take it down from the waiting words too", async () => {
+    await visited();
+    tickConsent(true);
+    await pick(await jpegFile());
+    answer = { status: 202, body: { status: "waiting", token: "abc123" } };
+    await submitSheet();
+    calls = [];
+    answer = { status: 200, body: { ok: true } };
+    click($("#elf-result .elf-photo-down"));
+    await flush();
+    expect(calls[0].method).toBe("DELETE");
+    expect(words($("#elf-result"))).toContain("Your photo has been taken down.");
   });
 });

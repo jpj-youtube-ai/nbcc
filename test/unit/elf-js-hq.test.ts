@@ -94,13 +94,13 @@ describe("locking in a guess", () => {
     $("form.elf-guess").dispatchEvent(event);
     await flush();
     expect(event.defaultPrevented).toBe(true);
-    expect(calls).toEqual([{ url: "/api/elf/guess", body: { door: 7, guess: "The Bookshop" } }]);
+    expect(calls).toEqual([{ url: "/api/elf/guess", body: { door: 7, text: "The Bookshop" } }]);
   });
 
   it("says the guess is locked in, names the place, and offers to change it", async () => {
     load();
     await choose("The Bookshop");
-    expect(words($(".elf-guess__status"))).toBe("Guess locked in: The Bookshop. You can change it until the elf is found.");
+    expect(words($(".elf-guess__status"))).toBe("Your guess: The Bookshop. You can change it until the hiding place is shown.");
     expect(words($("form.elf-guess button"))).toBe("Change my guess");
     expect($(".elf-guess__status").classList.contains("is-error")).toBe(false);
   });
@@ -113,19 +113,20 @@ describe("locking in a guess", () => {
     expect(words($(".elf-guess__status"))).toBe("Type a place first.");
   });
 
-  it("says when the door has just opened and guessing is over", async () => {
-    answer = { status: 409, body: { ok: false, reason: "not-hunting" } };
+  it("says when the door has just opened and guessing is over, in the server's words", async () => {
+    answer = { status: 409, body: { ok: false, reason: "not-hunting", message: "Too late: the hiding place is shown now. Have a look at the calendar." } };
     load();
     await choose("The Bookshop");
-    expect(words($(".elf-guess__status"))).toBe("Too late: this door has just opened. Have a look at the calendar.");
+    expect(words($(".elf-guess__status"))).toBe("Too late: the hiding place is shown now. Have a look at the calendar.");
     expect($(".elf-guess__status").classList.contains("is-error")).toBe(true);
   });
 
-  it("says when the place has just been taken off the list", async () => {
-    answer = { status: 409, body: { ok: false, reason: "place-already-open" } };
+  it("names the door when the place typed was already found", async () => {
+    answer = { status: 409, body: { ok: false, reason: "place-already-open", door: 3, message: "That elf was already found behind door 3. Try again!" } };
     load();
     await choose("The Bookshop");
-    expect(words($(".elf-guess__status"))).toBe("That place is no longer on the list. Pick another.");
+    expect(words($(".elf-guess__status"))).toContain("already found behind door 3");
+    expect($(".elf-guess__status").classList.contains("is-error")).toBe(true);
   });
 
   it("says so plainly when the guess could not be saved, and lets the family try again", async () => {
@@ -134,9 +135,9 @@ describe("locking in a guess", () => {
     await choose("The Bookshop");
     expect(words($(".elf-guess__status"))).toBe("We could not save your guess. Check your signal and try again.");
     expect($<HTMLButtonElement>("form.elf-guess button").disabled).toBe(false);
-    answer = { status: 200, body: { ok: true } };
+    answer = { status: 200, body: { ok: true, text: "The Toy Shop" } };
     await choose("The Toy Shop");
-    expect(words($(".elf-guess__status"))).toContain("Guess locked in: The Toy Shop.");
+    expect(words($(".elf-guess__status"))).toContain("Your guess: The Toy Shop.");
   });
 
   it("does not send twice while the first is still on its way", async () => {

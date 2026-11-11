@@ -10,9 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-10-elf-detective-wave-2-design.md` (binding): decisions 8, 9, 10, calls C7, C8, C13, C14, "Head Elf HQ: the photo check", "Alerts", "Head Elf HQ: Finds on the evening", "Emails in wave 2", and October decisions 6, 16 and 18 as the wave 2 design keeps them. The mockup to match is `.superpowers/sdd/2026-11-10-elf-wave-2/mockups/photo-check.html` (not in git). **Plan 2a (`2026-11-10-elf-wave-2-game-1.md`) and the texts plan (`2026-11-10-elf-wave-2-texts.md`) merge first**: this plan reuses `DoorRun` (with `contactEmail` and `closesAt`), `runsFor`, `loadDoorRuns`, `loadPractice`, `markAutomaticSnowDays`, `finderParts`, `familyDoorsDone`, `doorCounts`, `elf_photos`, `elf_photo_files`, `elf_visits`, `sendText`, `smsConfigured`, and Plan 1's `readinessOf` and `addElfDoorName`.
 
+**Plan 2a as built** (merged switched off as [TASK-609]; these shapes replace the ones this plan was written against): `runOf(year, setup, now)`; `DoorRun.calendarAt` (the time the calendar shows for clue 1); `onDoorsSwitchedOn(year)`; `loadDoorRunByPosterCode(code, year, now)`; `recordWord` holds one prize a family under the family row lock; `sendText` takes its sender from the caller, so every caller passes `config.SMS_SENDER_ID`; the picture sentences are exported from `src/fundraising/pictures.ts`; with December's doors off no family sees a new word (wave 1 words exactly). Three rulings from Plan 2a's reviews land in this plan: Task 4 shows at most one photo a family on each door (approving a photo replaces that family's other approved photo at that door) and keeps a door's photos row hidden until approved photos from at least two families are on it (until then an approved photo reads as waiting to its family and is never served, and the check tells the head elf so), because one family's photo beside that family's elves would match a face to a name; Task 7 makes the rules page's wave 2 words show only with the doors on (it still says "Each family can win one elf.") and hides the calendar script's "Visit any day in December" line on a door whose elf has gone home.
+
 ## Global Constraints
 
-- The repository is public. Invented names only, in every test, fixture, BDD step and example sentence: never a real person's name, NBCC's own team included ("Head Elf" as a title is fine; a head elf in a test is "Alex Example"); `01632 960 123` for a phone number and `07700 900 123` for a mobile (both Ofcom's reserved ranges); `@example.org` or `@example.com` for email. Never a real place, clue or prize anywhere committed. Every sample email in the catalogue uses "Example" people and the pretend place "Pine Cone Café, Ayr".
+- The repository is public. Invented names only, in every test, fixture, BDD step and example sentence: never a real person's name, NBCC's own team included ("Head Elf" as a title is fine; a head elf in a test is "Alex Example"); `01632 960 123` for a phone number and `07700 900 123` for a mobile (both Ofcom's reserved ranges); `@example.org` or `@example.com` for email. Never a real place, clue or prize anywhere committed. Every sample email in the catalogue uses "Example" people and the pretend place "Pine Cone Café, Snowford".
 - "Elf Detective School" always in full when it means the game; never "the school".
 - Plain English with no dashes in any words a person reads; money wording uses "could". Words about a clue time say "tonight" only when it is after midday; a 10am clue is "today" or "this morning". Emails keep NBCC's email look (`src/email/brand.ts`) and go from `events@nbcc.scot` on the apex, never `news.nbcc.scot`. No link in an email changes anything when followed. A clue picture is never attached to or linked from an email.
 - Head Elf HQ's CSS house rules (top of `assets/css/admin-elf-hq.css`, enforced by `test/unit/admin-elf-hq-css.test.ts`); `el()` and text only in the admin script; `is-ok` and `is-error`; no inner scrollbars; every screen works at 390 and 360 pixels wide.
@@ -20,7 +22,7 @@
 - Every admin route: `res.setHeader("Cache-Control", "no-store")`, `authorizeSection(req, res, "elf", "view" | "edit")`, a try/catch answering 500 `{ error: "Admin is temporarily unavailable" }`; the actor is `actorOf(claims)`. A head elf's name on a screen is `users.full_name`, the email only when it is blank. Audit rows never carry a place name, a photo or a mobile number.
 - Every timed send is claimed in `elf_sends` before it goes, so it goes once however many tasks run; a send that throws is retried at most three times, ten minutes apart, and a stuck row never blocks the rows after it.
 - Config goes through `src/config/schema.ts`, `.env.example`, SSM in `infra/modules/app/main.tf` and the task definition in `infra/modules/app/ecs.tf` (this plan adds none; the texts plan added the texts').
-- Migrations only add. This plan's migration is `migrations/1791200000440_elf-alerts.js`; before the pull request check it sorts after the newest migration on main and renumber it if not.
+- Migrations only add. This plan's migration is `migrations/1791200000450_elf-alerts.js` (Plan 2a's game took 440); before the pull request check it sorts after the newest migration on main and renumber it if not.
 - Tests first; unit tests touch no database and set the clock with `vi.setSystemTime`; BDD runs only in CI. No BDD date bombs: the `@elf-school` hooks (Plan 2a) set `elf_settings.year` to next year and `doors_on` by SQL and restore both; the worker's tick takes an injectable `at`, and BDD passes midday so quiet hours never bite.
 - Locally `perf-budget` and `footer-master` fail on Windows line endings; those two are not real failures. Run `npm run lint` and `npx tsc --noEmit` before each commit. Commit only the files the task names, never `.mcp.json`. End every commit message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - README.md is updated in Task 7, with the list of words for Jaimie.
@@ -40,8 +42,8 @@ Each line names the test that pins it.
 ### Task 1: The alert and send tables
 
 **Files:**
-- Create: `migrations/1791200000440_elf-alerts.js`
-- Test: `test/unit/elf-admin-migrations.test.ts` (add a `describe` for 440)
+- Create: `migrations/1791200000450_elf-alerts.js`
+- Test: `test/unit/elf-admin-migrations.test.ts` (add a `describe` for 450; it sorts after `1791200000440_elf-game.js`)
 
 **Interfaces:**
 - Produces the tables:
@@ -122,8 +124,8 @@ Each line names the test that pins it.
 
 **Files:**
 - Create: `src/routes/admin-elf-finds.ts`, `src/db/elf-photos.ts`
-- Modify: `src/app.ts` (mount `adminElfFindsRouter` after `adminElfDoorsRouter`), `src/elf/admin-hq.ts` (`HqTab` gains `"finds"`), `src/routes/admin-elf.ts` (`photosWaiting` on `/hq`), `assets/js/admin/elf-hq.js`, `assets/css/admin-elf-hq.css`
-- Test: `test/unit/elf-db-photos.test.ts`, `test/unit/admin-elf-finds.test.ts`, `test/unit/admin-elf-finds-js.test.ts`
+- Modify: `src/app.ts` (mount `adminElfFindsRouter` after `adminElfDoorsRouter`), `src/elf/admin-hq.ts` (`HqTab` gains `"finds"`), `src/routes/admin-elf.ts` (`photosWaiting` on `/hq`), `src/db/elf-game.ts` (the one photo a family and two families rules in `doorScrapbook`, `approvedPhoto` and `familyPhoto`), `assets/js/admin/elf-hq.js`, `assets/css/admin-elf-hq.css`
+- Test: `test/unit/elf-db-photos.test.ts`, `test/unit/admin-elf-finds.test.ts`, `test/unit/admin-elf-finds-js.test.ts`, `test/unit/elf-db-game.test.ts` (extend)
 
 **Interfaces:**
 - Consumes: `elf_photos`, `elf_photo_files` (Plan 2a); `loadDoorRun`, `loadPractice`, `openedAt`; `headElfName` (Task 3); `writeWithAudit`.
@@ -205,7 +207,8 @@ Each line names the test that pins it.
 
 **Files:**
 - Create: `docs/superpowers/specs/2026-11-10-elf-wave-2-words.md`
-- Modify: `README.md`
+- Modify: `README.md`, `src/elf/pages/rules.ts` (wave 2 words only with the doors on), `assets/js/elf-calendar.js` (no "Visit any day in December" on a gone home door)
+- Test: `test/unit/elf-page-rules.test.ts`, `test/unit/elf-js-calendar.test.ts` (extend)
 
 - [ ] **Step 1: Write the words file**: every new or changed sentence a person reads from Plan 2a and this plan, grouped by where it appears (the calendar and the scrapbook, Detective HQ, the poster page and the visit, the refusals, the prints as Plan 1 changed them, each email with its subject, the text, Head Elf HQ's new parts), each with a tick box, and the line at the top that December's doors are not switched on until every box is ticked. Invented examples only.
 - [ ] **Step 2: Update README.md**: the route table (every route of Tasks 3 to 6, "implemented"); the Elf Detective School section: the photo check and log (names from `users.full_name`), alerts and their rules (one at a time, 30 minutes, 9pm to 8am, email only for a find), the emails and where to read them, the worker (`elf_sends`, the claim and retry rule, the ten minute sweep for ranks earned any way, the clear out from 31 January by each photo's year, the tick hook outside production), Finds, and the texts plan's console steps as still owed if they are.

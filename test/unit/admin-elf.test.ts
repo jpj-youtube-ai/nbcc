@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
 // numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf, dbAlerts, sms, mailer } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf, dbAlerts, dbPhotos, sms, mailer } = vi.hoisted(() => ({
+  dbPhotos: { countPhotosWaiting: vi.fn() },
   dbAlerts: { listHeadElves: vi.fn(), setMyAlerts: vi.fn(), lastAlert: vi.fn(), recordAlert: vi.fn() },
   sms: { sendText: vi.fn(), on: true },
   mailer: { sendElfTestAlert: vi.fn() },
@@ -36,6 +37,7 @@ vi.mock("../../src/db/elf-doors", () => dbDoors);
 vi.mock("../../src/db/elf-practice", () => dbPractice);
 vi.mock("../../src/db/elf-game", () => dbGame);
 vi.mock("../../src/db/elf-alerts", () => dbAlerts);
+vi.mock("../../src/db/elf-photos", () => dbPhotos);
 vi.mock("../../src/clients/sms", () => ({ sendText: sms.sendText, get smsConfigured() { return sms.on; } }));
 vi.mock("../../src/clients/email", () => mailer);
 // No door has a picture on disk in a test; one test gives door 1 its picture.
@@ -114,11 +116,12 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame), ...Object.values(dbAlerts), sms.sendText, ...Object.values(mailer)]) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame), ...Object.values(dbAlerts), ...Object.values(dbPhotos), sms.sendText, ...Object.values(mailer)]) f.mockReset();
   sms.on = true;
   pictureOf.mockReset();
   pictureOf.mockReturnValue(null);
   dbGame.familyWordTries.mockResolvedValue([]);
+  dbPhotos.countPhotosWaiting.mockResolvedValue(0);
   db.getElfSettings.mockResolvedValue(ON);
   dbDoors.ensureElfDoors.mockResolvedValue(undefined);
   dbDoors.listElfDoors.mockResolvedValue([]);
@@ -200,6 +203,12 @@ describe("HQ in the admin", () => {
     expect(typeof body.daysToFirstClue).toBe("number");
     expect(body.canSwitch).toBe(true);
     expect(dbAdmin.elfRecruits).toHaveBeenCalledWith(8);
+  });
+
+  it("says how many photos are waiting for a head elf", async () => {
+    dbPhotos.countPhotosWaiting.mockResolvedValue(3);
+    const res = await run(getAdminElfHq, req("viewer", {}, HEAD_ELF));
+    expect((res.body as { photosWaiting: number }).photosWaiting).toBe(3);
   });
 
   it("counts the doors still to come that are not ready, from the clock", async () => {
@@ -858,6 +867,11 @@ describe("a family's wrong tries in the admin", () => {
 describe("the alerts in Settings", () => {
   const ALEX = { userId: 1, name: "Alex Example", email: "staff@example.org", mobile: "+447700900123", alertsOn: true };
   const SAM = { userId: 2, name: "Sam Example", email: "sam@example.org", mobile: null, alertsOn: false };
+  const PREVIEW = {
+    text: "Elf Detective School: a photo is waiting for a head elf to check. nbcc.scot/admin",
+    emailSubject: "A photo is waiting to be checked",
+    emailLine: "A family has sent a photo from door 7 of Elf Detective School. Nobody sees it until a head elf approves it.",
+  };
 
   it("lists the head elves, with me true for the one asking", async () => {
     dbAlerts.listHeadElves.mockResolvedValue([ALEX, SAM]);
@@ -869,6 +883,7 @@ describe("the alerts in Settings", () => {
       people: [{ ...ALEX, me: true }, { ...SAM, me: false }],
       textsOn: true,
       lastAlert: { at: new Date("2026-12-07T18:04:00Z"), textsFailed: ["Sam Example"] },
+      preview: PREVIEW,
     });
     expect(dbAlerts.lastAlert).toHaveBeenCalledWith("photo");
   });
@@ -880,7 +895,20 @@ describe("the alerts in Settings", () => {
     dbAlerts.lastAlert.mockResolvedValue(null);
     sms.on = false;
     const res = await run(getAdminElfAlerts, req("viewer", {}, HEAD_ELF));
-    expect(res.body).toEqual({ people: [], textsOn: false, lastAlert: null });
+    expect(res.body).toEqual({ people: [], textsOn: false, lastAlert: null, preview: PREVIEW });
+  });
+
+  it("answers the preview words from the real builders, so the screen keeps no copy of its own", async () => {
+    dbAlerts.listHeadElves.mockResolvedValue([]);
+    dbAlerts.lastAlert.mockResolvedValue(null);
+    const { ELF_PHOTO_TEXT, buildElfPhotoAlertEmail } = await import("../../src/elf/emails");
+    const built = buildElfPhotoAlertEmail({ door: 7, adminUrl: "https://www.example.org/admin" });
+    const res = await run(getAdminElfAlerts, req("viewer", {}, HEAD_ELF));
+    const preview = (res.body as { preview: { text: string; emailSubject: string; emailLine: string } }).preview;
+    expect(preview.text).toBe(ELF_PHOTO_TEXT);
+    expect(preview.emailSubject).toBe(built.subject);
+    expect(preview.emailLine).toBe(built.text.split("\n")[0]);
+    expect(preview.emailLine).toContain("door 7");
   });
 
   it("answers 500 in words when the database fails", async () => {

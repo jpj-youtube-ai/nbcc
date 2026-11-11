@@ -6,7 +6,7 @@ import { COSTUMES, SKIN_TONES } from "./wardrobe";
 // (decisions 4 and 5). Pure: no pool, no clock. Unit tested in test/unit/elf-admin-hq.test.ts.
 
 /** A part of Head Elf HQ, as its menu tile names it. */
-export type HqTab = "hq" | "families" | "doors" | "money" | "settings";
+export type HqTab = "hq" | "families" | "doors" | "finds" | "money" | "settings";
 
 /** What HQ counts: active families that have not been removed, and their paid orders. */
 export interface HqNumbers {

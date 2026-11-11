@@ -463,6 +463,21 @@ export async function doorCounts(year: number, door: number, now: Date, run: Doo
   return { cracked: crackedCount, visited: Number(r.rows[0]?.n ?? 0) };
 }
 
+/** The two rules that keep a child's photo from sitting beside that child's elf (the rulings on Plan 2a),
+ *  as SQL over a photo `p` and its family `f`: it is the family's newest approved photo on the door (one
+ *  photo a family), and approved photos from at least two different families are on the door, so one
+ *  family's photo is never alone beside that family's elves. The photo check (src/db/elf-photos.ts)
+ *  keeps one approved photo a family when it approves; this is the same rule on the read side. */
+const SHOWN_PHOTO_SQL = `p.status = 'approved' AND p.deleted_at IS NULL AND f.removed_at IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM elf_photos n
+     WHERE n.year = p.year AND n.door = p.door AND n.family_id = p.family_id
+       AND n.status = 'approved' AND n.deleted_at IS NULL AND n.id > p.id)
+  AND (
+    SELECT count(DISTINCT a.family_id) FROM elf_photos a JOIN elf_families fa ON fa.id = a.family_id
+     WHERE a.year = p.year AND a.door = p.door AND a.status = 'approved' AND a.deleted_at IS NULL
+       AND fa.removed_at IS NULL) >= 2`;
+
 /** A door's scrapbook: the elves that count by `now` and the approved photos, in the scrapbook's order. */
 export async function doorScrapbook(year: number, door: number, now: Date): Promise<Scrapbook> {
   const visits = await pool.query<{ id: number; counts_from: Date; found: boolean; first_name: string; surname: string; name_approved: boolean }>(
@@ -475,7 +490,7 @@ export async function doorScrapbook(year: number, door: number, now: Date): Prom
   const photos = await pool.query<{ token: string }>(
     `SELECT p.token FROM elf_photos p
        JOIN elf_families f ON f.id = p.family_id
-      WHERE p.year = $1 AND p.door = $2 AND p.status = 'approved' AND p.deleted_at IS NULL AND f.removed_at IS NULL`,
+      WHERE p.year = $1 AND p.door = $2 AND ${SHOWN_PHOTO_SQL}`,
     [year, door],
   );
   const elves: ScrapElf[] = visits.rows.map((v) => ({
@@ -536,22 +551,27 @@ export async function sendElfPhoto(o: {
 }
 
 /** The family's current photo for a door (not replaced, taken down or deleted). An approved photo reads
- *  as waiting while the place is still hidden. A decline's reason is never given to the family. */
+ *  as waiting while the place is still hidden, and while no second family's photo is approved on the
+ *  door (it is not shown to anyone until then). A decline's reason is never given to the family. */
 export async function familyPhoto(
   year: number,
   door: number,
   familyId: number,
   placeShown: boolean,
 ): Promise<{ token: string; status: "waiting" | "approved" | "declined" } | null> {
-  const r = await pool.query<{ token: string; status: "waiting" | "approved" | "declined" }>(
-    `SELECT token, status FROM elf_photos
-      WHERE year = $1 AND door = $2 AND family_id = $3 AND status NOT IN ('replaced', 'taken-down', 'deleted')
-      ORDER BY sent_at DESC, id DESC LIMIT 1`,
+  const r = await pool.query<{ token: string; status: "waiting" | "approved" | "declined"; shown: boolean }>(
+    `SELECT p.token, p.status,
+            (SELECT count(DISTINCT a.family_id) FROM elf_photos a JOIN elf_families fa ON fa.id = a.family_id
+              WHERE a.year = p.year AND a.door = p.door AND a.status = 'approved' AND a.deleted_at IS NULL
+                AND fa.removed_at IS NULL) >= 2 AS shown
+       FROM elf_photos p
+      WHERE p.year = $1 AND p.door = $2 AND p.family_id = $3 AND p.status NOT IN ('replaced', 'taken-down', 'deleted')
+      ORDER BY p.sent_at DESC, p.id DESC LIMIT 1`,
     [year, door, familyId],
   );
   const row = r.rows[0];
   if (!row) return null;
-  return { token: row.token, status: row.status === "approved" && !placeShown ? "waiting" : row.status };
+  return { token: row.token, status: row.status === "approved" && !(placeShown && row.shown === true) ? "waiting" : row.status };
 }
 
 /** A family takes its own photo down: gone from the page at once, and its bytes deleted. */
@@ -572,14 +592,14 @@ export async function takeDownOwnPhoto(year: number, door: number, familyId: num
   });
 }
 
-/** The bytes of an approved photo by its token, or null. */
+/** The bytes of an approved photo by its token, or null: nothing is served until approved photos from
+ *  two different families are on its door. */
 export async function approvedPhoto(year: number, door: number, token: string): Promise<{ mime: string; bytes: Buffer } | null> {
   const r = await pool.query<{ mime: string; bytes: Buffer }>(
-    `SELECT p.mime, f.bytes FROM elf_photos p
-       JOIN elf_photo_files f ON f.photo_id = p.id
-       JOIN elf_families fam ON fam.id = p.family_id
-      WHERE p.year = $1 AND p.door = $2 AND p.token = $3 AND p.status = 'approved'
-        AND p.deleted_at IS NULL AND fam.removed_at IS NULL`,
+    `SELECT p.mime, b.bytes FROM elf_photos p
+       JOIN elf_photo_files b ON b.photo_id = p.id
+       JOIN elf_families f ON f.id = p.family_id
+      WHERE p.year = $1 AND p.door = $2 AND p.token = $3 AND ${SHOWN_PHOTO_SQL}`,
     [year, door, token],
   );
   return r.rows[0] ? { mime: r.rows[0].mime, bytes: r.rows[0].bytes } : null;

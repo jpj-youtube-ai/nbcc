@@ -26,9 +26,10 @@ import { doorPicture, doorSeason, emptyDoor, type DoorSetup, readinessOf, staffE
 import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/admin-families";
 import { daysUntil, questsFor, tileFor, type SoonNotReady } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
-import { badgeWords, buildElfTestAlertEmail, ELF_TEST_TEXT } from "../elf/emails";
+import { badgeWords, buildElfPhotoAlertEmail, buildElfTestAlertEmail, ELF_PHOTO_TEXT, ELF_TEST_TEXT } from "../elf/emails";
 import { normaliseUkMobile } from "../elf/alerts";
 import { lastAlert, listHeadElves, recordAlert, setMyAlerts } from "../db/elf-alerts";
+import { countPhotosWaiting } from "../db/elf-photos";
 import { sendText, smsConfigured } from "../clients/sms";
 import { sendElfTestAlert } from "../clients/email";
 import { FESTIVE_SURNAMES } from "../elf/names";
@@ -57,7 +58,8 @@ function forAdmin(s: ElfSettings) {
 //   POST   /api/admin/elf/practice  start a practice evening at a pretend place (elf: edit; only with a
 //                                   preview link, which is how it is played)
 //   DELETE /api/admin/elf/practice  clear it and everything played at it (elf: edit)
-//   GET   /api/admin/elf/alerts     the head elves, their mobiles and ticks, and the last photo alert (elf: view)
+//   GET   /api/admin/elf/alerts     the head elves, their mobiles and ticks, the last photo alert and the
+//                                   words of the text and the email as they are sent (elf: view)
 //   PATCH /api/admin/elf/alerts/me  change only my own mobile and tick (elf: view)
 //   POST  /api/admin/elf/alerts/test  send me a test alert, by email and by text (elf: view)
 //
@@ -181,11 +183,12 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
   if (!claims) return;
   try {
     const now = new Date();
-    const [settings, numbers, recruits, perms] = await Promise.all([
+    const [settings, numbers, recruits, perms, photosWaiting] = await Promise.all([
       getElfSettings(),
       elfHqNumbers(now),
       elfRecruits(RECRUITS),
       loadEffectivePermissions(claims.sub),
+      countPhotosWaiting(),
     ]);
     const clue = firstClueAt(settings.year);
     const { notReady, soon } = await doorsNotReadyAt(settings.year, now);
@@ -200,6 +203,8 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       numbers,
       quests: questsFor(numbers, !!settings.previewHash, notReady, soon),
       doorsNotReady: notReady.length,
+      // The count on the Finds tile: photos waiting for a head elf to check.
+      photosWaiting,
       doorsOn: settings.doorsOn === true,
       doorsSoonNotReady: soon,
       recruits: recruits.map((d) => ({
@@ -550,13 +555,20 @@ const alertsMeSchema = z
   .strict();
 
 /** What Settings > Alerts shows: every head elf (with `me` for the one asking), whether texts are
- *  switched on, and the last photo alert. */
+ *  switched on, the last photo alert, and the words of the text and the email as the real builders write
+ *  them (the screen keeps no copy of its own). The email's sample is door 7's. */
+function alertPreview() {
+  const email = buildElfPhotoAlertEmail({ door: 7, adminUrl: `${siteOrigin()}/admin` });
+  return { text: ELF_PHOTO_TEXT, emailSubject: email.subject, emailLine: email.text.split(/\r?\n/)[0] };
+}
+
 async function alertsAnswer(userId: number) {
   const [people, last] = await Promise.all([listHeadElves(), lastAlert("photo")]);
   return {
     people: people.map((p) => ({ ...p, me: p.userId === userId })),
     textsOn: smsConfigured,
     lastAlert: last,
+    preview: alertPreview(),
   };
 }
 

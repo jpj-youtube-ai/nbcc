@@ -87,6 +87,13 @@ describe("Head Elf HQ's stylesheet", () => {
     }
   });
 
+  it("has pieces for the Finds photo check and log, in two columns once the part is wide", () => {
+    for (const s of [".hq-finds", ".hq-check", ".hq-polaroid", ".hq-hold", ".hq-look", ".hq-thumbs", ".hq-log", ".hq-steps"]) {
+      expect(all.some((r) => r.selector.split(",").some((x) => x.trim().startsWith(s))), s).toBe(true);
+    }
+    expect(all.some((r) => r.at.startsWith("@container") && r.at.includes("min-width: 1040px") && r.selector === ".hq-finds")).toBe(true);
+  });
+
   it("draws in NBCC's own colours, with a deep maroon ink rather than black", () => {
     expect(CSS).toContain("--hq-ink: #3A0B0B");
     expect(CSS).toContain("--hq-maroon: #800000");

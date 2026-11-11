@@ -137,7 +137,9 @@ export function renderCalendarPage(view: CalendarView): string {
   const ctx = { now: view.now, joinUrl: view.joinUrl, hqUrl: view.hqUrl };
   const join = sitePath(view.joinUrl) ?? "/";
   const hq = sitePath(view.hqUrl) ?? "/";
-  const found = view.doors.filter((d) => d.state === "found").length;
+  // An elf found while its place is still hidden is found: its door wears the Found chip. The live feed
+  // (src/routes/elf.ts) must count the same way, or the script would set the tally back.
+  const found = view.doors.filter((d) => d.state === "found" || d.state === "found-hidden").length;
   const status = calendarStatus(view);
 
   const board = view.doors.map((d) => doorTile(d, view.now) + doorDetail(d, ctx)).join("\n");

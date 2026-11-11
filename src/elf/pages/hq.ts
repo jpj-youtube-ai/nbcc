@@ -3,7 +3,7 @@ import { FRAMES } from "../wardrobe";
 import { clockWords, countdownWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
-import { elfPage, escapeHtml, sitePath } from "./shell";
+import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
 import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 
 // NBCC Elf Detective School: Detective HQ, a family's own page. The plan is
@@ -19,20 +19,12 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // script only saves the guess without leaving the page, and fetches the page again when the next
 // clue is due.
 //
-// One rule is kept here whatever the view holds: a clue is never written before it is out (the view
-// holds only the clues that are out, and none on a snow day).
+// One rule is kept here whatever the view holds: a clue is never written before it is out. Two locks
+// on the one secret: the view holds only the clues that are out (none on a snow day), and this page
+// writes only the clues whose time has come by the view's own clock (none if that clock is not real).
 //
 // Pure: no pool, no config, no clock (the time is in the view). Unit tested in
 // test/unit/elf-page-hq.test.ts.
-
-const line = (html: string, cls = ""): string => `<p${cls ? ` class="${cls}"` : ""}>${html}</p>`;
-
-/** Is this a real moment? A date built from a missing or mangled value is not, and must never
- *  bring the whole page down. */
-const real = (d: Date): boolean => d instanceof Date && Number.isFinite(d.getTime());
-
-/** A count as a whole number that is safe to write into the page, whatever a database hands over. */
-const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
 
 /** The clue as staff wrote it, with its line breaks kept. */
 function clueHtml(clue: string): string {
@@ -41,7 +33,7 @@ function clueHtml(clue: string): string {
 
 /** One clue that is out, on a taped note of its own: its number, its time, its words and its picture. */
 function clueNote(c: TodayView["clues"][number]): string {
-  const at = c.at instanceof Date && real(c.at) ? clockWords(c.at) : "";
+  const at = real(c.at) ? clockWords(c.at) : "";
   const picture = sitePath(c.pictureUrl);
   return (
     `<li class="elf-clue">` +
@@ -54,18 +46,22 @@ function clueNote(c: TodayView["clues"][number]): string {
 }
 
 /** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),
- *  or, once all three are out, when the hiding place is shown. */
+ *  or, once all three are out, when the hiding place is shown. Only a clue whose time has come is
+ *  written, whatever the view holds; with no real clock, no clue at all. */
 function clueLadder(today: TodayView, now: Date): string {
-  const notes = today.clues.length ? `<ol class="elf-ladder">${today.clues.map(clueNote).join("")}</ol>` : "";
+  if (!real(now)) return "";
+  const out = today.clues.filter((c) => real(c.at) && c.at.getTime() <= now.getTime());
+  const notes = out.length ? `<ol class="elf-ladder">${out.map(clueNote).join("")}</ol>` : "";
   const next = today.nextClueAt;
-  if (next instanceof Date && real(next)) {
-    const n = Math.min(3, today.clues.length + 1);
-    const counting = real(now)
-      ? `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${next.toISOString()}">${countdownWords(next.getTime() - now.getTime())}</span></p>`
-      : "";
-    return notes + line(`Clue ${n} comes out at ${clockWords(next)}`, "elf-ladder__next") + counting;
+  if (real(next)) {
+    const n = Math.min(3, out.length + 1);
+    return (
+      notes +
+      line(`Clue ${n} comes out at ${clockWords(next)}`, "elf-ladder__next") +
+      `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${next.toISOString()}">${countdownWords(next.getTime() - now.getTime())}</span></p>`
+    );
   }
-  if (next === null && today.revealAt instanceof Date && real(today.revealAt)) {
+  if (next === null && real(today.revealAt)) {
     return notes + line(`The hiding place is shown at ${clockWords(today.revealAt)}`, "elf-ladder__next");
   }
   return notes;

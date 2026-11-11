@@ -161,17 +161,21 @@ describe("a door that is not open, over every kind", () => {
     counts: { cracked: 3, visited: 2 },
     factLine: "Practice clue 1: it lives where the kettle lives",
   };
+  /** Each kind of door that is not open, as the view gives it. */
   const KINDS: [DoorKind, DoorView][] = [
-    ["later", door(LEAKY)],
-    ["tomorrow", { ...TOMORROW, ...LEAKY }],
-    ["today", { ...TODAY, ...LEAKY }],
-    ["hunting", { ...HUNTING, ...LEAKY }],
-    ["found-hidden", { ...FOUND_HIDDEN, ...LEAKY }],
-    ["snow", { ...SNOW, ...LEAKY }],
+    ["later", door()],
+    ["tomorrow", TOMORROW],
+    ["today", TODAY],
+    ["hunting", HUNTING],
+    ["found-hidden", FOUND_HIDDEN],
+    ["snow", SNOW],
   ];
 
-  it.each(KINDS)("%s: never shows the place, the scrapbook, a photo, the counts or the fact", (kind, d) => {
+  it.each(KINDS)("%s: never shows the place, the scrapbook, a photo, the counts or the fact", (kind, base) => {
+    const d = { ...base, ...LEAKY };
     expect(doorKind(d, NOW)).toBe(kind);
+    // Not even in its version: the feed would change when a hidden field did.
+    expect(doorVersion(d, NOW)).toBe(doorVersion(base, NOW));
     for (const said of [doorTile(d, NOW), doorDetail(d, CTX), doorLabel(d, NOW)]) {
       expect(said).not.toContain("Secret Cinema");
       expect(said).not.toMatch(/photo/i);

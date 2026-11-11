@@ -1,7 +1,7 @@
 import type { WordRefusal } from "../claim";
 import { clockWords, listWords, longDayWords, things } from "../words";
 import { candyCane, icon } from "./icons";
-import { elfPage, escapeHtml, sitePath } from "./shell";
+import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
 import type { ClaimWin, PosterOutcome, PosterView, VisitWin } from "./types";
 
 // NBCC Elf Detective School: the page a poster's QR code opens. The plan is
@@ -22,8 +22,9 @@ import type { ClaimWin, PosterOutcome, PosterView, VisitWin } from "./types";
 // hides at a place as on every day before it, or opening all 24 pages would give the day's place
 // away. So the page is told only what the public calendar already shows (posterViewFor), and until
 // the elf is found or the door is open it never writes the door's number, its elf's name or its
-// state. The words for a refused word keep the same secret: a wrong word is answered the same way
-// everywhere (see src/elf/claim.ts).
+// state, whatever else the view holds (a gone home flag or an approved photo included). The words for
+// a refused word keep the same secret: a wrong word is answered the same way everywhere (see
+// src/elf/claim.ts).
 //
 // The form posts to the server like any form. The page's script (assets/js/elf-poster.js) sends it
 // without leaving the page and shows the answer, which the server draws with claimWinHtml and
@@ -32,10 +33,6 @@ import type { ClaimWin, PosterOutcome, PosterView, VisitWin } from "./types";
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-page-poster.test.ts.
 
 const UNKNOWN = "Something went wrong. Refresh the page and try again.";
-
-const real = (d: unknown): d is Date => d instanceof Date && Number.isFinite(d.getTime());
-/** A count as a whole number that is safe to write into the page, whatever a database hands over. */
-const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
 
 /** "door 7", or "the practice door" for door 0, for the middle of a sentence. */
 const doorWords = (door: unknown): string => (count(door) === 0 ? "the practice door" : `door ${count(door)}`);
@@ -71,7 +68,6 @@ export function wordRefusalWords(reason: WordRefusal, triesLeft?: number): strin
 }
 
 const link = (url: string, words: string, cls = "elf-link"): string => `<a class="${cls}" href="${sitePath(url) ?? "/"}">${words}</a>`;
-const line = (html: string, cls = ""): string => `<p${cls ? ` class="${cls}"` : ""}>${html}</p>`;
 
 /** The gold card a winner shows the staff. Drawn by the server, for the page and for the script. */
 export function claimWinHtml(win: ClaimWin): string {
@@ -203,27 +199,33 @@ function wordCard(view: PosterView, refusal: string): string {
 }
 
 /** The family's own photo for this door: waiting, up, or not used, with Take it down (the page's
- *  script sends it) and Send another (opens the sheet again, with no script). */
+ *  script sends it) and Send another (opens the sheet again, with no script). Before the door is open
+ *  the card never names it: an approved photo reads as waiting until the place is shown (as the photo
+ *  itself does), and Send another, whose sheet names the door, waits too. Once the elves have gone home
+ *  there is nothing to send, so only Take it down stays. */
 function yourPhoto(view: PosterView): string {
   const photo = view.yourPhoto;
   if (!photo) return "";
+  const status = !view.open && photo.status === "approved" ? "waiting" : photo.status;
   const said =
-    photo.status === "waiting"
+    status === "waiting"
       ? "Thank you! A head elf will look at your photo soon."
-      : photo.status === "approved"
+      : status === "approved"
         ? `Your photo is on ${doorWords(view.door)}.`
-        : photo.status === "declined"
+        : status === "declined"
           ? "We could not use that photo this time. You are welcome to send another."
           : null;
   if (!said) return "";
   return note(
     "elf-your-photo",
     `<h2>Your photo</h2>` +
-      line(said, `elf-your-photo__said${photo.status === "approved" ? " is-ok" : ""}`) +
-      (photo.status === "declined" ? "" : `<p class="elf-your-photo__actions"><button class="elf-btn elf-btn--s elf-your-photo__down" type="button">Take it down</button></p>`) +
-      `<details class="elf-your-photo__again"><summary class="elf-btn elf-btn--s">Send another</summary>` +
-      photoSheet({ prefix: "elf-again", door: view.door, sendUrl: view.photoUrl, calendarUrl: view.calendarUrl }) +
-      `</details>`,
+      line(said, `elf-your-photo__said${status === "approved" ? " is-ok" : ""}`) +
+      (status === "declined" ? "" : `<p class="elf-your-photo__actions"><button class="elf-btn elf-btn--s elf-your-photo__down" type="button">Take it down</button></p>`) +
+      (view.open && !view.goneHome
+        ? `<details class="elf-your-photo__again"><summary class="elf-btn elf-btn--s">Send another</summary>` +
+          photoSheet({ prefix: "elf-again", door: view.door, sendUrl: view.photoUrl, calendarUrl: view.calendarUrl }) +
+          `</details>`
+        : ""),
   );
 }
 
@@ -254,7 +256,9 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
         `<p>Your family has no detectives yet. Add one at Detective HQ, then scan this poster again.</p>` +
         `<p class="elf-poster__actions">${link(view.hqUrl, "Detective HQ", "elf-btn elf-btn--crimson")}</p>`,
     );
-  } else if (view.goneHome) {
+  } else if (view.goneHome && view.open) {
+    // Only an open door's elves can have gone home as far as this page is concerned: a gone home flag on
+    // a door that is not open changes nothing, so the page still names nothing before its time.
     lede = `${elf} has gone home, so there is nothing to find here now. Thank you for calling in!`;
     body = yourPhoto(view);
   } else {
@@ -278,14 +282,14 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
     </div>
   </section>
 
-  <section class="elf-poster" aria-labelledby="elf-poster-heading">
+  <div class="elf-poster">
     <div class="wrap">
       <div id="elf-result" class="elf-result" tabindex="-1" aria-live="polite">${result}</div>
       ${body}
       <p class="elf-grown-up">Under 16? Bring a grown up with you to every hiding place.</p>
       <p class="elf-poster__links"><a class="elf-link" href="${calendar}">See the calendar</a>${view.signedIn ? ` ${link(view.hqUrl, "Detective HQ")}` : ""}</p>
     </div>
-  </section>`;
+  </div>`;
 
   return elfPage({
     title: view.placeName,

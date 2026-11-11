@@ -48,6 +48,18 @@ export function sitePath(value: unknown): string | null {
   return typeof value === "string" && /^\/(?!\/)[A-Za-z0-9/_.~%?=&-]*$/.test(value) ? value : null;
 }
 
+// ---- small helpers the screens share ---------------------------------------------------------------
+
+/** A paragraph, with a class when one is given. `html` is already safe. */
+export const line = (html: string, cls = ""): string => `<p${cls ? ` class="${cls}"` : ""}>${html}</p>`;
+
+/** Is this a real moment? A date built from a missing or mangled value is not, and must never bring a
+ *  page down. */
+export const real = (d: unknown): d is Date => d instanceof Date && Number.isFinite(d.getTime());
+
+/** A count as a whole number that is safe to write into a page, whatever a database hands over. */
+export const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
+
 /** The whole page. */
 export function elfPage(o: ElfPageOptions): string {
   const scripts = (o.scripts ?? [])

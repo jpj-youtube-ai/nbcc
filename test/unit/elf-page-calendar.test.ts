@@ -158,6 +158,17 @@ describe("the calendar page", () => {
     expect(words(page(view(at("2026-12-01T09:00:00.000Z"))).querySelector(".elf-tally"))).toBe("0 of 24 elves found");
   });
 
+  // Its door wears a Found chip, so it counts: the live feed (Task 7) must count the same way.
+  it("counts an elf found while its place is still hidden among the elves found", () => {
+    const hidden = view(at("2026-12-07T18:10:00.000Z"), {
+      state: "found-hidden",
+      found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Sam Snowsleuth" },
+      revealAt: at("2026-12-07T19:00:00.000Z"),
+    });
+    expect(words(page(hidden).querySelector(".elf-tally"))).toBe("7 of 24 elves found");
+    expect(words(page(view(at("2026-12-07T18:10:00.000Z"), { state: "snow" })).querySelector(".elf-tally"))).toBe("6 of 24 elves found");
+  });
+
   // The places are secret (docs/superpowers/specs/2026-11-03-elf-detective-secret-places-design.md):
   // a place shows only on its own door once that door is open, so the page never lists them.
   it("never lists this year's hiding places", () => {
@@ -342,9 +353,20 @@ describe("the advent calendar at every width", () => {
     for (const row of ["elf-collage", "elf-photos"]) {
       expect(css, row).toMatch(new RegExp(`\\.${row}[^{]*\\{[^}]*display:\\s*grid`));
     }
-    // At 360 pixels wide a row has about 232 pixels: two columns of at least 100 fit, two of 112 would not.
-    expect(css).toMatch(/\.elf-collage,\s*\.elf-photos \{[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(min\(100%, 100px\), 1fr\)\)/);
+    // Two columns always fit, however narrow the phone (half the row less half the 12px gap), so the
+    // finder's polaroid across two of them can never add a column and widen the row.
+    expect(css).toMatch(/\.elf-collage,\s*\.elf-photos \{[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(min\(calc\(50% - 6px\), 100px\), 1fr\)\)/);
+    expect(css).toMatch(/\.elf-collage,\s*\.elf-photos \{[^}]*gap:\s*20px 12px/);
     expect(css).toMatch(/\.elf-pol--first \{[^}]*grid-column:\s*span 2/);
+    // The finder's picture is the mockup's shape: wider than it is tall.
+    expect(css).toMatch(/\.elf-pol--first \.elf-pol__shot \{[^}]*aspect-ratio:\s*1\.25/);
+  });
+
+  // Measured at 320 pixels wide: a long festive surname and a two word place no longer broke a word.
+  it("keeps every word whole on the narrowest phone: names shrink a little, and the count drops below the place", () => {
+    expect(css).toMatch(/\.elf-pol \{[^}]*container-type:\s*inline-size/);
+    expect(css).toMatch(/\.elf-pol figcaption \{[^}]*font-size:\s*clamp\(0\.88rem, 15cqi, 1\.1rem\)/);
+    expect(css).toMatch(/\.elf-room__foot \{[^}]*flex-wrap:\s*wrap/);
   });
 
   it("draws a snow day's face as a paper snowflake cut out like the prize's shape, with no new picture", () => {

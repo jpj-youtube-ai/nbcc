@@ -30,6 +30,13 @@ describe("the page", () => {
     expect(doc.querySelector('.nav-cta[href="/elf"]')).not.toBeNull();
   });
 
+  it("names each part of the page once", () => {
+    for (const v of [posterView(), posterView(OPEN), posterView({ signedIn: false, detectives: [] }), posterView({ detectives: [] })]) {
+      const named = [...page(v).querySelectorAll("main [aria-labelledby]")].map((el) => el.getAttribute("aria-labelledby"));
+      expect(new Set(named).size, named.join(" ")).toBe(named.length);
+    }
+  });
+
   it("has a place for the answer that a screen reader is told about", () => {
     const result = page().querySelector("#elf-result")!;
     expect(result.getAttribute("aria-live")).toBe("polite");
@@ -58,6 +65,22 @@ describe("a place whose door is not open", () => {
 
   it("asks whether the family found the elf or came for a candy cane", () => {
     expect(lede(page())).toBe("Found the elf? Or here for a candy cane?");
+  });
+
+  // The page keeps its own rule whatever the view holds: before its door is open, nothing on it names
+  // the elf or its door.
+  it("changes nothing for a gone home flag on a door that is not open", () => {
+    expect(renderPosterPage(posterView({ goneHome: true, elfName: "Glitter" }))).toBe(renderPosterPage(posterView()));
+  });
+
+  it("never writes the door's number for the family's photo before the door is open", () => {
+    const doc = page(posterView({ yourPhoto: { token: "tok8", status: "approved" } }));
+    const box = doc.querySelector(".elf-your-photo")!;
+    expect(words(box)).toContain("Thank you! A head elf will look at your photo soon.");
+    expect(words(box)).toContain("Take it down");
+    expect(words(doc.querySelector("main"))).not.toMatch(/\bdoor \d/i);
+    // Send another opens a sheet that names the door, so it waits until the door is open.
+    expect(box.querySelector(".elf-photo-sheet, summary")).toBeNull();
   });
 });
 
@@ -212,6 +235,15 @@ describe("the family's own photo for this door", () => {
 
   it("is not there when the family has sent no photo", () => {
     expect(page(posterView(OPEN)).querySelector(".elf-your-photo")).toBeNull();
+  });
+
+  it("can still be taken down once the elves have gone home, with nothing to send and no form on the page", () => {
+    const doc = page(posterView({ ...OPEN, goneHome: true, yourPhoto: { token: "tok8", status: "approved" } }));
+    const box = doc.querySelector(".elf-your-photo")!;
+    expect(buttons(box).map(words)).toEqual(["Take it down"]);
+    expect(box.querySelector("summary, .elf-photo-sheet")).toBeNull();
+    expect(words(box)).not.toContain("Send another");
+    expect(doc.querySelector("form")).toBeNull();
   });
 });
 

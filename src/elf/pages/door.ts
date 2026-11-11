@@ -5,7 +5,7 @@ import { COLLAGE_MAX, type ScrapElf, type ScrapPhoto } from "../scrapbook";
 import { clockWords, countdownWords, dayWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { rosette } from "./paper";
-import { escapeHtml, sitePath } from "./shell";
+import { count, escapeHtml, line, sitePath } from "./shell";
 import type { DoorView } from "./types";
 
 // NBCC Elf Detective School: one door of the public calendar, and the detail that opens out beneath
@@ -67,13 +67,11 @@ function placeWords(d: DoorView): string | null {
   return isOpen(d.state) && d.place ? `${d.place.name}, ${d.place.town}` : null;
 }
 
-/** A count as a whole number that is safe to write into the page, whatever a database hands over. */
-const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
-
-/** "Found by Detective R. Tinselfoot at 5:47pm", leaving out a time that is not real. */
-function foundWords(found: { at: Date; by: string }): string {
+/** "Found by Detective R. Tinselfoot at 5:47pm", leaving out a time that is not real. Safe HTML: the
+ *  names are made safe, then dressed by `name` (the scrapbook sets them in bold). */
+function foundSentence(found: { at: Date; by: string }, name = (safe: string): string => safe): string {
   const at = clockWords(found.at);
-  return `Found by ${found.by}${at ? ` at ${at}` : ""}`;
+  return `Found by ${name(escapeHtml(found.by))}${at ? ` at ${at}` : ""}`;
 }
 
 /** The door in full words, for a screen reader. */
@@ -232,8 +230,6 @@ export function doorTile(d: DoorView, now: Date): string {
   );
 }
 
-const line = (html: string, cls = ""): string => `<p${cls ? ` class="${cls}"` : ""}>${html}</p>`;
-
 function countLines(d: DoorView): string {
   if (!d.counts) return "";
   const cracked = count(d.counts.cracked);
@@ -275,7 +271,7 @@ function detailParts(d: DoorView, kind: DoorKind, ctx: DoorContext): { meta: str
 
   if (kind === "found-hidden") {
     const reveal = d.revealAt ? clockWords(d.revealAt) : "";
-    const said = [d.found ? `${escapeHtml(foundWords(d.found))}.` : "", reveal ? `The hiding place is shown at ${reveal}.` : ""].filter((s) => s !== "").join(" ");
+    const said = [d.found ? `${foundSentence(d.found)}.` : "", reveal ? `The hiding place is shown at ${reveal}.` : ""].filter((s) => s !== "").join(" ");
     return {
       meta: `Door ${d.door} &middot; ${day}`,
       title: `${elf} has been found!`,
@@ -333,14 +329,13 @@ function detailParts(d: DoorView, kind: DoorKind, ctx: DoorContext): { meta: str
 /** One of the scrapbook's headings, in handwriting. */
 const bookHeading = (words: string, extra = ""): string => `<h4 class="elf-book__heading">${words}${extra ? ` ${extra}` : ""}</h4>`;
 
-/** "Found by Detective R. Tinselfoot at 5:47pm", beside a paper rosette. */
+/** Who found the elf and when, beside a paper rosette. */
 function foundLine(d: DoorView): string {
   if (!d.found) return "";
-  const at = clockWords(d.found.at);
   return (
     `<p class="elf-book__found">` +
     `<span class="elf-book__seal" aria-hidden="true">${rosette({ className: "elf-book__rosette", petals: 16 })}<b>Found</b></span>` +
-    `<span>Found by <b>${escapeHtml(d.found.by)}</b>${at ? ` at ${at}` : ""}</span></p>`
+    `<span>${foundSentence(d.found, (names) => `<b>${names}</b>`)}</span></p>`
   );
 }
 

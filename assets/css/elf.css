@@ -266,8 +266,11 @@
 .elf-mini:first-child:nth-last-child(2) { left: 6%; }
 .elf-mini:nth-child(2):last-child { left: auto; right: 6%; transform: rotate(4deg); }
 .elf-mini img { display: block; width: auto; height: 100%; aspect-ratio: 2 / 3; object-fit: cover; object-position: 50% 70%; border-radius: 1px; background: var(--elf-paper); }
-.elf-room__foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 4px; min-width: 0; }
-.elf-room .elf-door__place { min-width: 0; font-size: 0.66rem; font-weight: 600; line-height: 1.15; color: var(--maroon); overflow-wrap: break-word; }
+/* The place beside the count; on a door too narrow for the place's longest word and the count side by
+   side (a phone under about 340 pixels wide), the count drops to a line of its own rather than a word
+   breaking. */
+.elf-room__foot { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 2px 4px; min-width: 0; }
+.elf-room .elf-door__place { flex: 1 1 0; font-size: 0.66rem; font-weight: 600; line-height: 1.15; color: var(--maroon); overflow-wrap: break-word; }
 .elf-door .elf-room__count { flex: none; margin-left: auto; padding: 1px 8px 3px; font-size: 0.7rem; }
 .elf-room .elf-door__marks { top: 46%; }
 
@@ -410,22 +413,28 @@
 /* The rows' headings, in handwriting, with how many pictures under the first. */
 .elf-book__heading { margin: 20px 0 6px; color: var(--maroon); font-family: var(--elf-hand); font-weight: 700; font-size: 1.7rem; line-height: 1.05; letter-spacing: 0; }
 .elf-book__count { display: block; margin-top: 3px; color: var(--slate-soft); font-family: var(--font-body); font-weight: 500; font-size: 0.82rem; line-height: 1.2; }
-/* Two polaroids to a row on a phone: at 360 pixels wide the row has about 232 pixels, so a polaroid may
-   be as narrow as 100. More to a row only as the scrapbook widens. */
+/* Two polaroids to a row on a phone, however narrow: a column may shrink to half the row less half the
+   12px gap, so two always fit and the finders' polaroids across two columns never add a third that
+   would widen the row (at 320 pixels wide the row has about 192). More to a row only as the scrapbook
+   widens. */
 .elf-collage,
-.elf-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 100px), 1fr)); gap: 20px 12px; margin: 0 0 4px; padding: 12px 2px 6px; }
+.elf-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(calc(50% - 6px), 100px), 1fr)); gap: 20px 12px; margin: 0 0 4px; padding: 12px 2px 6px; }
 /* A polaroid: cream card on the paper, a strip of tape over its top, a little out of true. */
-.elf-pol { position: relative; margin: 0; padding: 6px 6px 8px; border-radius: 3px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.2), 0 8px 10px rgba(94, 0, 0, 0.18); transform: rotate(-1.6deg); }
+.elf-pol { position: relative; container-type: inline-size; margin: 0; padding: 6px 6px 8px; border-radius: 3px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.2), 0 8px 10px rgba(94, 0, 0, 0.18); transform: rotate(-1.6deg); }
 .elf-pol:nth-child(even) { transform: rotate(1.4deg); }
 .elf-pol::before { content: ""; position: absolute; left: 50%; top: -9px; width: 46px; height: 16px; margin-left: -23px; background: url(/assets/img/elf/paper/ui/tape.svg) 0 0 / 100% 100% no-repeat; transform: rotate(-3deg); pointer-events: none; }
 .elf-pol__shot { display: block; overflow: hidden; aspect-ratio: 0.86; border-radius: 2px; background: var(--elf-paper); }
 .elf-pol__shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 85%; }
 .elf-photos .elf-pol__shot img { object-position: 50% 30%; }
-.elf-pol figcaption { margin-top: 5px; color: var(--elf-ink-on-tan); font-family: var(--elf-hand); font-weight: 700; font-size: 1.1rem; line-height: 1.05; text-align: center; overflow-wrap: break-word; }
-/* The finders' elves: wide, square, with the FOUND FIRST! rosette pinned to the corner. */
+/* A detective's name, in handwriting a little smaller on a narrow polaroid, so a long festive surname
+   ("Merrymittens") still fits on a line of its own on the narrowest phone. */
+.elf-pol figcaption { margin-top: 5px; color: var(--elf-ink-on-tan); font-family: var(--elf-hand); font-weight: 700; font-size: 1.1rem; font-size: clamp(0.88rem, 15cqi, 1.1rem); line-height: 1.05; text-align: center; overflow-wrap: break-word; }
+/* The finders' elves: across the row, the mockup's shape (wider than tall, 1.25 to 1), framed on the elf
+   from its hat to its feet, with the FOUND FIRST! rosette pinned to the corner. */
 .elf-pol--first { grid-column: span 2; padding: 8px 8px 10px; transform: rotate(-0.8deg); }
 .elf-pol--first:nth-child(even) { transform: rotate(0.9deg); }
-.elf-pol--first .elf-pol__shot { aspect-ratio: 1; }
+.elf-pol--first .elf-pol__shot { aspect-ratio: 1.25; }
+.elf-pol--first .elf-pol__shot img { object-position: 50% 72%; }
 .elf-pol--first figcaption { font-size: 1.3rem; }
 .elf-pol__seal { position: absolute; z-index: 2; top: -14px; right: -8px; display: grid; place-items: center; width: 64px; height: 64px; color: var(--elf-on-dark); text-align: center; filter: drop-shadow(0 3px 3px rgba(94, 0, 0, 0.3)); transform: rotate(8deg); }
 .elf-pol__rosette { position: absolute; inset: 0; width: 100%; height: 100%; }

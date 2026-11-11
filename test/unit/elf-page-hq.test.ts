@@ -64,6 +64,17 @@ describe("the clue ladder", () => {
     expect(doc.querySelectorAll(".elf-clue").length).toBe(2);
   });
 
+  // Two locks on a clue before its time: the view holds only the clues that are out, and the page
+  // writes only those whose time has come, whatever the view holds.
+  it("never writes a clue whose time has not come, even when the view holds it", () => {
+    const doc = page(today({ clues: [CLUE_1, CLUE_2, CLUE_3], nextClueAt: CLUE_3.at }, { now: SIX_10 }));
+    expect([...doc.querySelectorAll(".elf-clue")].map((n) => words(n.querySelector(".elf-clue__n")))).toEqual(["Clue 1", "Clue 2"]);
+    expect(doc.documentElement.outerHTML).not.toContain(CLUE_3.words);
+    expect(words(doc.querySelector(".elf-ladder__next"))).toBe("Clue 3 comes out at 6:30pm");
+    // A clock that is not a real time shows no clue at all.
+    expect(page(today({}, { now: new Date("nonsense") })).querySelector(".elf-clue")).toBeNull();
+  });
+
   it("keeps a clue's lines as staff wrote them", () => {
     const first = page().querySelector(".elf-clue .elf-clue__words")!;
     expect(words(first)).toBe("I am hiding where stories sleep on shelves. Look up, not down!");

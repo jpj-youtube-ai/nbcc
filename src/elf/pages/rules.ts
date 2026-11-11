@@ -9,6 +9,15 @@ import type { ElfSettings } from "../settings";
 // rules are one sheet torn off a pad and taped up, each part's heading on a torn strip. Unit tested in
 // test/unit/elf-page-rules.test.ts.
 
+/** Who wins what while December's doors are off: wave 1's words, word for word, so no new words go live
+ *  before the doors do (as the calendar's steps, src/elf/pages/calendar.ts). */
+const WAVE_ONE_PRIZE = "The first detective to reach the elf and type the secret word on its tag wins that elf's prize. Each family can win one elf.";
+
+/** Who wins what once December's doors are on (docs/superpowers/specs/2026-11-10-elf-detective-wave-2-design.md):
+ *  the elf stays at its place and the finder wins that door's prize (decision 1), one prize a family (C6). */
+const PRIZE =
+  "The first detective to reach the elf and type the word on its tag wins that door's prize. The elf stays there for everyone else to find. Each family can win one prize.";
+
 function pounds(p: number): string {
   return p % 100 === 0 ? `£${p / 100}` : `£${(p / 100).toFixed(2)}`;
 }
@@ -42,7 +51,7 @@ export function renderRulesPage(view: { settings: ElfSettings }): string {
       <li>Each day from 1 to 24 December, one elf hides in a local shop, cafe or business. Where it hides is a secret.</li>
       <li>Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends and in the holidays.</li>
       <li>Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.</li>
-      <li>The first detective to reach the elf and type the secret word on its tag wins that elf's prize. Each family can win one elf.</li>
+      <li>${view.settings.doorsOn === true ? PRIZE : WAVE_ONE_PRIZE}</li>
       <li>Visit a place after its elf is found to collect a candy cane stamp.</li>
     </ul>`,
   )}

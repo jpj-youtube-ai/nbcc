@@ -195,11 +195,14 @@
       return null;
     }
 
-    // An open door can be visited any day in December, as the calendar's steps say.
-    function mineWords(mark) {
+    // An open door can be visited any day in December, as the calendar's steps say. A door whose elf has
+    // gone home has nothing left to find, as its scrapbook says, so its line never invites a visit: it
+    // says only what the family collected there, and nothing at all when that is nothing.
+    function mineWords(mark, goneHome) {
       if (mark.cracked && mark.visited) return "Your family cracked this case and has been there. Both marks collected.";
-      if (mark.cracked) return "Your family cracked this case. Visit any day in December for your candy cane too.";
       if (mark.visited) return "Your family has been there. Candy cane collected.";
+      if (goneHome) return mark.cracked ? "Your family cracked this case." : "";
+      if (mark.cracked) return "Your family cracked this case. Visit any day in December for your candy cane too.";
       return "Not done yet. Visit any day in December for your candy cane.";
     }
 
@@ -229,8 +232,9 @@
       var mine = detail.querySelector(".elf-detail__mine");
       var kind = door.getAttribute("data-kind");
       if (mine && (kind === "found" || kind === "revealed")) {
-        mine.textContent = mineWords(mark);
-        mine.hidden = false;
+        var said = mineWords(mark, !!detail.querySelector(".elf-book__gone"));
+        mine.textContent = said;
+        mine.hidden = said === "";
         // The family's own line says what is left to do, so the general hint would only repeat it.
         var hint = detail.querySelector(".elf-detail__hint");
         if (hint) hint.hidden = true;

@@ -751,6 +751,14 @@ describe("the sweep", () => {
       finderOf: vi.fn(async (_year: number, door: number) =>
         door === 6 ? { detectives: ["Ruby Tinselfoot", "Leo Frostwhistle"], grownUpName: "Sam Example", email: "sam@example.org", at: at("2026-12-06T10:20:00Z") } : null,
       ),
+      finderParts: vi.fn(async (_year: number, door: number) =>
+        door === 6
+          ? [
+              { firstName: "Ruby", surname: "Tinselfoot", approved: false },
+              { firstName: "Leo", surname: "Frostwhistle", approved: false },
+            ]
+          : [],
+      ),
     });
     sends.rows.set("proud 2026:won:9:6", { claimedAt: at("2026-12-06T10:20:00Z").getTime(), sentAt: null, attempts: 1, lastError: "SES refused the message" });
     await tick(FIVE_31);
@@ -759,6 +767,33 @@ describe("the sweep", () => {
     expect(won.map((m) => m.subject)).toEqual(["You found Pip!"]);
     expect(won[0]).toMatchObject({ to: "sam@example.org", name: "Sam Example" });
     expect(won[0].text).toContain("Detective Ruby Tinselfoot and Detective Leo Frostwhistle were the first to find Pip on door 6");
+  });
+
+  // Task 6's re-review: the sweep's won email named the finders raw. It names them as the word's own won email
+  // does, through the name checks (familyDetectiveName), so a name that fails them is never shown: here a
+  // surname that is not one of the festive ones, and a first name with a second word typed after it.
+  it("names the finders in the won email it sends through the name checks, as their own family sees them", async () => {
+    const { sent, sends, tick } = sweeping(new Map(), {
+      loadDoorRuns: vi.fn(async () => [door6()]),
+      familiesToSweep: vi.fn(async () => []),
+      finderOf: vi.fn(async () => ({
+        detectives: ["Ruby Examplesurname", "Leo Exampleton Frostwhistle"],
+        grownUpName: "Sam Example",
+        email: "sam@example.org",
+        at: at("2026-12-06T10:20:00Z"),
+      })),
+      finderParts: vi.fn(async () => [
+        { firstName: "Ruby", surname: "Examplesurname", approved: false },
+        { firstName: "Leo Exampleton", surname: "Frostwhistle", approved: true },
+      ]),
+    });
+    sends.rows.set("proud 2026:won:9:6", { claimedAt: at("2026-12-06T10:20:00Z").getTime(), sentAt: null, attempts: 1, lastError: "SES refused the message" });
+    await tick(FIVE_31);
+    const won = sentOf(sent, "proud");
+    expect(won.map((m) => m.subject)).toEqual(["You found Pip!"]);
+    expect(won[0].text).toContain("Detective Ruby and Detective Frostwhistle were the first to find Pip on door 6");
+    expect(won[0].text + won[0].html).not.toContain("Examplesurname");
+    expect(won[0].text + won[0].html).not.toContain("Exampleton");
   });
 
   it("never sends a won email the word has sent already", async () => {

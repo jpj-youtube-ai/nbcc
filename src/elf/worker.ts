@@ -462,7 +462,9 @@ async function sweep(due: Due, t: Tick): Promise<void> {
           elfName: run.elfName,
           familyId: run.foundFamilyId,
           family: finder,
-          detectives: finder.detectives.map((name) => `Detective ${name}`),
+          // Named as the word's own won email names them: in full, as their family typed them, through the
+          // name checks, so nothing of a name that fails them is shown.
+          detectives: (await t.deps.finderParts(t.year, run.door)).map(ownName),
         });
       } catch (err) {
         failed("the sweep of a found door", err);

@@ -56,6 +56,43 @@ describe("the rules page", () => {
   });
 });
 
+// Wave 2 (Plan 2b, Task 7): decision 1 (the elf stays at its place all December, and the finder wins the
+// prize) and C6 (one prize a family a year) reach the rules only once December's doors are switched on. With
+// them off the page reads exactly as wave 1's did, so no new words go live before the doors do, as the
+// calendar's steps already do.
+describe("how the hunt works, with December's doors off and on", () => {
+  const page = (doorsOn: boolean) =>
+    new DOMParser().parseFromString(renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true, doorsOn } }), "text/html");
+  const hunt = (d: Document) =>
+    [...d.querySelectorAll('[aria-labelledby="elf-rules-how"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim());
+
+  it("reads exactly as wave 1's did while December's doors are off", () => {
+    expect(hunt(page(false))).toEqual([
+      "Each day from 1 to 24 December, one elf hides in a local shop, cafe or business. Where it hides is a secret.",
+      "Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends and in the holidays.",
+      "Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.",
+      "The first detective to reach the elf and type the secret word on its tag wins that elf's prize. Each family can win one elf.",
+      "Visit a place after its elf is found to collect a candy cane stamp.",
+    ]);
+  });
+
+  it("says the finder wins that door's prize, the elf stays there, and one prize a family, once December's doors are on", () => {
+    const on = hunt(page(true));
+    expect(on).toHaveLength(5);
+    expect(on[3]).toBe(
+      "The first detective to reach the elf and type the word on its tag wins that door's prize. The elf stays there for everyone else to find. Each family can win one prize.",
+    );
+    expect(on.join(" ")).not.toContain("win one elf");
+    expect(on.join(" ")).not.toContain("secret word");
+  });
+
+  it("uses no dashes either way", () => {
+    for (const doorsOn of [false, true]) {
+      expect((page(doorsOn).querySelector("main")?.textContent ?? "").replace(/\s+/g, " ")).not.toMatch(/[‒–—―]| - /);
+    }
+  });
+});
+
 // The paper look (docs/superpowers/specs/2026-11-04-elf-paper-design.md): the rules in paper.
 describe("the rules, in paper", () => {
   const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");

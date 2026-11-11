@@ -665,7 +665,7 @@ describe("if the door cannot run", () => {
   }
 
   it("has a part with Call a snow day, which asks first and then posts", async () => {
-    const { calls } = withEight({}, { "POST /api/admin/elf/doors/8/snow-day": { body: { door: eight({ snowDay: { at: WHEN, by: "admin:staff@example.org" } }) } } });
+    const { calls } = withEight({}, { "POST /api/admin/elf/doors/8/snow-day": { body: { door: eight({ snowDay: { at: WHEN, by: "admin:staff@example.org", name: "Alex Example" } }) } } });
     await openEight();
     expect(partOf("snow").querySelector("h3")!.textContent).toBe("If the door cannot run");
     button(partOf("snow"), "Call a snow day")!.click();
@@ -674,7 +674,8 @@ describe("if the door cannot run", () => {
     button(partOf("snow"), "Yes, call a snow day")!.click();
     await flush();
     expect(calls.filter((c) => c.method === "POST")).toEqual([{ method: "POST", url: "/api/admin/elf/doors/8/snow-day", body: null }]);
-    expect(partOf("snow").textContent).toContain("Snow day called by staff@example.org on 6 December");
+    expect(partOf("snow").textContent).toContain("Snow day called by Alex Example on 6 December");
+    expect(partOf("snow").textContent).not.toContain("staff@example.org");
     expect(button(partOf("snow"), "Cancel the snow day")).toBeTruthy();
     expect(button(partOf("snow"), "Call a snow day")).toBeFalsy();
   });
@@ -729,14 +730,22 @@ describe("if the door cannot run", () => {
   });
 
   it("is words only for a head elf who may only look", async () => {
-    withEight({ snowDay: { at: WHEN, by: "admin:staff@example.org" } }, {}, false);
+    withEight({ snowDay: { at: WHEN, by: "admin:staff@example.org", name: "Alex Example" } }, {}, false);
     await openEight();
-    expect(partOf("snow").textContent).toContain("Snow day called by staff@example.org on 6 December");
+    expect(partOf("snow").textContent).toContain("Snow day called by Alex Example on 6 December");
     expect(partOf("snow").querySelectorAll("button")).toHaveLength(0);
   });
 
+  // The server names the head elf (their full name, the email only when it is blank); an answer with no name
+  // yet, from a task not yet on this version, still says who by the email.
+  it("names who called it by the email when the answer has no name", async () => {
+    withEight({ snowDay: { at: WHEN, by: "admin:staff@example.org" } });
+    await openEight();
+    expect(partOf("snow").textContent).toContain("Snow day called by staff@example.org on 6 December");
+  });
+
   it("ticks gone home once the door's day is over, and shows who and when", async () => {
-    const done = eight({ dayOver: true, goneHome: { at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org" } });
+    const done = eight({ dayOver: true, goneHome: { at: "2026-12-09T09:00:00.000Z", by: "admin:staff@example.org", name: "Alex Example" } });
     const { calls } = withEight({ dayOver: true }, { "POST /api/admin/elf/doors/8/gone-home": { body: { door: done } } });
     await openEight();
     const tick = sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!;
@@ -746,7 +755,8 @@ describe("if the door cannot run", () => {
     tick.dispatchEvent(new Event("change", { bubbles: true }));
     await flush();
     expect(calls.filter((c) => c.method === "POST")).toEqual([{ method: "POST", url: "/api/admin/elf/doors/8/gone-home", body: null }]);
-    expect(partOf("snow").textContent).toContain("Ticked by staff@example.org on 9 December");
+    expect(partOf("snow").textContent).toContain("Ticked by Alex Example on 9 December");
+    expect(partOf("snow").textContent).not.toContain("staff@example.org");
     expect(sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!.checked).toBe(true);
   });
 

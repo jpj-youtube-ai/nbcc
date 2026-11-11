@@ -458,13 +458,13 @@ From NBCC, to head elves with alerts on and a mobile number, once texts are swit
 - [ ] The question: Call a snow day for door *7*? Its elf will be snowed in, and every detective gets the door done.
 - [ ] The buttons: Yes, call a snow day, and Not yet
 - [ ] Snow day called.
-- [ ] Snow day called by *alex@example.org* on *5 December*
+- [ ] Snow day called by *Alex Example* on *5 December* (by their email only when their name in Team is blank)
 - [ ] Snow day: the door was not ready at its first clue
 - [ ] The button: Cancel the snow day
 - [ ] The snow day is cancelled.
 - [ ] Once the first clue is out with no snow day: No snow day was called.
 - [ ] After the door's day, the tick: Gone home: the place has stopped hosting the elf
-- [ ] Under the tick: Ticked by *alex@example.org* on *9 December*
+- [ ] Under the tick: Ticked by *Alex Example* on *9 December*
 - [ ] Refused: Door *7*'s evening has started, so it cannot be called off now.
 - [ ] Refused: Door *7*'s evening has started, so its snow day cannot be cancelled now.
 - [ ] Refused: Gone home is for after door *7*'s day.
@@ -653,5 +653,4 @@ Noticed while gathering these words:
 
 8. The word box on the poster page says "The secret word on the elf's tag" (and the poster says "type the secret word on its tag"), where the newer words say "the word on its tag": should they match?
 9. The clue email says "The hiding place is shown at 7pm", but if nobody has found the elf by then its place stays hidden until someone does or the place closes: should the email say so?
-10. The snow day and Gone home lines in Doors name the head elf by email ("Snow day called by alex@example.org"), where the photo log uses their name: should they use the name?
-11. The When alerts go box does not say that an alert never comes sooner than half an hour after the last one: should it?
+10. The When alerts go box does not say that an alert never comes sooner than half an hour after the last one: should it?

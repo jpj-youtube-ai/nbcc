@@ -2,12 +2,35 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { inTransaction } from "./elf-practice";
 import { listUsers } from "./admin-users";
-import { headElvesOf, type HeadElf } from "../elf/alerts";
+import { headElfName, headElvesOf, type HeadElf } from "../elf/alerts";
 
-// NBCC Elf Detective School wave 2: head elves' mobiles and alert ticks, and the alerts that went
-// (migrations/1791200000450_elf-alerts.js). A mobile is kept as E.164 and never written to the audit
-// log: a change is noted by who and the field names only. The SQL is proved against a real database
-// in CI; test/unit/elf-db-alerts.test.ts reads what is sent.
+// NBCC Elf Detective School wave 2: head elves' mobiles and alert ticks, the alerts that went
+// (migrations/1791200000450_elf-alerts.js), and who a head elf is by name. A mobile is kept as E.164 and
+// never written to the audit log: a change is noted by who and the field names only. The SQL is proved
+// against a real database in CI; test/unit/elf-db-alerts.test.ts reads what is sent.
+
+/** Who each actor a change was made under ("admin:<email>", from actorOf) is, as a screen names them: the
+ *  head elf's users.full_name, or the email when that is blank or there is no users row any more. One read
+ *  for them all, and none when no actor is a person. Any other actor ("automatic") comes back as it is. Read
+ *  by the photo log (src/db/elf-photos.ts) and Doors' snow day and gone home lines (src/routes/admin-elf-doors.ts). */
+export async function headElfNamesOf(actors: readonly (string | null | undefined)[]): Promise<(actor: string | null) => string> {
+  const emails = new Set<string>();
+  for (const a of actors) {
+    if (a && a.startsWith("admin:")) emails.add(a.slice("admin:".length).toLowerCase());
+  }
+  const names = new Map<string, string>();
+  if (emails.size > 0) {
+    const users = await pool.query<{ full_name: string; email: string }>(
+      "SELECT full_name, email FROM users WHERE lower(email) = ANY($1::text[])",
+      [[...emails]],
+    );
+    for (const u of users.rows) names.set(u.email.toLowerCase(), headElfName(u));
+  }
+  return (actor) => {
+    const email = (actor ?? "").replace(/^admin:/, "");
+    return names.get(email.toLowerCase()) ?? email;
+  };
+}
 
 interface HeadElfSql {
   user_id: number;

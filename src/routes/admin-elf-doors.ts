@@ -9,6 +9,7 @@ import { isUsableSecretWord } from "../elf/claim";
 import { renderElfPoster, renderElfTag, renderPlacesList, renderStaffCard } from "../elf/print";
 import { materialsMessagePage } from "../fundraising/materials";
 import { getElfSettings, type ElfSettings } from "../db/elf";
+import { headElfNamesOf } from "../db/elf-alerts";
 import { cluePicture } from "../db/elf-game";
 import {
   checkPictureUpload,
@@ -104,9 +105,10 @@ export interface DoorSheet extends DoorSetup {
   posterUrl: string;
   clueOut: Evening3;
   started: boolean;
-  /** Who called the door off and when (the by is "automatic" when the door was not ready); null if not. */
-  snowDay: { at: string; by: string } | null;
-  goneHome: { at: string; by: string } | null;
+  /** Who called the door off and when (the by is "automatic" when the door was not ready); null if not. The
+   *  name is who did it as a screen names a head elf: their users.full_name, the email when it is blank. */
+  snowDay: { at: string; by: string; name: string } | null;
+  goneHome: { at: string; by: string; name: string } | null;
   /** Has the door's day (midnight at the end of it) passed? Gone home can be ticked only then. */
   dayOver: boolean;
 }
@@ -132,10 +134,12 @@ function eveningState(year: number, d: DoorSetup, now: Date): { evening: Evening
   return { evening, clueOut: [out(evening.clue1), out(evening.clue2), out(evening.clue3)] };
 }
 
-function sheetOf(year: number, d: DoorSetup, now: Date): DoorSheet {
+async function sheetOf(year: number, d: DoorSetup, now: Date): Promise<DoorSheet> {
   const { evening, clueOut } = eveningState(year, d, now);
   const first = doorInstant(doorSeason(year), d.door, evening.clue1);
   const picture = doorPicture(year, d.door);
+  // Who called it off and who ticked gone home, by name, as the photo log names a head elf.
+  const name = await headElfNamesOf([d.snowDayAt ? d.snowDayBy : null, d.goneHomeAt ? d.goneHomeBy : null]);
   return {
     ...d,
     day: first ? longDayWords(first) : "",
@@ -146,8 +150,8 @@ function sheetOf(year: number, d: DoorSetup, now: Date): DoorSheet {
     posterUrl: `${String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "")}/elf/p/${d.posterCode}`,
     clueOut,
     started: clueOut[0],
-    snowDay: d.snowDayAt ? { at: new Date(d.snowDayAt).toISOString(), by: d.snowDayBy ?? "" } : null,
-    goneHome: d.goneHomeAt ? { at: new Date(d.goneHomeAt).toISOString(), by: d.goneHomeBy ?? "" } : null,
+    snowDay: d.snowDayAt ? { at: new Date(d.snowDayAt).toISOString(), by: d.snowDayBy ?? "", name: name(d.snowDayBy) } : null,
+    goneHome: d.goneHomeAt ? { at: new Date(d.goneHomeAt).toISOString(), by: d.goneHomeBy ?? "", name: name(d.goneHomeBy) } : null,
     dayOver: dayIsOver(year, d.door, now),
   };
 }
@@ -223,7 +227,7 @@ export const getAdminElfDoor = async (req: Request, res: Response): Promise<Resp
     const { year } = await getElfSettings();
     const [d, perms] = await Promise.all([getElfDoor(year, n), loadEffectivePermissions(claims.sub)]);
     if (!d) return noDoor(res, n);
-    return res.status(200).json({ door: sheetOf(year, d, new Date()), canEdit: !!perms && can(perms, "elf", "edit") });
+    return res.status(200).json({ door: await sheetOf(year, d, new Date()), canEdit: !!perms && can(perms, "elf", "edit") });
   } catch (err) {
     console.error("admin elf doors door failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
@@ -282,7 +286,7 @@ export const patchAdminElfDoor = guarded("change", "edit", async ({ req, res, ac
   const stored = await getElfDoor(year, door);
   if (!stored) return noDoor(res, door);
   // Nothing to change: write nothing, audit nothing, and answer the door as it is.
-  if (Object.keys(change).length === 0) return res.status(200).json({ door: sheetOf(year, stored, now) });
+  if (Object.keys(change).length === 0) return res.status(200).json({ door: await sheetOf(year, stored, now) });
   if ("placeName" in change && change.placeName === null && eveningState(year, stored, now).clueOut[0]) {
     return res.status(409).json({ error: `Door ${door}'s evening has started, so its place must keep a name.` });
   }
@@ -299,7 +303,7 @@ export const patchAdminElfDoor = guarded("change", "edit", async ({ req, res, ac
     }
   }
   const d = await changeElfDoor(year, door, change, actor);
-  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
 });
 
 // ---- names -----------------------------------------------------------------------------------------
@@ -313,7 +317,7 @@ export const postAdminElfDoorName = guarded("name add", "edit", async ({ req, re
   if (dayIsOver(year, door, now)) return res.status(409).json({ error: `Door ${door}'s day is over, so its names are fixed now.` });
   const d = await addElfDoorName(year, door, parsed.data.name, actor);
   if (d === "taken") return res.status(409).json({ error: "That name already counts for this door." });
-  return d ? res.status(201).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  return d ? res.status(201).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
 });
 
 export const deleteAdminElfDoorName = guarded("name remove", "edit", async ({ req, res, actor, year, now, door }) => {
@@ -326,7 +330,7 @@ export const deleteAdminElfDoorName = guarded("name remove", "edit", async ({ re
   }
   if (!stored.names.some((x) => x.id === Number(raw))) return res.status(404).json({ error: `There is no name like that on door ${door}.` });
   const d = await removeElfDoorName(year, door, Number(raw), actor);
-  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
 });
 
 // ---- the word --------------------------------------------------------------------------------------
@@ -345,7 +349,7 @@ export const postAdminElfDoorWord = guarded("word", "edit", async ({ req, res, a
     return res.status(409).json({ error: "This door's tag has been printed. Make a new word only if you will print the tag again.", printed: true });
   }
   const d = await setElfTagWord(year, door, makeTagWord(), actor);
-  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
 });
 
 // ---- the ticks -------------------------------------------------------------------------------------
@@ -353,7 +357,7 @@ export const postAdminElfDoorWord = guarded("word", "edit", async ({ req, res, a
 function tick(which: "droppedOff" | "thanked", on: boolean) {
   return guarded(`${which} ${on ? "tick" : "untick"}`, "edit", async ({ res, actor, year, now, door }) => {
     const d = await tickElfDoor(year, door, which, on, actor);
-    return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+    return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
   });
 }
 export const postAdminElfDoorDroppedOff = tick("droppedOff", true);
@@ -374,9 +378,9 @@ function snowDay(on: boolean) {
       });
     }
     // Already as asked: nothing to write, and the first caller stays on record.
-    if (on === (stored.snowDayAt !== null)) return res.status(200).json({ door: sheetOf(year, stored, now) });
+    if (on === (stored.snowDayAt !== null)) return res.status(200).json({ door: await sheetOf(year, stored, now) });
     const d = await tickElfDoor(year, door, "snowDay", on, actor);
-    return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+    return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
   });
 }
 export const postAdminElfDoorSnowDay = snowDay(true);
@@ -387,7 +391,7 @@ function goneHome(on: boolean) {
   return guarded(`gone home ${on ? "tick" : "untick"}`, "edit", async ({ res, actor, year, now, door }) => {
     if (!dayIsOver(year, door, now)) return res.status(409).json({ error: `Gone home is for after door ${door}'s day.` });
     const d = await tickElfDoor(year, door, "goneHome", on, actor);
-    return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+    return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
   });
 }
 export const postAdminElfDoorGoneHome = goneHome(true);
@@ -410,7 +414,7 @@ export const putAdminElfDoorClue = guarded("clue", "edit", async ({ req, res, ac
   if (!stored) return noDoor(res, door);
   if (eveningState(year, stored, now).clueOut[n - 1]) return res.status(409).json({ error: clueOutWords(door, n) });
   const d = await saveElfClue(year, door, n, trimmed === "" ? null : trimmed, actor);
-  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
 }, true);
 
 // ---- one clue's picture ----------------------------------------------------------------------------
@@ -475,7 +479,7 @@ export const putAdminElfDoorCluePicture = guarded("clue picture", "edit", async 
   if (!made.ok && made.reason === "size") return res.status(413).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_SIZE } });
   if (!made.ok) return res.status(400).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_READ } });
   const d = await saveElfCluePicture(year, door, n, { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height }, alt, actor);
-  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
 });
 
 export const deleteAdminElfDoorCluePicture = guarded("clue picture off", "edit", async ({ req, res, actor, year, now, door }) => {
@@ -485,9 +489,9 @@ export const deleteAdminElfDoorCluePicture = guarded("clue picture off", "edit",
   if (!stored) return noDoor(res, door);
   if (eveningState(year, stored, now).clueOut[n - 1]) return res.status(409).json({ error: clueOutWords(door, n) });
   // Nothing to take off: the door as it is, and no audit row.
-  if (!stored.clues.some((c) => c.n === n && c.hasPicture)) return res.status(200).json({ door: sheetOf(year, stored, now) });
+  if (!stored.clues.some((c) => c.n === n && c.hasPicture)) return res.status(200).json({ door: await sheetOf(year, stored, now) });
   const d = await removeElfCluePicture(year, door, n, actor);
-  return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
+  return d ? res.status(200).json({ door: await sheetOf(year, d, now) }) : noDoor(res, door);
 });
 
 export const getAdminElfDoorCluePicture = guarded("clue picture look", "view", async ({ req, res, year, door }) => {

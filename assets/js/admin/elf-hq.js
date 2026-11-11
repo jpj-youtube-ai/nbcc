@@ -1633,7 +1633,8 @@
         kids.push(
           el("p", {
             class: "hq-words",
-            text: automatic ? "Snow day: the door was not ready at its first clue" : "Snow day called by " + who(d.snowDay.by) + " on " + dayWords(d.snowDay.at),
+            // The head elf by name, as the server gives it (their full name, the email when it is blank).
+            text: automatic ? "Snow day: the door was not ready at its first clue" : "Snow day called by " + (d.snowDay.name || who(d.snowDay.by)) + " on " + dayWords(d.snowDay.at),
           }),
         );
         if (edit && !d.started) {
@@ -1707,7 +1708,7 @@
         kids.push(
           el("div", { class: "hq-dtick" }, [
             el("label", { class: "hq-tickbox", for: "hqDoor-goneHome" }, [box, el("span", { text: "Gone home: the place has stopped hosting the elf" })]),
-            d.goneHome ? el("span", { class: "hq-hint", text: "Ticked by " + (who(d.goneHome.by) || "staff") + " on " + dayWords(d.goneHome.at) }) : null,
+            d.goneHome ? el("span", { class: "hq-hint", text: "Ticked by " + (d.goneHome.name || who(d.goneHome.by) || "staff") + " on " + dayWords(d.goneHome.at) }) : null,
           ]),
         );
       }

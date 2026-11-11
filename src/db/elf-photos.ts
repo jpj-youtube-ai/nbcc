@@ -2,7 +2,7 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { inTransaction } from "./elf-practice";
 import { loadDoorRun, loadPractice, type DoorRun } from "./elf-game";
-import { headElfName } from "../elf/alerts";
+import { headElfNamesOf } from "./elf-alerts";
 import { isDoor, type Door } from "../elf/calendar";
 import { openedAt, shownAt } from "../elf/doors";
 import { approvedFamiliesSql } from "./elf-photo-sql";
@@ -222,27 +222,8 @@ const LOG_SELECT = `SELECT p.id, p.year, p.door, f.grown_up_name, p.status, p.se
             (p.status = 'approved' AND ${approvedFamiliesSql("p")} < 2) AS held
        FROM elf_photos p JOIN elf_families f ON f.id = p.family_id`;
 
-/** Who an actor string ("admin:<email>") is: the head elf's name, or the email when there is no row. */
-async function namesOf(rows: LogSql[]): Promise<(actor: string | null) => string> {
-  const emails = new Set<string>();
-  for (const r of rows) {
-    for (const a of [r.decided_by, r.taken_down_by]) {
-      if (a && a.startsWith("admin:")) emails.add(a.slice("admin:".length).toLowerCase());
-    }
-  }
-  const names = new Map<string, string>();
-  if (emails.size > 0) {
-    const users = await pool.query<{ full_name: string; email: string }>(
-      "SELECT full_name, email FROM users WHERE lower(email) = ANY($1::text[])",
-      [[...emails]],
-    );
-    for (const u of users.rows) names.set(u.email.toLowerCase(), headElfName(u));
-  }
-  return (actor) => {
-    const email = (actor ?? "").replace(/^admin:/, "");
-    return names.get(email.toLowerCase()) ?? email;
-  };
-}
+/** Who decided and who took down each of these photos, by name (headElfNamesOf). */
+const namesOf = (rows: LogSql[]): Promise<(actor: string | null) => string> => headElfNamesOf(rows.flatMap((r) => [r.decided_by, r.taken_down_by]));
 
 function stepsOf(r: LogSql, name: (actor: string | null) => string): { at: Date; words: string }[] {
   const steps = [{ at: r.sent_at, words: "Sent" }];

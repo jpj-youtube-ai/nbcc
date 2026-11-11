@@ -12009,7 +12009,9 @@ is found, whether or not Show it off is ticked.
 cannot run when its first clue falls due is snowed in automatically. The snow day is stored, and a
 snow day door counts as done for every detective, and shows done on the family's marks (Detective
 HQ and the calendar's holly). Gone home is allowed only after the door's day; a door whose elf has
-gone home takes no more photos.
+gone home takes no more photos. Doors says who called a snow day or ticked gone home, and on what day,
+naming the head elf by their `users.full_name` (the email only when it is blank) as the photo log does:
+the door's sheet carries the name beside the actor (`headElfNamesOf` in `src/db/elf-alerts.ts`).
 
 **Switched off means wave 1.** While December's doors are off, `runsFor` (the one loader every family
 route uses) gives exactly the wave 1 doors (`waveOneRuns`): shut, each door's default clue 1 time

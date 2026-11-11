@@ -13,7 +13,7 @@ vi.mock("../../src/db/pool", () => ({
 }));
 vi.mock("../../src/db/admin-users", () => ({ listUsers: vi.fn() }));
 
-import { lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert, setMyAlerts } from "../../src/db/elf-alerts";
+import { headElfNamesOf, lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert, setMyAlerts } from "../../src/db/elf-alerts";
 import { listUsers } from "../../src/db/admin-users";
 
 const ACTOR = "admin:alex@example.org";
@@ -43,6 +43,28 @@ describe("the head elves", () => {
     ]);
     query.mockResolvedValue({ rows: [] });
     expect((await listHeadElves()).map((e) => e.email)).toEqual(["alex@example.org"]);
+  });
+});
+
+// Who did something, by name: the photo log's steps and Doors' snow day and gone home lines both read it.
+describe("a head elf's name, from the actor a change was made under", () => {
+  it("is their full name, or their email when that is blank or there is no users row, read once for them all", async () => {
+    query.mockResolvedValue({ rows: [{ full_name: "Alex Example", email: "Alex@Example.org" }, { full_name: " ", email: "jo@example.org" }] });
+    const name = await headElfNamesOf(["admin:alex@example.org", "admin:JO@example.org", "admin:gone@example.org", null, "admin:alex@example.org"]);
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, params] = query.mock.calls[0];
+    expect(String(sql)).toContain("SELECT full_name, email FROM users WHERE lower(email) = ANY($1::text[])");
+    expect(params).toEqual([["alex@example.org", "jo@example.org", "gone@example.org"]]);
+    expect(name("admin:alex@example.org")).toBe("Alex Example");
+    expect(name("admin:JO@example.org")).toBe("jo@example.org");
+    expect(name("admin:gone@example.org")).toBe("gone@example.org");
+  });
+
+  it("reads nothing when no one but the system did it, and gives other actors back as they are", async () => {
+    const name = await headElfNamesOf(["automatic", null, undefined]);
+    expect(query).not.toHaveBeenCalled();
+    expect(name("automatic")).toBe("automatic");
+    expect(name(null)).toBe("");
   });
 });
 

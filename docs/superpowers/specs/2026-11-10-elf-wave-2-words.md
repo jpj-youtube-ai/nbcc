@@ -572,14 +572,14 @@ From NBCC, to head elves with alerts on and a mobile number, once texts are swit
 
 - [ ] The tile on HQ's front: **Finds**, with the number of photos waiting
 - [ ] The heading: **Photos to check**, with the chip *2* waiting
-- [ ] One alert went at *6:04pm*. (or: No alert has gone yet.)
+- [ ] One alert went at *6:04pm*. (for an alert on another day, with its day: One alert went at *Thu 6:04pm*.) (or: No alert has gone yet.)
 - [ ] No photos are waiting.
 - [ ] Loading the photo…
 - [ ] The photo could not be loaded.
 - [ ] What a screen reader says for the photo: A photo a family sent, waiting for a head elf to check
-- [ ] What a screen reader says for the photo being checked: Door *7*, sent at *6:04pm*
+- [ ] What a screen reader says for the photo being checked: Door *7*, sent at *6:04pm* (for a photo sent on another day: Door *7*, sent at *Sun 9:12pm*)
 - [ ] Door *7* · *Monday 7 December* (or: The practice door, with the chip **Practice**), then the place
-- [ ] Sent at *6:04pm*
+- [ ] Sent at *6:04pm* (for a photo sent on another day: Sent at *Sun 9:12pm*)
 - [ ] From *Sam Example*'s family, *2* detectives. Only head elves see who sent it.
 - [ ] Door *7*'s place is shown at *7pm*, so this photo waits until then, even once it is approved. (or: The practice door's place is shown at *3:10pm*, ...)
 - [ ] This is the first family's photo on door *7*, so it stays hidden until a photo from a second family is approved. (or: on the practice door)
@@ -598,7 +598,7 @@ From NBCC, to head elves with alerts on and a mobile number, once texts are swit
 - [ ] When someone else got there first: Someone has already checked this photo.
 - [ ] In place of the buttons, for a moment: Approved by *Alex Example* at *6:13pm* (or: Declined by *Alex Example* at *6:13pm*)
 - [ ] For a photo the family replaced while it waited: Replaced by a newer photo from the family
-- [ ] The other photos waiting: **Next**, each with its door, its place and Sent *6:04pm*
+- [ ] The other photos waiting: **Next**, each with its door, its place and Sent *6:04pm* (or Sent *Sun 9:12pm* for one sent on another day)
 - [ ] Refused: That photo is not there.
 - [ ] Refused: That request could not be read.
 

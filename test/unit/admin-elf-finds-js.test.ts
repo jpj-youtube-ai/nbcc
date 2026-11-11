@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 
@@ -92,8 +92,16 @@ async function openFinds(answers: Record<string, unknown> = {}, statuses: Record
   return env;
 }
 
+// 6:12pm on Monday 7 December 2026 in London (GMT, so UTC): the photos and the alert above are from today.
+const NOW = new Date("2026-12-07T18:12:00.000Z");
+
 beforeEach(() => {
   window.sessionStorage.clear();
+  vi.useRealTimers();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
+});
+afterEach(() => {
   vi.useRealTimers();
 });
 
@@ -208,6 +216,33 @@ describe("the photo to check", () => {
     expect(part().querySelector(".hq-queue")!.textContent).toContain("No alert has gone yet.");
   });
 
+  // A time alone is today's; a moment on another day says its day too, in the log's form ("Sun 9:12pm").
+  it("says the day beside a time that is not today: a photo sent last night, the next one, and an alert from last week", async () => {
+    const lastNight = { ...FIRST, sentAt: "2026-12-06T21:12:00.000Z" };
+    const alsoLastNight = { ...SECOND, sentAt: "2026-12-06T21:30:00.000Z" };
+    await openFinds({
+      "GET /api/admin/elf/photos": { ...PHOTOS, waiting: [lastNight, alsoLastNight, THIRD], lastAlert: { at: "2026-12-03T18:04:00.000Z", textsFailed: [] } },
+    });
+    const queue = part().querySelector<HTMLElement>(".hq-queue")!;
+    const check = queue.querySelector<HTMLElement>(".hq-check")!;
+    expect(check.textContent).toContain("Sent at Sun 9:12pm");
+    expect(check.getAttribute("aria-label")).toBe("Door 7, sent at Sun 9:12pm");
+    expect(queue.textContent).toContain("One alert went at Thu 6:04pm.");
+    // The practice photo was sent at 6:10pm today, so its time stands alone.
+    expect([...queue.querySelectorAll(".hq-thumb")].map((n) => n.textContent)).toEqual([
+      "Door 6Snowford LibrarySent Sun 9:30pm",
+      "The practice doorThe Pretend PlaceSent 6:10pm",
+    ]);
+  });
+
+  it("gives a time from today on its own, on the photo and for a screen reader", async () => {
+    await openFinds();
+    const check = part().querySelector<HTMLElement>(".hq-check")!;
+    expect(check.getAttribute("aria-label")).toBe("Door 7, sent at 6:04pm");
+    expect(check.textContent).toContain("Sent at 6:04pm");
+    expect(check.textContent).not.toMatch(/Sent at [A-Z][a-z]{2} /);
+  });
+
   it("says so when nothing is waiting", async () => {
     await openFinds({ "GET /api/admin/elf/photos": { ...PHOTOS, waiting: [] } });
     expect(part().querySelector(".hq-queue")!.textContent).toContain("No photos are waiting.");
@@ -255,7 +290,10 @@ describe("approving and declining", () => {
   });
 
   it("shows the other head elf's step in place of the buttons on a 409, then reads the queue again", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    // The file's clock fakes the date only: fake the timeout too, from the same moment.
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+    vi.setSystemTime(NOW);
     const env = await openFinds(
       { "POST /api/admin/elf/photos/41/approve": { error: "Someone has already checked this photo.", step: "Approved by Alex Example at 6:13pm" } },
       { "POST /api/admin/elf/photos/41/approve": 409 },

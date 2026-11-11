@@ -2557,6 +2557,14 @@
       if (isNaN(d.getTime())) return "";
       return new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "Europe/London" }).format(d) + " " + timeShort(iso);
     }
+    /** "6:04pm" for a moment today in London, and stepWhen's "Sun 9:12pm" for one on any other day, so a time
+     *  in the photo check never passes for today's when it is not. */
+    function whenShort(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      var day = new Intl.DateTimeFormat("en-GB", { year: "numeric", month: "numeric", day: "numeric", timeZone: "Europe/London" });
+      return day.format(d) === day.format(new Date()) ? timeShort(iso) : stepWhen(iso);
+    }
     /** "Sunday 31 January 2027": the day every photo from the year's December is deleted. */
     function deletionDay() {
       var year = (data && data.settings && Number(data.settings.year)) || new Date().getFullYear();
@@ -2813,7 +2821,7 @@
       var n = p.family.detectives;
       var said = el("p", { class: "hq-status", role: "status" });
       var decideBox = el("div", { class: "hq-decidebox" });
-      var card = el("article", { class: "hq-check", "aria-label": doorName(p) + ", sent at " + timeShort(p.sentAt) }, [
+      var card = el("article", { class: "hq-check", "aria-label": doorName(p) + ", sent at " + whenShort(p.sentAt) }, [
         polaroid,
         el("div", { class: "hq-facts" }, [
           el("div", {}, [
@@ -2822,7 +2830,7 @@
             p.placeName ? el("p", { class: "hq-where", text: p.placeName }) : null,
           ]),
           el("ul", { class: "hq-meta" }, [
-            el("li", { text: "Sent at " + timeShort(p.sentAt) }),
+            el("li", { text: "Sent at " + whenShort(p.sentAt) }),
             el("li", { text: "From " + p.family.grownUpName + "'s family, " + n + " " + plural(n, "detective", "detectives") + ". Only head elves see who sent it." }),
           ]),
           shown,
@@ -2853,7 +2861,7 @@
           el("span", { class: "hq-chip " + (w.length ? "hq-chip--crimson" : "hq-chip--holly"), text: w.length + " waiting" }),
         ]),
       );
-      box.appendChild(el("p", { class: "hq-words hq-soft", text: d.lastAlert && d.lastAlert.at ? "One alert went at " + timeShort(d.lastAlert.at) + "." : "No alert has gone yet." }));
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: d.lastAlert && d.lastAlert.at ? "One alert went at " + whenShort(d.lastAlert.at) + "." : "No alert has gone yet." }));
       if (finds.notice) {
         box.appendChild(el("p", { class: "hq-status is-ok", role: "status", text: finds.notice }));
         finds.notice = "";
@@ -2876,7 +2884,7 @@
             el("span", { class: "hq-pic", "aria-hidden": "true" }),
             el("b", { text: doorName(p) }),
             p.placeName ? el("span", { text: p.placeName }) : null,
-            el("span", { class: "hq-soft", text: "Sent " + timeShort(p.sentAt) }),
+            el("span", { class: "hq-soft", text: "Sent " + whenShort(p.sentAt) }),
           ]);
           b.addEventListener("click", function () {
             finds.currentId = p.id;

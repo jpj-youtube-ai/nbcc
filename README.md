@@ -12088,7 +12088,9 @@ screens in `assets/js/admin/elf-hq.js`.
 **The photo check and the photo log** (Head Elf HQ > Finds). The photos waiting, oldest first (a removed
 family's are left out), the first one big beside the four checks of the design (only the family in it;
 no school uniform or badge; nothing that shows where anyone lives; nothing unkind), with its door, its
-place, when it was sent and the family (head elves only). Approve, or Decline with a reason only head
+place, when it was sent and the family (head elves only). A time there, and the last alert's ("One alert
+went at 6:04pm."), stands alone only when it is today; on another day it says the day too, as the log's
+steps do ("Sun 9:12pm"). Approve, or Decline with a reason only head
 elves see (1 to 200 characters). Whoever gets there first decides: anyone else is shown the step that
 beat them ("Approved by Alex Example at 6:13pm") and the queue is read again. A decline, a take down and
 a photo replaced by its family delete the bytes at once (C8); the log keeps the line, never the picture.

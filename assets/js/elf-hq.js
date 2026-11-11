@@ -16,7 +16,7 @@
   "use strict";
 
   var NOT_SAVED = "We could not save your guess. Check your signal and try again.";
-  
+
   /** How long is left: "2:14:09", "14:09", "0:05", and "0:00" once the time has come. The same
    *  words as countdownWords in src/elf/words.ts. */
   function countdownWords(ms) {

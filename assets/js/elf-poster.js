@@ -32,6 +32,8 @@
   var MAX_BYTES = 2 * 1024 * 1024;
   var MAX_PX = 1600;
   var QUALITY = 0.86;
+  // Tried once more if the first drawing is over 2 MB.
+  var LOWER_QUALITY = 0.7;
 
   /** The time in London with its seconds: "5:47:13pm". */
   function clockWords(ms) {
@@ -73,7 +75,7 @@
   // Draws the picture again on a canvas, the whole of it made smaller if it is big: a fresh JPEG, so
   // nothing from the camera goes with it.
   function browserMake(doc) {
-    return function (pic) {
+    return function (pic, quality) {
       return new Promise(function (done) {
         try {
           var canvas = doc.createElement("canvas");
@@ -85,7 +87,7 @@
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(pic.img, 0, 0, canvas.width, canvas.height);
-          var url = canvas.toDataURL("image/jpeg", QUALITY);
+          var url = canvas.toDataURL("image/jpeg", quality || QUALITY);
           var comma = url.indexOf(",");
           if (comma === -1 || url.indexOf("data:image/jpeg") !== 0) return done(null);
           done({ mime: "image/jpeg", base64: url.slice(comma + 1) });
@@ -157,15 +159,24 @@
       return form;
     }
 
-    function json(payload) {
-      return { headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) };
-    }
-
-    /** What a server answer says in words: its message (a refusal) or its error, or a plain problem. */
+    /** What a server answer says in words: its message (a refusal), the sentence for the photo when it
+     *  names one, or its error, or a plain problem. */
     function wordsOf(body) {
       if (body && typeof body.message === "string" && body.message) return body.message;
+      var fields = body && body.fields && typeof body.fields === "object" ? body.fields : null;
+      if (fields && typeof fields.photo === "string" && fields.photo) return fields.photo;
       if (body && typeof body.error === "string" && body.error) return body.error;
       return PROBLEM;
+    }
+
+    /** Lets go of the preview's picture in the browser's memory, for a sheet or the whole page. */
+    function revokeIn(root) {
+      var shots = root.querySelectorAll("[data-blob]");
+      for (var i = 0; i < shots.length; i++) {
+        var url = shots[i].getAttribute("data-blob");
+        shots[i].removeAttribute("data-blob");
+        if (url && win.URL && typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
+      }
     }
 
     /** Sends a request and gives back { ok, status, body } however it went; never rejects. */
@@ -248,6 +259,7 @@
         input.addEventListener("change", function () {
           var file = input.files && input.files.length ? input.files[0] : null;
           picture = null;
+          if (preview) revokeIn(preview);
           if (!file) {
             if (preview) preview.hidden = true;
             return;
@@ -258,6 +270,7 @@
             if (shot) {
               shot.textContent = "";
               if (pic && pic.src) {
+                shot.setAttribute("data-blob", pic.src);
                 var img = doc.createElement("img");
                 img.src = pic.src;
                 img.alt = "";
@@ -273,20 +286,31 @@
       function prepare(file) {
         return picturing.then(function () {
           var made = picture ? make(picture) : Promise.resolve(null);
-          return made.then(function (small) {
-            if (small && small.base64) return small;
-            if (TYPES.indexOf(file.type) === -1) return { error: PHOTO_TYPE };
-            if (file.size > MAX_BYTES) return { error: PHOTO_SIZE };
-            return rawBase64(win, file).then(function (b64) {
-              return b64 ? { mime: file.type, base64: b64 } : { error: PHOTO_READ };
+          return made
+            .then(function (small) {
+              // Over 2 MB: draw it once more at a lower quality before giving up on it.
+              if (small && small.base64 && base64Bytes(small.base64) > MAX_BYTES) {
+                return make(picture, LOWER_QUALITY).then(function (lower) {
+                  return lower && lower.base64 ? lower : small;
+                });
+              }
+              return small;
+            })
+            .then(function (small) {
+              if (small && small.base64) return small;
+              if (TYPES.indexOf(file.type) === -1) return { error: PHOTO_TYPE };
+              if (file.size > MAX_BYTES) return { error: PHOTO_SIZE };
+              return rawBase64(win, file).then(function (b64) {
+                return b64 ? { mime: file.type, base64: b64 } : { error: PHOTO_READ };
+              });
             });
-          });
         });
       }
 
       function thanks() {
         var sheet = form.closest ? form.closest(".elf-photo-sheet") : null;
         if (!sheet) return;
+        revokeIn(sheet);
         sheet.textContent = "";
         var p = doc.createElement("p");
         p.className = "elf-photo-sheet__thanks";
@@ -315,7 +339,7 @@
           .then(function (made) {
             if (made.error) return { words: made.error };
             if (base64Bytes(made.base64) > MAX_BYTES) return { words: PHOTO_SIZE };
-            return request(form.getAttribute("data-api") || photoUrl(), Object.assign({ method: "POST" }, json({ mime: made.mime, dataBase64: made.base64, consent: true }))).then(function (res) {
+            return request(form.getAttribute("data-api") || photoUrl(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mime: made.mime, dataBase64: made.base64, consent: true }) }).then(function (res) {
               return res.status === 202 ? { sent: true } : { words: wordsOf(res.body) };
             });
           })
@@ -371,21 +395,24 @@
     }
 
     var onClick = function (event) {
-        var target = event.target && event.target.closest ? event.target : null;
-        if (!target) return;
-        var down = target.closest(".elf-your-photo__down, .elf-photo-down");
-        if (down) {
-          event.preventDefault();
-          takeDown(down);
-          return;
+      var target = event.target && event.target.closest ? event.target : null;
+      if (!target) return;
+      var down = target.closest(".elf-your-photo__down, .elf-photo-down");
+      if (down) {
+        event.preventDefault();
+        takeDown(down);
+        return;
+      }
+      // Not this time puts the sheet away, and stays on the page.
+      var skip = target.closest(".elf-photo-sheet__skip");
+      if (skip) {
+        event.preventDefault();
+        var sheet = skip.closest(".elf-photo-sheet");
+        if (sheet) {
+          revokeIn(sheet);
+          sheet.hidden = true;
         }
-        // Not this time puts the sheet away, and stays on the page.
-        var skip = target.closest(".elf-photo-sheet__skip");
-        if (skip) {
-          event.preventDefault();
-          var sheet = skip.closest(".elf-photo-sheet");
-          if (sheet) sheet.hidden = true;
-        }
+      }
     };
     if (canSend) doc.addEventListener("click", onClick);
 
@@ -423,7 +450,7 @@
         if (!typed.replace(/\s/g, "")) return say(claim, "Type the secret word on the elf's tag.", true);
         say(claim, "", false);
         hold(claim, true);
-        request(claim.getAttribute("data-api"), Object.assign({ method: "POST" }, json({ code: code ? code.value : "", detectiveIds: who, word: typed }))).then(function (res) {
+        request(claim.getAttribute("data-api"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code ? code.value : "", detectiveIds: who, word: typed }) }).then(function (res) {
           hold(claim, false);
           if (res.ok && typeof res.body.html === "string" && res.body.html) show(res.body.html, claim);
           else say(claim, wordsOf(res.body), true);

@@ -317,6 +317,23 @@ describe("the family's own photo", () => {
     expect(detail(3).querySelector("figure button")).toBeNull();
   });
 
+  it("says the photo is down, and leaves the door, when only the fetch of the door fails", async () => {
+    me = { status: 200, body: { doors: [], photos } };
+    const calendar = load(withPhotos());
+    await calendar.ready;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
+      return Promise.reject(new Error("offline"));
+    });
+    click(detail(3).querySelector("figure[data-token] button")!);
+    await flush();
+    const mine = detail(3).querySelector<HTMLElement>('figure[data-token="mine0001"]')!;
+    expect(words(mine)).toContain("Your photo has been taken down.");
+    expect(words(mine)).not.toContain("could not");
+    expect(mine.querySelector("button")).toBeNull();
+  });
+
   it("is not marked for a visitor who is not signed in", async () => {
     const calendar = load(withPhotos());
     await calendar.ready;

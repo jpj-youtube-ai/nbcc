@@ -319,6 +319,65 @@ describe("the photo sheet after a visit", () => {
     expect($<HTMLButtonElement>(`${SHEET} button[type="submit"]`).disabled).toBe(false);
   });
 
+  it("shows the sentence for the photo when the server names one", async () => {
+    await visited();
+    tickConsent(true);
+    await pick(await jpegFile());
+    answer = { status: 413, body: { error: "Please look again.", fields: { photo: "That picture is too big. Try a smaller one." } } };
+    await submitSheet();
+    expect(words($(`${SHEET} .elf-form-status`))).toBe("That picture is too big. Try a smaller one.");
+  });
+
+  it("tries a lower quality once when the redrawn picture is over 2 MB, and then gives up", async () => {
+    const qualities: unknown[] = [];
+    const big = "A".repeat(3 * 1024 * 1024);
+    await visited({
+      read: () => Promise.resolve({ src: "blob:x", width: 4000, height: 3000, img: {} }),
+      make: (_pic: unknown, quality?: number) => {
+        qualities.push(quality);
+        return Promise.resolve({ mime: "image/jpeg", base64: quality ? "c21hbGw=" : big });
+      },
+    });
+    tickConsent(true);
+    await pick(new File([new Uint8Array([1, 2, 3])], "big.jpg", { type: "image/jpeg" }));
+    answer = { status: 202, body: { status: "waiting", token: "t" } };
+    await submitSheet();
+    expect(qualities).toEqual([undefined, 0.7]);
+    expect(calls[0].json).toEqual({ mime: "image/jpeg", dataBase64: "c21hbGw=", consent: true });
+  });
+
+  it("says the picture is too big when even the lower quality is over 2 MB", async () => {
+    const big = "A".repeat(3 * 1024 * 1024);
+    await visited({
+      read: () => Promise.resolve({ src: "blob:x", width: 4000, height: 3000, img: {} }),
+      make: () => Promise.resolve({ mime: "image/jpeg", base64: big }),
+    });
+    tickConsent(true);
+    await pick(new File([new Uint8Array([1, 2, 3])], "big.jpg", { type: "image/jpeg" }));
+    await submitSheet();
+    expect(calls).toEqual([]);
+    expect(words($(`${SHEET} .elf-form-status`))).toBe("That picture is too big. Try a smaller one.");
+  });
+
+  it("lets go of the preview's picture when another is chosen, when the sheet is hidden and after sending", async () => {
+    const revoked: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window.URL as any).revokeObjectURL = (u: string) => revoked.push(u);
+    let n = 0;
+    await visited({ read: () => Promise.resolve({ src: `blob:${++n}`, width: 10, height: 10, img: {} }), make: () => Promise.resolve({ mime: "image/jpeg", base64: "c21hbGw=" }) });
+    await pick(new File([new Uint8Array([1])], "a.jpg", { type: "image/jpeg" }));
+    await pick(new File([new Uint8Array([2])], "b.jpg", { type: "image/jpeg" }));
+    expect(revoked).toEqual(["blob:1"]);
+    tickConsent(true);
+    answer = { status: 202, body: { status: "waiting", token: "t" } };
+    await submitSheet();
+    expect(revoked).toEqual(["blob:1", "blob:2"]);
+    await visited({ read: () => Promise.resolve({ src: "blob:9", width: 10, height: 10, img: {} }) });
+    await pick(new File([new Uint8Array([1])], "a.jpg", { type: "image/jpeg" }));
+    click($(".elf-photo-sheet__skip"));
+    expect(revoked).toEqual(["blob:1", "blob:2", "blob:9"]);
+  });
+
   it("asks for a photo before it sends anything", async () => {
     await visited();
     tickConsent(true);

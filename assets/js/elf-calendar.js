@@ -257,24 +257,40 @@
       if (!figure || !n || button.disabled) return;
       var door = n[1];
       button.disabled = true;
+      function note(words, isError) {
+        var status = figure.querySelector(".elf-form-status");
+        if (!status) {
+          status = doc.createElement("p");
+          status.className = "elf-form-status";
+          status.setAttribute("role", "status");
+          figure.appendChild(status);
+        }
+        status.textContent = words;
+        if (isError) status.classList.add("is-error");
+        else status.classList.remove("is-error");
+      }
+      // The photo is down once the server says so. If the door cannot be drawn again just now, the
+      // page says so and leaves the door as it is; the next news from the feed will redraw it.
+      function downButStillShown() {
+        if (!doc.contains(figure)) return;
+        if (button.parentNode) button.parentNode.removeChild(button);
+        note("Your photo has been taken down.", false);
+      }
       win
         .fetch(doorApi + door + "/photo", { method: "DELETE", credentials: "same-origin" })
-        .then(function (res) {
-          if (!res.ok) throw new Error("not taken down");
-          delete photos[door];
-          return refresh(door);
-        })
+        .then(
+          function (res) {
+            if (!res.ok) throw new Error("not taken down");
+            delete photos[door];
+            return refresh(door).then(downButStillShown, downButStillShown);
+          },
+          function () {
+            throw new Error("not taken down");
+          }
+        )
         .catch(function () {
           button.disabled = false;
-          var status = figure.querySelector(".elf-form-status");
-          if (!status) {
-            status = doc.createElement("p");
-            status.className = "elf-form-status";
-            status.setAttribute("role", "status");
-            figure.appendChild(status);
-          }
-          status.textContent = "We could not take your photo down just now. Please try again.";
-          status.classList.add("is-error");
+          note("We could not take your photo down just now. Please try again.", true);
         });
     }
 

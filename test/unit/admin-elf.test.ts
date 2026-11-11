@@ -77,6 +77,7 @@ import {
   patchAdminElfAlertsMe,
   postAdminElfAlertsTest,
   postAdminElfWorkerTick,
+  resetTestAlertLimit,
 } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
@@ -953,6 +954,7 @@ describe("the alerts in Settings", () => {
 
   describe("the test alert", () => {
     beforeEach(() => {
+      resetTestAlertLimit();
       dbAlerts.listHeadElves.mockResolvedValue([ALEX, SAM]);
       dbAlerts.recordAlert.mockResolvedValue(undefined);
       mailer.sendElfTestAlert.mockResolvedValue(undefined);
@@ -1031,6 +1033,39 @@ describe("the alerts in Settings", () => {
 
     it("is for those given the section", async () => {
       expect((await run(postAdminElfAlertsTest, req("viewer"))).statusCode).toBe(403);
+    });
+
+    // Each press can be a paid text, to a number nobody has confirmed: one test a minute for each head elf.
+    it("allows one test a minute for each head elf, and answers a second press inside the minute with 429 in words", async () => {
+      const asHeadElf = (sub: number, email: string) => {
+        getUserAuthRowMock.mockResolvedValue({ id: sub, email, status: "active", role: "viewer", permissions: HEAD_ELF });
+        const token = signAdminSession({ sub, email, role: "viewer", now: new Date(), secret: "test-admin-secret" }).token;
+        return { headers: { authorization: `Bearer ${token}` }, body: {}, params: {}, query: {} };
+      };
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        sms.sendText.mockResolvedValue("sent");
+        vi.setSystemTime(new Date("2026-12-07T12:00:00Z"));
+        expect((await run(postAdminElfAlertsTest, asHeadElf(1, "staff@example.org"))).statusCode).toBe(200);
+        vi.setSystemTime(new Date("2026-12-07T12:00:59Z"));
+        const again = await run(postAdminElfAlertsTest, asHeadElf(1, "staff@example.org"));
+        expect(again.statusCode).toBe(429);
+        expect(again.body).toEqual({ error: "You sent a test a moment ago. Try again in a minute." });
+        expect(again.headers["Cache-Control"]).toBe("no-store");
+        expect(mailer.sendElfTestAlert).toHaveBeenCalledTimes(1);
+        expect(sms.sendText).toHaveBeenCalledTimes(1);
+        expect(dbAlerts.recordAlert).toHaveBeenCalledTimes(1);
+        // Another head elf has a minute of their own.
+        const sam = await run(postAdminElfAlertsTest, asHeadElf(2, "sam@example.org"));
+        expect(sam.statusCode).toBe(200);
+        expect(sam.body).toEqual({ email: true, text: "no-mobile" });
+        // A minute after the first press, the first head elf may test again.
+        vi.setSystemTime(new Date("2026-12-07T12:01:00Z"));
+        expect((await run(postAdminElfAlertsTest, asHeadElf(1, "staff@example.org"))).statusCode).toBe(200);
+        expect(mailer.sendElfTestAlert).toHaveBeenCalledTimes(3);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

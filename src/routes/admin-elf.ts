@@ -29,6 +29,7 @@ import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { badgeWords, buildElfPhotoAlertEmail, buildElfTestAlertEmail, ELF_PHOTO_TEXT, ELF_TEST_TEXT } from "../elf/emails";
 import { normaliseUkMobile } from "../elf/alerts";
 import { elfTextsOn } from "../elf/texts-on";
+import { createRateLimiter } from "../portal/request-limiter";
 import { lastAlert, listHeadElves, recordAlert, setMyAlerts } from "../db/elf-alerts";
 import { countPhotosWaiting } from "../db/elf-photos";
 import { sendText, smsConfigured } from "../clients/sms";
@@ -616,13 +617,26 @@ export async function patchAdminElfAlertsMe(req: Request, res: Response): Promis
   }
 }
 
+/** One test alert a minute for each head elf: each press can be a paid text to a number nobody has confirmed.
+ *  Counted in this task's memory, as every limit made with createRateLimiter is. */
+const TEST_ALERT_LIMIT = { max: 1, windowMs: 60_000 } as const;
+let testAlertLimit = createRateLimiter(TEST_ALERT_LIMIT);
+const TEST_TOO_SOON = { error: "You sent a test a moment ago. Try again in a minute." };
+
+/** For tests: a fresh minute for every head elf. */
+export function resetTestAlertLimit(): void {
+  testAlertLimit = createRateLimiter(TEST_ALERT_LIMIT);
+}
+
 /** Sends the caller a test alert: the email, and the text when they have a mobile and texts are tried
  *  (elf: view). Whether texts are tried is the photo alert's own rule (elfTextsOn): switched on, or outside
- *  production through the stub. A text that fails never stops the email. */
+ *  production through the stub. A text that fails never stops the email. One a minute for each head elf;
+ *  a second press inside the minute is 429, with nothing sent. */
 export async function postAdminElfAlertsTest(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const claims = await authorizeSection(req, res, "elf", "view");
   if (!claims) return;
+  if (!testAlertLimit.allow(String(claims.sub), Date.now())) return res.status(429).json(TEST_TOO_SOON);
   try {
     const me = (await listHeadElves()).find((p) => p.userId === claims.sub);
     const name = me ? me.name : claims.email;

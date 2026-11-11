@@ -559,6 +559,7 @@ From NBCC, to head elves with alerts on and a mobile number, once texts are swit
 - [ ] Sent by email. Add a mobile number to get texts too.
 - [ ] Sent by email. The text did not go.
 - [ ] Sent by email. Texts are not switched on yet.
+- [ ] Pressed again within a minute (one test a minute for each head elf): You sent a test a moment ago. Try again in a minute.
 - [ ] **The text**, with From NBCC above the text itself
 - [ ] **The email**, with Subject: *A photo is waiting to be checked* and the email's first line
 - [ ] Under the email: You get one of these when photos start waiting, not one for every photo.

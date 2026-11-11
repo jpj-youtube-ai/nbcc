@@ -1117,6 +1117,25 @@ describe("Alerts in Settings", () => {
     expect(said.classList.contains("is-error")).toBe(true);
   });
 
+  // The server allows one test a minute for each head elf (src/routes/admin-elf.ts): its words are shown.
+  it("says in words, as an error, when a test went a moment ago, and the button can be pressed again", async () => {
+    await openSettings({});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const before = w.fetch;
+    w.fetch = vi.fn((url: string, init: RequestInit = {}) =>
+      init.method === "POST"
+        ? Promise.resolve({ ok: false, status: 429, json: () => Promise.resolve({ error: "You sent a test a moment ago. Try again in a minute." }) })
+        : before(url, init),
+    );
+    inPart(alertsNow(), "Send me a test alert")!.click();
+    await flush();
+    const said = alertsNow().querySelector(".hq-status")!;
+    expect(said.textContent).toBe("You sent a test a moment ago. Try again in a minute.");
+    expect(said.classList.contains("is-error")).toBe(true);
+    expect(inPart(alertsNow(), "Send me a test alert")!.disabled).toBe(false);
+  });
+
   it("says whose text did not reach them at the last alert, as an error", async () => {
     await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, lastAlert: { at: "2026-12-07T18:04:00.000Z", textsFailed: ["Alex Example"] } } });
     const line = [...alertsNow().querySelectorAll<HTMLElement>(".is-error")].find((n) => n.textContent!.includes("did not reach"))!;

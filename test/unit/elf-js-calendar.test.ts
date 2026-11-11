@@ -132,7 +132,8 @@ describe("opening a door", () => {
 
   it("opens from a tap on anything inside the door", () => {
     load();
-    click(door(4).querySelector(".elf-door__chip")!);
+    // An open door's room: the count of its pictures.
+    click(door(4).querySelector(".elf-room__count")!);
     expect(detail(4).classList.contains("is-open")).toBe(true);
     click(door(9).querySelector(".elf-door__flap .elf-door__num")!);
     expect(detail(9).classList.contains("is-open")).toBe(true);
@@ -193,7 +194,7 @@ describe("news from the live feed", () => {
     expect(door(7).classList.contains("is-open")).toBe(true);
     expect(door(7).classList.contains("is-opening")).toBe(true);
     expect(door(7).getAttribute("aria-label")).toContain("The Toy Shop, Troon");
-    expect(words(detail(7))).toContain("Found first by Detective Sam Snowsleuth");
+    expect(words(detail(7))).toContain("Found by Detective Sam Snowsleuth at 5:47pm");
     expect(words($(".elf-tally"))).toBe("7 of 24 elves found");
   });
 

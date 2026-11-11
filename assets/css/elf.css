@@ -36,6 +36,8 @@
 
   /* The shape carved into a door when staff have not uploaded one: the mystery star. */
   --elf-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M24 6l5.3 11.6 12.7 1.4-9.5 8.6 2.7 12.5L24 33.6l-11.2 6.5 2.7-12.5L6 19l12.7-1.4z'/%3E%3C/svg%3E");
+  /* A snow day's door: a six armed snowflake, cut out the same way. */
+  --elf-flake: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none' stroke='%23000' stroke-width='3.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20M19 6l5 5 5-5M37.1 10.7l-1.8 6.8 6.8 1.8M42.1 28.7l-6.8 1.8 1.8 6.8M29 42l-5-5-5 5M10.9 37.3l1.8-6.8-6.8-1.8M5.9 19.3l6.8-1.8-1.8-6.8'/%3E%3C/svg%3E");
 }
 
 /* ---------- the bar across the top: always solid cream ----------
@@ -67,7 +69,8 @@
 /* A link that stands by itself is tall enough for a thumb. */
 .elf-poster__links .elf-link,
 .elf-win__links .elf-link,
-.elf-stamped__links .elf-link,
+.elf-visit__links .elf-link,
+.elf-photo-sheet__links .elf-link,
 .elf-wd-back .elf-link { display: inline-flex; align-items: center; min-height: 44px; }
 
 /* ---------- the top of the calendar page ---------- */
@@ -92,8 +95,10 @@
 .elf-status .elf-status__eyebrow { margin: -44px 0 14px -6px; }
 .elf-status__title { font-size: clamp(1.5rem, 1.25rem + 1.2vw, 2.1rem); color: var(--maroon); margin-top: 4px; text-wrap: balance; }
 .elf-status--today { --elf-layer: var(--elf-paper-gold); }
-.elf-status--found { --elf-layer: var(--holly); --elf-layer-tilt: -1.3deg; }
-.elf-status--revealed { --elf-layer: var(--tan); --elf-layer-tilt: -1.5deg; }
+.elf-status--found,
+.elf-status--foundhidden { --elf-layer: var(--holly); --elf-layer-tilt: -1.3deg; }
+.elf-status--revealed,
+.elf-status--snow { --elf-layer: var(--tan); --elf-layer-tilt: -1.5deg; }
 .elf-status--hunting { --elf-layer: var(--elf-paper-gold); --elf-card-face: var(--holly); color: var(--elf-on-dark); }
 .elf-status--hunting .elf-status__title { color: var(--elf-on-dark); }
 
@@ -174,6 +179,8 @@
   line-height: 1.2;
   text-align: center;
   -webkit-tap-highlight-color: transparent;
+  /* "Close door 7" jumps back to the door: clear of the bar across the top. */
+  scroll-margin-top: calc(var(--nav-h) + 16px);
 }
 /* The door itself: card of the board's own maroon, a dark cut round it with the light on its top and
    left edges, and its shadow on the board. It turns on its left edge. */
@@ -220,8 +227,10 @@
    same everywhere). Its gold and its bow still say which door is today's. */
 .elf-door--today.has-chip .elf-door__foot { display: inline-flex; font-variant-numeric: tabular-nums; }
 .elf-door--today .elf-door__chip { display: none; }
-/* Where an open door's elf was is in its detail, so the picture can have the whole door. */
-.elf-door__place { display: none; }
+/* Who found an elf whose place is still hidden: a name can run to two lines, so the chip wraps and the
+   shape on the door steps down a size to leave it room. */
+.elf-door .elf-door__by { max-width: 100%; white-space: normal; font-size: 0.64rem; line-height: 1.15; overflow-wrap: break-word; }
+.elf-door--found-hidden .elf-carve { width: 40px; height: 40px; }
 
 /* Today's door, and the one being hunted: gold card round the door, a gold glow on the board round
    it, a gold shape and the painted bow, as on a present. */
@@ -233,18 +242,34 @@
 .elf-door__bow { position: absolute; top: -16px; left: 57%; z-index: 2; width: 60px; height: auto; margin-left: -30px; filter: drop-shadow(0 2px 1px rgba(58, 0, 0, 0.35)); pointer-events: none; }
 .elf-door--gold .elf-door__chip { margin-top: 22px; }
 
-/* An open door stands open on its hinge, swung almost flat, so what was behind it fills the door
-   (Jaimie, 5 November 2026: the picture must be big enough to see on a phone). Shown open here,
-   swung open only for a visitor happy with motion (below). Behind it, in the hole, the finder's
-   picture, or the prize's shape in gold; its chip is stuck on at the foot. */
+/* An open door stands open on its hinge, swung almost flat, so the room behind it fills the door
+   (Jaimie, 5 November 2026: what is behind must be big enough to see on a phone). Shown open here,
+   swung open only for a visitor happy with motion (below). A revealed elf's chip, Still here, is stuck
+   on at the top. */
 .elf-door.is-open { padding-left: 25%; }
 .elf-door.is-open .elf-door__flap { transform: perspective(var(--elf-depth, 1300px)) rotateY(-78deg); }
 .elf-door.is-open .elf-carve__hi { background-color: var(--elf-paper-gold); }
-.elf-door.is-open .elf-door__face { grid-row: 1 / -1; align-self: stretch; justify-self: stretch; min-height: 0; }
-/* Laid over the whole hole and fitted inside it, so a picture can never make a door taller, however
-   wide the door (23 and the double doors too). */
-.elf-door.is-open .elf-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(58, 0, 0, 0.3)); }
-.elf-door.is-open .elf-door__chip { position: absolute; left: 62.5%; bottom: 6px; z-index: 2; transform: translateX(-50%) rotate(var(--elf-chip-tilt, -2deg)); }
+.elf-door.is-open .elf-door__chip { position: absolute; top: 6px; right: 5px; z-index: 3; }
+
+/* The room behind an open door (door-scrapbook-v2.html): its number, up to three of the elves that
+   found it on little polaroids (elves only, never a photo), its place, and how many pictures its
+   scrapbook holds. Laid over the hole beside the swung door, so it can never make a door taller,
+   however wide the door (23 and the double doors too). Each polaroid takes its size from the room's
+   height, so it fits a short wide door as well as a tall one. */
+.elf-room { position: absolute; inset: 7px 7px 7px 25%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 3px; text-align: left; }
+.elf-room__num { justify-self: start; font-family: var(--font-head); font-weight: 800; font-size: 0.95rem; line-height: 1; color: var(--maroon); font-variant-numeric: lining-nums; }
+.elf-room__pics { position: relative; min-height: 0; display: grid; place-items: center; }
+.elf-mini { position: absolute; top: 8%; left: 0; height: 78%; padding: 3px 3px 9px; border-radius: 2px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 0 1px 1px rgba(94, 0, 0, 0.25), 0 3px 5px rgba(94, 0, 0, 0.22); transform: rotate(-7deg); }
+.elf-mini:nth-child(2) { top: 0; left: 50%; z-index: 2; transform: translateX(-50%) rotate(4deg); }
+.elf-mini:nth-child(3) { top: 14%; left: auto; right: 0; z-index: 1; transform: rotate(-2deg); }
+.elf-mini:only-child { top: 2%; left: 50%; height: 92%; transform: translateX(-50%) rotate(-3deg); }
+.elf-mini:first-child:nth-last-child(2) { left: 6%; }
+.elf-mini:nth-child(2):last-child { left: auto; right: 6%; transform: rotate(4deg); }
+.elf-mini img { display: block; width: auto; height: 100%; aspect-ratio: 2 / 3; object-fit: cover; object-position: 50% 70%; border-radius: 1px; background: var(--elf-paper); }
+.elf-room__foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 4px; min-width: 0; }
+.elf-room .elf-door__place { min-width: 0; font-size: 0.66rem; font-weight: 600; line-height: 1.15; color: var(--maroon); overflow-wrap: break-word; }
+.elf-door .elf-room__count { flex: none; margin-left: auto; padding: 1px 8px 3px; font-size: 0.7rem; }
+.elf-room .elf-door__marks { top: 46%; }
 
 /* Door 23 is two doors wide, so the 24 fill every row at every width. */
 .elf-door--wide { --elf-depth: 2600px; grid-column: span 2; aspect-ratio: 2.065 / 1.12; }
@@ -267,7 +292,9 @@
 .elf-door--double .elf-door__bow { left: 100%; }
 .elf-door--double.is-open { padding-inline: 13%; }
 .elf-door--double.is-open .elf-door__flap--right { transform: perspective(var(--elf-depth, 1300px)) rotateY(78deg); }
-.elf-door--double.is-open .elf-door__chip { left: 50%; }
+/* Both halves swing away, so the room is between them. */
+.elf-door--double .elf-room { left: 13%; right: 13%; }
+.elf-door--double.is-open .elf-door__chip { right: calc(13% + 5px); }
 
 /* A door the signed in family has done, cracked or visited: the painted holly, put on by the page's
    script. */
@@ -278,9 +305,9 @@
 .elf-door[aria-expanded="true"],
 .elf-door:has(+ .elf-detail:target) { outline: 3px solid var(--card); outline-offset: 2px; }
 
-/* The winner's picture: their dressed elf, or their photo once it has been checked. Behind an open
-   door it fills the door (above); in a door's detail it sits on a paper mount (below). */
-.elf-shot { display: block; height: auto; }
+/* A snow day's face: a paper snowflake cut out of card the way a prize's shape is (no picture: the
+   stylesheet supplies its shape, as it does the mystery star). */
+.elf-snowflake { --shape: var(--elf-flake); }
 
 /* A family's own marks, laid on by the page's script. Marks are only ever earned at an open door,
    so they sit down the edge of what is behind it, like stickers. */
@@ -331,20 +358,15 @@
 .elf-board.is-live .elf-detail:target:not(.is-open) { display: none; }
 .elf-detail p { margin: 0 0 8px; }
 .elf-detail__media { justify-self: center; }
-.elf-detail__shape,
-.elf-detail__paper { display: grid; place-items: center; width: 150px; min-height: 150px; padding: 12px; border-radius: 3px; }
-/* The prize's shape on a square of the doors' maroon, as it is on its door. */
-.elf-detail__shape { background-color: var(--maroon); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.6), 0 3px 6px rgba(58, 0, 0, 0.3); }
+/* The prize's shape (or a snow day's snowflake) on a square of the doors' maroon, as it is on its door. */
+.elf-detail__shape { display: grid; place-items: center; width: 150px; min-height: 150px; padding: 12px; border-radius: 3px; background-color: var(--maroon); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.6), 0 3px 6px rgba(58, 0, 0, 0.3); }
 .elf-detail__shape .elf-carve { width: 96px; height: 96px; }
 .elf-detail--today .elf-detail__shape,
-.elf-detail--hunting .elf-detail__shape { box-shadow: inset 0 0 0 3px var(--elf-paper-gold), 0 0 14px 3px rgba(240, 200, 100, 0.6); }
+.elf-detail--hunting .elf-detail__shape,
+.elf-detail--found-hidden .elf-detail__shape { box-shadow: inset 0 0 0 3px var(--elf-paper-gold), 0 0 14px 3px rgba(240, 200, 100, 0.6); }
 .elf-detail--today .elf-carve__hi,
 .elf-detail--hunting .elf-carve__hi,
-.elf-detail--revealed .elf-carve__hi { background-color: var(--elf-paper-gold); }
-/* The winner's picture on a paper mount. */
-.elf-detail__paper { background-color: color-mix(in srgb, var(--tan) 32%, var(--card)); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: inset 2px 3px 6px rgba(58, 0, 0, 0.3); }
-.elf-detail__paper .elf-shot--elf { width: 112px; }
-.elf-detail__paper .elf-shot--photo { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; border-radius: 3px; }
+.elf-detail--found-hidden .elf-carve__hi { background-color: var(--elf-paper-gold); }
 .elf-detail__meta { font-size: 0.86rem; color: var(--maroon); margin-bottom: 4px; }
 .elf-detail__title { font-size: clamp(1.3rem, 1.15rem + 0.8vw, 1.7rem); color: var(--maroon); margin-bottom: 10px; text-wrap: balance; overflow-wrap: anywhere; }
 .elf-detail__when { color: var(--holly-dark); }
@@ -362,6 +384,62 @@
 @media (min-width: 560px) {
   .elf-detail.elf-note { grid-template-columns: auto minmax(0, 1fr); align-items: start; padding: 28px 24px 20px; }
 }
+
+/* ---------- behind an open door: the scrapbook ----------
+   door-scrapbook-v2.html, with decision 11's two rows in place of its mixed collage: who found the elf
+   beside a paper rosette, the prize beside the shape cut into the door, then everyone's elves on
+   polaroids with their detective names (the finders first, wide, with the FOUND FIRST! rosette), then
+   the photos in a row of their own with no names at all. Both rows are grids that wrap, two
+   polaroids to a row on a phone; nothing scrolls inside a box. One column at every width. */
+.elf-detail.elf-note.elf-book { grid-template-columns: minmax(0, 1fr); justify-self: center; width: calc(100% - 8px); max-width: 780px; }
+.elf-book .elf-detail__title { margin-bottom: 12px; }
+.elf-book__found { display: flex; align-items: center; gap: 12px; font-size: 0.95rem; line-height: 1.35; }
+.elf-detail .elf-book__found { margin: 0 0 12px; }
+.elf-book__found b { color: var(--maroon); }
+.elf-book__seal { position: relative; display: grid; place-items: center; flex: none; width: 60px; height: 60px; filter: drop-shadow(0 2px 2px rgba(94, 0, 0, 0.25)); }
+.elf-book__rosette { position: absolute; inset: 0; width: 100%; height: 100%; }
+.elf-book__seal b { position: relative; color: var(--elf-on-dark); font-size: 0.5rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+/* The prize on a slip of tan paper, beside the shape cut into the door in gold on the door's maroon. */
+.elf-book__prize { position: relative; isolation: isolate; display: flex; align-items: center; gap: 12px; padding: 10px 14px 11px; color: var(--elf-ink-on-tan); font-size: 0.92rem; line-height: 1.35; }
+.elf-detail .elf-book__prize { margin: 0 0 14px; }
+.elf-book__prize::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, color-mix(in srgb, var(--tan) 26%, var(--card)); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-a); mask: var(--elf-tear-fine-a); }
+.elf-book__cut { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 3px; background-color: var(--maroon); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.6), 0 2px 3px rgba(58, 0, 0, 0.3); }
+.elf-book__cut .elf-carve { width: 32px; height: 32px; }
+.elf-book__cut .elf-carve__hi { background-color: var(--elf-paper-gold); }
+.elf-book__still { font-size: 1rem; }
+/* The rows' headings, in handwriting, with how many pictures under the first. */
+.elf-book__heading { margin: 20px 0 6px; color: var(--maroon); font-family: var(--elf-hand); font-weight: 700; font-size: 1.7rem; line-height: 1.05; letter-spacing: 0; }
+.elf-book__count { display: block; margin-top: 3px; color: var(--slate-soft); font-family: var(--font-body); font-weight: 500; font-size: 0.82rem; line-height: 1.2; }
+/* Two polaroids to a row on a phone: at 360 pixels wide the row has about 232 pixels, so a polaroid may
+   be as narrow as 100. More to a row only as the scrapbook widens. */
+.elf-collage,
+.elf-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 100px), 1fr)); gap: 20px 12px; margin: 0 0 4px; padding: 12px 2px 6px; }
+/* A polaroid: cream card on the paper, a strip of tape over its top, a little out of true. */
+.elf-pol { position: relative; margin: 0; padding: 6px 6px 8px; border-radius: 3px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.2), 0 8px 10px rgba(94, 0, 0, 0.18); transform: rotate(-1.6deg); }
+.elf-pol:nth-child(even) { transform: rotate(1.4deg); }
+.elf-pol::before { content: ""; position: absolute; left: 50%; top: -9px; width: 46px; height: 16px; margin-left: -23px; background: url(/assets/img/elf/paper/ui/tape.svg) 0 0 / 100% 100% no-repeat; transform: rotate(-3deg); pointer-events: none; }
+.elf-pol__shot { display: block; overflow: hidden; aspect-ratio: 0.86; border-radius: 2px; background: var(--elf-paper); }
+.elf-pol__shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 85%; }
+.elf-photos .elf-pol__shot img { object-position: 50% 30%; }
+.elf-pol figcaption { margin-top: 5px; color: var(--elf-ink-on-tan); font-family: var(--elf-hand); font-weight: 700; font-size: 1.1rem; line-height: 1.05; text-align: center; overflow-wrap: break-word; }
+/* The finders' elves: wide, square, with the FOUND FIRST! rosette pinned to the corner. */
+.elf-pol--first { grid-column: span 2; padding: 8px 8px 10px; transform: rotate(-0.8deg); }
+.elf-pol--first:nth-child(even) { transform: rotate(0.9deg); }
+.elf-pol--first .elf-pol__shot { aspect-ratio: 1; }
+.elf-pol--first figcaption { font-size: 1.3rem; }
+.elf-pol__seal { position: absolute; z-index: 2; top: -14px; right: -8px; display: grid; place-items: center; width: 64px; height: 64px; color: var(--elf-on-dark); text-align: center; filter: drop-shadow(0 3px 3px rgba(94, 0, 0, 0.3)); transform: rotate(8deg); }
+.elf-pol__rosette { position: absolute; inset: 0; width: 100%; height: 100%; }
+.elf-pol__seal b { position: relative; max-width: 42px; font-size: 0.56rem; font-weight: 800; line-height: 1.05; letter-spacing: 0.04em; }
+/* The family's own photo, marked by the calendar's script with Your photo and Take it down: a gold edge,
+   as today's door has. Nobody else sees it marked. */
+.elf-pol--mine { box-shadow: 0 0 0 3px var(--elf-paper-gold), 0 2px 2px rgba(94, 0, 0, 0.2), 0 8px 10px rgba(94, 0, 0, 0.18); }
+.elf-pol--mine figcaption { color: var(--maroon); }
+.elf-pol--mine .elf-btn { width: 100%; margin-top: 6px; }
+.elf-book .elf-detail__fact { margin-top: 18px; }
+.elf-detail .elf-book__end { margin: 16px 0 0; color: var(--slate-soft); font-size: 0.92rem; text-align: center; }
+.elf-detail .elf-book__gone { color: var(--maroon); font-weight: 600; }
+.elf-book .elf-detail__mine { margin-top: 12px; }
+.elf-detail .elf-book__close { margin: 16px 0 0; text-align: center; }
 
 /* ---------- under the board ---------- */
 .elf-legend { list-style: none; margin: 24px 2px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px 24px; font-size: 0.9rem; color: var(--slate-soft); }
@@ -406,10 +484,14 @@
    hunted, a holly sheet shows under it. */
 .elf-case.elf-note { max-width: 760px; margin: 12px auto 0; padding: clamp(30px, 4vw, 40px) clamp(20px, 4vw, 36px) clamp(22px, 3vw, 32px); color: var(--slate); }
 .elf-case.elf-note::before { background: var(--elf-grain-light) 0 0 / 384px, var(--card); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-card-c); mask: var(--elf-tear-card-c); }
-.elf-case--hunting::after { content: ""; position: absolute; inset: 9px -9px -10px 8px; z-index: -2; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(1.2deg); }
+.elf-case--hunting::after,
+.elf-case--found-hidden::after { content: ""; position: absolute; inset: 9px -9px -10px 8px; z-index: -2; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(1.2deg); }
 .elf-case h2 { font-size: clamp(1.6rem, 1.3rem + 1.4vw, 2.3rem); color: var(--maroon); margin-bottom: 12px; text-wrap: balance; }
 .elf-case p { margin: 0 0 10px; }
 .elf-case__door { font-family: var(--elf-hand); font-weight: 700; font-size: 1.7rem; line-height: 1; color: var(--crimson); }
+/* A practice evening says so, on a crimson chip beside "The practice door". */
+.elf-practice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.elf-practice .elf-chip { font-family: var(--font-body); font-size: 0.8rem; }
 .elf-case .elf-case__count { margin: 14px 0 16px 10px; }
 .elf-case__by .elf-icon { color: var(--gold-ink); }
 /* How it turned out, on a slip of paper: holly when the family cracked it. */
@@ -419,53 +501,37 @@
 .elf-case__verdict.is-cracked::before { background-color: var(--holly-soft); background-image: var(--elf-grain-light); }
 .elf-case__hint { color: var(--slate-soft); }
 
-/* The clue, set a size up from everything round it, on a slip of kraft paper: it is read aloud to
-   children. */
-.elf-clue { position: relative; isolation: isolate; margin: 0 0 clamp(16px, 3vw, 24px); padding: clamp(18px, 3vw, 26px); color: var(--elf-ink-on-tan); font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem); line-height: 1.55; }
+/* The clue ladder: one note of kraft paper a clue, taped on as each comes out, a little out of true,
+   the newest at the foot. The words are set a size up from everything round them: they are read
+   aloud to children. A picture fits the note's width. Then when the next clue comes out (counting
+   down on the candy cane strip), or when the hiding place is shown. */
+.elf-ladder { list-style: none; margin: 6px 0 clamp(16px, 3vw, 22px); padding: 0; display: grid; gap: 24px; }
+.elf-clue { position: relative; isolation: isolate; margin: 0; padding: clamp(22px, 3vw, 28px) clamp(16px, 3vw, 24px) clamp(16px, 2.5vw, 22px); color: var(--elf-ink-on-tan); filter: var(--elf-drop-small); transform: rotate(-0.4deg); }
+.elf-clue:nth-child(even) { transform: rotate(0.5deg); }
 .elf-clue::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain) 0 0 / 384px, color-mix(in srgb, var(--tan) 45%, var(--card)); background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-tile-a); mask: var(--elf-tear-tile-a); }
+.elf-clue:nth-child(even)::before { -webkit-mask: var(--elf-tear-tile-b); mask: var(--elf-tear-tile-b); }
+.elf-clue .elf-clue__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 0 6px; }
+.elf-clue__n { color: var(--crimson); font-family: var(--elf-hand); font-weight: 700; font-size: 1.55rem; line-height: 1; }
+.elf-clue__at { font-size: 0.86rem; font-weight: 600; }
+.elf-clue .elf-clue__words { margin: 0; font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem); line-height: 1.55; overflow-wrap: break-word; }
+.elf-clue__pic { display: block; max-width: 100%; height: auto; margin: 12px 0 0; border-radius: 3px; box-shadow: 0 2px 3px rgba(58, 0, 0, 0.25); }
+.elf-case .elf-ladder__next { margin: 0 0 4px; color: var(--holly-dark); font-weight: 600; }
 
-/* The guess: one choice from the places still in play, each on a slip of paper that is a whole button
-   to a thumb. The site gives every form a card of its own; this one already sits on the note. */
+/* The guess: one box to type the place in, cut into the note. The site gives every form a card of its
+   own; this one already sits on the note. */
 .elf-case form { background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
 .elf-guess fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
-.elf-guess legend { padding: 0; margin-bottom: 10px; font-family: var(--font-head); font-weight: 800; font-size: 1.2rem; color: var(--maroon); }
-.elf-guess__choices { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.elf-guess__choices li { position: relative; }
-.elf-guess__choices input {
-  position: absolute;
-  z-index: 1;
-  left: 14px;
-  top: 50%;
-  width: 20px;
-  height: 20px;
-  margin: -10px 0 0;
-  padding: 0;
-  accent-color: var(--holly);
+.elf-guess legend { padding: 0; margin-bottom: 4px; font-family: var(--font-head); font-weight: 800; font-size: 1.2rem; color: var(--maroon); }
+.elf-guess .elf-guess__hint { margin: 0 0 10px; color: var(--slate-soft); font-size: 0.92rem; font-weight: 400; }
+.elf-guess .elf-guess__text {
+  width: 100%; min-height: 52px; padding: 12px 14px; border: 0; border-radius: 6px; color: var(--slate); font: inherit; font-size: 1.15rem;
+  background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply;
+  box-shadow: inset 0 2px 3px rgba(94, 0, 0, 0.2), inset 0 0 0 1.5px color-mix(in srgb, var(--maroon) 55%, transparent);
 }
-/* The site gives every label a margin, a size and a weight of its own: put them back to the row's. */
-.elf-guess__choices label {
-  position: relative;
-  isolation: isolate;
-  display: block;
-  min-height: 48px;
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 400;
-  padding: 12px 14px 12px 46px;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-.elf-guess__choices label::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, color-mix(in srgb, var(--tan) 18%, var(--card)); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-b); mask: var(--elf-tear-fine-b); filter: drop-shadow(0 1px 1px rgba(94, 0, 0, 0.2)); }
-.elf-guess__choices input:checked + label { color: var(--holly-dark); font-weight: 600; }
-.elf-guess__choices input:checked + label::before { background-color: var(--holly-soft); background-image: var(--elf-grain-light); }
-.elf-guess__choices input:focus-visible { outline: none; }
-.elf-guess__choices input:focus-visible + label { outline: 3px solid var(--holly); outline-offset: 2px; }
+.elf-guess .elf-guess__text:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 2px; }
 .elf-case .elf-guess__status { min-height: 1.7em; margin: 12px 0; color: var(--holly-dark); }
 .elf-case .elf-guess__status.is-error { color: var(--crimson); }
 .elf-guess button[disabled] { opacity: 0.6; cursor: progress; }
-@media (min-width: 640px) {
-  .elf-guess__choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 
 /* The detectives. One card sheet each, a child is a person, not a row in a table: their elf in the
    frame they chose, their rank on a chip, the doors done on the candy cane strip. */
@@ -816,54 +882,103 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 }
 
 /* =================================================================
-   THE POSTER PAGE: claiming an elf, and checking in
+   THE POSTER PAGE: the word on the elf's tag, and the photo
    Used on a phone, standing in a shop: one narrow column, big
-   targets. The loud thing is the gold card for whoever is first.
+   targets, every card on a taped note. The loud thing is the gold
+   card for whoever is first.
    ================================================================= */
 
 .elf-poster-top { padding-bottom: clamp(14px, 2vw, 24px); }
 .elf-poster { padding-bottom: clamp(48px, 7vw, 88px); }
 .elf-poster > .wrap { display: grid; gap: 18px; justify-items: start; }
 .elf-poster > .wrap > * { width: 100%; }
+/* Its cards line up with the place's name above them, rather than standing in the middle. */
+.elf-poster .elf-case.elf-note { margin: 12px 0 0; }
 
 /* Where the answer to a form goes. Empty until there is one. */
 .elf-result:empty { display: none; }
 .elf-result:focus { outline: none; }
 .elf-result { scroll-margin-top: calc(var(--nav-h) + 12px); }
 
-/* Tick boxes for the family's detectives: each row is a whole button to a thumb. */
+/* Tick boxes for the family's detectives: each row a slip of paper that is a whole button to a thumb,
+   holly once it is ticked. */
 .elf-ticks { min-width: 0; margin: 0 0 18px; padding: 0; border: 0; }
 .elf-ticks legend,
 .elf-field > label { display: block; padding: 0; margin: 0 0 10px; font-family: var(--font-head); font-weight: 800; font-size: 1.2rem; line-height: 1.25; color: var(--maroon); }
 .elf-ticks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .elf-ticks li { position: relative; }
-.elf-ticks input { position: absolute; left: 14px; top: 50%; width: 20px; height: 20px; margin: -10px 0 0; padding: 0; accent-color: var(--holly); }
-.elf-ticks label { display: block; min-height: 48px; margin: 0; padding: 12px 14px 12px 46px; border: 1.6px solid var(--line); border-radius: 12px; background: var(--white); font-size: 1rem; font-weight: 400; cursor: pointer; overflow-wrap: anywhere; }
-.elf-ticks input:checked + label { border-color: var(--holly); background: var(--holly-soft); color: var(--holly-dark); }
+.elf-ticks input { position: absolute; z-index: 1; left: 14px; top: 50%; width: 20px; height: 20px; margin: -10px 0 0; padding: 0; accent-color: var(--holly); }
+.elf-ticks label { position: relative; isolation: isolate; display: block; min-height: 48px; margin: 0; padding: 12px 14px 12px 46px; color: var(--slate); font-size: 1rem; font-weight: 400; cursor: pointer; overflow-wrap: break-word; }
+.elf-ticks label::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, color-mix(in srgb, var(--tan) 18%, var(--card)); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-b); mask: var(--elf-tear-fine-b); filter: drop-shadow(0 1px 1px rgba(94, 0, 0, 0.2)); }
+.elf-ticks input:checked + label { color: var(--holly-dark); font-weight: 600; }
+.elf-ticks input:checked + label::before { background-color: var(--holly-soft); background-image: var(--elf-grain-light); }
 .elf-ticks input:focus-visible { outline: none; }
 .elf-ticks input:focus-visible + label { outline: 3px solid var(--holly); outline-offset: 2px; }
 
 .elf-field { margin: 0 0 16px; }
 .elf-case .elf-hint { margin: 7px 0 0; font-size: 0.9rem; color: var(--slate-soft); }
-/* The secret word, set large: the staff may want to read it over a shoulder. */
-.elf-word { background: var(--white); font-size: 1.3rem; letter-spacing: 0.06em; text-transform: uppercase; }
+/* The secret word, set large and cut into the note: the staff may want to read it over a shoulder. */
+.elf-field .elf-word__input {
+  width: 100%; min-height: 54px; padding: 12px 14px; border: 0; border-radius: 6px; color: var(--slate); font: inherit; font-size: 1.3rem; letter-spacing: 0.06em; text-transform: uppercase;
+  background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply;
+  box-shadow: inset 0 2px 3px rgba(94, 0, 0, 0.2), inset 0 0 0 1.5px color-mix(in srgb, var(--maroon) 55%, transparent);
+}
+.elf-field .elf-word__input:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 2px; }
 .elf-field input[type="file"] { padding: 10px; background: var(--white); font-size: 0.95rem; }
 .elf-case .elf-form-status { min-height: 1.5em; margin: 12px 0; color: var(--holly-dark); }
 .elf-case .elf-form-status:empty { min-height: 0; margin: 0 0 4px; }
 .elf-case .elf-form-status.is-error { color: var(--crimson); }
-.elf-claim .btn,
-.elf-stamp .btn { width: 100%; max-width: 380px; justify-content: center; }
-.elf-claim button[disabled],
-.elf-stamp button[disabled] { opacity: 0.6; cursor: progress; }
+.elf-word button[disabled],
+.elf-photo-sheet__form button[disabled] { opacity: 0.6; cursor: progress; }
 
-.elf-stamp__location { margin: 0 0 18px; }
-.elf-case .elf-stamp__or { margin: 16px 0 0; color: var(--slate-soft); }
-.elf-case .elf-stamp__have { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--holly-soft); color: var(--holly-dark); }
+/* Who already has this place's candy cane, on a slip of holly paper. */
+.elf-case .elf-word__have { position: relative; isolation: isolate; display: flex; align-items: baseline; gap: 8px; margin: 0 0 14px; padding: 10px 14px 11px; color: var(--holly-dark); }
+.elf-case .elf-word__have::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, var(--holly-soft); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-a); mask: var(--elf-tear-fine-a); }
 .elf-poster__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.elf-poster__later { max-width: 760px; }
-.elf-poster__later h2 { margin-bottom: 8px; font-size: 1.3rem; color: var(--maroon); }
-.elf-poster__later p { margin: 0; }
 .elf-poster__links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 4px 0 0; }
+
+/* A word that counted: the door done. A card sheet on a holly sheet: the candy cane on a circle of
+   paper, each detective's doors on a slip, the elves on the door, and the photo sheet taped beneath. */
+.elf-visit { max-width: 760px; margin-right: 8px; padding: clamp(22px, 4vw, 34px) clamp(18px, 4vw, 30px) clamp(20px, 3vw, 28px); color: var(--slate); }
+.elf-visit p { margin: 0 0 10px; }
+.elf-visit h2 { margin: 10px 0 8px; font-size: clamp(1.8rem, 1.4rem + 2vw, 2.6rem); color: var(--holly-dark); text-wrap: balance; }
+.elf-visit__cane { display: inline-grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.2), 0 6px 8px rgba(94, 0, 0, 0.16); }
+.elf-visit .elf-visit__from { color: var(--holly-dark); font-weight: 600; }
+.elf-visit__who { list-style: none; margin: 12px 0 14px; padding: 0; display: grid; gap: 8px; }
+.elf-visit__who li { position: relative; isolation: isolate; padding: 10px 14px 11px; overflow-wrap: break-word; }
+.elf-visit__who li::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, color-mix(in srgb, var(--tan) 18%, var(--card)); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-b); mask: var(--elf-tear-fine-b); }
+.elf-visit__up { color: var(--crimson); font-weight: 600; }
+.elf-visit .elf-visit__door { color: var(--maroon); font-family: var(--elf-hand); font-weight: 700; font-size: 1.55rem; line-height: 1.1; }
+.elf-visit__links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin: 18px 0 0; }
+
+/* The photo sheet: a note taped on, the grown up's yes on a slip of its own (unticked until they tick
+   it), and the promise beside a sprig of holly. */
+.elf-photo-sheet.elf-note { margin: 24px 0 6px; padding: 28px clamp(16px, 4vw, 26px) 18px; color: var(--slate); }
+.elf-photo-sheet.elf-note::before { background: var(--elf-grain-light) 0 0 / 384px, var(--card); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-card-c); mask: var(--elf-tear-card-c); }
+.elf-photo-sheet h3 { margin: 0 0 6px; font-size: clamp(1.3rem, 1.15rem + 0.8vw, 1.6rem); color: var(--maroon); text-wrap: balance; }
+.elf-photo-sheet p { margin: 0 0 12px; }
+form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+.elf-photo-sheet__form .elf-field { margin: 0; }
+.elf-photo-sheet__preview { justify-self: center; width: min(76%, 220px); transform: rotate(-1.4deg); }
+.elf-photo-sheet__preview[hidden] { display: none; }
+.elf-consent { position: relative; isolation: isolate; padding: 12px 14px 13px; }
+.elf-consent::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, var(--card); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-a); mask: var(--elf-tear-fine-a); filter: drop-shadow(0 1px 1px rgba(94, 0, 0, 0.25)); }
+.elf-consent label { display: grid; gap: 2px; margin: 0; padding-top: 1px; color: var(--slate-soft); font-size: 0.9rem; font-weight: 400; line-height: 1.4; }
+.elf-consent label b { color: var(--maroon); font-size: 1rem; font-weight: 600; }
+.elf-photo-sheet .elf-form-status { min-height: 0; margin: 0; color: var(--holly-dark); }
+.elf-photo-sheet .elf-form-status.is-error { color: var(--crimson); }
+.elf-photo-sheet .elf-photo-sheet__links { margin: 10px 0 0; text-align: center; }
+.elf-photo-sheet .elf-photo-sheet__promise { position: relative; isolation: isolate; margin: 14px 0 0; padding: 12px 14px 12px 52px; color: var(--holly-dark); font-size: 0.86rem; line-height: 1.45; }
+.elf-photo-sheet__promise::before { content: ""; position: absolute; left: 12px; top: 10px; width: 30px; height: 29px; background: url(/assets/img/elf/paper/deco/holly.webp) center / contain no-repeat; filter: drop-shadow(0 1px 1px rgba(58, 0, 0, 0.3)); }
+.elf-photo-sheet__promise::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, var(--holly-soft); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-b); mask: var(--elf-tear-fine-b); }
+
+/* The family's own photo for this door, with Take it down, and Send another, which opens the sheet
+   again with no script. */
+.elf-case .elf-your-photo__said { margin: 0 0 12px; }
+.elf-case .elf-your-photo__said.is-ok { color: var(--holly-dark); font-weight: 600; }
+.elf-case .elf-your-photo__actions { margin: 0 0 12px; }
+.elf-your-photo__again > summary { list-style: none; cursor: pointer; }
+.elf-your-photo__again > summary::-webkit-details-marker { display: none; }
 /* An answer card brings its own way on, so the same links are not offered twice. */
 .elf-result:not(:empty) ~ .elf-poster__links { display: none; }
 
@@ -892,16 +1007,6 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 .elf-win .elf-win__staff { max-width: 44ch; margin: 14px auto; padding: 12px 14px; border-radius: 12px; background: rgba(255, 253, 250, 0.72); }
 .elf-win__links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 22px; margin-top: 16px; }
 .elf-win .elf-link { color: var(--elf-gold-ink); }
-
-/* A candy cane collected. */
-.elf-stamped { max-width: 760px; padding: clamp(20px, 4vw, 36px); border-radius: var(--radius-lg); background: var(--holly-soft); color: var(--holly-dark); }
-.elf-stamped p { margin: 0 0 10px; }
-.elf-stamped h2 { margin: 10px 0 8px; font-size: clamp(1.8rem, 1.4rem + 2vw, 2.6rem); color: var(--holly-dark); }
-.elf-stamped__cane { display: inline-grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: var(--white); box-shadow: var(--shadow-sm); }
-.elf-stamped__who { list-style: none; margin: 12px 0 16px; padding: 0; display: grid; gap: 8px; }
-.elf-stamped__who li { padding: 10px 12px; border-radius: 12px; background: var(--card); color: var(--slate); overflow-wrap: anywhere; }
-.elf-stamped__up { color: var(--crimson); }
-.elf-stamped__links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
 
 /* ---------- motion: only where something changes ---------- */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
@@ -965,7 +1070,7 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
   }
 
   /* A candy cane lands like a rubber stamp. */
-  .elf-stamped__cane { animation: elf-stamp 0.5s var(--elf-ease-expo); }
+  .elf-visit__cane { animation: elf-stamp 0.5s var(--elf-ease-expo); }
   @keyframes elf-stamp { from { opacity: 0; transform: scale(1.7) rotate(-14deg); } }
 }
 

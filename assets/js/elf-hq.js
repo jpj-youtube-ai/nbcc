@@ -80,8 +80,8 @@
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         if (sending) return;
-        // Stop gap until Task 6 rewrites the typed guess: the guess is one text box.
-        var box = form.querySelector('input[name="guess"]');
+        // Task 9: the typed guess's box is name="text" since Task 6; Task 9 rewrites what is sent.
+        var box = form.querySelector('input[name="text"]');
         var place = box ? box.value.trim() : "";
         if (!place) {
           say("Type a place first.", true);

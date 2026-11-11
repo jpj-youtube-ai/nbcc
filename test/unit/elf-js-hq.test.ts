@@ -48,7 +48,7 @@ function load(view: HqView = hqView()): Hq {
 }
 
 async function choose(guess: string): Promise<void> {
-  $<HTMLInputElement>('input[name="guess"]').value = guess;
+  $<HTMLInputElement>('input[name="text"]').value = guess;
   $("form.elf-guess").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await flush();
 }
@@ -90,7 +90,7 @@ describe("locking in a guess", () => {
   it("sends the door and the place, and stays on the page", async () => {
     load();
     const event = new Event("submit", { bubbles: true, cancelable: true });
-    $<HTMLInputElement>('input[name="guess"]').value = "The Bookshop";
+    $<HTMLInputElement>('input[name="text"]').value = "The Bookshop";
     $("form.elf-guess").dispatchEvent(event);
     await flush();
     expect(event.defaultPrevented).toBe(true);
@@ -141,7 +141,7 @@ describe("locking in a guess", () => {
 
   it("does not send twice while the first is still on its way", async () => {
     load();
-    $<HTMLInputElement>('input[name="guess"]').value = "The Bookshop";
+    $<HTMLInputElement>('input[name="text"]').value = "The Bookshop";
     const form = $("form.elf-guess");
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

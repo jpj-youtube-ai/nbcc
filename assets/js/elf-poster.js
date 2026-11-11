@@ -42,7 +42,9 @@
     var clock = opts && opts.now ? opts.now : function () { return Date.now(); };
     var geo = opts && "geolocation" in opts ? opts.geolocation : win.navigator && win.navigator.geolocation;
     var result = doc.getElementById("elf-result");
-    var claim = doc.querySelector("form.elf-claim");
+    // Task 9: since Task 6 the page has one form, the word (it both claims and stamps); Task 9
+    // rewrites this script for it.
+    var claim = doc.querySelector("form.elf-word");
     var stamp = doc.querySelector("form.elf-stamp");
     var busy = false;
     var ticker = null;

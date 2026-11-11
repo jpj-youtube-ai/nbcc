@@ -10,15 +10,17 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md; its paper look is
 // docs/superpowers/specs/2026-11-04-elf-paper-design.md.
 //
-// Three things, in the order a family wants them: today's case (the clue and their guess, on a taped
-// note), their detectives (each on a card sheet: their elf in its frame, rank and progress), and the
-// marks they have collected. It is private, so it shows first names in full and is never listed by
-// search engines.
+// Three things, in the order a family wants them: today's case (on a taped note: the clue ladder, one
+// note a clue as each comes out, and the family's typed guess), their detectives (each on a card
+// sheet: their elf in its frame, rank and progress), and the marks they have collected. It is private,
+// so it shows first names in full and is never listed by search engines.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
-// script only saves the guess without leaving the page.
+// script only saves the guess without leaving the page, and fetches the page again when the next
+// clue is due.
 //
-// One rule is kept here whatever the view holds: the clue is never written before it is out.
+// One rule is kept here whatever the view holds: a clue is never written before it is out (the view
+// holds only the clues that are out, and none on a snow day).
 //
 // Pure: no pool, no config, no clock (the time is in the view). Unit tested in
 // test/unit/elf-page-hq.test.ts.
@@ -37,16 +39,49 @@ function clueHtml(clue: string): string {
   return escapeHtml(clue).replace(/\r?\n/g, "<br />\n");
 }
 
-// Stop gap: Task 6 rewrites this page for the typed guess and the clues. Until then the guess is a
-// plain text box and each clue that is out is one note.
+/** One clue that is out, on a taped note of its own: its number, its time, its words and its picture. */
+function clueNote(c: TodayView["clues"][number]): string {
+  const at = c.at instanceof Date && real(c.at) ? clockWords(c.at) : "";
+  const picture = sitePath(c.pictureUrl);
+  return (
+    `<li class="elf-clue">` +
+    `<span class="elf-tape" aria-hidden="true"></span>` +
+    `<p class="elf-clue__head"><b class="elf-clue__n">Clue ${count(c.n)}</b>${at ? ` <span class="elf-clue__at">${at}</span>` : ""}</p>` +
+    (c.words ? `<p class="elf-clue__words">${clueHtml(c.words)}</p>` : "") +
+    (picture ? `<img class="elf-clue__pic" src="${picture}" alt="${escapeHtml(c.pictureAlt ?? "")}" width="800" height="600" loading="lazy" decoding="async" />` : "") +
+    `</li>`
+  );
+}
+
+/** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),
+ *  or, once all three are out, when the hiding place is shown. */
+function clueLadder(today: TodayView, now: Date): string {
+  const notes = today.clues.length ? `<ol class="elf-ladder">${today.clues.map(clueNote).join("")}</ol>` : "";
+  const next = today.nextClueAt;
+  if (next instanceof Date && real(next)) {
+    const n = Math.min(3, today.clues.length + 1);
+    const counting = real(now)
+      ? `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${next.toISOString()}">${countdownWords(next.getTime() - now.getTime())}</span></p>`
+      : "";
+    return notes + line(`Clue ${n} comes out at ${clockWords(next)}`, "elf-ladder__next") + counting;
+  }
+  if (next === null && today.revealAt instanceof Date && real(today.revealAt)) {
+    return notes + line(`The hiding place is shown at ${clockWords(today.revealAt)}`, "elf-ladder__next");
+  }
+  return notes;
+}
+
+/** The guess: one box to type the place in. Its legend asks the question; its label says how. */
 function guessForm(today: TodayView, guessUrl: string): string {
   if (!today.canGuess) return line("There is nothing left to guess just now. Keep an eye on the calendar.");
-  const status = today.guess ? `Your guess: ${escapeHtml(today.guess.text)}. You can change it until the elf is found.` : "";
+  const status = today.guess ? `Your guess: ${escapeHtml(today.guess.text)}. You can change it until the hiding place is shown.` : "";
   return (
     `<form class="elf-guess" method="post" action="${sitePath(guessUrl) ?? "/"}" data-api="/api/elf/guess">` +
     `<input type="hidden" name="door" value="${count(today.door)}" />` +
-    `<div class="elf-field"><label for="guess-text">Where is ${escapeHtml(today.elfName)} hiding?</label>` +
-    `<input id="guess-text" name="guess" type="text" required maxlength="80" autocomplete="off" value="${escapeHtml(today.guess?.text ?? "")}" /></div>` +
+    `<fieldset><legend>Where is ${escapeHtml(today.elfName)} hiding?</legend>` +
+    `<label class="elf-guess__hint" for="guess-text">Type the name of the place. Spelling does not have to be perfect.</label>` +
+    `<input class="elf-guess__text" id="guess-text" name="text" type="text" required maxlength="80" autocomplete="off" autocapitalize="words" enterkeyhint="done" value="${escapeHtml(today.guess?.text ?? "")}" />` +
+    `</fieldset>` +
     `<p class="elf-guess__status" role="status">${status}</p>` +
     `<button class="elf-btn elf-btn--crimson" type="submit">${today.guess ? "Change my guess" : "Lock in my guess"}</button>` +
     `</form>`
@@ -65,8 +100,12 @@ function outcomeHtml(today: TodayView): string {
       : line(`${elf} was hiding at ${place}.`) +
         (outcome.by ? line(`${icon("rosette", 16)} Found first by ${escapeHtml(outcome.by)}${outcome.at ? ` at ${clockWords(outcome.at)}` : ""}`, "elf-case__by") : "");
   const guess = today.guess ? escapeHtml(today.guess.text) : null;
+  // The guess as the family typed it: spelling did not have to be perfect.
   const verdict = outcome.cracked
-    ? line(`<span class="elf-mark elf-mark--cracked">${icon("cracked", 16)}</span> <b>You cracked it!</b> Your guess was right.`, "elf-case__verdict is-cracked")
+    ? line(
+        `<span class="elf-mark elf-mark--cracked">${icon("cracked", 16)}</span> <b>You cracked it!</b> ${guess ? `Your guess was ${guess}.` : "Your guess was right."}`,
+        "elf-case__verdict is-cracked",
+      )
     : guess
       ? line(`Your guess was ${guess}. Not this time, but there is a new clue tomorrow.`, "elf-case__verdict")
       : line("You did not lock in a guess for this one. There is a new clue tomorrow.", "elf-case__verdict");
@@ -86,7 +125,10 @@ function caseCard(view: HqView): string {
       line(`${things(sleepsUntil(view.now, view.nextClueAt), "sleep")} to go`, "elf-case__count elf-cane-strip")
     );
   }
-  const head = `<p class="elf-case__door">Door ${count(today.door)}</p>`;
+  // A practice evening is plainly a practice: never "Door 0".
+  const head = today.practice
+    ? `<p class="elf-case__door elf-practice">The practice door <span class="elf-chip elf-chip--new">Practice</span></p>`
+    : `<p class="elf-case__door">Door ${count(today.door)}</p>`;
   if (today.state === "shut") {
     // A door whose clue time is not a real date stays shut (src/elf/doors.ts). Say so plainly.
     const clueAt = today.nextClueAt ?? new Date(NaN);
@@ -102,13 +144,17 @@ function caseCard(view: HqView): string {
       line("Come back then to read it and lock in your guess.")
     );
   }
-  if (today.state === "hunting") {
+  // Found before the place is shown: the clues keep coming and the guessing goes on until then.
+  if (today.state === "hunting" || today.state === "found-hidden") {
     return (
       head +
-      `<h2 id="elf-case-heading">The hunt is on!</h2>` +
-      today.clues.map((c) => (c.words ? `<blockquote class="elf-clue">${clueHtml(c.words)}</blockquote>` : "")).join("") +
+      `<h2 id="elf-case-heading">${today.state === "hunting" ? "The hunt is on!" : `${escapeHtml(today.elfName)} has been found!`}</h2>` +
+      clueLadder(today, view.now) +
       guessForm(today, view.guessUrl)
     );
+  }
+  if (today.state === "snow") {
+    return head + `<h2 id="elf-case-heading">Snow day</h2>` + line(`${escapeHtml(today.elfName)} got snowed in. This door counts as done for everyone.`);
   }
   return (
     head +

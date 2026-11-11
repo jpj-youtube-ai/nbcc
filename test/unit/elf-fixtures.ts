@@ -8,6 +8,7 @@ export function posterView(over: Partial<PosterView> = {}): PosterView {
   return {
     code: "toy-shop-k4f9",
     door: 7,
+    elfName: "Bauble",
     placeName: "The Toy Shop",
     placeTown: "Troon",
     open: false,
@@ -46,8 +47,9 @@ export function claimWin(over: Partial<ClaimWin> = {}): ClaimWin {
   };
 }
 
-/** Ruby and Leo have checked in. The visit took Ruby to six doors and a promotion. */
-export function stampWin(over: Partial<VisitWin> = {}): VisitWin {
+/** Ruby and Leo have typed the word at the shop after its elf was found. The visit took Ruby to six
+ *  doors and a promotion. */
+export function visitWin(over: Partial<VisitWin> = {}): VisitWin {
   return {
     door: 7,
     placeName: "The Toy Shop",

@@ -1,7 +1,7 @@
 import { DOOR_COUNT } from "../calendar";
 import { SCHOOL_NAME, schoolLogo } from "../logo";
 import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
-import { doorDetail, doorTile } from "./door";
+import { GUESS_LINE, doorDetail, doorTile } from "./door";
 import { candyCane, icon } from "./icons";
 import { headingStrip, rosette } from "./paper";
 import { elfPage, escapeHtml, sitePath } from "./shell";
@@ -23,8 +23,9 @@ import type { CalendarView, DoorView } from "./types";
 // test/unit/elf-page-calendar.test.ts.
 
 export interface CalendarStatus {
-  /** What kind of news it is, for the stylesheet. */
-  kind: "before" | "today" | "hunting" | "found" | "revealed" | "between" | "done";
+  /** What kind of news it is, for the stylesheet (which reads it with anything but letters taken out,
+   *  as the page's script writes it: "found-hidden" is .elf-status--foundhidden). */
+  kind: "before" | "today" | "hunting" | "found-hidden" | "found" | "revealed" | "snow" | "between" | "done";
   title: string;
   /** The lines under the title. Already safe HTML. */
   html: string;
@@ -57,6 +58,23 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
       html:
         `<p>Clue out at ${clockWords(today.clueAt)}</p>` +
         `<p class="elf-status__count elf-cane-strip"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>`,
+    };
+  }
+  // Found before its place is shown: who and when, never where.
+  if (today && today.state === "found-hidden" && today.found) {
+    const at = clockWords(today.found.at);
+    const reveal = today.revealAt ? clockWords(today.revealAt) : "";
+    return {
+      kind: "found-hidden",
+      title: `${escapeHtml(today.elfName)} has been found!`,
+      html: `<p>${escapeHtml(today.found.by)} found today's elf${at ? ` at ${at}` : ""}.${reveal ? ` The hiding place is shown at ${reveal}.` : ""}</p>`,
+    };
+  }
+  if (today && today.state === "snow") {
+    return {
+      kind: "snow",
+      title: `${escapeHtml(today.elfName)} got snowed in`,
+      html: `<p>Door ${today.door} could not open today. It counts as done for everyone.</p>` + nextClueLine(view),
     };
   }
   if (today && today.state === "found" && today.found) {
@@ -100,16 +118,17 @@ const STEPS: readonly { title: string; words: string }[] = [
   },
   {
     title: "Lock in your guess",
-    words: "Pick the hiding place from the list before anyone finds the elf. Get it right and you have cracked the case.",
+    words: GUESS_LINE,
   },
   {
     title: "Race to find it",
-    words: "The first detective to find the elf and type the secret word on its tag wins the elf and a prize.",
+    words:
+      "Three clues come out across the evening, each easier than the last. The first detective to find the elf and type the word on its tag wins the prize.",
   },
   {
     title: "Collect your candy canes",
     words:
-      "Once a door is open, visit its hiding place any day and scan the poster for a candy cane stamp. Every door you crack or visit takes you up the ranks.",
+      "Once a door is open, visit its hiding place any day in December, type the word on the elf's tag for a candy cane stamp, and add your picture to the door.",
   },
 ];
 
@@ -141,7 +160,7 @@ export function renderCalendarPage(view: CalendarView): string {
           <a class="elf-btn" href="${hq}">Detective HQ</a>
         </p>
       </div>
-      <div class="elf-status elf-card elf-status--${status.kind}" aria-live="polite">
+      <div class="elf-status elf-card elf-status--${status.kind.replace(/[^a-z]/g, "")}" aria-live="polite">
         <p class="elf-label elf-status__eyebrow">Today</p>
         <h2 class="elf-status__title">${status.title}</h2>
         <div class="elf-status__body">${status.html}</div>

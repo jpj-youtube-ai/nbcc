@@ -297,6 +297,7 @@ export function posterViewFor(o: {
   return {
     code: o.run.posterCode,
     door: o.run.door,
+    elfName: o.run.elfName,
     placeName: o.run.placeName ?? "",
     placeTown: o.run.placeTown ?? "",
     open: isOpen(state),

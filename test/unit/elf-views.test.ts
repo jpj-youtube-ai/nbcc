@@ -468,4 +468,10 @@ describe("the poster page's view", () => {
   it("says when the elves have gone home", () => {
     expect(poster(SEVEN_30, { goneHomeAt: at("2026-12-07T19:20:00Z") }).goneHome).toBe(true);
   });
+
+  // Task 6: the page names the elf once its door is found or open, and only then.
+  it("carries the door's elf name, the stock one when staff typed none", () => {
+    expect(poster(SIX_10, { elfName: "Pudding" }).elfName).toBe("Pudding");
+    expect(poster(SIX_10, { elfName: "" }).elfName).toBe("Bauble");
+  });
 });

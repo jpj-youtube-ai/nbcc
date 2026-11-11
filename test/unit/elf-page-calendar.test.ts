@@ -185,10 +185,21 @@ describe("the calendar page", () => {
     expect(renderCalendarPage(view(AFTERNOON))).not.toContain("Join the school");
   });
 
-  it("explains how it works in four steps", () => {
-    const steps = page(view(AFTERNOON)).querySelectorAll(".elf-steps > li");
+  it("explains how it works in four steps, as the doors run in December", () => {
+    const steps = [...page(view(AFTERNOON)).querySelectorAll(".elf-steps > li")];
     expect(steps.length).toBe(4);
-    expect(words(steps[2])).toContain("secret word");
+    expect(words(steps[1])).toContain("Type in your guess at Detective HQ before the hiding place is shown. Get it right and you have cracked the case.");
+    expect(words(steps[2])).toContain(
+      "Three clues come out across the evening, each easier than the last. The first detective to find the elf and type the word on its tag wins the prize.",
+    );
+    expect(words(steps[3])).toContain(
+      "Once a door is open, visit its hiding place any day in December, type the word on the elf's tag for a candy cane stamp, and add your picture to the door.",
+    );
+    // The old wave 1 steps: a guess picked from a list, an elf won, a poster scanned.
+    const all = steps.map(words).join(" ");
+    expect(all).not.toContain("from the list");
+    expect(all).not.toContain("wins the elf");
+    expect(all).not.toContain("scan the poster");
   });
 
   it("can be listed by search engines", () => {
@@ -236,6 +247,32 @@ describe("today's news at the top of the calendar", () => {
     expect(status.html).toContain("Detective Sam Snowsleuth");
     expect(status.html).toContain("The Toy Shop, Troon");
     expect(status.html).toContain("Next clue: Tue 8 Dec at 5:30pm");
+  });
+
+  it("says who found today's elf and when, and when its place is shown, while the place is still hidden", () => {
+    const hidden = view(at("2026-12-07T18:10:00.000Z"), {
+      state: "found-hidden",
+      found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Sam Snowsleuth" },
+      revealAt: at("2026-12-07T19:00:00.000Z"),
+      place: { name: "The Secret Cinema", town: "Ayr" },
+    });
+    const status = calendarStatus(hidden);
+    expect(status.title).toBe("Bauble has been found!");
+    expect(words(new DOMParser().parseFromString(status.html, "text/html").body)).toBe(
+      "Detective Sam Snowsleuth found today's elf at 5:47pm. The hiding place is shown at 7pm.",
+    );
+    expect(renderCalendarPage(hidden)).not.toContain("Secret Cinema");
+    // Its card is styled as the find; the class is the kind in letters, as the page's script writes it.
+    expect(page(hidden).querySelector(".elf-status")!.classList.contains("elf-status--foundhidden")).toBe(true);
+  });
+
+  it("says today's elf got snowed in, and that the door counts for everyone", () => {
+    const snow = view(at("2026-12-07T18:10:00.000Z"), { state: "snow" });
+    const status = calendarStatus(snow);
+    expect(status.title).toBe("Bauble got snowed in");
+    expect(status.html).toContain("Door 7 could not open today. It counts as done for everyone.");
+    expect(status.html).toContain("Next clue: Tue 8 Dec at 5:30pm");
+    expect(page(snow).querySelector(".elf-status")!.classList.contains("elf-status--snow")).toBe(true);
   });
 
   it("says a revealed elf is still waiting", () => {
@@ -286,15 +323,33 @@ describe("the advent calendar at every width", () => {
     expect(css).toMatch(/\.elf-door__flap \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
   });
 
-  it("swings an open door almost flat, so the picture behind it fills the door", () => {
+  it("swings an open door almost flat, so the room behind it fills the door", () => {
     const swung = stillParts(css).match(/\.elf-door\.is-open \.elf-door__flap \{[^}]*rotateY\(-(\d+)deg\)/);
     expect(Number(swung?.[1])).toBeGreaterThanOrEqual(76);
-    expect(css).toMatch(/\.elf-door\.is-open \.elf-shot \{[^}]*object-fit:\s*contain/);
+    // Each elf in the room is cropped to its polaroid, never squashed.
+    expect(css).toMatch(/\.elf-mini img \{[^}]*object-fit:\s*cover/);
   });
 
   // Seen on the pictures: in the wide door 23 and the double doors the picture grew taller than its door.
-  it("lays the picture over the whole hole, so it can never make a door taller, however wide the door", () => {
-    expect(css).toMatch(/\.elf-door\.is-open \.elf-shot \{[^}]*position:\s*absolute;\s*inset:\s*0/);
+  it("lays the room over the whole hole, so it can never make a door taller, however wide the door", () => {
+    expect(css).toMatch(/\.elf-room \{[^}]*position:\s*absolute;\s*inset:/);
+    expect(css).toMatch(/\.elf-room__pics \{[^}]*min-height:\s*0/);
+  });
+
+  // The design to match: door-scrapbook-v2.html, with decision 11's two rows. Polaroids two to a row on
+  // a phone, and the rows wrap: nothing scrolls inside a box.
+  it("lays the scrapbook's two rows out as grids that wrap, two polaroids to a row on a phone", () => {
+    for (const row of ["elf-collage", "elf-photos"]) {
+      expect(css, row).toMatch(new RegExp(`\\.${row}[^{]*\\{[^}]*display:\\s*grid`));
+    }
+    // At 360 pixels wide a row has about 232 pixels: two columns of at least 100 fit, two of 112 would not.
+    expect(css).toMatch(/\.elf-collage,\s*\.elf-photos \{[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(min\(100%, 100px\), 1fr\)\)/);
+    expect(css).toMatch(/\.elf-pol--first \{[^}]*grid-column:\s*span 2/);
+  });
+
+  it("draws a snow day's face as a paper snowflake cut out like the prize's shape, with no new picture", () => {
+    expect(css).toMatch(/\.elf-snowflake \{[^}]*--shape:\s*var\(--elf-flake\)/);
+    expect(css).toMatch(/--elf-flake:\s*url\("data:image\/svg\+xml,/);
   });
 
   // Seen on the pictures: with 3 or more doors to a row, door 24 alone in the middle left bare maroon

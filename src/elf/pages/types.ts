@@ -1,5 +1,4 @@
 import type { Door } from "../calendar";
-// Task 6 reshapes the poster page; until then both forms refuse with the one WordRefusal.
 import type { WordRefusal } from "../claim";
 import type { DoorState } from "../doors";
 import type { Rank } from "../progress";
@@ -164,6 +163,9 @@ export interface PosterView {
   /** The place's own code from its poster. */
   code: string;
   door: Door | 0;
+  /** The name of the door's elf. The page writes it only once the elf is found, the place is open,
+   *  or the elves have gone home: before then it would tie the place to a door on the calendar. */
+  elfName: string;
   placeName: string;
   placeTown: string;
   /** Is this place's door open? Then visitors can see where it ended up. */

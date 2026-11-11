@@ -3426,7 +3426,7 @@
     // TASK-497: a change the organiser asked for, approved or rejected by staff.
     ["fundraiseEditApproved", "Fundraiser update live"], ["fundraiseEditRejected", "Fundraiser update held back"],
     // TASK-501: the private area's sign in code, and "I've finished" to events@.
-    ["fundraiseCode", "Fundraiser sign in code"], ["elfWelcome", "Elf Detective School welcome"], ["elfSignInCode", "Elf Detective School sign in code"],["fundraiseFinishedStaff", "Fundraiser finished (to events@)"],
+    ["fundraiseCode", "Fundraiser sign in code"], ["elfWelcome", "Elf Detective School welcome"], ["elfSignInCode", "Elf Detective School sign in code"], ["elfClue", "Elf Detective School first clue"], ["elfPlaceReminder", "Elf Detective School place reminder"], ["elfMorning", "Elf Detective School morning email (head elves)"], ["elfFindAlert", "Elf Detective School find alert (head elves)"], ["elfPhotoAlert", "Elf Detective School photo alert (head elves)"], ["elfTestAlert", "Elf Detective School test alert (head elves)"], ["elfProud", "Elf Detective School proud moment"],["fundraiseFinishedStaff", "Fundraiser finished (to events@)"],
     // TASK-503: the invite staff send, and the Monday summary.
     ["fundraiseInvite", "Fundraising invite"], ["fundraiseSummary", "Fundraising Monday summary"],
     // TASK-506: a news update the organiser posted, approved or not used by staff.

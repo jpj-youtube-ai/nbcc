@@ -600,6 +600,37 @@ export async function sendElfSignInCode(name: string | null, message: FundraiseE
   await sendVerbatim("elfSignInCode", name, message, ELF_CODE_LOG_SUBJECT);
 }
 
+// Elf Detective School wave 2 (src/elf/emails.ts). The clue, the place reminder and the proud emails
+// go to families and places; the morning email, both alerts and the test alert go to head elves only
+// (STAFF_ONLY_KINDS in src/email/tracked-links.ts). All from events@ on the apex.
+export async function sendElfClue(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfClue", name, message);
+}
+
+export async function sendElfPlaceReminder(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfPlaceReminder", name, message);
+}
+
+export async function sendElfMorning(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfMorning", name, message);
+}
+
+export async function sendElfFindAlert(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfFindAlert", name, message);
+}
+
+export async function sendElfPhotoAlert(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfPhotoAlert", name, message);
+}
+
+export async function sendElfTestAlert(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfTestAlert", name, message);
+}
+
+export async function sendElfProud(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfProud", name, message);
+}
+
 // TASK-501: to events@ when an organiser presses "I've finished". Staff only, so never tagged.
 export async function sendFundraiseFinishedStaff(name: string, message: FundraiseEmailMessage): Promise<void> {
   await sendVerbatim("fundraiseFinishedStaff", name, message);

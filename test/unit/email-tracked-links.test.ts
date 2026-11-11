@@ -343,7 +343,7 @@ describe("staff only emails are never tagged", () => {
       [
         "invoiceStaff",
         "adminInvite", "adminReset", "backupAlert", "ballChaseList", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraisePledgeStaff", "fundraiseStaff", "fundraiseSummary",
-        "fundraiseTeamJoinStaff", "fundraiseTeamMemberRemoved", "lapsedAdmin", "loginCode",
+        "fundraiseTeamJoinStaff", "fundraiseTeamMemberRemoved", "lapsedAdmin", "loginCode", "elfFindAlert", "elfMorning", "elfPhotoAlert", "elfTestAlert",
         "eventTicketsRefundAsked", "eventTicketsToApprove", "eventTicketsToCheck",
       ].sort(),
     );

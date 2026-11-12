@@ -6871,6 +6871,64 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
+## The admin as a phone app, with notifications (TASK-NNN)
+
+The admin can be pinned to a phone's home screen as its own app, and will then push a notification
+whenever something new arrives. It is the SAME "new" as the New pills above — the same areas, the
+same per-person cursor, the same permission filtering — so the phone and the screen never disagree.
+Design: `docs/superpowers/specs/2026-11-12-admin-phone-app-design.md`.
+
+**Installing it.** On the phone, open the admin, press Share, then Add to Home Screen. The icon is
+the NBCC logo on maroon, named "NBCC Admin", and it opens in its own window rather than a Safari
+tab (`assets/admin-icons/admin.webmanifest`, `display: "standalone"`). That is not cosmetic: **iOS
+delivers a push only to a home-screen web app, never to a browser tab.** The still-open pull
+request #699 sets the SITE manifest to `display: "browser"`, which is right for the public pages
+and would silently disable all of this if the admin shared it, which is why the admin carries a
+manifest of its own.
+
+Regenerate the icons with `node scripts/make-admin-icons.mjs`. They are flattened onto opaque
+maroon and stripped of their alpha channel, because iOS fills a transparent icon with black.
+
+**Turning notifications on.** Admin > Notifications, from the icon (not a tab), then Allow. iOS
+asks **once and only once**: somebody who taps Don't Allow has to delete the icon and add it back
+to be asked again, which is why the screen warns about that above the button rather than below it.
+Each person and each phone is separate.
+
+**What buzzes.** Everything that would raise a New pill: donations, monthly givers, Get involved
+sign-ups, contact messages, Festive Ball bookings, business supporters, stories and newsletter
+sign-ups. Nothing a staff member does in the admin ever buzzes anyone. Notifications carry the
+amount and the source but **never a name** — a phone on a table at an event shows its lock screen
+to the room — so "£25 donation — card reader", not who gave it.
+
+By default there is one buzz per arrival, with no quiet hours, which is what the charity asked
+for. Two switches on the same screen calm it down (group them; stay quiet between two times), both
+off, and either way anything held back still shows as a New pill. One exception is not optional:
+**more than 20 arrivals in a single sweep collapse into one "N new things"**, because a CSV import
+or a webhook replay would otherwise fire hundreds.
+
+**Sessions.** The pinned app stays signed in for **30 days**, against 8 hours in a browser tab,
+and keeps its token in `localStorage` rather than `sessionStorage`. Without both, iOS evicting a
+backgrounded app would mean a 2am notification opening onto a password box instead of the donation.
+
+**Config.** `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, both SSM parameters created holding
+`REPLACE_ME` and pasted in out of band (the generation recipe is in `.env.example`). They are
+deliberately NOT required in production: until both are real, `pushIsConfigured()` is false, the
+sweep never starts, and nothing else notices. There is no third value for the RFC 8292 contact —
+`vapidSubject()` derives it from `ADMIN_NOTIFICATION_EMAIL`.
+
+**How it is built.** There is no `web-push` dependency and there cannot be (the npm registry is
+blocked on the owner's machine), so `src/admin/web-push.ts` implements RFC 8291, RFC 8188 and
+RFC 8292 on `node:crypto`, pinned in its tests to the RFCs' own published intermediate values.
+`src/admin/notify-runner.ts` sweeps every 60 seconds from `src/index.ts` — never from
+`createApp()`, so no test run sends a real notification — and claims each (person, area) cursor in
+`admin_notified` with a single atomic statement before sending, so overlapping tasks during a
+deploy cannot buzz the same phone twice.
+
+**Tests:** `test/unit/web-push-crypto.test.ts` (the RFC vectors and every guard),
+`admin-notify.test.ts` (the burst cap, the switches, quiet hours), `admin-push-model.test.ts`,
+`admin-session-installed.test.ts`, `admin-sw.test.ts`, `admin-notifications-screen.test.ts`,
+`admin-app-install.test.ts`, and `features/admin-app-install.feature`.
+
 ## The admin Overview: Needs you (TASK-508), How we are doing (TASK-509) and Coming up (TASK-510)
 
 The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent

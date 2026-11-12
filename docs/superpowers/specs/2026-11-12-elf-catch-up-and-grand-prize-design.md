@@ -244,7 +244,7 @@ Also:
 3. **Age. ANSWERED (Jaimie, 12 November):** the entries are judged **without knowing ages**, and NBCC asks the age when it rings the parent.
    - The entry never asks for an age, and the site never stores one.
    - The rules' sentence about judging "taking age into account" stays as it is (my call), because age is still weighed on the call.
-4. **Winners.** Is there one winner, or one in each age group, and any runners up? Is anyone told on the site, such as a line on the calendar on Christmas Day?
+4. **Winners. ANSWERED (Jaimie, 12 November): just one winner.** Head Elf HQ's Grand prize part lets a head elf mark one entry as the winner, and marking another moves the mark. The site announces nothing (my call, as nothing was asked for). NBCC rings the winner's grown up.
 5. **The closing time with the clues.** Should families see the hiding place's closing time alongside the clues, so they know their deadline (a small hint), or only once they know the place? Today the site deliberately never tells a family how late a place is open.
 6. **After Christmas.** Should the places, and the photos, appear on the calendar for everyone as a thank you to the businesses? If so, from Christmas Day or from 1 January? And should December's doors, and having a go, stay on into January, or switch off after Christmas?
 

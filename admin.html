@@ -604,27 +604,24 @@
 
             <!-- Contact form: public enquiries from the isolated contact database (2026-07-10 spec). -->
             <section class="admin-view" id="view-contact" aria-labelledby="contact-heading" hidden>
-              <h2 id="contact-heading">Contact form</h2>
-              <p class="admin-view-intro">Messages sent through the public contact form. Open one to read it, reply in Gmail (which marks it Replied), or delete it. These live in their own database, separate from donor and story data.</p>
-              <div class="admin-search-bar">
-                <div class="admin-segmented" role="group" aria-label="Filter by status" id="contactStatusFilter">
-                  <button class="admin-seg is-active" type="button" data-status="">All</button>
-                  <button class="admin-seg" type="button" data-status="new">New</button>
-                  <button class="admin-seg" type="button" data-status="replied">Replied</button>
+              <!-- The Contact form in the Donations look (2026-11-12): a card per message under its day,
+                   opening where it is. Messages live in their own database, separate from donor and story
+                   data (2026-07-10 spec); reply in Gmail, which marks nothing until Mark as replied. -->
+              <div class="ct-root">
+                <div class="ct-title">
+                  <h2 id="contact-heading">Contact form</h2>
+                  <p class="ct-lede"><strong id="ctWaitingLine"></strong> Tap a message to read it and reply.</p>
                 </div>
+                <div class="ct-filter" role="group" aria-label="Show" id="contactStatusFilter">
+                  <button class="admin-seg ct-seg is-active" type="button" data-status="" aria-pressed="true"><span class="ct-seg__count"></span><span class="ct-seg__name">All</span></button>
+                  <button class="admin-seg ct-seg" type="button" data-status="new" aria-pressed="false"><span class="ct-seg__count"></span><span class="ct-seg__name">Waiting</span></button>
+                  <button class="admin-seg ct-seg" type="button" data-status="replied" aria-pressed="false"><span class="ct-seg__count"></span><span class="ct-seg__name">Replied</span></button>
+                </div>
+                <div id="contactTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               </div>
-              <div class="admin-table-wrap" id="contactTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
-            <!-- Contact enquiry detail (reached from a contact row); Editor+ reply/delete actions. -->
-            <section class="admin-view" id="view-contact-detail" aria-labelledby="contact-detail-heading" hidden>
-              <button class="admin-back" id="contactBack" type="button">&larr; Back</button>
-              <h2 id="contact-detail-heading">Enquiry</h2>
-              <div id="contactDetail" aria-live="polite"></div>
-              <p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p>
-            </section>
-
-            <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
+                        <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
 

@@ -129,3 +129,57 @@
 @media (prefers-reduced-motion: no-preference) {
   #view-overview .ov-card, #view-overview .ov-tile, #view-overview .ov-see-all { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1); }
 }
+
+/* ---- the Contact form: a card per message under its day, opening where it is ---- */
+#view-contact .ct-root { display: grid; gap: 20px; color: var(--ov-text); }
+#view-contact .ct-root :focus-visible { outline: 3px solid var(--ov-gold-ink); outline-offset: 3px; }
+#view-contact .ct-title { display: grid; gap: 4px; }
+#view-contact .ct-title h2 { margin: 0; font-family: var(--ov-head); font-weight: 800; font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.4rem); line-height: 1.05; color: var(--ov-maroon); }
+#view-contact .ct-lede { margin: 0; color: var(--ov-soft); font-size: 0.95rem; }
+#view-contact .ct-lede strong { color: var(--ov-ink); }
+#view-contact .ct-lede strong:empty { display: none; }
+
+/* The three filters as pressable tiles, each with its count; the chosen one pressed in, maroon. */
+#view-contact .ct-filter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 520px; }
+#view-contact .ct-seg { display: grid; justify-items: center; gap: 0; min-height: 56px; margin: 0; padding: 8px 6px; border: var(--ov-line); border-radius: 14px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-text); font: inherit; text-align: center; cursor: pointer; }
+#view-contact .ct-seg:hover { background: var(--ov-hover); }
+#view-contact .ct-seg__count { font-family: var(--ov-head); font-weight: 800; font-size: 1.25rem; line-height: 1.1; color: var(--ov-ink); }
+#view-contact .ct-seg__name { font-size: 0.82rem; color: var(--ov-soft); }
+#view-contact .ct-seg.is-active { background: var(--ov-maroon); transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+#view-contact .ct-seg.is-active .ct-seg__count, #view-contact .ct-seg.is-active .ct-seg__name { color: var(--ov-on-dark); }
+
+/* The day headings, as the gift log's: words, then a dashed rule to the edge. */
+#view-contact .ct-list { display: grid; gap: 10px; }
+#view-contact .ct-day { display: flex; align-items: center; gap: 8px; margin: 8px 0 -2px; font-family: inherit; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ov-soft); }
+#view-contact .ct-day::after { content: ""; flex: 1; border-top: 2px dashed var(--ov-rule); }
+
+/* A message. Its summary is the button; the opened part sits beside it, inside the same card. */
+#view-contact .ct-msg { min-width: 0; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+#view-contact .ct-msg--open { box-shadow: var(--ov-pop-lg); }
+#view-contact .ct-msg__summary { display: grid; gap: 6px; width: 100%; margin: 0; padding: 14px 16px; border: 0; border-radius: 16px; background: transparent; color: var(--ov-text); font: inherit; text-align: left; cursor: pointer; }
+#view-contact .ct-msg__summary:hover { background: var(--ov-hover); }
+#view-contact .ct-msg--open .ct-msg__summary { border-radius: 16px 16px 0 0; }
+#view-contact .ct-msg__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+#view-contact .ct-msg__name { min-width: 0; font-weight: 600; font-size: 1.02rem; line-height: 1.25; overflow-wrap: anywhere; }
+#view-contact .ct-msg--waiting .ct-msg__name::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; background: var(--ov-crimson); vertical-align: 0.1em; }
+#view-contact .ct-msg__time { flex: none; font-size: 0.82rem; color: var(--ov-soft); }
+/* Two lines on the card; the whole message once it is open, in the page and never in a box. */
+#view-contact .ct-msg__mark:has(.sr-only:only-child) { display: contents; }
+#view-contact .ct-msg__snippet { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.95rem; line-height: 1.45; overflow-wrap: anywhere; }
+#view-contact .ct-msg--open .ct-msg__snippet { display: none; }
+#view-contact .ct-mark { display: inline-flex; padding: 1px 8px; border: 2px solid currentColor; border-radius: 999px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.4; }
+#view-contact .ct-mark--done { color: var(--ov-soft); background: var(--ov-card); }
+#view-contact .ct-msg__more { display: grid; gap: 14px; margin: 0 16px; padding: 14px 0 16px; border-top: 2px dashed var(--ov-rule); }
+#view-contact .ct-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 0.9rem; }
+#view-contact .ct-facts dt { color: var(--ov-soft); }
+#view-contact .ct-facts dd { margin: 0; overflow-wrap: anywhere; }
+#view-contact .ct-msg__full { margin: 0; font-size: 0.98rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+#view-contact .ct-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+#view-contact .ct-act { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; margin: 0; padding: 0 16px; border: var(--ov-line); border-radius: 14px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-ink); font: inherit; font-weight: 600; cursor: pointer; }
+#view-contact .ct-act[hidden] { display: none; }
+#view-contact .ct-act--primary { background: var(--ov-holly); color: var(--ov-on-dark); }
+#view-contact .ct-act--danger { color: var(--ov-crimson); }
+#view-contact .ct-act:active, #view-contact .ct-seg:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+@media (prefers-reduced-motion: no-preference) {
+  #view-contact .ct-act, #view-contact .ct-seg { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1); }
+}

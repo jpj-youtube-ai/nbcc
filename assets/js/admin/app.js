@@ -3488,77 +3488,129 @@
   // ---- contact form (2026-07-10 spec): list + filter, detail, reply-in-Gmail/mark-new/delete
   // (editor+). Reads/writes go to the isolated contact DB via /api/admin/contact*. Mirrors the
   // Stories view controller above (loadStories/storiesTable/openStory/renderStory).
+  // The Contact form in the Donations look (2026-11-12). Each message is a card under its day's
+  // heading, and opens where it is, the way a gift opens in Donations, rather than on a screen of
+  // its own. One fetch brings every live message, so the three filter tiles can show their counts
+  // and filtering is instant; the list has no cap (listEnquiries), and contact is low volume.
+  //
+  // Only the card's summary button carries data-contact. The opened part sits beside it, not inside
+  // it, so pressing Reply in Gmail or Archive never bubbles up to the opener and redraws the card.
+  // Only one is ever open, so #contactDetail and #contactActionStatus stay unique.
+  var ctRows = [];
+  var ctOpenId = null;
+  var CT_FILTER_WORDS = { "": "No enquiries yet.", new: "Nothing is waiting for a reply.", replied: "Nothing has been replied to yet." };
+  function ctName(r) {
+    return ((r.first_name || "") + " " + (r.last_name || "")).trim();
+  }
+  function ctMarkHtml(r) {
+    var esc = H.escapeHtml;
+    return r.status === "replied"
+      ? '<span class="ct-mark ct-mark--done">' + esc(r.replied_summary || "Replied") + "</span>"
+      // The red dot by the name says it to the eye, as in the mockup Jaimie approved; these words
+      // say it to a screen reader, which a colour alone cannot.
+      : '<span class="sr-only">Waiting for a reply</span>';
+  }
+  function ctCardHtml(r) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    var id = Number(r.id);
+    var open = id === ctOpenId;
+    var waiting = r.status !== "replied";
+    var text = String(r.message || "");
+    return (
+      '<article class="ct-msg' + (waiting ? " ct-msg--waiting" : "") + (open ? " ct-msg--open" : "") + '" data-ct-id="' + id + '">' +
+      '<button type="button" class="ct-msg__summary" data-contact="' + id + '" aria-expanded="' + (open ? "true" : "false") + '">' +
+      '<span class="ct-msg__top"><span class="ct-msg__name">' + esc(ctName(r)) + "</span>" +
+      '<span class="ct-msg__time">' + esc(GL && GL.timeLabel ? GL.timeLabel(r.created_at) : H.fmtDate(r.created_at)) + "</span></span>" +
+      '<span class="ct-msg__snippet">' + esc(text.length > 240 ? text.slice(0, 240) + "…" : text) + "</span>" +
+      '<span class="ct-msg__mark">' + ctMarkHtml(r) + "</span>" +
+      "</button>" +
+      (open
+        ? '<div class="ct-msg__more"><div id="contactDetail" aria-live="polite"></div>' +
+          '<p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p></div>'
+        : "") +
+      "</article>"
+    );
+  }
+  function ctListHtml(rows) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    if (!rows.length) return '<p class="admin-empty">' + esc(ctRows.length ? CT_FILTER_WORDS[contactStatusFilter] || CT_FILTER_WORDS[""] : CT_FILTER_WORDS[""]) + "</p>";
+    var out = "";
+    var lastDay = null;
+    rows.forEach(function (r) {
+      var key = GL && GL.dayKey ? GL.dayKey(r.created_at) : H.fmtDate(r.created_at);
+      if (key !== lastDay) {
+        out += '<h3 class="ct-day">' + esc(GL && GL.dayLabel ? GL.dayLabel(r.created_at) : H.fmtDate(r.created_at)) + "</h3>";
+        lastDay = key;
+      }
+      out += ctCardHtml(r);
+    });
+    return '<div class="ct-list">' + out + "</div>";
+  }
+  function ctCounts() {
+    var waiting = ctRows.filter(function (r) { return r.status !== "replied"; }).length;
+    var counts = { "": ctRows.length, new: waiting, replied: ctRows.length - waiting };
+    Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .ct-seg"), function (b) {
+      var c = b.querySelector(".ct-seg__count");
+      if (c) c.textContent = String(counts[b.getAttribute("data-status") || ""] || 0);
+    });
+    var line = el("ctWaitingLine");
+    if (line) line.textContent = waiting === 0 ? "Nothing waiting for a reply." : waiting === 1 ? "1 waiting for a reply." : waiting + " waiting for a reply.";
+  }
+  function ctDraw() {
+    ctCounts();
+    var shown = contactStatusFilter
+      ? ctRows.filter(function (r) { return contactStatusFilter === "replied" ? r.status === "replied" : r.status !== "replied"; })
+      : ctRows;
+    el("contactTable").innerHTML = ctListHtml(shown);
+  }
   Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (b) {
     b.addEventListener("click", function () {
       contactStatusFilter = b.getAttribute("data-status") || "";
       Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (x) {
         x.classList.toggle("is-active", x === b);
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
       });
-      loadContact();
+      // A message that the new filter hides cannot stay open.
+      ctOpenId = null;
+      ctDraw();
     });
   });
-  function contactSnippet(message) {
-    var s = String(message || "");
-    return s.length > 80 ? s.slice(0, 80) + "…" : s;
-  }
-  function contactStatusBadge(status) {
-    return status === "replied"
-      ? '<span class="admin-pill is-replied">Replied</span>'
-      : '<span class="admin-pill is-new">New</span>';
-  }
-  // TASK-425: the status pill, with who replied and when beneath it. replied_summary arrives
-  // already formatted from the server, and is null whenever there is nothing honest to say.
-  // Putting it in the existing cell rather than a new column keeps the table within the width
-  // that TASK-422 fixed for phones.
-  function contactStatusCell(r) {
-    var badge = contactStatusBadge(r.status);
-    if (!r.replied_summary) return badge;
-    return badge + '<span class="admin-replied-by">' + H.escapeHtml(r.replied_summary) + "</span>";
-  }
-
-  function contactTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No enquiries yet.</p>';
-    var body = rows
-      .map(function (r) {
-        return (
-          "<tr><td>" + window.formatReceived(r.created_at) + "</td><td>" +
-          H.escapeHtml(((r.first_name || "") + " " + (r.last_name || "")).trim()) + "</td><td>" +
-          H.escapeHtml(r.email) + "</td><td>" + contactStatusCell(r) + "</td><td>" +
-          H.escapeHtml(contactSnippet(r.message)) +
-          '</td><td><button class="admin-link" type="button" data-contact="' + r.id + '">View</button></td></tr>'
-        );
-      })
-      .join("");
-    return (
-      '<table class="admin-table"><thead><tr><th>Received</th><th>Name</th><th>Email</th>' +
-      "<th>Status</th><th>Message</th><th></th></tr></thead><tbody>" +
-      body + "</tbody></table>"
-    );
-  }
   function loadContact() {
     var wrap = el("contactTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    var path = "/api/admin/contact" + (contactStatusFilter ? "?status=" + encodeURIComponent(contactStatusFilter) : "");
-    authFetch(path)
+    ctOpenId = null;
+    authFetch("/api/admin/contact")
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = contactTable(d.results || []);
+        ctRows = d.results || [];
+        ctDraw();
       })
       .catch(function () {
+        ctRows = [];
         wrap.innerHTML = unavailableHtml("Enquiries are unavailable.");
+        var line = el("ctWaitingLine");
+        if (line) line.textContent = "";
       });
   }
   function contactStatus(msg) {
-    el("contactActionStatus").textContent = msg || "";
+    var s = el("contactActionStatus");
+    if (s) s.textContent = msg || "";
   }
+  // A message opens where it is. Pressing an open one's card again closes it.
   function openContact(id) {
+    id = Number(id);
+    if (ctOpenId === id) {
+      ctOpenId = null;
+      ctDraw();
+      return;
+    }
+    ctOpenId = id;
     currentContactId = id;
-    showOnly("view-contact-detail");
-    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
-      b.classList.remove("is-active");
-    });
-    contactStatus("");
+    ctDraw();
     var wrap = el("contactDetail");
+    if (!wrap) return;
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/contact/" + id)
       .then(function (res) {
@@ -3576,35 +3628,51 @@
       });
   }
   function renderContact(c) {
+    var esc = H.escapeHtml;
     var canWrite = canEdit("contact");
-    var info =
-      '<dl class="admin-dl">' +
-      dl("Name", ((c.first_name || "") + " " + (c.last_name || "")).trim()) +
+    var facts =
+      '<dl class="ct-facts">' +
       dl("Email", c.email) +
       // Optional on the form, so only a line when the sender gave one.
       (c.phone ? dl("Phone", c.phone) : "") +
       dl("Received", window.formatReceived(c.created_at)) +
-      dl("Status", c.status === "replied" ? "Replied" : "New") +
       (c.status === "replied"
-        ? dl("Replied by", (c.replied_by || "") + " · " + window.formatReceived(c.replied_at))
+        ? dl("Replied by", (c.replied_by || "") + (c.replied_at ? " · " + window.formatReceived(c.replied_at) : ""))
         : "") +
       "</dl>" +
-      '<h3 class="admin-subhead">Message</h3><p class="admin-story-text">' + H.escapeHtml(c.message || "") + "</p>";
+      '<p class="ct-msg__full">' + esc(c.message || "") + "</p>";
     var actions = "";
     if (canWrite) {
       actions =
-        '<div class="admin-donor-actions">' +
-        '<button class="btn btn-primary" type="button" id="contactReplyBtn">Reply in Gmail</button> ' +
+        '<div class="ct-actions">' +
+        '<button class="ct-act ct-act--primary" type="button" id="contactReplyBtn">Reply in Gmail</button>' +
         (c.status === "replied"
-          ? '<button class="btn btn-ghost" type="button" id="contactMarkNewBtn">Mark as new</button> '
-          : '<button class="btn btn-ghost" type="button" id="contactMarkRepliedBtn">Mark as replied</button> ') +
-        '<button class="btn" type="button" id="contactArchiveBtn">Archive</button>' +
-        '<button class="btn" type="button" id="contactRestoreBtn" hidden>Restore</button>' +
-        '<button class="btn btn-danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
+          ? '<button class="ct-act" type="button" id="contactMarkNewBtn">Mark as new</button>'
+          : '<button class="ct-act" type="button" id="contactMarkRepliedBtn">Mark as replied</button>') +
+        '<button class="ct-act" type="button" id="contactArchiveBtn">Archive</button>' +
+        '<button class="ct-act" type="button" id="contactRestoreBtn" hidden>Restore</button>' +
+        '<button class="ct-act ct-act--danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
         "</div>";
     }
-    el("contactDetail").innerHTML = info + actions;
+    var wrap = el("contactDetail");
+    if (!wrap) return;
+    wrap.innerHTML = facts + actions;
     if (canWrite) wireContactActions(c);
+  }
+  // After a status change: the card's mark and the counts follow, without redrawing the opened part
+  // (which holds the message saying it worked).
+  function ctRowChanged(updated) {
+    var row = ctRows.find(function (r) { return Number(r.id) === Number(updated.id); });
+    if (!row) return;
+    row.status = updated.status;
+    row.replied_summary = updated.status === "replied" ? "Replied by " + (updated.replied_by || "you") : null;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + Number(row.id) + '"]');
+    if (card) {
+      card.classList.toggle("ct-msg--waiting", row.status !== "replied");
+      var mark = card.querySelector(".ct-msg__mark");
+      if (mark) mark.innerHTML = ctMarkHtml(row);
+    }
+    ctCounts();
   }
   function patchContact(body, okMsg, errMsg) {
     return authFetch("/api/admin/contact/" + currentContactId, {
@@ -3618,6 +3686,7 @@
       .then(function (updated) {
         if (updated) {
           renderContact(updated);
+          ctRowChanged(updated);
           contactStatus(okMsg);
           refreshEnquiryNotice(); // one fewer waiting, or one more if it was un-marked
         } else contactStatus(errMsg);
@@ -3688,9 +3757,6 @@
       })
       .catch(function () { contactStatus("Could not erase the message."); });
   }
-  bindClick("contactBack", function () {
-    selectView("contact");
-  });
 
   // ---- audit ----
   function loadAudit() {

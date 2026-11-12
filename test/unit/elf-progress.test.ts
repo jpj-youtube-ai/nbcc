@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RANKS, progressOf, promotionsBetween, rankAt } from "../../src/elf/progress";
+import { RANKS, doneDoorsOf, progressOf, promotionsBetween, rankAt } from "../../src/elf/progress";
 
 // NBCC Elf Detective School: how far a detective has got. Pure, so every threshold is checked here.
 
@@ -127,5 +127,35 @@ describe("snow days", () => {
     const p = progressOf({ cracked: [], visited: [], snow: doors(1, 24) });
     expect(p.graduate).toBe(true);
     expect(p.goldSeal).toBe(true);
+  });
+});
+
+describe("a visit by any detective in the family", () => {
+  it("is done for every detective, and is not their own stamp", () => {
+    const p = progressOf({ cracked: [], visited: [], family: [1, 2, 3, 4, 5, 6] });
+    expect(p.doorsDone).toBe(6);
+    expect(p.rank).toBe("Junior Detective");
+    expect(p.visited).toBe(0);
+    expect(p.goldSeal).toBe(false);
+  });
+
+  it("graduates a family that visited all 24, with no gold seal for a detective who went to none", () => {
+    const p = progressOf({ cracked: [], visited: [], family: doors(1, 24) });
+    expect(p.graduate).toBe(true);
+    expect(p.goldSeal).toBe(false);
+  });
+
+  it("gives the gold seal for 24 of the detective's own visits", () => {
+    expect(progressOf({ cracked: [], visited: doors(1, 24) }).goldSeal).toBe(true);
+  });
+});
+
+describe("doneDoorsOf", () => {
+  it("lists every door done any way, real doors only, in order", () => {
+    expect(doneDoorsOf({ cracked: [2], visited: [1], family: [1, 3, 0, 25], snow: [4] })).toEqual([1, 2, 3, 4]);
+  });
+
+  it("is empty for missing lists", () => {
+    expect(doneDoorsOf({ cracked: null, visited: undefined })).toEqual([]);
   });
 });

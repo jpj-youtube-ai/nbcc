@@ -793,26 +793,90 @@ describe("familyDoorsDone and detectiveDoorsDone", () => {
   it("gives each detective the cracked doors of the family, their own counted stamps, and the snow days", async () => {
     db();
     const m = await familyDoorsDone(2026, 3, [open, snowed], now);
-    expect(m.get(10)).toEqual({ cracked: [7], visited: [7], snow: [8] });
+    expect(m.get(10)).toEqual({ cracked: [7], visited: [7], family: [7], snow: [8] });
     // detective 11's stamp for door 9 does not count until 9 December, and the practice door never counts
-    expect(m.get(11)).toEqual({ cracked: [7], visited: [], snow: [8] });
+    expect(m.get(11)).toEqual({ cracked: [7], visited: [], family: [7], snow: [8] });
   });
 
   it("shows no progress from a door the runs say is shut, whatever rows exist", async () => {
     db();
     // With the switch off every run is shut: the stamps and the guess count for nothing.
     const m = await familyDoorsDone(2026, 3, waveOneRuns(2026, now), now);
-    expect(m.get(10)).toEqual({ cracked: [], visited: [], snow: [] });
-    expect(m.get(11)).toEqual({ cracked: [], visited: [], snow: [] });
+    expect(m.get(10)).toEqual({ cracked: [], visited: [], family: [], snow: [] });
+    expect(m.get(11)).toEqual({ cracked: [], visited: [], family: [], snow: [] });
   });
 
   it("gives one detective's doors", async () => {
     db();
-    expect(await detectiveDoorsDone(2026, 10, [open, snowed], now)).toEqual({ cracked: [7], visited: [7], snow: [8] });
+    expect(await detectiveDoorsDone(2026, 10, [open, snowed], now)).toEqual({ cracked: [7], visited: [7], family: [7], snow: [8] });
+  });
+});
+
+describe("a visit counts for the whole family, and a go counts when it is saved", () => {
+  // Detectives 11 and 12 are one family. Door 7 opened at 7pm; door 6 opened on 6 December.
+  const door7 = runOf(2026, fullDoor(), at("2026-12-07T21:00:00Z"));
+  const door6 = runOf(2026, fullDoor({ door: 6, placeName: "Corner Bakehouse" }), at("2026-12-07T21:00:00Z"));
+
+  function db(over: { visits?: Record<string, unknown>[]; guesses?: Record<string, unknown>[] }) {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_detectives/.test(s)) return { rows: [{ id: 11 }, { id: 12 }] };
+      if (/FROM elf_guesses/.test(s)) return { rows: over.guesses ?? [] };
+      if (/FROM elf_visits/.test(s)) return { rows: over.visits ?? [] };
+      return { rows: [] };
+    });
+  }
+
+  it("is done for a detective whose sibling went, though it is not their own stamp", async () => {
+    db({ visits: [{ door: 7, detective_id: 11, counts_from: at("2026-12-07T18:00:00Z"), found: false }] });
+    const m = await familyDoorsDone(2026, 3, [door7], at("2026-12-07T19:05:00Z"));
+    expect(m.get(12)).toMatchObject({ family: [7], visited: [] });
+    expect(m.get(11)).toMatchObject({ family: [7], visited: [7] });
+  });
+
+  it("does not count a visit before it counts, nor the practice door", async () => {
+    db({
+      visits: [
+        { door: 7, detective_id: 11, counts_from: at("2026-12-07T19:30:00Z"), found: false },
+        { door: 0, detective_id: 11, counts_from: at("2026-12-07T18:00:00Z"), found: false },
+      ],
+    });
+    const m = await familyDoorsDone(2026, 3, [door7], at("2026-12-07T19:05:00Z"));
+    expect(m.get(12)).toMatchObject({ family: [] });
+  });
+
+  it("counts a go that is right in both detectives' cracked doors from the moment it is saved, and not before", async () => {
+    const goRow = { door: 6, text: "Corner Bakehouse", norm: "cornerbakehouse", saved_at: at("2026-12-07T19:10:00Z"), late: true };
+    db({ guesses: [goRow] });
+    const after = await familyDoorsDone(2026, 3, [door6], at("2026-12-07T19:15:00Z"));
+    expect(after.get(11)!.cracked).toEqual([6]);
+    expect(after.get(12)!.cracked).toEqual([6]);
+    const before = await familyDoorsDone(2026, 3, [door6], at("2026-12-07T19:09:00Z"));
+    expect(before.get(11)!.cracked).toEqual([]);
+    expect(before.get(12)!.cracked).toEqual([]);
   });
 });
 
 describe("doorCounts", () => {
+  const cracking = (family_id: number, saved_at: string, late: boolean) => ({
+    family_id,
+    text: "Pine Cone Café",
+    norm: "pineconecafe",
+    saved_at: at(saved_at),
+    late,
+  });
+
+  it("counts a cracking go with the night's guesses, unless asked to leave gos out", async () => {
+    const run = runOf(2026, fullDoor(), at("2026-12-08T19:00:00Z"));
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM elf_guesses/.test(String(sql))) return { rows: [cracking(1, "2026-12-07T18:00:00Z", false), cracking(2, "2026-12-08T18:10:00Z", true)] };
+      return { rows: [{ n: "4" }] };
+    });
+    const now = at("2026-12-08T19:00:00Z");
+    expect((await doorCounts(2026, 7, now, run)).cracked).toBe(2);
+    expect((await doorCounts(2026, 7, now, run, false)).cracked).toBe(1);
+  });
+
   it("counts the families that cracked it and those who visited, leaving removed families out", async () => {
     const run = runOf(2026, fullDoor(), at("2026-12-07T21:00:00Z"));
     query.mockImplementation(async (sql: string) => {

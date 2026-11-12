@@ -1,7 +1,6 @@
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import { isDoor } from "./calendar";
-import type { DoorsDone } from "./progress";
+import { doneDoorsOf, type DoorsDone } from "./progress";
 
 // NBCC Elf Detective School: the elf wardrobe, as the server sees it. The design is
 // docs/superpowers/specs/2026-11-04-elf-paper-design.md (the paper wardrobe: whole costumes and extras),
@@ -144,13 +143,12 @@ export function normaliseFavourites(list: unknown, state: WardrobeState): ElfLoo
 }
 
 /**
- * The doors a detective has done: the family's cracked doors and the detective's own visits, each door
+ * The doors a detective has done: the family's cracked doors, every visit by the family and the snow days, each door
  * once, real doors only (1 to 24), in order. Always build a WardrobeState here.
  *
  * A wrong state fails shut and says nothing: hand normaliseLook a door as text and it sees no door, so
  * a saved costume quietly comes off. Building the state in one typed place is what stops that.
  */
 export function wardrobeState(doors: DoorsDone): WardrobeState {
-  const done = new Set([...(doors.cracked ?? []), ...(doors.visited ?? []), ...(doors.snow ?? [])].filter(isDoor));
-  return { doors: [...done].sort((a, b) => a - b) };
+  return { doors: doneDoorsOf(doors) };
 }

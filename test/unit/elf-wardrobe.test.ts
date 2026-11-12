@@ -254,6 +254,10 @@ describe("the doors a detective has done, for the wardrobe", () => {
     expect(wardrobeState({ cracked: [], visited: [], snow: [5] }).doors).toEqual([5]);
   });
 
+  it("counts a door any detective in the family visited", () => {
+    expect(wardrobeState({ cracked: [], visited: [], family: [5] }).doors).toEqual([5]);
+  });
+
   it("counts nothing from a missing list", () => {
     expect(wardrobeState({ cracked: null, visited: undefined })).toEqual({ doors: [] });
   });

@@ -484,12 +484,15 @@ export async function finderOf(year: number, door: number): Promise<Finder | nul
 // ---- doors done ---------------------------------------------------------------------------------------
 
 function crackedBy(run: DoorRun, guess: SavedGuess | undefined, now: Date): boolean {
+  // A guess saved after `now` is not there yet: a go saved at 7:10pm does not count at 7:09pm.
+  if (guess && guess.at.getTime() > now.getTime()) return false;
   return cracked({ state: doorState(run.facts, now), openedAt: openedAt(run.facts, now), names: run.names }, guess ?? null);
 }
 
 /** For each of the family's detectives, the doors done at `now`: the family's cracked doors (the same
- *  for each detective), the detective's own stamps that count by now (never the practice door), and the
- *  snowed in doors. */
+ *  for each detective, a right go included), the detective's own stamps that count by now (never the
+ *  practice door), the doors any detective of the family has a counting stamp for (the same for each
+ *  detective), and the snowed in doors. */
 export async function familyDoorsDone(year: number, familyId: number, runs: DoorRun[], now: Date): Promise<Map<number, DoorsDone>> {
   const [detectives, guesses, visits] = await Promise.all([
     pool.query<{ id: number }>("SELECT id FROM elf_detectives WHERE family_id = $1 AND active ORDER BY id", [familyId]),
@@ -501,6 +504,7 @@ export async function familyDoorsDone(year: number, familyId: number, runs: Door
   const open = new Set<number>(realRuns.map((r) => r.door));
   const crackedDoors = realRuns.filter((r) => crackedBy(r, guesses.get(r.door), now)).map((r) => r.door);
   const snowDoors = realRuns.filter((r) => doorState(r.facts, now) === "snow").map((r) => r.door);
+  const familyDoors = [...new Set(visits.filter((v) => open.has(v.door) && v.countsFrom.getTime() <= now.getTime()).map((v) => v.door))].sort((a, b) => a - b);
   const out = new Map<number, DoorsDone>();
   for (const d of detectives.rows) {
     const id = Number(d.id);
@@ -508,7 +512,7 @@ export async function familyDoorsDone(year: number, familyId: number, runs: Door
       .filter((v) => v.detectiveId === id && open.has(v.door) && v.countsFrom.getTime() <= now.getTime())
       .map((v) => v.door)
       .sort((a, b) => a - b);
-    out.set(id, { cracked: crackedDoors, visited, snow: snowDoors });
+    out.set(id, { cracked: crackedDoors, visited, family: familyDoors, snow: snowDoors });
   }
   return out;
 }
@@ -517,15 +521,16 @@ export async function familyDoorsDone(year: number, familyId: number, runs: Door
 export async function detectiveDoorsDone(year: number, detectiveId: number, runs: DoorRun[], now: Date): Promise<DoorsDone> {
   const r = await pool.query<{ family_id: number }>("SELECT family_id FROM elf_detectives WHERE id = $1", [detectiveId]);
   const familyId = r.rows[0]?.family_id;
-  const none: DoorsDone = { cracked: [], visited: [], snow: [] };
+  const none: DoorsDone = { cracked: [], visited: [], family: [], snow: [] };
   if (familyId === undefined) return none;
   return (await familyDoorsDone(year, Number(familyId), runs, now)).get(detectiveId) ?? none;
 }
 
-/** How many families cracked a door and how many visited it by `now`, leaving removed families out. */
-export async function doorCounts(year: number, door: number, now: Date, run: DoorRun): Promise<{ cracked: number; visited: number }> {
+/** How many families cracked a door and how many visited it by `now`, leaving removed families out. A
+ *  go counts as a crack, unless `withLate` is false (Finds does not count late cracks). */
+export async function doorCounts(year: number, door: number, now: Date, run: DoorRun, withLate = true): Promise<{ cracked: number; visited: number }> {
   const guesses = await doorGuesses(year, door);
-  const crackedCount = guesses.filter((g) => crackedBy(run, g.guess, now)).length;
+  const crackedCount = guesses.filter((g) => (withLate || !g.guess.late) && crackedBy(run, g.guess, now)).length;
   const r = await pool.query<{ n: string }>(
     `SELECT count(DISTINCT v.family_id) AS n FROM elf_visits v
        JOIN elf_families f ON f.id = v.family_id

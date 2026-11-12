@@ -4,10 +4,12 @@ import { DOOR_COUNT, isDoor } from "./calendar";
 // docs/superpowers/specs/2026-10-04-elf-detective-school-design.md (decision 8).
 //
 // The hiding places are spread across the whole area, so only very keen families will visit all 24.
-// A door therefore counts when it is cracked OR visited, and promotions come along the way, so every
+// A door therefore counts when the family cracks it (a right guess on the night or a right go later),
+// when any detective of the family visits it, or when it snows, and promotions come along the way, so every
 // child has something to aim for. Two finishes: Graduate for all 24 doors done either way, which is
 // what leads to the grand prize (Jaimie, 5 November 2026: a family need not visit every place), and
-// the gold seal for visiting all 24 places, an honour on the certificate.
+// the gold seal for visiting all 24 places, an honour on the certificate. The gold seal is the
+// detective's own visits only; a sibling's visit does not make it.
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-progress.test.ts.
 
@@ -42,6 +44,9 @@ export interface DoorsDone {
   cracked: readonly number[] | null | undefined;
   /** The doors whose place the detective has a stamp for. */
   visited: readonly number[] | null | undefined;
+  /** The doors any detective in the family has visited (the find or a visit), counting by now. Each is
+   *  done for every detective in the family, but it is not this detective's own stamp. */
+  family?: readonly number[] | null;
   /** The doors that were snowed in: done every way, so nobody loses an honour to the weather. */
   snow?: readonly number[] | null;
 }
@@ -58,13 +63,20 @@ export function rankAt(doorsDone: number): Rank {
   return rank;
 }
 
+/** Every door done any way (cracked, visited, visited by the family, or snowed in), real doors only,
+ *  in order. */
+export function doneDoorsOf(doors: DoorsDone): number[] {
+  const done = new Set([...doorSet(doors.cracked), ...doorSet(doors.visited), ...doorSet(doors.family), ...doorSet(doors.snow)]);
+  return [...done].sort((a, b) => a - b);
+}
+
 /** Everything about a detective's progress. The two lists are named, not passed in order, so they
  *  cannot be swapped by mistake: swapped, 24 cracked doors would look like the gold seal. */
 export function progressOf(doors: DoorsDone): Progress {
   const snow = doorSet(doors.snow);
   const cracked = new Set([...doorSet(doors.cracked), ...snow]);
   const visited = new Set([...doorSet(doors.visited), ...snow]);
-  const doorsDone = new Set([...cracked, ...visited]).size;
+  const doorsDone = doneDoorsOf(doors).length;
   const upcoming = RANKS.find((r) => r.at > doorsDone) ?? null;
   return {
     doorsDone,

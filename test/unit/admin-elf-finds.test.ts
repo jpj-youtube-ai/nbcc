@@ -270,7 +270,7 @@ describe("Finds on the evening", () => {
     const d7 = body(await finds()).doors[0];
     expect(d7).toMatchObject({ door: 7, practice: false, state: "hunting", placeName: "Pine Cone Café 7", placeTown: "Snowford", found: null, cluesOut: 2, counts: null, canAddName: true });
     expect(d7.day).toBe("Monday 7 December");
-    expect(game.doorCounts).not.toHaveBeenCalledWith(2026, 7, expect.anything(), expect.anything());
+    expect(game.doorCounts).not.toHaveBeenCalledWith(2026, 7, expect.anything(), expect.anything(), expect.anything());
   });
 
   it("gives a door found yesterday its finders by full name, and its counts", async () => {
@@ -281,6 +281,8 @@ describe("Finds on the evening", () => {
     const d6 = body(await finds()).doors[1];
     expect(d6.found).toEqual({ detectives: ["Sam Twinkle", "Kim Twinkle"], grownUpName: "Alex Example", at: "2026-12-06T18:10:00.000Z" });
     expect(d6.counts).toEqual({ families: 5, cracked: 3 });
+    // Finds does not count late cracks (a go).
+    expect(game.doorCounts).toHaveBeenCalledWith(2026, 6, expect.anything(), expect.anything(), false);
     expect(d6.canAddName).toBe(false);
     expect(JSON.stringify(d6)).not.toContain("alex@example.org");
   });

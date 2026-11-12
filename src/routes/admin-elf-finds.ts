@@ -85,7 +85,7 @@ async function findRow(run: DoorRun, now: Date): Promise<FindRow> {
   const practice = run.door === 0;
   const hasFinder = run.state === "found" || run.state === "found-hidden";
   const finder = hasFinder ? await finderOf(run.year, run.door) : null;
-  const counts = isOpen(run.state) ? await doorCounts(run.year, run.door, now, run) : null;
+  const counts = isOpen(run.state) ? await doorCounts(run.year, run.door, now, run, false) : null;
   return {
     door: run.door,
     practice,

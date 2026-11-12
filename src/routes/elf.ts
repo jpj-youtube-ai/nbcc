@@ -48,6 +48,7 @@ import {
   type FamilyRuns,
 } from "../db/elf-game";
 import { DOOR_COUNT, isDoor, type Door } from "../elf/calendar";
+import { placesPublic } from "../elf/catch-up";
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
 import { canGuess, cluesOut, doorState, isOpen, shownAt } from "../elf/doors";
 import { badgeWords } from "../elf/emails";
@@ -715,7 +716,8 @@ function publicCache(res: Response): void {
 /** How the public calendar is built: snow in what cannot run (only once December's doors are on), read
  *  the doors through runsFor without the practice door, then who found each found door (its place shown
  *  or not) and the counts and scrapbook of each open one. A door neither found nor open shows nothing
- *  more, so nothing more is read for it. */
+ *  more, so nothing more is read for it. A scrapbook's photos are read only while every place is shown
+ *  to everyone, from Christmas Day until 1 January: a photo can show the inside of the place. */
 async function loadPublicCalendar(now: Date): Promise<CalendarView> {
   const settings = await getElfSettings();
   if (settings.doorsOn) await markAutomaticSnowDays(settings.year, now);
@@ -733,7 +735,7 @@ async function loadPublicCalendar(now: Date): Promise<CalendarView> {
     const [parts, counted, book] = await Promise.all([
       found ? finderParts(run.year, door) : null,
       open ? doorCounts(run.year, door, now, run) : null,
-      open ? doorScrapbook(run.year, door, now) : null,
+      open ? doorScrapbook(run.year, door, now, placesPublic(run.year, now)) : null,
     ]);
     if (parts) finders.set(door, parts);
     if (counted) counts.set(door, counted);

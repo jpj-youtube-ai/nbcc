@@ -10,7 +10,7 @@ import type { SavedGuess } from "../../src/elf/guess";
 import type { DetectiveNameParts } from "../../src/elf/names";
 import type { DoorsDone } from "../../src/elf/progress";
 import type { Scrapbook } from "../../src/elf/scrapbook";
-import { calendarViewFor, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
+import { calendarViewFor, familyDoorView, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { defaultLook } from "../../src/elf/wardrobe";
 
@@ -237,15 +237,17 @@ describe("the calendar's doors through the evening", () => {
     expect(d.factLine).toBeNull();
   });
 
-  it("gives a found door its place, scrapbook, collage and prize, even with Show it off unticked", () => {
+  // Plan 2c-1, Task 4: before Christmas Day the calendar everyone shares names no place and shows no photo.
+  it("gives a found door its elves, collage, counts and prize, even with Show it off unticked, but not its place or photos", () => {
     const d = calDoor7(
       { now: SEVEN_30, finders: new Map([[7 as Door, [RUBY]]]), scrapbooks: new Map([[7 as Door, BOOK]]), counts: new Map([[7 as Door, { cracked: 2, visited: 3 }]]) },
       { foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3, prizeShowOff: false },
     );
     expect(d.state).toBe("found");
-    expect(d.place).toEqual({ name: "The Toy Shop", town: "Troon" });
+    expect(d.place).toBeNull();
+    expect(d.goUrl).toBe("/elf/hq/door/7");
     expect(d.revealAt).toBeNull();
-    expect(d.scrapbook).toBe(BOOK);
+    expect(d.scrapbook).toEqual({ elves: BOOK.elves, photos: [], count: 2 });
     expect(d.counts).toEqual({ cracked: 2, visited: 3 });
     expect(d.collage).toEqual(["/elf/door/7/elf/1.png", "/elf/door/7/elf/2.png"]);
     expect(d.prize).toBe("A pretend prize");
@@ -301,6 +303,113 @@ describe("the calendar's doors through the evening", () => {
       const text = JSON.stringify(calDoor7({ now }, { ...over, prizeShowOff: false }));
       for (const secret of ["Toy Shop", "Troon", "kettle", "SNOWBALL", "pretend prize", "/elf/door/7/photo"]) expect(text).not.toContain(secret);
     }
+  });
+});
+
+// Plan 2c-1, Task 4, and Review Focus 4: the calendar everyone shares carries no place and no photo for an
+// open door from its shown moment until Christmas Day, carries both from Christmas Day, and neither from 1
+// January (Jaimie's answer 6). Door 7's run holds its place every time, and the scrapbook given for it holds
+// a photo, so each test fails if either leaks. Door 7 is found at 5:47pm on Monday 7 December and its place
+// shown at 7pm; never found, it is shown at the place's 8pm closing. December has no clock change, so
+// London's time is UTC's.
+const CORNER: Partial<DoorSetup> = { placeName: "Corner Bakehouse", placeTown: "Snowford", names: [{ id: 1, name: "The Bakehouse" }] };
+const FOUND_AT_547: Partial<DoorSetup> = { ...CORNER, foundAt: at("2026-12-07T17:47:00Z"), foundFamilyId: 3 };
+const SEVEN_05 = at("2026-12-07T19:05:00Z");
+/** Door 7 on the calendar everyone shares at `now`, found at 5:47pm unless told otherwise. */
+const shared7 = (now: Date, over: Partial<DoorSetup> = FOUND_AT_547) => calDoor7({ now, scrapbooks: new Map([[7 as Door, BOOK]]) }, over);
+
+describe("the calendar everyone shares, from a door's shown moment to the new year", () => {
+  it("gives an open door no place and no photo, and the go page, from its shown moment until Christmas Day", () => {
+    for (const now of [SEVEN_05, at("2026-12-24T23:59:59Z")]) {
+      const d = shared7(now);
+      expect(d.state, now.toISOString()).toBe("found");
+      expect(d.place).toBeNull();
+      expect(d.goUrl).toBe("/elf/hq/door/7");
+      expect(d.scrapbook?.photos).toEqual([]);
+      // The elves stay, counted on their own.
+      expect(d.scrapbook?.elves).toEqual(BOOK.elves);
+      expect(d.scrapbook?.count).toBe(2);
+      const text = JSON.stringify(d);
+      for (const secret of ["Bakehouse", "Snowford", "/photo/", "tok1"]) expect(text, now.toISOString()).not.toContain(secret);
+    }
+  });
+
+  it("does the same for a door shown with nobody found", () => {
+    const d = shared7(at("2026-12-07T20:05:00Z"), CORNER);
+    expect(d.state).toBe("revealed");
+    expect(d.place).toBeNull();
+    expect(d.goUrl).toBe("/elf/hq/door/7");
+    expect(d.scrapbook?.photos).toEqual([]);
+    for (const secret of ["Bakehouse", "Snowford", "/photo/"]) expect(JSON.stringify(d)).not.toContain(secret);
+  });
+
+  it("gives an open door its place and its scrapbook as given, photos and all, and no go page, from Christmas Day until 1 January", () => {
+    for (const now of [at("2026-12-25T00:00:00Z"), at("2026-12-31T23:59:59Z")]) {
+      const d = shared7(now);
+      expect(d.place, now.toISOString()).toEqual({ name: "Corner Bakehouse", town: "Snowford" });
+      expect(d.goUrl).toBeNull();
+      expect(d.scrapbook).toBe(BOOK);
+    }
+  });
+
+  it("takes the place and the photos off again from 1 January, and offers no go", () => {
+    const d = shared7(at("2027-01-01T00:00:00Z"));
+    expect(d.state).toBe("found");
+    expect(d.place).toBeNull();
+    expect(d.goUrl).toBeNull();
+    expect(d.scrapbook?.photos).toEqual([]);
+  });
+
+  it("offers no go at a door that is not open: found with its place hidden, snowed in, hunted or shut", () => {
+    expect(shared7(SIX_45, { ...CORNER, foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 })).toMatchObject({ state: "found-hidden", goUrl: null, place: null });
+    expect(shared7(SIX_10, { ...CORNER, snowDayAt: at("2026-12-07T17:30:00Z") })).toMatchObject({ state: "snow", goUrl: null });
+    expect(shared7(SIX_10, CORNER)).toMatchObject({ state: "hunting", goUrl: null });
+    expect(shared7(at("2026-12-07T17:00:00Z"), CORNER)).toMatchObject({ state: "shut", goUrl: null });
+  });
+
+  // The spec: nothing worked out from the place either. The view is the same whatever the place is called.
+  it("is the same whatever the place is called, so nothing on it can be worked out from the place", () => {
+    const elsewhere = { ...FOUND_AT_547, placeName: "Mistletoe Mill", placeTown: "Exampleton", names: [] };
+    expect(shared7(SEVEN_05, elsewhere)).toEqual(shared7(SEVEN_05));
+  });
+});
+
+// Plan 2c-1, Task 4: a family's own door, which the family's own route draws for a family that can see the
+// place (Task 5): the shared door with the place, its elves and the door's photos, and no go page.
+describe("a family's own door", () => {
+  const photos = [
+    { token: "zz9photo", url: "/elf/door/7/photo/zz9photo.jpg" },
+    { token: "aa1photo", url: "/elf/door/7/photo/aa1photo.jpg" },
+  ];
+  const mine = { place: { name: "Corner Bakehouse", town: "Snowford" }, photos };
+
+  it("is the shared door with its place, its elves and the photos sorted by token and counted with them, and no go page", () => {
+    const shared = shared7(SEVEN_05);
+    const d = familyDoorView(shared, mine);
+    expect(d.place).toEqual({ name: "Corner Bakehouse", town: "Snowford" });
+    expect(d.scrapbook?.elves).toEqual(BOOK.elves);
+    expect(d.scrapbook?.photos).toEqual([photos[1], photos[0]]);
+    expect(d.scrapbook?.count).toBe(BOOK.elves.length + 2);
+    expect(d.goUrl).toBeNull();
+    // Everything else is the shared door's, and nothing given is changed.
+    expect({ ...d, place: shared.place, scrapbook: shared.scrapbook, goUrl: shared.goUrl }).toEqual(shared);
+    expect(photos.map((p) => p.token)).toEqual(["zz9photo", "aa1photo"]);
+  });
+
+  // From Christmas Day the shared door holds the photos too: the family's own door takes them from `mine`
+  // alone, so none is shown twice.
+  it("takes only the shared door's elves, so from Christmas Day no photo is shown twice", () => {
+    const christmas = shared7(at("2026-12-25T00:00:00Z"));
+    expect(christmas.scrapbook?.photos.length).toBe(1);
+    const d = familyDoorView(christmas, mine);
+    expect(d.scrapbook?.photos).toEqual([photos[1], photos[0]]);
+    expect(d.scrapbook?.count).toBe(BOOK.elves.length + 2);
+  });
+
+  it("gives back a door that is not open as it was", () => {
+    const hidden = shared7(SIX_45, { ...CORNER, foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 });
+    expect(hidden.state).toBe("found-hidden");
+    expect(familyDoorView(hidden, mine)).toBe(hidden);
   });
 });
 

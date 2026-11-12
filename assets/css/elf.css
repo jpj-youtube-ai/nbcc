@@ -466,6 +466,10 @@
 .elf-book .elf-detail__fact { margin-top: 18px; }
 .elf-detail .elf-book__end { margin: 16px 0 0; color: var(--slate-soft); font-size: 0.92rem; text-align: center; }
 .elf-detail .elf-book__gone { color: var(--maroon); font-weight: 600; }
+/* The calendar everyone shares, before Christmas Day: an open door's last line asks where its elf was
+   hiding, and its Have a go button sits on a line of its own under the question, centred, however narrow
+   the phone. */
+.elf-detail .elf-book__go .elf-btn { display: flex; width: fit-content; margin: 10px auto 0; }
 .elf-book .elf-detail__mine { margin-top: 12px; }
 .elf-detail .elf-book__close { margin: 16px 0 0; text-align: center; }
 

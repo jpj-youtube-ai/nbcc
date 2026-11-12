@@ -20,6 +20,7 @@ import {
   clearWordTries,
   cluePicture,
   doorCounts,
+  doorPhotos,
   doorScrapbook,
   familyDoorsDone,
   familyGuesses,
@@ -860,7 +861,7 @@ describe("a visit counts for the whole family, and a go counts when it is saved"
 describe("doorCounts", () => {
   const cracking = (family_id: number, saved_at: string, late: boolean) => ({
     family_id,
-    text: "Pine Cone Café",
+    text: "Pine Cone CafÃ©",
     norm: "pineconecafe",
     saved_at: at(saved_at),
     late,
@@ -913,7 +914,7 @@ describe("doorScrapbook", () => {
       if (/FROM elf_photos/.test(s)) return { rows: [{ token: "zzzzzzzzzzzz" }, { token: "aaaaaaaaaaaa" }] };
       return { rows: [] };
     });
-    const book = await doorScrapbook(2026, 7, at("2026-12-07T20:00:00Z"));
+    const book = await doorScrapbook(2026, 7, at("2026-12-07T20:00:00Z"), true);
     const sql = query.mock.calls.map((c) => String(c[0]));
     expect(sql.every((q) => q.includes("removed_at IS NULL"))).toBe(true);
     expect(sql.find((q) => /elf_visits/.test(q))).toContain("counts_from <=");
@@ -924,6 +925,44 @@ describe("doorScrapbook", () => {
     expect(book.photos.map((p) => p.token)).toEqual(["aaaaaaaaaaaa", "zzzzzzzzzzzz"]);
     expect(book.photos[0].url).toBe("/elf/door/7/photo/aaaaaaaaaaaa.jpg");
     expect(book.count).toBe(4);
+  });
+
+  // Plan 2c-1, Task 4: a photo can show the inside of the place, so the calendar everyone shares asks for a
+  // door's photos only from Christmas Day until 1 January (loadPublicCalendar says when).
+  it("reads the photos only when asked: one query without them, two with", async () => {
+    query.mockImplementation(async (sql: string) =>
+      /FROM elf_photos/.test(String(sql)) ? { rows: [{ token: "aaaaaaaaaaaa" }] } : { rows: [{ id: 4, counts_from: at("2026-12-07T19:20:00Z"), found: true, first_name: "Ruby", surname: "Tinselfoot", name_approved: true }] },
+    );
+    const without = await doorScrapbook(2026, 7, at("2026-12-07T20:00:00Z"), false);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(String(query.mock.calls[0][0])).toContain("FROM elf_visits");
+    expect(without).toEqual({ elves: [expect.objectContaining({ visitId: 4 })], photos: [], count: 1 });
+    query.mockClear();
+    const withPhotos = await doorScrapbook(2026, 7, at("2026-12-07T20:00:00Z"), true);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(withPhotos.photos).toEqual([{ token: "aaaaaaaaaaaa", url: "/elf/door/7/photo/aaaaaaaaaaaa.jpg" }]);
+    expect(withPhotos.count).toBe(2);
+  });
+});
+
+// Plan 2c-1, Task 4: a door's shown photos on their own, for a family that can see the place (Task 5) and for
+// the scrapbook from Christmas Day.
+describe("doorPhotos", () => {
+  it("reads the door's shown photos, each with its address, by the two families rule", async () => {
+    query.mockResolvedValueOnce({ rows: [{ token: "zzzzzzzzzzzz" }, { token: "aaaaaaaaaaaa" }] });
+    expect(await doorPhotos(2026, 7)).toEqual([
+      { token: "zzzzzzzzzzzz", url: "/elf/door/7/photo/zzzzzzzzzzzz.jpg" },
+      { token: "aaaaaaaaaaaa", url: "/elf/door/7/photo/aaaaaaaaaaaa.jpg" },
+    ]);
+    expect(query).toHaveBeenCalledTimes(1);
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("FROM elf_photos");
+    expect(sql).toContain("p.status = 'approved'");
+    expect(sql).toContain(">= 2");
+    expect(sql).toContain("NOT EXISTS");
+    expect(sql).toContain("deleted_at IS NULL");
+    expect(sql).toContain("removed_at IS NULL");
+    expect(query.mock.calls[0][1]).toEqual([2026, 7]);
   });
 });
 
@@ -1099,7 +1138,7 @@ describe("photos", () => {
 
   it("lists a door's photos in the scrapbook only once two families' photos are approved on it", async () => {
     query.mockResolvedValue({ rows: [] });
-    await doorScrapbook(2026, 7, SIX_10);
+    await doorScrapbook(2026, 7, SIX_10, true);
     const sql = String(query.mock.calls.map((c) => String(c[0])).find((q) => /FROM elf_photos/.test(q)));
     expect(sql).toContain("count(DISTINCT");
     expect(sql).toContain(">= 2");
@@ -1109,7 +1148,7 @@ describe("photos", () => {
     // The rule lives in decidePhoto (src/db/elf-photos.ts); here, the family side proves the read side
     // never lists two photos from one family even if two approved rows were ever there.
     query.mockResolvedValue({ rows: [] });
-    await doorScrapbook(2026, 7, SIX_10);
+    await doorScrapbook(2026, 7, SIX_10, true);
     const sql = String(query.mock.calls.map((c) => String(c[0])).find((q) => /FROM elf_photos/.test(q)));
     expect(sql).toContain("NOT EXISTS");
   });

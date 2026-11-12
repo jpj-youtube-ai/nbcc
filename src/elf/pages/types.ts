@@ -35,7 +35,9 @@ export interface DoorView {
   /** The name of this door's elf. */
   elfName: string;
   /** Where it was hiding. Null until the door is open. The screens also refuse to show it before
-   *  then, whatever is passed in: two locks on the one secret. */
+   *  then, whatever is passed in: two locks on the one secret. On the calendar everyone shares it is
+   *  set only from Christmas Day until 1 January (placesPublic in src/elf/catch-up.ts); a family that
+   *  can see the place gets its own door with it (familyDoorView in src/elf/views.ts). */
   place: { name: string; town: string } | null;
   /** Who found it, from the moment it is found (even while the place is still hidden), else null.
    *  `by` is PUBLIC: it MUST come from detectiveNames in src/elf/names.ts, which shows a first name
@@ -45,7 +47,9 @@ export interface DoorView {
   revealAt: Date | null;
   /** How many families cracked it and how many families have visited. Null until the door is open. */
   counts: { cracked: number; visited: number } | null;
-  /** The elves and photos on the door. Null until the door is open. */
+  /** The elves and photos on the door. Null until the door is open. On the calendar everyone shares it
+   *  holds the elves only, counted on their own, until Christmas Day, and the photos too from then until
+   *  1 January: a photo can show the inside of the place. */
   scrapbook: Scrapbook | null;
   /** The door tile's mini collage: elf pictures only, never a photo. Empty until the door is open. */
   collage: string[];
@@ -56,6 +60,10 @@ export interface DoorView {
   /** Are December's doors on? Off, the door reads exactly as wave 1's did, today's door's words among
    *  it: no new words go live with the doors off. */
   doorsOn: boolean;
+  /** Where to have a go at this door in Detective HQ: `/elf/hq/door/${n}` on an open door while having a
+   *  go is open (until Christmas Day), the same for every visitor; null otherwise, and on a family's own
+   *  door, whose family can see the place. */
+  goUrl: string | null;
 }
 
 export interface CalendarView {

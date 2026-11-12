@@ -1502,6 +1502,28 @@ describe("the public calendar", () => {
     expect(doors.ensureElfDoors).not.toHaveBeenCalled();
   });
 
+  // Plan 2c-1, Task 4: a photo can show the inside of the place, so the calendar everyone shares reads the
+  // open doors' photos only while every place is shown to everyone, from Christmas Day until 1 January.
+  it("reads the open doors' photos only from Christmas Day until 1 January", async () => {
+    await call("GET", "/api/elf/calendar", { cookie: null });
+    expect(game.doorScrapbook.mock.calls).toEqual([[2026, 6, SIX_10, false]]);
+    const moments: [Date, boolean][] = [
+      [at("2026-12-24T23:59:59.000Z"), false],
+      [at("2026-12-25T00:00:00.000Z"), true],
+      [at("2026-12-31T23:59:59.000Z"), true],
+      [at("2027-01-01T00:00:00.000Z"), false],
+    ];
+    for (const [now, withPhotos] of moments) {
+      vi.setSystemTime(now);
+      resetPublicCalendar();
+      game.doorScrapbook.mockClear();
+      await call("GET", "/api/elf/calendar", { cookie: null });
+      const asked = game.doorScrapbook.mock.calls.map((c) => c[3]);
+      expect(asked.length, now.toISOString()).toBeGreaterThan(1);
+      expect(asked, now.toISOString()).toEqual(asked.map(() => withPhotos));
+    }
+  });
+
   // Final review, Important 1: the calendar is built once every 15 seconds and shared, so the time its
   // script sets its clock by is the time of each answer, never the time of the build.
   it("tells the script the time of the answer, not the time the shared calendar was built", async () => {

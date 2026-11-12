@@ -6,7 +6,7 @@ import { elfFilm } from "./film";
 import { candyCane, icon } from "./icons";
 import { headingStrip, rosette } from "./paper";
 import { elfPage, escapeHtml, sitePath } from "./shell";
-import type { CalendarView, DoorView } from "./types";
+import type { CalendarView } from "./types";
 
 // NBCC Elf Detective School: the public calendar. The plan is
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md; its paper look is
@@ -32,14 +32,14 @@ export interface CalendarStatus {
   html: string;
 }
 
-const placeOf = (d: DoorView): string => (d.place ? escapeHtml(`${d.place.name}, ${d.place.town}`) : "");
-
 function nextClueLine(view: CalendarView): string {
   const next = view.doors.find((d) => d.state === "shut");
   return next ? `<p>Next clue: ${dayWords(next.clueAt)} at ${clockWords(next.clueAt)}</p>` : "";
 }
 
-/** The news at the top of the calendar: what is happening today, in a title and a line or two. */
+/** The news at the top of the calendar: what is happening today, in a title and a line or two. It is
+ *  the same for everyone, so it never names a place, whatever the view holds: a family that missed the
+ *  hunt can still crack the case in Detective HQ (Plan 2c-1). */
 export function calendarStatus(view: CalendarView): CalendarStatus {
   const { now, doors } = view;
   const hunting = doors.find((d) => d.state === "hunting");
@@ -80,19 +80,24 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
     };
   }
   if (today && today.state === "found" && today.found) {
+    const at = clockWords(today.found.at);
     return {
       kind: "found",
       title: `${escapeHtml(today.elfName)} has been found!`,
       html:
-        `<p>${escapeHtml(today.found.by)} found today's elf at ${placeOf(today)} at ${clockWords(today.found.at)}.</p>` +
+        `<p>${escapeHtml(today.found.by)} found today's elf${at ? ` at ${at}` : ""}. Missed the hunt? You can still crack the case in Detective HQ.</p>` +
         nextClueLine(view),
     };
   }
   if (today && today.state === "revealed") {
+    // An elf that has gone home can no longer be found, so nobody still wins its prize (ruling F8).
+    const said = today.goneHome
+      ? "Nobody found today's elf in time. You can crack the case in Detective HQ."
+      : "Nobody has found today's elf yet, and the first detective to find it still wins the prize. You can crack the case in Detective HQ.";
     return {
       kind: "revealed",
       title: `${escapeHtml(today.elfName)} is still waiting`,
-      html: `<p>Nobody found today's elf in time. It is at ${placeOf(today)}, and the first detective there still wins the prize.</p>` + nextClueLine(view),
+      html: `<p>${said}</p>` + nextClueLine(view),
     };
   }
   const next = doors.find((d) => d.state === "shut");

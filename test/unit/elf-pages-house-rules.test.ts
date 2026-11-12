@@ -16,6 +16,7 @@ import { FESTIVE_SURNAMES } from "../../src/elf/names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
+import type { CalendarView } from "../../src/elf/pages/types";
 import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the house rules every elf screen must keep.
@@ -52,6 +53,16 @@ const opened = {
   counts: { cracked: 31, visited: 4 },
   factLine: "NBCC began with a question from a girl aged 12 in Annbank.",
 };
+/** Plan 2c-1, Task 4: door 7 open on the calendar everyone shares before Christmas Day, with no place and
+ *  no photo, and a go in Detective HQ. */
+const forEveryoneElse = { ...opened, place: null, scrapbook: { ...scrapbook, photos: [], count: 2 }, goUrl: "/elf/hq/door/7" };
+/** The calendar from Christmas Day, when every place and photo is shown to everyone: door 7 with its place,
+ *  its photo and no go. */
+function fromChristmasDay(): CalendarView {
+  const view = calendarView(at("2026-12-25T10:00:00.000Z"));
+  const seven = { state: "found" as const, found, ...opened, place: { name: "Corner Bakehouse", town: "Snowford" } };
+  return { ...view, doors: view.doors.map((d) => (d.door === 7 ? { ...d, ...seven } : d)) };
+}
 const today = hqView().today!;
 const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
 const everyoneStamped = posterView({ open: true, claimable: false, detectives: posterView().detectives.map((d) => ({ ...d, hasStamp: true })) });
@@ -68,6 +79,8 @@ const PAGES: [string, string][] = [
   ["calendar, a snow day", renderCalendarPage(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "snow" }))],
   ["calendar, a door whose elves have gone home", renderCalendarPage(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "found", found, ...opened, goneHome: true }))],
   ["calendar, all done", renderCalendarPage(calendarView(at("2026-12-25T10:00:00.000Z")))],
+  ["calendar, an open door for everyone else", renderCalendarPage(calendarView(at("2026-12-07T19:05:00.000Z"), { state: "found", found, ...forEveryoneElse }))],
+  ["calendar, an open door from Christmas Day", renderCalendarPage(fromChristmasDay())],
   ["HQ, before the clue", renderHqPage(hqView({ today: { ...today, state: "shut", clues: [], canGuess: false } }))],
   ["HQ, the hunt on", renderHqPage(hqView())],
   ["HQ, two clues out", renderHqPage(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } }))],
@@ -311,6 +324,7 @@ describe("data that tries to break out of the page", () => {
     ["HQ, found", renderHqPage(poisoned(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome } })))],
     ["wardrobe", renderWardrobePage(poisoned(wardrobeView()))],
     ["calendar, a scrapbook's photos", renderCalendarPage(poisoned(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...opened })))],
+    ["calendar, an open door's go", renderCalendarPage(poisoned(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...forEveryoneElse })))],
     ["HQ, two clues out", renderHqPage(poisoned(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } })))],
     ["poster", renderPosterPage(poisoned(posterView({ open: true, claimable: true })))],
     ["poster, your photo", renderPosterPage(poisoned(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "approved" } })))],

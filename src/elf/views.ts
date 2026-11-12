@@ -1,5 +1,6 @@
 import type { DoorRun, FamilyRuns } from "../db/elf-game";
 import { DEFAULT_MORNING_CLUE_TIME, DEFAULT_SCHOOL_CLUE_TIME, DOOR_COUNT, clueTimeFor, doorDate, doorInstant, isDoor, type Door } from "./calendar";
+import { goesOpen, placesPublic } from "./catch-up";
 import { canGuess, cluesOut, doorState, isClaimable, isOpen, nextClueAt, openedAt, shownAt, type DoorFacts, type DoorState } from "./doors";
 import { badgeWords } from "./emails";
 import { factFor } from "./facts";
@@ -7,7 +8,7 @@ import { cracked, type SavedGuess } from "./guess";
 import { detectiveNames, familyDetectiveName, type DetectiveNameParts } from "./names";
 import { doorPicture } from "./door-setup";
 import { progressOf, type DoorsDone } from "./progress";
-import { collageOf, type Scrapbook } from "./scrapbook";
+import { collageOf, orderScrapbook, type ScrapPhoto, type Scrapbook } from "./scrapbook";
 import type { ElfSettings } from "./settings";
 import { sameDay } from "./words";
 import { normaliseFavourites, normaliseLook, wardrobeState } from "./wardrobe";
@@ -15,8 +16,9 @@ import type { CalendarView, DetectiveView, DoorView, FamilyMarks, HqView, Poster
 
 // NBCC Elf Detective School: what the database holds, turned into what the screens show. Pure: the
 // rows and the doors' runs come in, the views go out. Nothing is shown before its time: a place, a
-// scrapbook, the counts and the prize come only once a door is open, a clue only once it is out, and a
-// child is named only through detectiveName or detectiveNames.
+// scrapbook, the counts and the prize come only once a door is open (and on the calendar everyone
+// shares, a place and the photos only from Christmas Day until 1 January), a clue only once it is out,
+// and a child is named only through detectiveName or detectiveNames.
 // Unit tested in test/unit/elf-views.test.ts.
 
 export interface DetectiveRow {
@@ -245,6 +247,14 @@ const EMPTY_BOOK: Scrapbook = { elves: [], photos: [], count: 0 };
 
 const filled = (s: string | null): s is string => typeof s === "string" && s.trim() !== "";
 
+/** An open door's scrapbook on the calendar everyone shares: as the loader gave it while every place is
+ *  shown to everyone, otherwise its elves only, counted on their own. The loader reads no photos then
+ *  either (loadPublicCalendar in src/routes/elf.ts): two locks, as a photo can show the inside of the
+ *  place. */
+function everyonesBook(book: Scrapbook, placesShown: boolean): Scrapbook {
+  return placesShown || book.photos.length === 0 ? book : { elves: book.elves, photos: [], count: book.elves.length };
+}
+
 function doorViewOf(
   run: DoorRun & { door: Door },
   o: { settings: ElfSettings; now: Date; finders: Map<Door, DetectiveNameParts[]>; counts: Map<Door, { cracked: number; visited: number }>; scrapbooks: Map<Door, Scrapbook> },
@@ -252,7 +262,10 @@ function doorViewOf(
   const state = doorState(run.facts, o.now);
   const open = isOpen(state);
   const hasFound = state === "found-hidden" || state === "found";
-  const book = open ? (o.scrapbooks.get(run.door) ?? EMPTY_BOOK) : null;
+  // The calendar everyone shares names an open door's place only from Christmas Day until 1 January (the
+  // spec's answer 6). Before then a family sees it on its own door, once it can (familyDoorView).
+  const placesShown = placesPublic(run.year, o.now);
+  const book = open ? everyonesBook(o.scrapbooks.get(run.door) ?? EMPTY_BOOK, placesShown) : null;
   return {
     door: run.door,
     state,
@@ -265,7 +278,7 @@ function doorViewOf(
     teaser: run.prizeShowOff && (state === "shut" || state === "hunting" || state === "revealed") && filled(run.prize) ? run.prize : null,
     prize: state === "found" && filled(run.prize) ? run.prize : null,
     elfName: run.elfName,
-    place: open && run.placeName !== null ? { name: run.placeName, town: run.placeTown ?? "" } : null,
+    place: open && placesShown && run.placeName !== null ? { name: run.placeName, town: run.placeTown ?? "" } : null,
     found: hasFound && run.facts.foundAt !== null ? { at: run.facts.foundAt, by: detectiveNames(o.finders.get(run.door) ?? []) || "A detective" } : null,
     revealAt: state === "found-hidden" ? shownAt(run.facts) : null,
     counts: open ? (o.counts.get(run.door) ?? { cracked: 0, visited: 0 }) : null,
@@ -274,12 +287,31 @@ function doorViewOf(
     goneHome: run.facts.goneHome,
     factLine: open ? (factFor(run.door)?.doorLine ?? null) : null,
     doorsOn: o.settings.doorsOn,
+    // The same for every visitor: whether a visitor may have a go is the go page's to say.
+    goUrl: open && goesOpen(run.year, o.now) ? `/elf/hq/door/${run.door}` : null,
+  };
+}
+
+/**
+ * A family's own door, for a family that can see the place (the one rule, src/elf/catch-up.ts): the shared
+ * door with the place, the door's photos beside the shared elves, in the scrapbook's order, and no go
+ * (the family already knows where the elf was hiding). A door that is not open comes back as it was.
+ * Pure: the caller decides whether the family may see the place, and reads its photos (doorPhotos).
+ */
+export function familyDoorView(shared: DoorView, mine: { place: { name: string; town: string }; photos: readonly ScrapPhoto[] }): DoorView {
+  if (!isOpen(shared.state)) return shared;
+  return {
+    ...shared,
+    place: { name: mine.place.name, town: mine.place.town },
+    scrapbook: orderScrapbook(shared.scrapbook?.elves ?? [], mine.photos),
+    goUrl: null,
   };
 }
 
 /**
  * The public calendar: the same for every visitor, so it can be cached. It never carries the
- * practice run. A door shows its place, scrapbook, counts and prize only once it is open.
+ * practice run. A door shows its scrapbook, counts and prize only once it is open, and its place and
+ * photos only from Christmas Day until 1 January.
  */
 export function calendarViewFor(o: {
   settings: ElfSettings;

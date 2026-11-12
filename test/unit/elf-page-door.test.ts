@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+// The calendar everyone shares is built here by the real view from real runs; the database is never reached.
+vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+
+import { runOf, waveOneRuns } from "../../src/db/elf-game";
+import type { Door } from "../../src/elf/calendar";
+import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
 import { doorDetail, doorKind, doorLabel, doorTile, doorVersion, type DoorKind } from "../../src/elf/pages/door";
 import type { DoorView } from "../../src/elf/pages/types";
 import type { Scrapbook } from "../../src/elf/scrapbook";
+import { ELF_DEFAULTS } from "../../src/elf/settings";
+import { calendarViewFor, familyDoorView } from "../../src/elf/views";
 
 // NBCC Elf Detective School: one door of the public calendar and its opened out detail. Every
 // business, detective, prize and address here is invented. It is Monday 7 December 2026, at 3pm.
@@ -31,6 +39,7 @@ function door(over: Partial<DoorView> = {}): DoorView {
     factLine: null,
     // December's doors on, as every state but a shut one needs.
     doorsOn: true,
+    goUrl: null,
     ...over,
   };
 }
@@ -162,6 +171,8 @@ describe("a door that is not open, over every kind", () => {
     prize: "A pretend secret prize",
     counts: { cracked: 3, visited: 2 },
     factLine: "Practice clue 1: it lives where the kettle lives",
+    // Having a go is only ever at an open door (Plan 2c-1, Task 4).
+    goUrl: "/elf/hq/door/9",
   };
   /** Each kind of door that is not open, as the view gives it. */
   const KINDS: [DoorKind, DoorView][] = [
@@ -186,6 +197,8 @@ describe("a door that is not open, over every kind", () => {
       expect(said).not.toContain("secret prize");
       expect(said).not.toContain("cracked this case");
       expect(said).not.toMatch(/elf-room|elf-book|elf-pol/);
+      expect(said).not.toContain("Have a go");
+      expect(said).not.toContain("/elf/hq/door/");
     }
   });
 
@@ -712,5 +725,184 @@ describe("a door's version for the live feed", () => {
 
   it("is short, and safe to put in a page", () => {
     for (const d of [TODAY, HUNTING, FOUND_HIDDEN, SNOW, FOUND, REVEALED]) expect(doorVersion(d, NOW)).toMatch(/^[a-z0-9]{1,16}$/);
+  });
+
+  // Ruling F4 on Plan 2c-1: with December's doors off the calendar is byte for byte today's, and its feed
+  // with it. So a door with no go page keeps today's fingerprint: these are the ones these doors had
+  // before the go page was added (worked out at c3c14a18), the doors off today's door among them.
+  it("is today's for a door with no go page, with or without the field", () => {
+    expect(doorVersion(door(), NOW)).toBe("msowe8");
+    expect(doorVersion({ ...TODAY, doorsOn: false }, NOW)).toBe("ruiwff");
+    expect(doorVersion(FOUND, NOW)).toBe("20nm1v");
+    const bare = Object.fromEntries(Object.entries(FOUND).filter(([key]) => key !== "goUrl")) as unknown as DoorView;
+    expect(doorVersion(bare, NOW)).toBe(doorVersion(FOUND, NOW));
+  });
+});
+
+// ---- the calendar everyone shares (Plan 2c-1, Task 4) ----------------------------------------------------
+//
+// Before Christmas Day the calendar everyone shares names no place and shows no photo, and an open door
+// offers a go in Detective HQ instead. Door 7 here is built by the real view from a run that holds its place,
+// Corner Bakehouse in Snowford, and a scrapbook that holds a photo, so each test fails if either is drawn
+// (ruling F12). Bauble is found at 5:47pm on Monday 7 December and the place shown at 7pm; never found, it is
+// shown at the place's 8pm closing. December has no clock change, so London's time is UTC's.
+
+const SHARED_BOOK: Scrapbook = {
+  elves: [{ visitId: 71, detective: RUBY, countsFrom: at("2026-12-07T19:00:00.000Z"), found: true, pictureUrl: "/elf/door/7/elf/71.png" }],
+  photos: [{ token: "m4n5p6q7r8st", url: "/elf/door/7/photo/m4n5p6q7r8st.jpg" }],
+  count: 2,
+};
+
+/** Door 7 as the calendar everyone shares gives it at `now`. */
+function shared7(now: Date, over: Partial<DoorSetup> = {}): DoorView {
+  const setup: DoorSetup = {
+    ...emptyDoor(7, "bcdfghjkmnpq"),
+    placeName: "Corner Bakehouse",
+    placeTown: "Snowford",
+    names: [{ id: 1, name: "The Bakehouse" }],
+    tagWord: "SNOWBALL 472",
+    elfName: "Bauble",
+    prize: "A pretend sledge",
+    foundAt: at("2026-12-07T17:47:00.000Z"),
+    foundFamilyId: 3,
+    ...over,
+  };
+  const runs = waveOneRuns(2026, now).map((r) => (r.door === 7 ? runOf(2026, setup, now) : r));
+  return calendarViewFor({
+    settings: { ...ELF_DEFAULTS, schoolOn: true, doorsOn: true },
+    now,
+    runs,
+    finders: new Map([[7 as Door, [RUBY]]]),
+    counts: new Map([[7 as Door, { cracked: 2, visited: 1 }]]),
+    scrapbooks: new Map([[7 as Door, SHARED_BOOK]]),
+  }).doors[6];
+}
+
+const SEVEN_05 = at("2026-12-07T19:05:00.000Z");
+const EIGHT_05 = at("2026-12-07T20:05:00.000Z");
+const CHRISTMAS_DAY = at("2026-12-25T00:00:00.000Z");
+const atTime = (now: Date) => ({ ...CTX, now });
+
+describe("an open door on the calendar everyone shares, before Christmas Day", () => {
+  const FOUND7 = shared7(SEVEN_05);
+  const REVEALED7 = shared7(EIGHT_05, { foundAt: null, foundFamilyId: null });
+  const OPEN7: [string, DoorView, Date][] = [
+    ["found", FOUND7, SEVEN_05],
+    ["revealed", REVEALED7, EIGHT_05],
+  ];
+
+  it("is found, or revealed, and offers a go", () => {
+    expect([FOUND7.state, REVEALED7.state]).toEqual(["found", "revealed"]);
+    expect([FOUND7.goUrl, REVEALED7.goUrl]).toEqual(["/elf/hq/door/7", "/elf/hq/door/7"]);
+  });
+
+  it.each(OPEN7)("%s: names the place nowhere, on the door, to a screen reader or in its scrapbook, and shows no photo", (_kind, d, now) => {
+    for (const said of [doorTile(d, now), doorLabel(d, now), doorDetail(d, atTime(now))]) {
+      for (const secret of ["Corner Bakehouse", "Bakehouse", "Snowford"]) expect(said).not.toContain(secret);
+      expect(said).not.toContain("/photo/");
+    }
+  });
+
+  it("is read out as found, or not found yet, with who found it", () => {
+    expect(doorLabel(FOUND7, SEVEN_05)).toBe("Door 7, found. Found by Detective R. Tinselfoot.");
+    expect(doorLabel(REVEALED7, EIGHT_05)).toBe("Door 7, not found yet.");
+  });
+
+  it("heads its scrapbook with the find, or with nobody finding the elf in time", () => {
+    expect(words(dom(doorDetail(FOUND7, atTime(SEVEN_05))).querySelector("h3"))).toBe("Bauble was found!");
+    expect(words(dom(doorDetail(REVEALED7, atTime(EIGHT_05))).querySelector("h3"))).toBe("Nobody found Bauble in time");
+  });
+
+  it("says who found the elf and what they won, as it does today", () => {
+    const said = words(dom(doorDetail(FOUND7, atTime(SEVEN_05))));
+    expect(said).toContain("Found by Detective R. Tinselfoot at 5:47pm");
+    expect(said).toContain("Detective R. Tinselfoot won the prize cut into this door: A pretend sledge.");
+  });
+
+  it("says under the title of a revealed door that the elf is still hiding, and the prize still to be won", () => {
+    const b = dom(doorDetail(REVEALED7, atTime(EIGHT_05)));
+    expect(words(b.querySelector(".elf-book__still"))).toBe("Bauble is still hiding, and the first detective to type the word on its tag wins the prize.");
+    expect(words(b)).not.toContain("here is the hiding place");
+  });
+
+  it("ends by asking where the elf was hiding, with Have a go on a crimson paper button to the go page", () => {
+    const asks: [DoorView, Date, string][] = [
+      [FOUND7, SEVEN_05, "Where was Bauble hiding?"],
+      [REVEALED7, EIGHT_05, "Where is Bauble hiding?"],
+    ];
+    for (const [d, now, ask] of asks) {
+      const go = dom(doorDetail(d, atTime(now))).querySelector(".elf-book__go")!;
+      expect(go.tagName).toBe("P");
+      expect([...go.classList]).toEqual(["elf-book__end", "elf-detail__hint", "elf-book__go"]);
+      expect(words(go)).toBe(`${ask} Crack the case in Detective HQ to find out. Have a go`);
+      const a = go.querySelector('a[href="/elf/hq/door/7"]')!;
+      expect(words(a)).toBe("Have a go");
+      expect(a.className).toBe("elf-btn elf-btn--crimson elf-btn--s");
+    }
+  });
+
+  it("invites nobody to visit a place it does not name", () => {
+    for (const [, d, now] of OPEN7) expect(words(dom(doorDetail(d, atTime(now))))).not.toContain("Visit to add your picture");
+  });
+
+  // Ruling F8: an elf that has gone home cannot be found, so nobody still wins its prize.
+  it("says where an elf that has gone home was hiding, after the gone home line, and never that anyone still wins", () => {
+    for (const [, d, now] of OPEN7) {
+      const b = dom(doorDetail({ ...d, goneHome: true }, atTime(now)));
+      expect([...b.querySelectorAll(".elf-book__end")].map(words)).toEqual([
+        "Bauble has gone home now, so there is nothing to find there. The pictures stay.",
+        "Where was Bauble hiding? Crack the case in Detective HQ to find out. Have a go",
+      ]);
+      expect(words(b)).not.toContain("first detective");
+      expect(words(b)).not.toContain("still hiding");
+    }
+  });
+
+  it("offers no go once having a go has closed, and still names no place", () => {
+    for (const [, d, now] of OPEN7) {
+      const html = doorDetail({ ...d, goUrl: null }, atTime(now));
+      expect(html).not.toContain("Have a go");
+      expect(dom(html).querySelector(".elf-book__go")).toBeNull();
+      expect(html).not.toContain("Bakehouse");
+    }
+  });
+
+  it("changes its fingerprint with the go page, and not with the place it never shows", () => {
+    expect(doorVersion(FOUND7, SEVEN_05)).not.toBe(doorVersion({ ...FOUND7, goUrl: null }, SEVEN_05));
+    const elsewhere = shared7(SEVEN_05, { placeName: "Mistletoe Mill", placeTown: "Exampleton", names: [] });
+    expect(doorVersion(elsewhere, SEVEN_05)).toBe(doorVersion(FOUND7, SEVEN_05));
+  });
+});
+
+describe("the same open door with its place: a family's own, or everyone's from Christmas Day", () => {
+  const own = () => familyDoorView(shared7(SEVEN_05), { place: { name: "Corner Bakehouse", town: "Snowford" }, photos: [] });
+  const CHRISTMAS = shared7(CHRISTMAS_DAY);
+
+  it("reads as it does today: the place for its title, and an invitation to visit", () => {
+    const withPlace: [DoorView, Date][] = [
+      [own(), SEVEN_05],
+      [CHRISTMAS, CHRISTMAS_DAY],
+    ];
+    for (const [d, now] of withPlace) {
+      const b = dom(doorDetail(d, atTime(now)));
+      expect(words(b.querySelector("h3"))).toBe("Corner Bakehouse, Snowford");
+      expect(words(b)).toContain("The elf is still at Corner Bakehouse. Visit to add your picture.");
+      expect(b.querySelector(".elf-book__go")).toBeNull();
+      expect(words(b)).not.toContain("Have a go");
+      expect(words(dom(doorTile(d, now)).querySelector(".elf-room .elf-door__place"))).toBe("Corner Bakehouse");
+      expect(doorLabel(d, now)).toBe("Door 7, found. Corner Bakehouse, Snowford. Found by Detective R. Tinselfoot.");
+    }
+  });
+
+  it("shows the door's photos from Christmas Day", () => {
+    const b = dom(doorDetail(CHRISTMAS, atTime(CHRISTMAS_DAY)));
+    expect([...b.querySelectorAll(".elf-photos img")].map((img) => img.getAttribute("src"))).toEqual(["/elf/door/7/photo/m4n5p6q7r8st.jpg"]);
+  });
+
+  // The calendar's script fetches a door again when its fingerprint changes, so every open page shows the
+  // place at midnight as Christmas Day begins.
+  it("changes its fingerprint at midnight as Christmas Day begins", () => {
+    const late = at("2026-12-24T23:59:59.000Z");
+    expect(doorVersion(CHRISTMAS, CHRISTMAS_DAY)).not.toBe(doorVersion(shared7(late), late));
   });
 });

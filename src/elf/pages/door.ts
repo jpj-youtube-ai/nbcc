@@ -190,7 +190,7 @@ function room(d: DoorView): string {
 export function doorVersion(d: DoorView, now: Date): string {
   const open = isOpen(d.state);
   const book = open ? d.scrapbook : null;
-  const parts = [
+  const parts: unknown[] = [
     d.door,
     doorKind(d, now),
     d.clueAt.getTime(),
@@ -205,6 +205,9 @@ export function doorVersion(d: DoorView, now: Date): string {
     open ? [placeWords(d), d.prize, d.collage, d.goneHome, d.factLine] : null,
     book ? [book.count, book.elves.map((e) => [e.pictureUrl, e.found, e.detective ? detectiveName(e.detective) : ""]), book.photos.map((p) => p.url)] : null,
   ];
+  // Only an open door with a go adds it, so every other door keeps the code it had before having a go
+  // came in: with December's doors off the calendar and its feed are exactly as they were (ruling F4).
+  if (open && d.goUrl) parts.push(d.goUrl);
   let hash = 0x811c9dc5;
   for (const ch of JSON.stringify(parts)) {
     hash ^= ch.codePointAt(0) ?? 0;
@@ -388,22 +391,46 @@ function photoPolaroid(p: ScrapPhoto): string {
   return `<figure class="elf-pol"${token}><span class="elf-pol__shot"><img src="${src}" alt="" width="480" height="560" loading="lazy" decoding="async" /></span></figure>`;
 }
 
-/** An open door's detail: the scrapbook. */
+/** The last line of an open door with no place to show (the calendar everyone shares, before Christmas
+ *  Day), while having a go is open: where was the elf hiding, and a go in Detective HQ to find out. The
+ *  elf "is" hiding only while it can still be found, at a revealed door whose elf has not gone home
+ *  (ruling F8). */
+function goLine(d: DoorView, elf: string, stillHiding: boolean): string {
+  const go = sitePath(d.goUrl);
+  if (!go) return "";
+  const ask = stillHiding ? `Where is ${elf} hiding?` : `Where was ${elf} hiding?`;
+  return line(
+    `${ask} Crack the case in Detective HQ to find out. <a class="elf-btn elf-btn--crimson elf-btn--s" href="${go}">Have a go</a>`,
+    "elf-book__end elf-detail__hint elf-book__go",
+  );
+}
+
+/** An open door's detail: the scrapbook. With no place to show (the calendar everyone shares, before
+ *  Christmas Day) its title says who found the elf, or that nobody did in time, in place of the place,
+ *  and its last line offers a go in Detective HQ in place of a visit. */
 function scrapbook(d: DoorView, kind: DoorKind): string {
   const elf = escapeHtml(d.elfName);
   const book = d.scrapbook;
   const elves = book ? book.elves : [];
   const photos = book ? book.photos.map(photoPolaroid).filter((html) => html !== "") : [];
+  const where = placeWords(d);
+  // The elf can still be found only at a revealed door whose elf has not gone home.
+  const stillHiding = kind === "revealed" && !d.goneHome;
+  const title = where !== null ? escapeHtml(where) : kind === "found" ? `${elf} was found!` : `Nobody found ${elf} in time`;
   // A revealed door whose elf has gone home has nothing left to win: its end line says it has gone home.
   const lead =
     kind === "found"
       ? foundLine(d) + prizeLine(d)
-      : d.goneHome
-        ? line(`Nobody found ${elf} in time, so here is the hiding place.`, "elf-book__still")
-        : line(
-            `Nobody found ${elf} in time, so here is the hiding place. ${elf} is still there, and the first detective to type the word on its tag wins the prize.`,
-            "elf-book__still",
-          );
+      : where === null
+        ? stillHiding
+          ? line(`${elf} is still hiding, and the first detective to type the word on its tag wins the prize.`, "elf-book__still")
+          : ""
+        : d.goneHome
+          ? line(`Nobody found ${elf} in time, so here is the hiding place.`, "elf-book__still")
+          : line(
+              `Nobody found ${elf} in time, so here is the hiding place. ${elf} is still there, and the first detective to type the word on its tag wins the prize.`,
+              "elf-book__still",
+            );
   const everyone = elves.length
     ? bookHeading("Everyone who found this elf", `<span class="elf-book__count">${things(count(book?.count), "picture")}</span>`) +
       `<div class="elf-collage">${elves.map(elfPolaroid).join("")}</div>`
@@ -411,15 +438,13 @@ function scrapbook(d: DoorView, kind: DoorKind): string {
   const pictures = photos.length ? bookHeading("Photos from the door") + `<div class="elf-photos">${photos.join("")}</div>` : "";
   const fact = d.factLine ? line(`<b>Did you know?</b> ${escapeHtml(d.factLine)}`, "elf-detail__fact") : "";
   // The visit line steps aside for the family's own line (the page's script); the gone home line never does.
-  const end = d.goneHome
-    ? line(`${elf} has gone home now, so there is nothing to find there. The pictures stay.`, "elf-book__end elf-book__gone")
-    : d.place
-      ? line(`The elf is still at ${escapeHtml(d.place.name)}. Visit to add your picture.`, "elf-book__end elf-detail__hint")
-      : "";
+  const gone = d.goneHome ? line(`${elf} has gone home now, so there is nothing to find there. The pictures stay.`, "elf-book__end elf-book__gone") : "";
+  const visit = d.place ? line(`The elf is still at ${escapeHtml(d.place.name)}. Visit to add your picture.`, "elf-book__end elf-detail__hint") : "";
+  const end = where === null ? gone + goLine(d, elf, stillHiding) : gone || visit;
   return (
     `<div class="elf-detail__body">` +
     `<p class="elf-detail__meta">Door ${d.door} &middot; ${longDayWords(d.clueAt)}</p>` +
-    `<h3 class="elf-detail__title" id="case-${d.door}-h">${escapeHtml(placeWords(d) ?? "")}</h3>` +
+    `<h3 class="elf-detail__title" id="case-${d.door}-h">${title}</h3>` +
     lead +
     countLines(d) +
     everyone +

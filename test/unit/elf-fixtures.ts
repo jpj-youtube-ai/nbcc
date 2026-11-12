@@ -132,6 +132,9 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
       goneHome: false,
       factLine: null,
       doorsOn: true,
+      // The doors before the day carry their places, as a family's own doors and everyone's from
+      // Christmas Day do, so none of them offers a go.
+      goUrl: null,
     };
     if (n < dayOfMonth) {
       doors.push({

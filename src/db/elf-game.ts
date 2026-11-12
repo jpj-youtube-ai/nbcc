@@ -552,20 +552,27 @@ const SHOWN_PHOTO_SQL = `p.status = 'approved' AND p.deleted_at IS NULL AND f.re
        AND n.status = 'approved' AND n.deleted_at IS NULL AND n.id > p.id)
   AND ${approvedFamiliesSql("p")} >= 2`;
 
-/** A door's scrapbook: the elves that count by `now` and the approved photos, in the scrapbook's order. */
-export async function doorScrapbook(year: number, door: number, now: Date): Promise<Scrapbook> {
+/** A door's photos that are shown (SHOWN_PHOTO_SQL), each with its address. Only for someone who may see
+ *  them: a family that can see the door's place, or everyone from Christmas Day until 1 January. */
+export async function doorPhotos(year: number, door: number): Promise<ScrapPhoto[]> {
+  const photos = await pool.query<{ token: string }>(
+    `SELECT p.token FROM elf_photos p
+       JOIN elf_families f ON f.id = p.family_id
+      WHERE p.year = $1 AND p.door = $2 AND ${SHOWN_PHOTO_SQL}`,
+    [year, door],
+  );
+  return photos.rows.map((p) => ({ token: p.token, url: `/elf/door/${door}/photo/${p.token}.jpg` }));
+}
+
+/** A door's scrapbook: the elves that count by `now`, and its shown photos only `withPhotos` (a photo can
+ *  show the inside of the place), in the scrapbook's order. */
+export async function doorScrapbook(year: number, door: number, now: Date, withPhotos: boolean): Promise<Scrapbook> {
   const visits = await pool.query<{ id: number; counts_from: Date; found: boolean; first_name: string; surname: string; name_approved: boolean }>(
     `SELECT v.id, v.counts_from, v.found, d.first_name, d.surname, d.name_approved FROM elf_visits v
        JOIN elf_detectives d ON d.id = v.detective_id
        JOIN elf_families f ON f.id = v.family_id
       WHERE v.year = $1 AND v.door = $2 AND v.counts_from <= $3 AND f.removed_at IS NULL`,
     [year, door, now],
-  );
-  const photos = await pool.query<{ token: string }>(
-    `SELECT p.token FROM elf_photos p
-       JOIN elf_families f ON f.id = p.family_id
-      WHERE p.year = $1 AND p.door = $2 AND ${SHOWN_PHOTO_SQL}`,
-    [year, door],
   );
   const elves: ScrapElf[] = visits.rows.map((v) => ({
     visitId: Number(v.id),
@@ -574,8 +581,7 @@ export async function doorScrapbook(year: number, door: number, now: Date): Prom
     found: v.found,
     pictureUrl: `/elf/door/${door}/elf/${v.id}.png`,
   }));
-  const pics: ScrapPhoto[] = photos.rows.map((p) => ({ token: p.token, url: `/elf/door/${door}/photo/${p.token}.jpg` }));
-  return orderScrapbook(elves, pics);
+  return orderScrapbook(elves, withPhotos ? await doorPhotos(year, door) : []);
 }
 
 // ---- photos -------------------------------------------------------------------------------------------

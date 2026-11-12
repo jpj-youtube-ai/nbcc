@@ -4677,8 +4677,10 @@ Stories and Newsletter) for the public enquiry form (`contact.html`), backed ent
 stories DB; see **Configuration** and the migration walkthrough below). Reads are **Viewer+**:
 `GET /api/admin/contact` lists enquiries newest-first (optional `?status=new|replied`),
 `GET /api/admin/contact/:id` returns one enquiry in full. The list table shows Received
-(`formatReceived`), Name, Email, a Status badge and an ~80-character message snippet; opening a row
-shows the full message (line breaks preserved) and, once replied, a **"Replied by `<email>` ·
+(`formatReceived`), Name, Email, a Status badge and an ~80-character message snippet (since
+2026-11-12 these are cards under day headings, each opening where it is: see
+[The Overview, the Contact form and the phone menu](#the-overview-the-contact-form-and-the-phone-menu-in-the-donations-look-2026-11-12));
+opening a row shows the full message (line breaks preserved) and, once replied, a **"Replied by `<email>` ·
 `<when>`"** line. Writes are **Editor+** (the server enforces regardless of what the UI hides, via
 `H.roleCan`): **Reply in Gmail** opens a prefilled Gmail compose tab
 (`buildGmailReplyUrl`/`formatReceived`, `assets/js/gmail-reply.js` — pure, unit-tested in
@@ -7130,6 +7132,46 @@ billboard or a business card, so staff can see which ones work. The design is in
   is numbered below 310, which the open Elf Detective School pull request has taken: right while
   this merges first. Production refuses a migration that sorts before one it has already run, so
   if that one lands first, this is renumbered above it before merging.
+
+## The Overview, the Contact form and the phone menu in the Donations look (2026-11-12)
+
+Jaimie loved how Donations and Elf Detective School look and work on a phone, and asked for the
+Overview and the Contact form to match, and for the menu and navigation bars to stop being "all over
+the place" on a phone. Design: `docs/superpowers/specs/2026-11-12-overview-contact-phone-menu-design.md`;
+plan: `docs/superpowers/plans/2026-11-12-overview-contact-phone-menu.md`. It is a change of look and
+layout only: what each screen says and does, and every test pinning it, is as before.
+
+- **One stylesheet**, `assets/css/admin-overview.css`, after `admin.css`, with the Donations tokens
+  copied by value (`--ov-*`). Overview rules are all scoped `#view-overview …` (the Festive Ball's
+  list shares the `ov-` names, and a test holds the scoping); Contact rules `#view-contact …`; the
+  phone menu and bottom bar are `pm-`. The old Overview rules in `admin.css` are retired.
+- **Overview.** Each Needs you line is a card that is its own button: the count large at the front,
+  the words beside it, the screen it opens beneath, grouped Urgent / Waiting on you / Coming due. The
+  server now sends each line's `count` and `words` (`src/admin/overview.ts`) and each number's
+  `figure` and `rest` (`splitHeadline`, `src/admin/overview-numbers.ts`); an older server's plain
+  sentence still reads whole. How we are doing is tiles; Coming up is cards under day headings; the
+  latest gifts are drawn the way the Donations log draws them, each opening the donor (or the elf
+  family). On a laptop, two columns from 1000px.
+- **Contact form.** Messages are cards under day headings and open in place, one at a time, with the
+  same Reply in Gmail / Mark as replied / Archive buttons; the separate detail screen is gone. One
+  fetch brings every message, so the All / Waiting / Replied tiles show their counts and filter at
+  once. Only the card's summary is the opener, so pressing a button inside an open message never
+  redraws it.
+- **The phone menu (below 860px).** One pinned maroon bar: the logo, "NBCC Admin" and Menu. The tall
+  top bar is hidden; who is signed in, My account and Sign out sit at the foot of the open menu
+  (`.pm-me`, whose buttons press the top bar's own). The open menu is the same groups and screens in
+  the same order, as a two-column grid of tiles; the one you are on is pressed in maroon. Closed, it
+  is still hidden with `visibility`, never `display:none` (TASK-443). The laptop banner is untouched.
+- **The bar along the bottom (below 860px).** Overview, Donations, Get involved, Contact and
+  Everything (which presses Menu). `syncTabBar()` in `app.js` makes each tab copy its menu link:
+  hidden with it (the same permission gate), a crimson dot when it has a New pill, `aria-current`
+  when it is where you are. It sits inside `#appView`, so the sign-in screen never shows it; the app
+  has 84px plus the iPhone's home bar of room beneath its last thing, so the bar never covers it;
+  and it steps aside while you type.
+
+Tests: `admin-overview-screen`, `admin-contact-screen`, `admin-phone-menu` and `admin-bottom-bar`
+(`test/unit/`), with `admin-overview`, `admin-overview-numbers`, `admin-app`, `admin-red-bag`,
+`admin-get-involved-tab` and `admin-screen-styles` updated for the new markup and stylesheet.
 
 ## Invoices for donations (Admin > Giving > Invoices)
 

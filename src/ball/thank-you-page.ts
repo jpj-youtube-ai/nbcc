@@ -1,6 +1,11 @@
+import { siteFooter, siteHeader } from "../site/chrome";
 import { escapeHtml } from "./page";
 
 // TASK-313: where Stripe sends a buyer the instant their payment succeeds.
+//
+// TASK-615: the banner, menu and footer are the site's own (src/site/chrome.ts), as on every page of
+// the site; everything to do with the Ball is in the page itself. The route adds what every page gains
+// as it goes out (dressPage).
 //
 // This page existing at all is the point: the checkout's success_url pointed here from the
 // start, but nothing served it, so a real payment ended on a 404. The money was taken, the
@@ -75,15 +80,11 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
 <title>Thank you for your Festive Ball booking | Night Before Christmas Campaign</title>
 <link rel="stylesheet" href="/assets/css/styles.css" />
 <link rel="stylesheet" href="/assets/css/ball.css" />
+<script defer src="/assets/js/main.js"></script>
 </head>
 <body class="ball-page">
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="nav" id="nav" data-region="nav">
-  <div class="wrap">
-    <a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="50" height="50" loading="lazy" /></a>
-    <a class="nav-cta" href="/ball">The ball</a>
-  </div>
-</header>
+${siteHeader()}
 
 <main class="site-main" id="main" tabindex="-1">
   <!-- TASK-335: the ball page's OWN hero class, not a copy of it. Reusing .ball-hero means this
@@ -159,14 +160,7 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
   </section>
 </main>
 
-<footer class="site-footer" data-region="footer">
-  <div class="legal">
-    <div class="wrap">
-      <span>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</span>
-      <span>Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator, OSCR.</span>
-    </div>
-  </div>
-</footer>
+${siteFooter()}
 <script defer src="/assets/js/ball.js"></script>
 </body>
 </html>`;

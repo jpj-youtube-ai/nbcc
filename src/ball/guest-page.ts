@@ -1,8 +1,13 @@
+import { siteFooter, siteHeader } from "../site/chrome";
 import { escapeHtml } from "./page";
 import { choosableCourses, fixedCourses, parseChoice, parseMenu, type MenuCourse } from "./menu";
 
 // TASK-313 (plan 5): the "tell us about your table" form. Pure render — no pool, no config —
 // so it is unit-tested DB-free, mirroring src/thank-you/letter-page.ts.
+//
+// TASK-615: the banner, menu and footer are the site's own (src/site/chrome.ts), as on every page of
+// the site; everything to do with the Ball is in the page itself. The route adds what every page gains
+// as it goes out (dressPage).
 //
 // Design constraints that shaped this, all of them about the reader rather than the code:
 //
@@ -334,15 +339,11 @@ export function renderGuestPage(input: GuestPageInput): string {
 <title>Your table at the Festive Ball | Night Before Christmas Campaign</title>
 <link rel="stylesheet" href="/assets/css/styles.css" />
 <link rel="stylesheet" href="/assets/css/ball.css" />
+<script defer src="/assets/js/main.js"></script>
 </head>
 <body class="ball-page">
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="nav" id="nav" data-region="nav">
-  <div class="wrap">
-    <a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="50" height="50" loading="lazy" /></a>
-    <a class="nav-cta" href="/ball">The ball</a>
-  </div>
-</header>
+${siteHeader()}
 
 <main class="site-main" id="main" tabindex="-1">
   <section class="page-top" aria-labelledby="guests-heading">
@@ -400,18 +401,11 @@ export function renderGuestPage(input: GuestPageInput): string {
   </section>
 </main>
 
-<footer class="site-footer" data-region="footer">
-  <div class="legal">
-    <div class="wrap">
-      <span>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</span>
-      <span>Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator, OSCR.</span>
-    </div>
-  </div>
-</footer>
-<!-- The page's only script, and nothing depends on it. It reveals the "clear this guest" button
-     and wires it to empty the two name boxes, for a PA who booked on somebody else's behalf.
-     Without JavaScript the button is never shown and the boxes are cleared the ordinary way, so
-     the form keeps working exactly as it did. -->
+${siteFooter()}
+<!-- The page's own script, and nothing depends on it (main.js, above, only opens the site's menu on
+     a phone). It reveals the "clear this guest" button and wires it to empty the two name boxes, for
+     a PA who booked on somebody else's behalf. Without JavaScript the button is never shown and the
+     boxes are cleared the ordinary way, so the form keeps working exactly as it did. -->
 <script>
 (function () {
   var wrap = document.querySelector("[data-guest-clear]");
@@ -446,8 +440,12 @@ export function renderGuestNotFound(): string {
 <meta name="robots" content="noindex, nofollow" />
 <title>Link not found | Night Before Christmas Campaign</title>
 <link rel="stylesheet" href="/assets/css/styles.css" />
+<script defer src="/assets/js/main.js"></script>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
+${siteHeader()}
+
 <main class="site-main" id="main" tabindex="-1">
   <section class="page-top">
     <div class="wrap">
@@ -461,6 +459,8 @@ export function renderGuestNotFound(): string {
     </div>
   </section>
 </main>
+
+${siteFooter()}
 </body>
 </html>`;
 }

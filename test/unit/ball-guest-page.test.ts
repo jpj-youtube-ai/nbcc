@@ -44,11 +44,13 @@ describe("renderGuestPage", () => {
     // script tag" but "nothing the form needs can fail to arrive", so it now asserts that
     // directly and more strictly than the old proxy did:
     //
-    //   - no EXTERNAL script, so there is nothing to fetch and nothing to time out
+    //   - no EXTERNAL script the form needs, so there is nothing it waits for or that can time out:
+    //     the only one is the site's own main.js, deferred, which opens the site's menu on a phone
+    //     now that the page wears the site's banner (TASK-615)
     //   - the submit button is a plain submit, so saving never goes through a handler
     //   - the one control that does need the script ships hidden, so a reader without
     //     JavaScript is never shown a button that does nothing
-    expect(html).not.toMatch(/<script[^>]*\ssrc=/);
+    expect(html.match(/<script[^>]*\ssrc=[^>]*>/g)).toEqual(['<script defer src="/assets/js/main.js">']);
     expect(html).toContain('<button class="btn btn-primary" type="submit">');
     expect(html).toMatch(/data-guest-clear[^>]*hidden/);
   });

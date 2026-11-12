@@ -48,6 +48,7 @@ import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken, guestsFromForm } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
 import { renderBallThankYou } from "../ball/thank-you-page";
+import { dressPage, pageFailed } from "../site/chrome";
 import { getBookingByGuestToken, getBookingBySessionId, joinWaitingList, saveGuests } from "../db/ball";
 import { verifyPassword } from "../admin/password";
 import { checkboxValue, waitingListSchema } from "../ball/waiting-list";
@@ -57,6 +58,13 @@ import { checkboxValue, waitingListSchema } from "../ball/waiting-list";
 // it is unauthenticated. Mirrors the supporter ticker feed's shape (src/routes/ticker.ts).
 
 export const ballRouter = Router();
+
+/** Sends the guest details or the thank you. Their banner and footer are the site's
+ *  (src/site/chrome.ts), so as they go out they gain what every page of the site gains: the menu's
+ *  items that are switched on, and the footer's links (dressPage), never waiting more than 1.5s. */
+async function sendPage(req: express.Request, res: express.Response, html: string): Promise<void> {
+  res.type("html").send(await dressPage(html, req.headers.cookie));
+}
 
 ballRouter.get("/api/ball/availability", async (_req, res) => {
   try {
@@ -481,11 +489,13 @@ ballRouter.get("/ball/guests/:token", async (req, res, next) => {
   try {
     const found = await getBookingByGuestToken(req.params.token);
     if (!found) {
-      res.status(404).type("html").send(renderGuestNotFound());
+      await sendPage(req, res.status(404), renderGuestNotFound());
       return;
     }
     const settings = await getSettings();
-    res.type("html").send(
+    await sendPage(
+      req,
+      res,
       renderGuestPage({
         booking: found.booking,
         guests: found.guests,
@@ -544,7 +554,7 @@ ballRouter.post(
     try {
       const found = await getBookingByGuestToken(req.params.token);
       if (!found) {
-        res.status(404).type("html").send(renderGuestNotFound());
+        await sendPage(req, res.status(404), renderGuestNotFound());
         return;
       }
       const body = (req.body ?? {}) as Record<string, unknown>;
@@ -565,7 +575,9 @@ ballRouter.post(
         guests,
       });
       if (!parsed.success) {
-        res.status(400).type("html").send(
+        await sendPage(
+          req,
+          res.status(400),
           renderGuestPage({
             booking: found.booking,
             guests: found.guests,
@@ -655,5 +667,10 @@ ballRouter.get("/ball/thank-you", async (req, res) => {
   // A personal receipt with a booking reference on it. Never cached, and never by anything
   // shared: this is the page someone lands on straight after paying.
   res.setHeader("Cache-Control", "private, no-store");
-  res.type("html").send(renderBallThankYou(booking));
+  try {
+    await sendPage(req, res, renderBallThankYou(booking));
+  } catch (err) {
+    // An answer, never a promise left to reject (TASK-615).
+    pageFailed(res, "ball thank you", err);
+  }
 });

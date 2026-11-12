@@ -83,6 +83,9 @@ vi.mock("../../src/elf/worker", async (orig) => {
   return { ...real, sendProudMoments: spies.sendProudMoments };
 });
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+// What every page of the site gains in its banner and footer as it goes out (TASK-615) is not this
+// file's to check (elf-preview.test.ts checks an elf page gains it): the pages here go out as drawn.
+vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string) => html }));
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 

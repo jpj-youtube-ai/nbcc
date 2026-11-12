@@ -24,6 +24,13 @@ import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, visitWin, wa
 // root of the repository. These screens are drawn by functions instead, so those tests never see
 // them, and the same rules are checked here: over every screen, in every state it can be in.
 // Every shop, family and detective is invented (see elf-fixtures.ts).
+//
+// The screens are checked as their functions draw them, before they are dressed (TASK-615). As a
+// page goes out, src/routes/site.ts adds what every page of the site gains: the menu's items that are
+// switched on, the footer's links, and the menu's fit that goes with them, the MENU_FIT and
+// ELF_MENU_FIT style blocks (src/events/menu-fit.ts, src/elf/menu-fit.ts). So the page as served also
+// carries those two <style> blocks. They are the site menu's, not the screen's, and the rule below
+// against styles in the page is about the screen's own.
 
 const ROOT = resolve(__dirname, "../..");
 const place = { name: "The Toy Shop", town: "Troon" };
@@ -103,6 +110,18 @@ const PAGES: [string, string][] = [
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
 
+/** The page's own part: everything but the site's banner and footer (TASK-615). Those are the site's,
+ *  the same on every page, and test/unit/site-chrome-everywhere.test.ts holds them to the home page's:
+ *  the footer's headings and its links to the charity's socials and to the regulator are the site's. */
+function ownPart(doc: Document): Document {
+  const copy = doc.cloneNode(true) as Document;
+  for (const chrome of copy.querySelectorAll("header.nav, footer.site-footer")) chrome.remove();
+  return copy;
+}
+
+/** The site's own script, which opens the site's menu on a phone (and does nothing else here). */
+const SITE_SCRIPT = "/assets/js/main.js";
+
 /** Everything on a page that a person reads or a screen reader says. */
 function readWords(doc: Document): string[] {
   const out: string[] = [doc.title, doc.querySelector('meta[name="description"]')?.getAttribute("content") ?? ""];
@@ -142,11 +161,13 @@ function unlabelled(doc: Document): string[] {
   return out;
 }
 
-/** Anything that would run from the page itself rather than from a script file. */
+/** Anything that would run from the page itself rather than from a script file, or style it from
+ *  the page itself. As drawn: the menu's fit (MENU_FIT, ELF_MENU_FIT) is added as the page goes out. */
 function runsInPage(doc: Document): string[] {
   const out: string[] = [];
   for (const script of doc.querySelectorAll("script")) {
-    if (!/^\/assets\/js\/elf-[a-z-]+\.js$/.test(script.getAttribute("src") ?? "") || !script.hasAttribute("defer")) out.push(script.outerHTML.slice(0, 80));
+    const src = script.getAttribute("src") ?? "";
+    if ((src !== SITE_SCRIPT && !/^\/assets\/js\/elf-[a-z-]+\.js$/.test(src)) || !script.hasAttribute("defer")) out.push(script.outerHTML.slice(0, 80));
   }
   for (const el of doc.querySelectorAll("*")) {
     for (const attr of el.getAttributeNames()) if (attr.startsWith("on")) out.push(`${el.tagName} ${attr}`);
@@ -179,6 +200,17 @@ describe("the checks themselves", () => {
     expect(runsInPage(bad).length).toBe(3);
     expect(offSite(bad).length).toBe(3);
   });
+
+  it("leave out only the site's own banner and footer, and allow only the site's own script", () => {
+    const page = parse(
+      '<html><body><header class="nav"><a href="https://elsewhere.example/a">a</a></header><main><h1>x</h1></main>' +
+        '<footer class="site-footer"><a href="https://elsewhere.example/b">b</a></footer><footer><a href="https://elsewhere.example/c">c</a></footer>' +
+        '<script defer src="/assets/js/main.js"></script><script defer src="/assets/js/other.js"></script></body></html>',
+    );
+    expect(offSite(page).length).toBe(3);
+    expect(offSite(ownPart(page))).toEqual(['<a href="https://elsewhere.example/c">c</a>']);
+    expect(runsInPage(page)).toEqual(['<script defer="" src="/assets/js/other.js"></script>']);
+  });
 });
 
 describe.each(PAGES)("%s", (_name, html) => {
@@ -209,7 +241,7 @@ describe.each(PAGES)("%s", (_name, html) => {
   });
 
   it("has one main heading, and no heading skips a level", () => {
-    const levels = [...doc.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((h) => Number(h.tagName[1]));
+    const levels = [...ownPart(doc).querySelectorAll("h1, h2, h3, h4, h5, h6")].map((h) => Number(h.tagName[1]));
     expect(levels.filter((l) => l === 1).length).toBe(1);
     expect(levels[0]).toBe(1);
     for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1], `heading ${i + 1} of ${levels.join(" ")}`).toBeLessThanOrEqual(1);
@@ -230,7 +262,7 @@ describe.each(PAGES)("%s", (_name, html) => {
   });
 
   it("links and posts only to this site", () => {
-    expect(offSite(doc)).toEqual([]);
+    expect(offSite(ownPart(doc))).toEqual([]);
     for (const form of doc.querySelectorAll("form")) expect(form.getAttribute("method")).toBe("post");
   });
 
@@ -291,7 +323,7 @@ describe("data that tries to break out of the page", () => {
     expect(html).toContain("&lt;img src=x");
     expect(doc.querySelector('img[src="x"]')).toBeNull();
     expect(runsInPage(doc)).toEqual([]);
-    expect(offSite(doc)).toEqual([]);
+    expect(offSite(ownPart(doc))).toEqual([]);
     expect(html).not.toContain("javascript:");
     for (const el of doc.querySelectorAll("[style]")) expect(el.getAttribute("style"), "a style from data").not.toMatch(/javascript|expression|</i);
   });

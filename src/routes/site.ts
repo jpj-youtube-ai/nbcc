@@ -177,7 +177,8 @@ async function fundraisingIsOn(): Promise<boolean> {
 }
 
 // Get involved, the menu item the events switch governs, and the tighter menu that goes with it. Not in
-// addEventsNavLink, because Ball pages take that one (src/ball/page-decor.ts) and keep their old menu.
+// addEventsNavLink, because the Festive Ball's own pages take that one (src/ball/page-decor.ts) without
+// the tighter menu. Every other page goes out through here, those built in code too (TASK-615).
 async function addEventsItems(html: string): Promise<string> {
   const [{ addEventsNavLink }, { addMenuFit }] = await Promise.all([import("../events/nav-link"), import("../events/menu-fit")]);
   return addMenuFit(addEventsNavLink(html));
@@ -190,7 +191,8 @@ async function elfLinksAt(now: Date): Promise<boolean> {
 }
 
 // Elf Detective School's menu item and the menu's fit with it (src/elf/nav-link.ts, src/elf/menu-fit.ts).
-// Added after Get involved, so it can go straight after it. Not on Ball pages, which keep their old menu.
+// Added after Get involved, so it can go straight after it. Not on the Festive Ball's own pages, which
+// src/ball/page-decor.ts decorates; its guest details and thank you go out through here, so they have it.
 async function addElfItems(html: string): Promise<string> {
   const [{ addElfNavLink }, { addElfMenuFit }] = await Promise.all([import("../elf/nav-link"), import("../elf/menu-fit")]);
   return addElfMenuFit(addElfNavLink(html));

@@ -70,7 +70,9 @@ import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
 import { FESTIVE_SURNAMES, familyDetectiveName, type DetectiveNameParts } from "../elf/names";
 import { renderJoinPage } from "../elf/pages/join";
+import { ELF_BAR_START } from "../elf/pages/shell";
 import { renderSignInPage, renderWelcomePage } from "../elf/pages/sign-in";
+import { dressPage } from "../site/chrome";
 import {
   ELF_PENDING_COOKIE,
   ELF_PREVIEW_COOKIE,
@@ -145,18 +147,27 @@ async function schoolOn(req: Request, res: Response, next: NextFunction): Promis
   res.locals.elfPractice = practice;
   if (preview) {
     res.locals.elfPreview = true;
-    // A private preview: never listed, never cached, and every page says so across the top.
+    // A private preview: never listed, never cached, and every page says so across the top, straight
+    // under the site's banner.
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
     res.setHeader("Cache-Control", "private, no-store");
     const send = res.send.bind(res);
     res.send = ((body?: unknown) =>
-      send(typeof body === "string" && body.startsWith("<!doctype html>") ? body.replace("<main", PREVIEW_STRIP + "<main") : body)) as Response["send"];
+      send(typeof body === "string" && body.startsWith("<!doctype html>") ? body.replace(ELF_BAR_START, PREVIEW_STRIP + ELF_BAR_START) : body)) as Response["send"];
   }
   next();
 }
 
 const PREVIEW_STRIP =
   '<p class="elf-preview-strip" role="status">Private preview: Elf Detective School is switched off, and only people with the preview link can see this. Payments here are real.</p>';
+
+/** Sends an Elf Detective School page. Its banner and footer are the site's (src/elf/pages/shell.ts),
+ *  so as it goes out it gains what every page of the site gains: the menu's items that are switched
+ *  on, and the footer's links (dressPage, src/site/chrome.ts), never waiting more than 1.5s for them. */
+async function sendPage(req: Request, res: Response, html: string): Promise<Response> {
+  const dressed = await dressPage(html, header(req, "cookie"));
+  return res.type("html").send(dressed);
+}
 
 // The private preview link (Jaimie, 3 November 2026): made in the admin, it puts its code in a
 // cookie and opens the calendar. A wrong or old code is simply not found.
@@ -191,12 +202,15 @@ function familyRuns(res: Response, now: Date): Promise<FamilyRuns> {
 }
 
 function sendJoinPage(
+  req: Request,
   res: Response,
   status: number,
   extra: { errors?: string[]; values?: Record<string, string>; signedIn?: { grownUpName: string; email: string } } = {},
-): void {
+): Promise<Response> {
   res.status(status).setHeader("Cache-Control", "no-store");
-  res.type("html").send(
+  return sendPage(
+    req,
+    res,
     renderJoinPage({
       settings: settingsOf(res),
       captchaSiteKey: captchaEnabled() ? captchaSiteKey() : null,
@@ -221,8 +235,12 @@ async function joiningFamily(req: Request): Promise<FamilyRow | null> {
 }
 
 elfRouter.get("/elf/join", schoolOn, async (req, res) => {
-  const family = await joiningFamily(req);
-  sendJoinPage(res, 200, family ? { signedIn: { grownUpName: family.grownUpName, email: family.email } } : {});
+  try {
+    const family = await joiningFamily(req);
+    await sendJoinPage(req, res, 200, family ? { signedIn: { grownUpName: family.grownUpName, email: family.email } } : {});
+  } catch (err) {
+    gameFailed(res, "join page", err, false);
+  }
 });
 
 /** Enrolments each address may make: loose enough for a family enrolling its children one at a time,
@@ -230,7 +248,19 @@ elfRouter.get("/elf/join", schoolOn, async (req, res) => {
 export const JOIN_LIMIT = { max: 10, windowMs: 10 * 60_000 } as const;
 const joinLimiter = createRateLimiter(JOIN_LIMIT);
 
+// The sign up, the sign in code request and the sign in each read the database before or after they
+// answer. A failure there is said plainly (gameFailed: a 500, never cached), never a rejected promise,
+// which would stop the whole server: src has no unhandledRejection handler. An answer already given
+// stays as it was.
 export async function postJoin(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerJoin(req, res);
+  } catch (err) {
+    return gameFailed(res, "join", err, wantsJson(req));
+  }
+}
+
+async function answerJoin(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const json = wantsJson(req);
   const sent: Record<string, unknown> = { ...(json ? (req.body ?? {}) : joinBodyFromForm(req.body ?? {})) };
@@ -244,7 +274,7 @@ export async function postJoin(req: Request, res: Response): Promise<Response | 
   }
   const signedIn = family ? { grownUpName: family.grownUpName, email: family.email } : undefined;
   const refuse = (status: number, errors: string[]) =>
-    json ? res.status(status).json({ errors }) : sendJoinPage(res, status, { errors, values: typedValues(req.body ?? {}), signedIn });
+    json ? res.status(status).json({ errors }) : sendJoinPage(req, res, status, { errors, values: typedValues(req.body ?? {}), signedIn });
 
   if (typeof sent.website === "string" && sent.website !== "") return refuse(400, ["Something went wrong. Please try again."]);
   if (!isLoopbackRequest(req) && !joinLimiter.allow(req.ip ?? "unknown", Date.now())) {
@@ -274,7 +304,7 @@ export async function postJoin(req: Request, res: Response): Promise<Response | 
     const email = String(sent.email ?? "").trim().toLowerCase();
     if (isLoopbackRequest(req) || codeEmailLimiter.allow(email, Date.now())) await sendSignInCodeTo(email);
     if (json) return res.status(200).json({ status: "check-email", message: JOIN_CHECK_EMAIL });
-    return sendSignInPage(res, 200, { stage: "code", email, message: JOIN_CHECK_EMAIL });
+    return sendSignInPage(req, res, 200, { stage: "code", email, message: JOIN_CHECK_EMAIL });
   }
 
   try {
@@ -361,24 +391,38 @@ async function startSession(req: Request, res: Response, familyId: number): Prom
   return hash;
 }
 
-function sendSignInPage(res: Response, status: number, view: Parameters<typeof renderSignInPage>[0]): void {
+function sendSignInPage(req: Request, res: Response, status: number, view: Parameters<typeof renderSignInPage>[0]): Promise<Response> {
   res.status(status).setHeader("Cache-Control", "no-store");
-  res.type("html").send(renderSignInPage(view));
+  return sendPage(req, res, renderSignInPage(view));
 }
 
-elfRouter.get("/elf/sign-in", schoolOn, (_req, res) => sendSignInPage(res, 200, { stage: "email" }));
+elfRouter.get("/elf/sign-in", schoolOn, async (req, res) => {
+  try {
+    await sendSignInPage(req, res, 200, { stage: "email" });
+  } catch (err) {
+    gameFailed(res, "sign in page", err, false);
+  }
+});
 
 export async function postSignInRequest(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerSignInRequest(req, res);
+  } catch (err) {
+    return gameFailed(res, "sign in code request", err, wantsJson(req));
+  }
+}
+
+async function answerSignInRequest(req: Request, res: Response): Promise<Response | void> {
   const json = wantsJson(req);
   if (!ourOwnPage(req)) {
     if (json) return res.status(403).json({ error: ELF_NOT_OURS });
-    return sendSignInPage(res, 403, { stage: "email", message: ELF_NOT_OURS, error: true });
+    return sendSignInPage(req, res, 403, { stage: "email", message: ELF_NOT_OURS, error: true });
   }
   const parsed = emailSchema.safeParse(req.body?.email);
   if (!parsed.success) {
     const words = "Please give a valid email address.";
     if (json) return res.status(400).json({ error: words });
-    return sendSignInPage(res, 400, { stage: "email", message: words, error: true });
+    return sendSignInPage(req, res, 400, { stage: "email", message: words, error: true });
   }
   const email = parsed.data;
   const now = Date.now();
@@ -386,21 +430,29 @@ export async function postSignInRequest(req: Request, res: Response): Promise<Re
   const allowed =
     isLoopbackRequest(req) ||
     [codeEmailLimiter.allow(email, now), codeEmailDayLimiter.allow(email, now), codeIpLimiter.allow(req.ip ?? "unknown", now)].every(Boolean);
-  // Always the same answer, and given BEFORE looking, so neither the words nor the time it takes
-  // tell anyone who has detectives enrolled.
+  // Always the same answer, and given BEFORE looking (the page is sent before the search starts), so
+  // neither the words nor the time it takes tell anyone who has detectives enrolled.
   if (json) res.status(200).json({ message: ELF_REQUEST_MESSAGE });
-  else sendSignInPage(res, 200, { stage: "code", email, message: ELF_REQUEST_MESSAGE });
+  else await sendSignInPage(req, res, 200, { stage: "code", email, message: ELF_REQUEST_MESSAGE });
   if (!allowed) return;
   if (!(await getElfSettings()).schoolOn) return;
   await sendSignInCodeTo(email);
 }
 
 export async function postSignIn(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerSignIn(req, res);
+  } catch (err) {
+    return gameFailed(res, "sign in", err, wantsJson(req));
+  }
+}
+
+async function answerSignIn(req: Request, res: Response): Promise<Response | void> {
   const json = wantsJson(req);
   const email = emailSchema.safeParse(req.body?.email);
   const back = (status: number, words: string) => {
     if (json) return res.status(status).json({ error: words });
-    return sendSignInPage(res, status, { stage: "code", email: email.success ? email.data : "", message: words, error: true });
+    return sendSignInPage(req, res, status, { stage: "code", email: email.success ? email.data : "", message: words, error: true });
   };
   if (!ourOwnPage(req)) return back(403, ELF_NOT_OURS);
   const code = readCode(req.body?.code);
@@ -431,6 +483,14 @@ export async function postSignIn(req: Request, res: Response): Promise<Response 
 }
 
 export async function postSignOut(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerSignOut(req, res);
+  } catch (err) {
+    return gameFailed(res, "sign out", err, wantsJson(req));
+  }
+}
+
+async function answerSignOut(req: Request, res: Response): Promise<Response | void> {
   if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
   const id = sessionIdOf(req);
   if (id) await deleteElfSession(hashSessionId(id));
@@ -439,19 +499,27 @@ export async function postSignOut(req: Request, res: Response): Promise<Response
 }
 
 export async function getWelcome(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await welcome(req, res);
+  } catch (err) {
+    return gameFailed(res, "welcome", err, false);
+  }
+}
+
+async function welcome(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const raw = req.query.elf_session;
   const sessionId = typeof raw === "string" && /^cs_[A-Za-z0-9_]{1,200}$/.test(raw) ? raw : null;
   const order = sessionId ? await orderForWelcome(sessionId) : null;
   const token = readCookie(header(req, "cookie"), ELF_PENDING_COOKIE);
   const ours = order !== null && token !== null && /^[0-9a-f]{64}$/.test(token) && order.browserTokenHash === hashElfToken(token);
-  if (ours && order.status === "pending") return res.status(200).type("html").send(renderWelcomePage({ state: "checking" }));
+  if (ours && order.status === "pending") return sendPage(req, res.status(200), renderWelcomePage({ state: "checking" }));
   if (ours && order.status === "paid" && order.openedFamily) {
     await startSession(req, res, order.familyId);
     res.clearCookie(ELF_PENDING_COOKIE, { path: "/" });
     return res.redirect(303, "/elf/hq");
   }
-  return res.status(200).type("html").send(renderWelcomePage({ state: "done" }));
+  return sendPage(req, res.status(200), renderWelcomePage({ state: "done" }));
 }
 
 const forms = express.urlencoded({ extended: false, limit: "8kb" });
@@ -488,6 +556,8 @@ async function familyOr(req: Request, res: Response): Promise<FamilyRow | null> 
  *  error's own message only (a place, a clue or a tag word never goes in a log or an answer). */
 function gameFailed(res: Response, what: string, err: unknown, json: boolean): Response {
   console.error(`elf ${what} failed:`, err instanceof Error ? err.message : err);
+  // An answer already on its way cannot be changed, and trying would throw from the catch.
+  if (res.headersSent) return res;
   res.setHeader("Cache-Control", "no-store");
   const words = "Something went wrong just now. Please try again in a few minutes.";
   return json ? res.status(500).json({ error: words }) : res.status(500).type("text/plain").send(words);
@@ -531,7 +601,7 @@ export async function getHq(req: Request, res: Response): Promise<Response | voi
   try {
     const family = await familyOr(req, res);
     if (!family) return;
-    return res.type("html").send(renderHqPage(await hqViewOf(res, family, now)));
+    return await sendPage(req, res, renderHqPage(await hqViewOf(res, family, now)));
   } catch (err) {
     return gameFailed(res, "detective hq", err, false);
   }
@@ -548,7 +618,7 @@ export async function getWardrobe(req: Request, res: Response): Promise<Response
     const detective = family.detectives.find((d) => d.id === id);
     if (!detective) return res.status(404).type("text/plain").send("Not found");
     const doorsDone = await detectiveDoorsDone(settings.year, detective.id, (await familyRuns(res, now)).runs, now);
-    return res.type("html").send(renderWardrobePage(wardrobeViewFor({ detective, settings, now, doorsDone })));
+    return await sendPage(req, res, renderWardrobePage(wardrobeViewFor({ detective, settings, now, doorsDone })));
   } catch (err) {
     return gameFailed(res, "wardrobe", err, false);
   }
@@ -682,11 +752,11 @@ export function resetPublicCalendar(): void {
 // The calendar is built once every 15 seconds and shared, so its view's time can be 15 seconds old. The
 // page and the feed each tell the script the time of their own answer, which it sets its clock by.
 
-export async function getCalendarPage(_req: Request, res: Response): Promise<Response | void> {
+export async function getCalendarPage(req: Request, res: Response): Promise<Response | void> {
   try {
     const view = await publicCalendar.get(new Date());
     publicCache(res);
-    return res.type("html").send(renderCalendarPage(view, new Date()));
+    return await sendPage(req, res, renderCalendarPage(view, new Date()));
   } catch (err) {
     return gameFailed(res, "calendar", err, false);
   }
@@ -752,9 +822,13 @@ export async function getMe(req: Request, res: Response): Promise<Response | voi
 
 elfRouter.get("/elf", schoolOn, getCalendarPage);
 
-elfRouter.get("/elf/rules", schoolOn, (_req, res) => {
-  publicCache(res);
-  res.type("html").send(renderRulesPage({ settings: settingsOf(res) }));
+elfRouter.get("/elf/rules", schoolOn, async (req, res) => {
+  try {
+    publicCache(res);
+    await sendPage(req, res, renderRulesPage({ settings: settingsOf(res) }));
+  } catch (err) {
+    gameFailed(res, "rules", err, false);
+  }
 });
 
 elfRouter.get("/api/elf/calendar", schoolOn, getCalendarFeed);
@@ -865,7 +939,7 @@ export async function getPoster(req: Request, res: Response): Promise<Response |
     if (!run) return notFound(res);
     const s = await signedInFamily(req);
     const family = s ? await familyWithDetectives(s.familyId) : null;
-    return res.status(200).type("html").send(renderPosterPage(await posterViewOf(run, family, now)));
+    return await sendPage(req, res.status(200), renderPosterPage(await posterViewOf(run, family, now)));
   } catch (err) {
     return gameFailed(res, "poster page", err, false);
   }
@@ -974,7 +1048,7 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
     const run = await runByCode(res, String(req.params.code ?? body.code ?? ""), now);
     if (!run) return notFound(res, json);
     // The plain form is told on its own page, in the form's status line.
-    if (limited) return res.status(429).type("html").send(renderPosterPage({ ...(await posterViewOf(run, family, now)), wordError: ELF_TOO_MANY }));
+    if (limited) return await sendPage(req, res.status(429), renderPosterPage({ ...(await posterViewOf(run, family, now)), wordError: ELF_TOO_MANY }));
     const { year, door } = run;
     // The try is taken before the word is looked at, in one step, so a burst of words cannot all read
     // the same count.
@@ -998,7 +1072,7 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
     );
 
     const answer = async (status: number, outcome: PosterOutcome): Promise<Response> => {
-      if (!json) return res.status(status).type("html").send(renderPosterPage(await posterViewOf(run, family, now), outcome));
+      if (!json) return sendPage(req, res.status(status), renderPosterPage(await posterViewOf(run, family, now), outcome));
       if (!outcome.ok) {
         const left = outcome.triesLeft === undefined ? {} : { triesLeft: outcome.triesLeft };
         return res.status(status).json({ reason: outcome.reason, message: wordRefusalWords(outcome.reason, outcome.triesLeft), ...left });
@@ -1166,7 +1240,7 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
       if (!family) return res.redirect(303, "/elf/sign-in");
       const view = await hqViewOf(res, family, now, runs);
       const today = view.today && view.today.door === run.door ? { ...view.today, guessError: message } : view.today;
-      return res.status(status).type("html").send(renderHqPage({ ...view, today }));
+      return sendPage(req, res.status(status), renderHqPage({ ...view, today }));
     };
     if (limited) return await hqSaying(429, ELF_TOO_MANY);
     const state = doorState(run.facts, now);

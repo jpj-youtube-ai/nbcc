@@ -40,28 +40,31 @@
   --elf-flake: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none' stroke='%23000' stroke-width='3.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20M19 6l5 5 5-5M37.1 10.7l-1.8 6.8 6.8 1.8M42.1 28.7l-6.8 1.8 1.8 6.8M29 42l-5-5-5 5M10.9 37.3l1.8-6.8-6.8-1.8M5.9 19.3l6.8-1.8-1.8-6.8'/%3E%3C/svg%3E");
 }
 
-/* ---------- the bar across the top: always solid cream ----------
-   The NBCC logo is the red mark and sits on cream only (.impeccable.md). These pages do not load
-   main.js, which is what paints the bar once a page is scrolled, so it is painted from the start. */
-.elf-page .nav {
-  background: var(--cream);
-  box-shadow: var(--shadow-sm);
-  border-bottom: 1px solid var(--line);
-}
+/* ---------- the banner, and the strip under it ----------
+   The banner across the top, its menu and the footer are the site's own (src/site/chrome.ts), and
+   nothing here styles them: they look and work exactly as on every other page (Jaimie, 11 November
+   2026: "the same banner and the same nav bar across the entire site"). main.js paints the banner once
+   the page is scrolled and opens its menu on a phone, as it does everywhere.
 
-/* The site hides the bar's one link on a phone, where its own menu takes over. These pages have no
-   menu: that link is the only way across, so it stays. */
-.elf-page .nav-cta { display: inline-block; }
-
-/* The school's own logo, in the charity's place in the bar on every screen but the calendar. It
-   leads back to the calendar. Its lettering is dark red and green, so like the charity's mark it
-   sits on cream only. */
-.elf-page .elf-school { border-radius: 12px; }
-.elf-page .elf-school img { display: block; height: 68px; width: 68px; }
-.elf-school:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
-@media (max-width: 680px) {
-  .elf-page .nav-cta { padding: 11px 18px; font-size: 0.9rem; }
+   Straight under the banner, Elf Detective School's own strip: a sheet of holly paper with its
+   name, leading back to the calendar, and the page's own button. The torn bands at the top
+   of the page are its bottom edge. It wraps rather than scroll, and the button is a thumb's height. */
+.elf-bar {
+  position: relative;
+  z-index: 2;
+  margin-top: var(--nav-h);
+  background-color: var(--holly);
+  background-image: var(--elf-grain);
+  background-size: 384px;
+  background-blend-mode: soft-light;
+  color: var(--elf-on-dark);
 }
+.elf-bar .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding-block: 10px 6px; }
+.elf-bar__home { font-family: var(--font-head); font-weight: 800; font-size: clamp(1rem, 0.9rem + 0.6vw, 1.35rem); line-height: 1.2; color: var(--elf-on-dark); text-decoration: none; text-wrap: balance; }
+.elf-bar__home:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.elf-bar__home:focus-visible,
+.elf-bar .elf-btn:focus-visible { outline: 3px solid var(--cream); outline-offset: 4px; border-radius: 6px; }
+.elf-bar .elf-btn { flex: none; padding-inline: 16px; }
 
 .elf-page .elf-icon { vertical-align: -0.18em; flex: none; }
 
@@ -1208,9 +1211,9 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 .elf-gift__seal small { position: relative; display: block; font-family: var(--font-body); font-weight: 600; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
 
 /* the gold band that passes across a main button now and then (Detective HQ, the wardrobe and the
-   poster, until they are in paper) */
-.elf-page .btn-primary { position: relative; overflow: hidden; }
-.elf-page .btn-primary::after {
+   poster, until they are in paper). Only in the page itself: the footer's Sign up is the site's. */
+.elf-page .site-main .btn-primary { position: relative; overflow: hidden; }
+.elf-page .site-main .btn-primary::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(105deg, transparent 35%, var(--elf-shine) 50%, transparent 65%);
   transform: translateX(-110%);
@@ -1271,7 +1274,7 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
   .elf-gift__peek { animation: elf-peek 4.6s var(--elf-ease) 1.3s infinite; }
   .elf-gift__tag { animation: elf-swing-in 1s var(--elf-ease) 1.3s both; }
   .elf-gift__seal { animation: elf-swing-in .9s var(--elf-ease) 1.1s both; }
-  .elf-page .btn-primary::after { animation: elf-shimmer 4s var(--elf-ease) 1.6s infinite; }
+  .elf-page .site-main .btn-primary::after { animation: elf-shimmer 4s var(--elf-ease) 1.6s infinite; }
   .elf-stars i { animation: elf-fall 1.5s var(--elf-ease) var(--d) both; }
   .elf-tick input { transition: transform 0.15s var(--elf-ease); }
   .elf-tick input:checked { transform: rotate(-2deg) scale(1.06); }
@@ -1295,11 +1298,10 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 .elf-page .page-top.elf-join-top { padding-bottom: clamp(8px, 2vw, 16px); }
 
 /* The private preview (Jaimie, 3 November 2026): every page says so across the top. */
-/* It sits under the bar (which stays fixed at the top), and the page moves down after it: the torn
-   bands start at the strip's foot, and the page's top no longer leaves room for the bar again. */
+/* It sits straight under the banner (which stays fixed at the top), above Elf Detective School's
+   strip, and the strip moves down after it. */
 .elf-preview-strip { position: relative; z-index: 3; margin: var(--nav-h) 0 0; padding: 10px 16px; background: var(--maroon); color: var(--cream); font-size: .9rem; text-align: center; }
-.elf-preview-strip + .site-main .elf-bands { top: 0; }
-.elf-preview-strip + .site-main .page-top { padding-top: calc(40px + clamp(14px, 3vw, 40px)); }
+.elf-preview-strip + .elf-bar { margin-top: 0; }
 
 /* =================================================================
    The paper look (docs/superpowers/specs/2026-11-04-elf-paper-design.md; mockup 6, approved by Jaimie
@@ -1343,10 +1345,12 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 }
 /* Paper that hangs over the edge of the screen (a holly sprig, a scrap) is cut there, never widening it. */
 .elf-page .site-main { position: relative; z-index: 1; overflow-x: clip; }
-/* A page's top section starts below the bar and the torn bands under it, whether or not it is also a
-   .section (whose own spacing would otherwise put it under the bar). */
-.elf-page .page-top { padding-top: calc(var(--nav-h) + 40px + clamp(14px, 3vw, 40px)); }
-.elf-page .site-footer { position: relative; z-index: 1; background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; }
+/* A page's top section starts below the torn bands, whether or not it is also a .section (whose own
+   spacing would otherwise leave room for the banner again: Elf Detective School's strip already sits
+   below the banner, so the page starts below the strip). */
+.elf-page .page-top { padding-top: calc(40px + clamp(14px, 3vw, 40px)); }
+/* The footer is the site's own, looking as it does on every page: it only sits above the paper sky. */
+.elf-page .site-footer { position: relative; z-index: 1; }
 .elf-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 /* The colours of the pieces drawn into the page. */
@@ -1356,8 +1360,9 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 .elf-fill-tan { fill: var(--tan); }
 .elf-fill-maroon { fill: var(--maroon); }
 
-/* The torn bands under the bar: holly over crimson, cut to the screen's width. */
-.elf-bands { position: absolute; left: 0; right: 0; top: var(--nav-h); z-index: 2; height: 40px; pointer-events: none; filter: drop-shadow(0 4px 3px rgba(94, 0, 0, 0.22)); }
+/* The torn bands under Elf Detective School's strip: holly over crimson, cut to the screen's width.
+   Their holly runs on from the strip's, so the two read as one sheet with a torn edge. */
+.elf-bands { position: absolute; left: 0; right: 0; top: 0; z-index: 2; height: 40px; pointer-events: none; filter: drop-shadow(0 4px 3px rgba(94, 0, 0, 0.22)); }
 .elf-bands svg { display: block; width: 100%; height: 100%; }
 
 /* The cut paper hills, as wide as the screen and in proportion, running into the footer. */
@@ -1367,8 +1372,9 @@ form.elf-photo-sheet__form { display: grid; gap: 14px; margin: 0; padding: 0; ba
 .elf-hills svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 .elf-hills__grain { mix-blend-mode: soft-light; }
 
-/* A few paper stars and snowflakes behind the page. Still for anyone who asked for less motion. */
-.elf-sky { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+/* A few paper stars and snowflakes behind the page. Still for anyone who asked for less motion. They
+   fall from under the site's banner, never behind it, so the banner looks as it does on every page. */
+.elf-sky { position: fixed; inset: var(--nav-h) 0 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .elf-sky i { position: absolute; top: var(--y); left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: var(--tan); opacity: 0.38; }
 .elf-sky .elf-sky__star { border-radius: 0; background: var(--elf-gold-bright); opacity: 0.7; clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); }
 .elf-sky i:nth-child(1) { --x: 0.0%; --y: 44.7%; --s: 10.9px; --d: 14.5s; --delay: -20.7s; --drift: -6px; }

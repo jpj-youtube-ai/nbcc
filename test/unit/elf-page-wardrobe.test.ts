@@ -29,8 +29,9 @@ describe("the wardrobe page", () => {
     expect(words(doc.querySelector("h1"))).toBe("The wardrobe");
     expect(doc.querySelector('meta[name="robots"]')!.getAttribute("content")).toBe("noindex, nofollow");
     const scripts = [...doc.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"));
-    expect(scripts).toEqual(["/assets/js/elf-wardrobe.js", "/assets/js/elf-wardrobe-ui.js"]);
-    expect(doc.querySelector('.nav-cta[href="/elf/hq"]')).not.toBeNull();
+    // The site's own script first, for the site's menu on a phone (TASK-615).
+    expect(scripts).toEqual(["/assets/js/main.js", "/assets/js/elf-wardrobe.js", "/assets/js/elf-wardrobe-ui.js"]);
+    expect(doc.querySelector('nav.elf-bar a.elf-bar__go[href="/elf/hq"]')).not.toBeNull();
   });
 
   it("gives nothing on the page the same id as anything else", () => {
@@ -216,7 +217,7 @@ describe("what comes from data", () => {
     const doc = page(wardrobeView({ saveUrl: "https://example.com/steal", hqUrl: "//example.com" }));
     expect(doc.querySelector("form.elf-wd")!.getAttribute("action")).toBe("/");
     for (const a of doc.querySelectorAll("main a")) expect(a.getAttribute("href")).toMatch(/^[/#]/);
-    expect(doc.querySelector(".nav-cta")!.getAttribute("href")).toBe("/");
+    expect(doc.querySelector(".elf-bar__go")!.getAttribute("href")).toBe("/");
   });
 });
 

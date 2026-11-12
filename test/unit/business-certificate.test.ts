@@ -16,6 +16,23 @@ vi.mock("../../src/clients/email", () => ({ sendBusinessCaptureConfirmation: vi.
 vi.mock("../../src/config", () => ({
   config: { PORTAL_BASE_URL: "https://nbcc.test", GIVING_FROM_EMAIL: "giving@nbcc.scot" },
 }));
+// A page that will not draw, when a test asks for one.
+const drawing = vi.hoisted(() => {
+  const state = { fail: false };
+  const breakable =
+    <A extends unknown[]>(draw: (...a: A) => string) =>
+    (...a: A): string => {
+      if (state.fail) throw new Error("a page that will not draw");
+      return draw(...a);
+    };
+  return { state, breakable };
+});
+// TASK-615: what every page of the site gains as it goes out (src/routes/site.ts): here a mark.
+vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string) => html.replace("</footer>", "<!-- dressed --></footer>") }));
+vi.mock("../../src/business/certificate-not-found", async (orig) => {
+  const real = await orig<typeof import("../../src/business/certificate-not-found")>();
+  return { certificateNotFoundPage: drawing.breakable(real.certificateNotFoundPage) };
+});
 
 import { getCertificate } from "../../src/routes/business";
 import { formatMonthYear, certificateHeroName, renderCertificate } from "../../src/business/certificate";
@@ -24,13 +41,16 @@ type MockRes = {
   statusCode: number;
   body: unknown;
   contentType: string | undefined;
+  headers: Record<string, string>;
+  setHeader: (k: string, v: string) => MockRes;
   status: (c: number) => MockRes;
   type: (t: string) => MockRes;
   json: (b: unknown) => MockRes;
   send: (b: unknown) => MockRes;
 };
 function mockRes(): MockRes {
-  const res = { statusCode: 200, body: undefined as unknown, contentType: undefined } as MockRes;
+  const res = { statusCode: 200, body: undefined as unknown, contentType: undefined, headers: {} } as unknown as MockRes;
+  res.setHeader = (k, v) => { res.headers[k] = v; return res; };
   res.status = (c) => { res.statusCode = c; return res; };
   res.type = (t) => { res.contentType = t; return res; };
   res.json = (b) => { res.body = b; return res; };
@@ -78,6 +98,34 @@ describe("GET /business/certificate/:token (TASK-211)", () => {
     getCtxMock.mockResolvedValue(null);
     const res = await run("nope");
     expect(res.statusCode).toBe(404);
+  });
+
+  // TASK-615: the answer when there is no certificate is a page of the site, with its banner and
+  // footer, dressed as every page is as it goes out. The certificate itself stays a sheet to print.
+  it("says there is no certificate on a page of the site", async () => {
+    getCtxMock.mockResolvedValue(null);
+    const res = await run("nope");
+    const html = String(res.body);
+    expect(res.contentType).toBe("html");
+    expect(html).toMatch(/<header class="nav" id="nav"/);
+    expect(html).toContain("<!-- dressed --></footer>");
+    expect(html).toContain("<h1>Certificate not found</h1><p>This certificate link is not valid.</p>");
+  });
+
+  it("answers 500, never a promise left to reject, when that page will not draw", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getCtxMock.mockResolvedValue(null);
+    drawing.state.fail = true;
+    try {
+      const res = await run("nope");
+      expect(res.statusCode).toBe(500);
+      expect(res.headers["Cache-Control"]).toBe("no-store");
+      expect(res.body).toBe("Something went wrong just now. Please try again in a few minutes.");
+      expect(logged).toHaveBeenCalledOnce();
+    } finally {
+      drawing.state.fail = false;
+      logged.mockRestore();
+    }
   });
 
   it("404s for a non-platinum token", async () => {

@@ -13,6 +13,18 @@ vi.mock("../../src/db/sleigh", () => ({
   publicSettings: async () => ({ seasonFrom: "2026-11-01", offOn: "2027-01-31" }),
   sleighTotals: async () => null,
 }));
+// A page that will not draw, when a test asks for one.
+const drawing = vi.hoisted(() => ({ fail: false }));
+vi.mock("../../src/sleigh/page", async (orig) => {
+  const real = await orig<typeof import("../../src/sleigh/page")>();
+  const breakable =
+    <A extends unknown[]>(draw: (...a: A) => string) =>
+    (...a: A): string => {
+      if (drawing.fail) throw new Error("a page that will not draw");
+      return draw(...a);
+    };
+  return { ...real, renderSleighPage: breakable(real.renderSleighPage), renderSleighThanks: breakable(real.renderSleighThanks) };
+});
 
 const { createSleighRouter } = await import("../../src/routes/sleigh");
 
@@ -151,5 +163,26 @@ describe("GET /sleigh/thank-you", () => {
     session = { payment_status: "paid", amount_total: 2500, metadata: { sleigh: "true" } };
     const html = await (await get("/sleigh/thank-you?session_id=not-an-id")).text();
     expect(html).not.toContain("£25");
+  });
+});
+
+// TASK-615: both pages wait for the menu's extras before they go out, so a page that fails to draw
+// must still be an answer: a plain 500, never cached, rather than a rejected promise that would take
+// the whole server down.
+describe("a Santa Sleigh page that will not draw", () => {
+  it.each(["/sleigh", "/sleigh/thank-you"])("%s answers 500, never a promise left to reject", async (path) => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    clock = new Date("2026-11-10T20:00:00Z");
+    drawing.fail = true;
+    try {
+      const r = await get(path);
+      expect(r.status).toBe(500);
+      expect(r.headers.get("cache-control")).toBe("no-store");
+      expect(await r.text()).toBe("Something went wrong just now. Please try again in a few minutes.");
+      expect(logged).toHaveBeenCalledOnce();
+    } finally {
+      drawing.fail = false;
+      logged.mockRestore();
+    }
   });
 });

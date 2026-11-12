@@ -67,39 +67,38 @@ describe("the logo on a screen", () => {
     const img = doc.querySelector("h1 img")!;
     expect(img.getAttribute("src")).toBe(SCHOOL_LOGO_SRC);
     expect(img.getAttribute("alt")).toBe("NBCC Elf Detective School");
-    // The bar across the top does not show it a second time there.
+    // Neither the banner nor the strip under it shows it a second time there.
     expect(doc.querySelectorAll(`img[src="${SCHOOL_LOGO_SRC}"]`).length).toBe(1);
   });
 
-  it("takes the charity's place in the bar across the top of every other screen, and leads back to the calendar", () => {
-    const pages = [renderHqPage(hqView()), renderWardrobePage(wardrobeView()), renderPosterPage(posterView())];
+  // TASK-615: the banner is the site's own on every screen, so its logo is the charity's, leading to the
+  // site. The strip under it names Elf Detective School in words: the logo's lettering is dark red and
+  // green, and the strip is holly paper.
+  it("never takes the charity's place in the banner: the strip under it names Elf Detective School in words, leading back to the calendar", () => {
+    const pages = [renderCalendarPage(calendarView(AFTERNOON)), renderHqPage(hqView()), renderWardrobePage(wardrobeView()), renderPosterPage(posterView())];
     for (const page of pages) {
       const doc = html(page);
-      const link = doc.querySelector("header.nav a.elf-school")!;
-      expect(link.getAttribute("href")).toBe("/elf");
-      const img = link.querySelector("img")!;
-      expect(img.getAttribute("src")).toBe(SCHOOL_LOGO_SRC);
-      expect(img.getAttribute("alt")).toBe("NBCC Elf Detective School");
-      expect(doc.querySelectorAll(`img[src="${SCHOOL_LOGO_SRC}"]`).length).toBe(1);
-      // One mark in the bar, not two: both logos are the same peeping elf.
-      expect(doc.querySelectorAll("header.nav img").length).toBe(1);
-    }
-  });
-
-  it("keeps the charity's logo, leading to the site, on the calendar and when the way back is not an address on this site", () => {
-    for (const page of [renderCalendarPage(calendarView(AFTERNOON)), renderHqPage({ ...hqView(), calendarUrl: "https://elsewhere.example/" })]) {
-      const doc = html(page);
-      expect(doc.querySelector("a.elf-school")).toBeNull();
       const brand = doc.querySelector("header.nav a.brand")!;
       expect(brand.getAttribute("href")).toBe("/");
-      expect(brand.querySelector("img")!.getAttribute("src")).toBe("/assets/img/nbcc-logo.png");
+      expect([...doc.querySelectorAll("header.nav img")].map((img) => img.getAttribute("src"))).toEqual(["/assets/img/nbcc-logo.png"]);
+      const home = doc.querySelector("nav.elf-bar a.elf-bar__home")!;
+      expect(home.textContent).toBe("Elf Detective School");
+      expect(home.getAttribute("href")).toBe("/elf");
+      expect(doc.querySelectorAll(`header.nav img[src="${SCHOOL_LOGO_SRC}"], nav.elf-bar img`).length).toBe(0);
     }
   });
 
-  it("is styled in the elf stylesheet: a fixed size in the bar, and never wider than its column in the heading", () => {
+  it("leads back to the calendar from the strip even when the way back given is not an address on this site", () => {
+    const doc = html(renderHqPage({ ...hqView(), calendarUrl: "https://elsewhere.example/" }));
+    expect(doc.querySelector("nav.elf-bar a.elf-bar__home")!.getAttribute("href")).toBe("/elf");
+    expect(doc.querySelector("header.nav a.brand")!.getAttribute("href")).toBe("/");
+  });
+
+  it("is styled in the elf stylesheet: never wider than its column in the heading", () => {
     const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
-    expect(css).toMatch(/\.elf-page \.elf-school img \{[^}]*height:\s*\d+px/);
     expect(css).toMatch(/\.elf-top__logo \{[^}]*max-width:\s*100%/);
+    // The banner is the site's: nothing in the elf stylesheet sizes or paints it.
+    expect(css).not.toMatch(/\.elf-page \.nav\b|\.elf-page \.nav-cta|\.elf-school/);
   });
 });
 

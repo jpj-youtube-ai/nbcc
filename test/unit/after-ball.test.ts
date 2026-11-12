@@ -83,6 +83,18 @@ vi.mock("../../src/ball/preview-access", () => ({
   holdsPreviewCookie: async () => state.preview,
   previewSecret: () => "an-invented-secret",
 }));
+// A thank you that will not draw, when a test asks for one.
+const drawing = vi.hoisted(() => ({ fail: false }));
+vi.mock("../../src/ball/thank-you-page", async (orig) => {
+  const real = await orig<typeof import("../../src/ball/thank-you-page")>();
+  return {
+    ...real,
+    renderBallThankYou: (...a: Parameters<typeof real.renderBallThankYou>) => {
+      if (drawing.fail) throw new Error("a page that will not draw");
+      return real.renderBallThankYou(...a);
+    },
+  };
+});
 
 import { AFTER_BALL_AT, afterBall, showAfterBall } from "../../src/site/after-ball";
 import { createSiteRouter } from "../../src/routes/site";
@@ -374,7 +386,9 @@ describe.each([
 });
 
 describe("the Ball's own pages do not know the moment exists", () => {
-  // Ball pages are served by src/routes/ball.ts, which draws its own menu (decorateBallPage).
+  // Ball pages are served by src/routes/ball.ts, which draws its own menu (decorateBallPage). The guest
+  // details and the thank you wear the site's banner since TASK-615 and go out dressed as every page of
+  // the site does (dressPage), by the real clock, so the clock this file moves cannot move them either.
   const PAGES = ["/ball", "/ball/terms", "/ball/donate", "/ball/thank-you", "/ball/guests/an-invented-token"];
 
   const answer = async (path: string) => {
@@ -421,6 +435,35 @@ describe("the Ball's own pages do not know the moment exists", () => {
       const source = read(file);
       expect(source, file).not.toContain("after-ball");
       expect(source, file).not.toContain("afterBall");
+    }
+  });
+});
+
+// TASK-615: the guest details and the thank you are pages of the site: the site's own banner and
+// footer, with what every page gains as it goes out (here, Get involved while the events switch is on).
+describe("the Festive Ball's guest details and thank you", () => {
+  it.each(["/ball/thank-you", "/ball/guests/an-invented-token"])("%s wears the site's banner and gains its menu's items", async (path) => {
+    state.eventsOn = true;
+    const on = await body(path);
+    expect(on).toContain('<a class="nav-cta" href="/donate">Donate</a>');
+    expect(navList(on)).toContain('<li><a href="/get-involved">Get involved</a></li>');
+    state.eventsOn = false;
+    expect(navList(await body(path))).not.toContain('href="/get-involved"');
+  });
+
+  // It waits for the menu's extras before it goes out, so a thank you that fails to draw must still be
+  // an answer: a plain 500, never cached, rather than a rejected promise that would take the server down.
+  it("answers 500, never a promise left to reject, when the thank you will not draw", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    drawing.fail = true;
+    try {
+      const r = await get("/ball/thank-you");
+      expect(r.status).toBe(500);
+      expect(r.headers.get("cache-control")).toBe("no-store");
+      expect(await r.text()).toBe("Something went wrong just now. Please try again in a few minutes.");
+    } finally {
+      drawing.fail = false;
+      logged.mockRestore();
     }
   });
 });

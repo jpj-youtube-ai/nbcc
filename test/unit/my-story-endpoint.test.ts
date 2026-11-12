@@ -18,6 +18,28 @@ vi.mock("../../src/clients/stripe", () => ({
 vi.mock("../../src/config", () => ({
   config: { STRIPE_SUCCESS_URL: "https://nbcc.test/s", STRIPE_CANCEL_URL: "https://nbcc.test/c" },
 }));
+// A page that will not draw, when a test asks for one.
+const drawing = vi.hoisted(() => {
+  const state = { fail: false };
+  const breakable =
+    <A extends unknown[]>(draw: (...a: A) => string) =>
+    (...a: A): string => {
+      if (state.fail) throw new Error("a page that will not draw");
+      return draw(...a);
+    };
+  return { state, breakable };
+});
+// TASK-615: what every page of the site gains as it goes out (src/routes/site.ts): here a mark.
+vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string) => html.replace("</footer>", "<!-- dressed --></footer>") }));
+vi.mock("../../src/stories/answer-pages", async (orig) => {
+  const real = await orig<typeof import("../../src/stories/answer-pages")>();
+  return {
+    storyThanksPage: drawing.breakable(real.storyThanksPage),
+    storyCheckPage: drawing.breakable(real.storyCheckPage),
+    storyTooManyPage: drawing.breakable(real.storyTooManyPage),
+    storyFailedPage: drawing.breakable(real.storyFailedPage),
+  };
+});
 
 import { postMyStory, rejectOversizedMyStoryJson } from "../../src/routes/api";
 
@@ -25,6 +47,8 @@ type MockRes = {
   statusCode: number;
   body: unknown;
   contentType: string | undefined;
+  headers: Record<string, string>;
+  setHeader: (k: string, v: string) => MockRes;
   status: (c: number) => MockRes;
   json: (b: unknown) => MockRes;
   type: (t: string) => MockRes;
@@ -32,7 +56,11 @@ type MockRes = {
 };
 
 function mockRes(): MockRes {
-  const res = { statusCode: 200, body: undefined, contentType: undefined } as MockRes;
+  const res = { statusCode: 200, body: undefined, contentType: undefined, headers: {} } as unknown as MockRes;
+  res.setHeader = (k: string, v: string) => {
+    res.headers[k] = v;
+    return res;
+  };
   res.status = (c: number) => {
     res.statusCode = c;
     return res;
@@ -194,5 +222,71 @@ describe("POST /api/my-story — per-IP rate limiting", () => {
     // Some call within these 10 must have been rate-limited (a non-200/400 status,
     // or insertStory called fewer than 10 times).
     expect(insertStory.mock.calls.length).toBeLessThan(10);
+  });
+});
+
+// TASK-615: without JavaScript the form's answers are pages of the site, with its banner and footer,
+// dressed as every page is as it goes out. A page that will not draw is a plain 500, never a promise
+// left to reject.
+describe("POST /api/my-story — the no-JS answers are pages of the site", () => {
+  const formReq = (body: Record<string, string>, ip: string) => ({ body, ip, is: () => false });
+  const FORM = { submitterRole: "supported", storyText: "A story told without JavaScript.", useScope: "internal_only", confirmOver16: "on" };
+  const sitePage = (res: MockRes) => {
+    const html = String(res.body);
+    expect(res.contentType).toBe("html");
+    expect(html).toMatch(/<header class="nav" id="nav"/);
+    expect(html).toContain("<!-- dressed --></footer>");
+    return html;
+  };
+
+  it("thanks the teller on a page of the site", async () => {
+    const res = mockRes();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postMyStory(formReq(FORM, "10.0.0.1") as any, res as any);
+    expect(res.statusCode).toBe(200);
+    expect(insertStory).toHaveBeenCalledOnce();
+    const html = sitePage(res);
+    expect(html).toContain("<h1>Thank you</h1>");
+    expect(html).toContain("<p>Your story becomes part of ours.</p>");
+  });
+
+  it("asks for the details again on a page of the site", async () => {
+    const res = mockRes();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postMyStory(formReq({ ...FORM, confirmOver16: "" }, "10.0.0.2") as any, res as any);
+    expect(res.statusCode).toBe(400);
+    expect(insertStory).not.toHaveBeenCalled();
+    expect(sitePage(res)).toContain("<h1>Please check your details</h1>");
+  });
+
+  it("says the story could not be saved on a page of the site", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    insertStory.mockRejectedValue(new Error("database down"));
+    try {
+      const res = mockRes();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await postMyStory(formReq(FORM, "10.0.0.3") as any, res as any);
+      expect(res.statusCode).toBe(500);
+      expect(sitePage(res)).toContain("<h1>Something went wrong</h1>");
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it("answers 500, never a promise left to reject, when its page will not draw", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    drawing.state.fail = true;
+    try {
+      const res = mockRes();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await postMyStory(formReq(FORM, "10.0.0.4") as any, res as any);
+      expect(res.statusCode).toBe(500);
+      expect(res.headers["Cache-Control"]).toBe("no-store");
+      expect(res.body).toBe("Something went wrong just now. Please try again in a few minutes.");
+      expect(logged).toHaveBeenCalledOnce();
+    } finally {
+      drawing.state.fail = false;
+      logged.mockRestore();
+    }
   });
 });

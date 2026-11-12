@@ -16,6 +16,9 @@ vi.mock("../../src/db/newsletters", () => newsletters);
 vi.mock("../../src/db/subscriber-lists", () => lists);
 vi.mock("../../src/db/email-opt-outs", () => optOuts);
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "a-test-secret" } }));
+// TASK-615: the page goes out as every page of the site does (src/routes/site.ts adds the menu's
+// extras); here it goes out as drawn, so this file stays about the save.
+vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string) => html }));
 
 import { postPreferences } from "../../src/routes/preferences";
 import { signUnsubscribeToken } from "../../src/donors/unsubscribe-token";
@@ -23,8 +26,17 @@ import { signUnsubscribeToken } from "../../src/donors/unsubscribe-token";
 const TOKEN = signUnsubscribeToken(5, "a-test-secret");
 
 function mockRes() {
-  const res = { statusCode: 200, html: "" } as { statusCode: number; html: string; status: (c: number) => unknown; type: (t: string) => unknown; send: (b: string) => unknown };
+  const res = { statusCode: 200, html: "", headers: {} } as {
+    statusCode: number;
+    html: string;
+    headers: Record<string, string>;
+    status: (c: number) => unknown;
+    type: (t: string) => unknown;
+    send: (b: string) => unknown;
+    setHeader: (k: string, v: string) => unknown;
+  };
   res.status = (c: number) => ((res.statusCode = c), res);
+  res.setHeader = (k: string, v: string) => ((res.headers[k] = v), res);
   res.type = () => res;
   res.send = (b: string) => ((res.html = b), res);
   return res;
@@ -70,6 +82,7 @@ describe("the preference centre and the opt out list", () => {
     optOuts.addOptOut.mockRejectedValue(new Error("db down"));
     const res = await post({ all: "off" });
     expect(res.statusCode).toBe(200);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
     expect(newsletters.setDonorConsents).toHaveBeenCalledWith("robin@example.com", { newsletter: false, thankYou: false });
     expect(lists.unsubscribeListMember).toHaveBeenCalledWith(11);
     expect(String(err.mock.calls[0]?.[0])).toMatch(/opt out/i);

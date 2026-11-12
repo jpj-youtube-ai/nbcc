@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // NBCC Elf Detective School: signing in with an emailed code, and the page Stripe sends people back
 // to. Every family here is invented.
@@ -26,9 +26,23 @@ vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentB
 vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "production", ADMIN_SESSION_SECRET: "test-secret", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" },
 }));
+// What every page of the site gains as it goes out (src/routes/site.ts): here the page goes out as drawn.
+vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string) => html }));
+// A sign in page that will not draw, when a test asks for one.
+const drawing = vi.hoisted(() => ({ fail: false }));
+vi.mock("../../src/elf/pages/sign-in", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/pages/sign-in")>();
+  return {
+    ...real,
+    renderSignInPage: (...a: Parameters<typeof real.renderSignInPage>) => {
+      if (drawing.fail) throw new Error("a page that will not draw");
+      return real.renderSignInPage(...a);
+    },
+  };
+});
 
 import { elfSessionCookieOptions, ELF_PENDING_COOKIE, ELF_SESSION_COOKIE, hashElfToken } from "../../src/elf/session";
-import { getWelcome, postSignIn, postSignInRequest, signedInFamily } from "../../src/routes/elf";
+import { ELF_REQUEST_MESSAGE, getWelcome, postSignIn, postSignInRequest, signedInFamily } from "../../src/routes/elf";
 import { hashSignInCode } from "../../src/fundraising/sign-in";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 };
@@ -43,12 +57,14 @@ function fakeRes() {
     redirected: null as null | { status: number; url: string },
     locals: {} as Record<string, unknown>,
     headers: {} as Record<string, string>,
+    headersSent: false,
     status(code: number) {
       res.statusCode = code;
       return res;
     },
     json(b: unknown) {
       res.body = b;
+      res.headersSent = true;
       return res;
     },
     type() {
@@ -56,6 +72,7 @@ function fakeRes() {
     },
     send(b: string) {
       res.html = b;
+      res.headersSent = true;
       return res;
     },
     setHeader(k: string, v: string) {
@@ -72,6 +89,7 @@ function fakeRes() {
     },
     redirect(status: number, url: string) {
       res.redirected = { status, url };
+      res.headersSent = true;
       return res;
     },
   };
@@ -297,5 +315,122 @@ describe("the review's findings: signing in", () => {
     expect(JSON.stringify(res.body)).toContain("Check your email");
     expect(JSON.stringify(res.body)).not.toMatch(/already has detectives/);
     expect(mail.sendElfSignInCode).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Elf Detective School's sign ups went live on 12 November 2026. A database hiccup while someone signs up
+// or signs in is said plainly (a 500, never cached), never a rejected promise, which would stop the whole
+// server: src has no unhandledRejection handler. Every answer they give today is as it was (above). From
+// an address and with emails of their own, so the limits the tests above have used do not count here.
+describe("a database hiccup while signing up or signing in", () => {
+  const WORDS = "Something went wrong just now. Please try again in a few minutes.";
+  const SIGN_UP = { grownUpName: "Sam Example", email: "sam@example.com", mobile: "07700 900 123", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true };
+  const SIGN_UP_FORM = { grownUpName: "Sam Example", email: "sam@example.com", mobile: "07700 900 123", "detective-1-first": "Ivy", "detective-1-surname": "Snowsleuth", entry: "5", agreed: "on" };
+  const fromElsewhere = (o: Parameters<typeof req>[0]) => ({ ...(req(o) as object), ip: "198.51.100.23" }) as never;
+  let logged: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    drawing.fail = false;
+    logged.mockRestore();
+  });
+
+  it("answers a sign up 500 when the signed in family cannot be read, from the page's script and from the plain form", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    db.findElfSession.mockRejectedValue(new Error("database down"));
+    for (const json of [true, false]) {
+      const res = fakeRes();
+      res.locals = { elfSettings: ON };
+      await postJoin(fromElsewhere({ json, cookie: `${ELF_SESSION_COOKIE}=abcDEF123_-xyz`, body: json ? SIGN_UP : SIGN_UP_FORM }), res as never);
+      expect(res.statusCode).toBe(500);
+      expect(res.headers["Cache-Control"]).toBe("no-store");
+      if (json) expect(res.body).toEqual({ error: WORDS });
+      else expect(res.html).toBe(WORDS);
+    }
+    expect(db.createPendingJoin).not.toHaveBeenCalled();
+    expect(logged.mock.calls.map((c) => c[0])).toEqual(["elf join failed:", "elf join failed:"]);
+  });
+
+  it("answers a sign up 500 when it cannot be saved", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    db.createPendingJoin.mockRejectedValue(new Error("database down"));
+    const res = fakeRes();
+    res.locals = { elfSettings: ON };
+    await postJoin(fromElsewhere({ json: true, body: { ...SIGN_UP, email: "lee@example.com" } }), res as never);
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: WORDS });
+    expect(res.cookies).toEqual([]);
+  });
+
+  it("keeps the answer already given when the database fails after a sign in code is asked for", async () => {
+    db.getElfSettings.mockRejectedValue(new Error("database down"));
+    const res = fakeRes();
+    await postSignInRequest(fromElsewhere({ json: true, body: { email: "pat@example.com" } }), res as never);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ message: ELF_REQUEST_MESSAGE });
+    expect(mail.sendElfSignInCode).not.toHaveBeenCalled();
+    expect(logged.mock.calls.map((c) => c[0])).toEqual(["elf sign in code request failed:"]);
+  });
+
+  it("answers a sign in code request 500 when its page will not draw", async () => {
+    drawing.fail = true;
+    const res = fakeRes();
+    await postSignInRequest(fromElsewhere({ body: { email: "kit@example.com" } }), res as never);
+    expect(res.statusCode).toBe(500);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+    expect(res.html).toBe(WORDS);
+  });
+
+  it("signs out as it always has: refused from another website's page, otherwise the session ended and the cookie cleared", async () => {
+    const { postSignOut } = await import("../../src/routes/elf");
+    const cookie = `${ELF_SESSION_COOKIE}=abcDEF123_-xyz`;
+    const elsewhere = req({ json: true, cookie }) as unknown as { headers: Record<string, string> };
+    elsewhere.headers["sec-fetch-site"] = "cross-site";
+    elsewhere.headers.origin = "https://evil.example";
+    const refused = fakeRes();
+    await postSignOut(elsewhere as never, refused as never);
+    expect(refused.statusCode).toBe(403);
+    expect(db.deleteElfSession).not.toHaveBeenCalled();
+
+    const viaScript = fakeRes();
+    await postSignOut(fromElsewhere({ json: true, cookie }), viaScript as never);
+    expect([viaScript.statusCode, viaScript.body, viaScript.cleared]).toEqual([200, { status: "signed_out" }, [ELF_SESSION_COOKIE]]);
+
+    const viaForm = fakeRes();
+    await postSignOut(fromElsewhere({ cookie }), viaForm as never);
+    expect([viaForm.redirected, viaForm.cleared]).toEqual([{ status: 303, url: "/elf" }, [ELF_SESSION_COOKIE]]);
+    expect(db.deleteElfSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("answers a sign out 500 when the session cannot be ended, from the page's script and from the plain form", async () => {
+    const { postSignOut } = await import("../../src/routes/elf");
+    db.deleteElfSession.mockRejectedValue(new Error("database down"));
+    for (const json of [true, false]) {
+      const res = fakeRes();
+      await postSignOut(fromElsewhere({ json, cookie: `${ELF_SESSION_COOKIE}=abcDEF123_-xyz` }), res as never);
+      expect(res.statusCode).toBe(500);
+      expect(res.headers["Cache-Control"]).toBe("no-store");
+      if (json) expect(res.body).toEqual({ error: WORDS });
+      else expect(res.html).toBe(WORDS);
+      expect(res.redirected).toBeNull();
+    }
+    expect(logged.mock.calls.map((c) => c[0])).toEqual(["elf sign out failed:", "elf sign out failed:"]);
+  });
+
+  it("answers a sign in 500 when the code cannot be looked up: in its own words to the page's script, and plainly when the page to say so will not draw", async () => {
+    db.countElfCodeTry.mockRejectedValue(new Error("database down"));
+    const viaScript = fakeRes();
+    await postSignIn(fromElsewhere({ json: true, body: { email: "robin@example.com", code: "123456" } }), viaScript as never);
+    expect(viaScript.statusCode).toBe(500);
+    expect(viaScript.body).toEqual({ error: "We could not sign you in just now. Please try again in a few minutes." });
+
+    drawing.fail = true;
+    const viaForm = fakeRes();
+    await postSignIn(fromElsewhere({ body: { email: "robin@example.com", code: "123456" } }), viaForm as never);
+    expect(viaForm.statusCode).toBe(500);
+    expect(viaForm.headers["Cache-Control"]).toBe("no-store");
+    expect(viaForm.html).toBe(WORDS);
+    expect(db.createElfSession).not.toHaveBeenCalled();
   });
 });

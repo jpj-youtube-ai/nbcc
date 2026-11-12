@@ -2934,6 +2934,18 @@
             </section>
           </div>
         </div>
+        <!-- The bar along the bottom on a phone (2026-11-12): the four screens used most, and
+             Everything, which opens the whole menu. Each tab copies its menu link (app.js, syncTabBar):
+             there only when the link is, a dot when it has a New pill, marked when it is where you are.
+             Not menu links (another class, no data-view), so nothing that counts the menu's screens counts these.
+             Inside #appView, so the sign-in screen never shows it. Hidden wider than 860px. -->
+        <nav class="pm-bar" aria-label="Quick links">
+            <button class="pm-tab" type="button" data-pm-view="overview"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span><span class="pm-tab__word">Overview</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="donations"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 6.5A4.5 4.5 0 0 0 8.5 10v2.5c0 3-1.5 5-3 6.5h12M6 13h8"/></svg></span><span class="pm-tab__word">Donations</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="get-involved"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2c2.9.2 5 2.6 5 5.8"/></svg></span><span class="pm-tab__word">Get involved</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="contact"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/></svg></span><span class="pm-tab__word">Contact</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" id="pmEverything" aria-controls="adminNavList" aria-expanded="false"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><span class="pm-tab__word">Everything</span></button>
+        </nav>
       </div>
     </main>
   </body>

@@ -334,6 +334,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
       g.hidden = !g.querySelector(".admin-nav-link:not([hidden])");
     });
+    syncTabBar();
   }
 
   // Fetch an admin API path with the bearer token; a 401 means the session is gone -> back to login.
@@ -488,6 +489,16 @@
   // regardless of section permissions - not a nav-link, so it isn't part of applyNavFiltering.
   // The phone menu's foot (2026-11-12): its two buttons press the top bar's own, so they can never
   // drift from what those do.
+  // The bottom bar (2026-11-12): a tab opens its screen as its menu link does. Everything presses
+  // the Menu button, which takes you up to the menu and, closed again, back to where you were.
+  Array.prototype.forEach.call(doc.querySelectorAll(".pm-bar [data-pm-view]"), function (t) {
+    t.addEventListener("click", function () {
+      selectView(t.getAttribute("data-pm-view"));
+    });
+  });
+  bindClick("pmEverything", function () {
+    el("adminNavToggle").click();
+  });
   bindClick("pmAccountBtn", function () {
     el("accountBtn").click();
   });
@@ -574,6 +585,22 @@
     return whatsNewLoad;
   }
 
+  // The bar along the bottom on a phone (2026-11-12). Each tab copies its menu link, so it can never
+  // offer a screen the menu would not, nor disagree with it about what is new or where you are. Run
+  // whenever any of those changes: after the menu is filtered (applyNavFiltering) and after the pills
+  // are drawn (renderNewPills, which selectView runs once it has marked the screen you chose).
+  function syncTabBar() {
+    Array.prototype.forEach.call(doc.querySelectorAll(".pm-bar [data-pm-view]"), function (t) {
+      var link = doc.querySelector('#adminNavList .admin-nav-link[data-view="' + t.getAttribute("data-pm-view") + '"]');
+      t.hidden = !link || link.hidden;
+      var isNew = !!link && !link.hidden && !!link.querySelector(".admin-new-pill");
+      t.classList.toggle("pm-tab--new", isNew);
+      var words = t.querySelector(".pm-tab__new");
+      if (words) words.hidden = !isNew;
+      if (link && link.classList.contains("is-active")) t.setAttribute("aria-current", "page");
+      else t.removeAttribute("aria-current");
+    });
+  }
   function renderNewPills() {
     var any = false;
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link[data-view]"), function (b) {
@@ -607,6 +634,7 @@
         b.insertAdjacentHTML("beforeend", NEW_PILL);
       }
     });
+    syncTabBar();
     var toggle = el("adminNavToggle");
     if (!toggle) return;
     var oldT = toggle.querySelector(".admin-new-pill");
@@ -1051,6 +1079,8 @@
   function markNav(open) {
     navBar.classList.toggle("is-open", open);
     navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    var all = el("pmEverything");
+    if (all) all.setAttribute("aria-expanded", open ? "true" : "false");
   }
   function openNav() {
     if (!navBar || navIsOpen()) return;

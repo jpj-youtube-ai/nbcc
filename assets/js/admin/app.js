@@ -48,6 +48,10 @@
   // New pills); here they are only where in the one tab each lands.
   var GI_VIEW = "get-involved";
   var GI_SECTIONS = ["signups", "events", "tickets", "emails", "settings"];
+  // Menu links with no permission behind them, shown to everyone. Overview is the landing screen;
+  // Notifications (TASK-NNN) is about this person's own phone, and what they actually receive is
+  // filtered by their permissions when it is sent, not by whether they can open this screen.
+  var UNGATED_VIEWS = ["overview", "notifications"];
   var GI_OLD_VIEWS = { events: "events", fundraising: "signups" }; // old tab -> the section it opens
   var GI_AREA = { signups: "fundraising", events: "events" }; // section -> the New pill it is a visit to
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
@@ -300,7 +304,12 @@
 
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       var section = b.getAttribute("data-view");
-      if (section === "overview") return;
+      // Screens that belong to the person rather than to a permission section: everyone has them,
+      // and gating them on a section the server has never heard of would hide them from
+      // absolutely everybody — which is precisely how Monthly givers went unseen for weeks
+      // (TASK-447). admin-sections-in-sync.test.ts holds the same list and will not let the two
+      // drift apart.
+      if (UNGATED_VIEWS.indexOf(section) !== -1) return;
       // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
       // data-view - e.g. Business supporters gates on business-supporters:edit, matching its server
       // route. Or on VIEW of another section (data-view-gate), when its screen has no permission of

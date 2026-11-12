@@ -97,6 +97,16 @@ describe("admin section list stays in sync", () => {
   // admins included, from the day it shipped (TASK-447): it gated on "monthly", which no permission
   // map has ever held. Gate is data-edit-gate, else data-view-gate, else the link's own data-view,
   // the same order app.js's applyNavFiltering reads them in.
+  // Overview is the landing screen; Notifications is about this person's own phone, and what they
+  // receive is filtered by permission at send time rather than by whether they can open it.
+  const UNGATED_VIEWS = ["overview", "notifications"];
+
+  it("keeps app.js's list of ungated menu links in step with this one", () => {
+    const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+    const listed = parseJsArrayLiteral(app, "UNGATED_VIEWS", "app.js");
+    expect([...listed].sort()).toEqual([...UNGATED_VIEWS].sort());
+  });
+
   it("gates every menu link on a section the server knows", () => {
     const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
     // Any element with the class anywhere in its list, and every one of them: a link this missed
@@ -113,6 +123,10 @@ describe("admin section list stays in sync", () => {
         gates: attr(tag, "data-view-gate-any")?.split(" ") ?? [attr(tag, "data-edit-gate") ?? attr(tag, "data-view-gate") ?? attr(tag, "data-view")],
       }))
       .flatMap(({ view, gates }) => gates.map((gate) => ({ view, gate })))
+      // Screens that belong to the person rather than to a permission section. app.js skips these
+      // in applyNavFiltering for the same reason, and the assertion below keeps the two lists
+      // from drifting — a link quietly added here would otherwise escape the check entirely.
+      .filter(({ view }) => !UNGATED_VIEWS.includes(view ?? ""))
       .filter(({ gate }) => !(SECTIONS as readonly string[]).includes(gate ?? ""))
       .map(({ view, gate }) => `${view} is gated on "${gate}"`);
     expect(gatedOnNothing).toEqual([]);

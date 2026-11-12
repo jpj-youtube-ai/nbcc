@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import { dropOffNavShown } from "../site/dropoff-nav";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { forwardStatus, forwardsToItself, keepQuery } from "../site/redirect";
@@ -198,6 +199,14 @@ async function addElfItems(html: string): Promise<string> {
   return addElfMenuFit(addElfNavLink(html));
 }
 
+// Drop-off points in the menu, and the menu's fit with it, until after Sunday 20 December 2026
+// (src/site/dropoff-nav.ts). Added after Elf Detective School's item, so it lands straight after Get
+// involved and before Elf Detective School.
+async function addDropOffItems(html: string): Promise<string> {
+  const { addDropOffNavLink, addDropOffMenuFit } = await import("../site/dropoff-nav");
+  return addDropOffMenuFit(addDropOffNavLink(html));
+}
+
 // The menu items a page gets on top of what is in its file: the Festive Ball's while the ball is
 // published (or being previewed), and Get involved and What's on while the events switch is on. And
 // while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up rather than
@@ -213,12 +222,14 @@ async function decorateNav(
   after: boolean,
   elf: Promise<boolean>,
   page?: FillLinkPage,
+  dropOff = dropOffNavShown(new Date()),
 ): Promise<string> {
   const [ball, events, fundraising, elfOn] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn(), elf]);
   let out = html;
   if (ball && !after) out = (await import("../ball/nav-link")).addBallNavLink(out);
   if (events) out = await addEventsItems(out);
   if (elfOn) out = await addElfItems(out);
+  if (dropOff) out = await addDropOffItems(out);
   if (fundraising) out = (await import("../fundraising/footer-link")).addFundraiseFooterLink(out);
   if (after) out = addFillFooterLink(out, page);
   return out;
@@ -227,7 +238,7 @@ async function decorateNav(
 /** The same, for a page drawn outside this router (the Santa Sleigh's, src/routes/sleigh.ts): the
  *  Ball's moment and Elf Detective School's read from the clock, and no query can move them. */
 export function decorateSitePage(html: string, cookieHeader: string | undefined, now: Date = new Date()): Promise<string> {
-  return decorateNav(html, cookieHeader, showAfterBall(now, undefined), elfLinksAt(now));
+  return decorateNav(html, cookieHeader, showAfterBall(now, undefined), elfLinksAt(now), undefined, dropOffNavShown(now));
 }
 
 /**
@@ -261,7 +272,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   const isAfterBall = (query?: unknown): boolean => showAfterBall(clock(), query);
   const decorate = (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage): Promise<string> => {
     const now = clock();
-    return decorateNav(html, cookieHeader, showAfterBall(now, query), elfLinksAt(now), page);
+    return decorateNav(html, cookieHeader, showAfterBall(now, query), elfLinksAt(now), page, dropOffNavShown(now));
   };
   // TASK-613: may this view link to Elf Detective School (elfLinksAt, above)?
   const elfLinksOn = (): Promise<boolean> => elfLinksAt(clock());
@@ -292,7 +303,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         // Asked once, for the menu's item and the card alike, so the two always agree.
         const elf = elfLinksAt(now);
         const [html, stage, elfOn] = await Promise.all([
-          decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true, elf),
+          decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true, elf, undefined, dropOffNavShown(now)),
           loadFillStage(),
           elf,
         ]);
@@ -439,7 +450,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
       ]);
       const after = showAfterBall(now, undefined);
       const ball = published && !after;
-      if (!ball && !events && !fundraising && !after && !elf) {
+      const dropOff = dropOffNavShown(now);
+      if (!ball && !events && !fundraising && !after && !elf && !dropOff) {
         res.sendFile(file);
         return;
       }
@@ -448,6 +460,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         if (ball) html = (await import("../ball/nav-link")).addBallNavLink(html);
         if (events) html = await addEventsItems(html);
         if (elf) html = await addElfItems(html);
+        if (dropOff) html = await addDropOffItems(html);
         if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
         if (after) html = addFillFooterLink(html);
         res.type("html").send(html);
@@ -494,6 +507,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         /<div class="sitemap-tree">[\s\S]*?<\/div>/,
         `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen, eventsOn, fundraisingOn, elfOn)}</div>`,
       );
+      // Drop-off points in the menu while the collection is on, as on every other page.
+      if (dropOffNavShown(clock())) html = await addDropOffItems(html);
       // The footer's "Fundraise for us", as on every other page (TASK-545: this page now has it).
       if (fundraisingOn) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
       if (isAfterBall()) html = addFillFooterLink(html);

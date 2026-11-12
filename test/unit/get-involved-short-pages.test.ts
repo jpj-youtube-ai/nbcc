@@ -133,7 +133,9 @@ describe("the menu on a short page", () => {
   it("offers neither while the events switch is off, because both are the 404", async () => {
     state.eventsOn = false;
     const list = navList(await (await get("/get-involved/volunteer")).text());
-    expect(list).not.toContain("/get-involved");
+    // The menu's own Get involved item: Drop-off points (/get-involved/drop-off-points) has its own
+    // dates, not this switch (src/site/dropoff-nav.ts).
+    expect(list).not.toContain('href="/get-involved"');
     expect(list).not.toContain("/whats-on");
   });
 

@@ -212,6 +212,23 @@ ship. Every page now has the same full footer: the seven pages that once had a s
 its footer link to itself. Pages built in code take theirs from the home page (below), so they follow
 the master too.
 
+### Drop-off points in the menu, until after 20 December 2026
+
+Jaimie, 12 November 2026: **Drop-off points** in the main menu, to `/get-involved/drop-off-points`,
+straight after Get involved (Home, About, Get involved, Drop-off points, Elf Detective School,
+Donate, Contact, Supporters), while the Red Bag collection is on. It is added to every page as it
+goes out, like Get involved and Elf Detective School: the site's own files (`src/routes/site.ts`),
+and pages drawn in code (`decorateSitePage`, `src/site/chrome.ts`); not the Festive Ball's own pages,
+which keep their menu (the Ball is over). It shows through Sunday 20 December 2026, UK time, and from Monday
+21 December pages go out without it (`dropOffNavShown`, `src/site/dropoff-nav.ts`). For next year,
+change `DROPOFF_NAV_LAST_DAY` there.
+
+With one more item the menu has its own fit (`DROPOFF_MENU_FIT`), measured in a browser on a page with
+Get involved, Drop-off points and Elf Detective School, every 10px from 681px to 900px and every 40px to
+1320px: one line, Donate in view, nothing scrolling sideways. The words step down only as far as each
+band needs (.8rem to 1180px, .78rem to 900px, .74rem to 760px). On a phone the burger's list is one
+item to a line, unchanged.
+
 ### Every page wears the site's own banner, menu bar and footer (TASK-615)
 
 Every public page gets its banner (the logo, the menu bar and the Donate button) and its footer from

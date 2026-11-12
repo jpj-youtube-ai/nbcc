@@ -156,11 +156,15 @@ describe("while the school is switched on", () => {
     expect(await body("/sitemap.xml")).toContain("<loc>https://nbcc.scot/elf</loc>");
   });
 
-  it.each(MENU_PAGES)("%s offers Elf Detective School in the menu once, straight after Get involved, with the menu's fit", async (path) => {
+  // Straight after Get involved, or after Drop-off points while that is in the menu (Jaimie, 12 November
+  // 2026: Get involved, Drop-off points, Elf Detective School; src/site/dropoff-nav.ts, until 20 December).
+  it.each(MENU_PAGES)("%s offers Elf Detective School in the menu once, after Get involved, with the menu's fit", async (path) => {
     const html = await body(path);
     const list = hrefs(navList(html));
     expect(list.filter((h) => h === "/elf")).toHaveLength(1);
-    expect(list.indexOf("/elf")).toBe(list.indexOf("/get-involved") + 1);
+    const dropOff = list.includes("/get-involved/drop-off-points") ? 1 : 0;
+    if (dropOff) expect(list.indexOf("/get-involved/drop-off-points")).toBe(list.indexOf("/get-involved") + 1);
+    expect(list.indexOf("/elf")).toBe(list.indexOf("/get-involved") + 1 + dropOff);
     expect(navList(html)).toContain(">Elf Detective School</a>");
     expect(count(html, ELF_MENU_FIT)).toBe(1);
     expect(html.indexOf(ELF_MENU_FIT)).toBeLessThan(html.indexOf("</head>"));

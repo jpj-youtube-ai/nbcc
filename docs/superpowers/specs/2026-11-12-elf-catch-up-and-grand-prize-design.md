@@ -241,7 +241,9 @@ Also:
    - When any detective in a family visits a door's place (the find or a visit), that door is **done for every detective in the family**, towards ranks, costumes, presents, graduating and the grand prize.
    - The candy cane stamp, the gold seal and the elf on the door stay with the child who went.
    - So a detective's doors done = the family's cracks, plus the family's visits, plus snow days. The gold seal still counts only that detective's own visits.
-3. **Age.** The rules say the grand prize is judged "taking age into account", but also "We never ask for a real surname, a school or an age." Should each entry ask the detective's age, only for judging and deleted in January (the rules would then say so)? Or is it judged without ages?
+3. **Age. ANSWERED (Jaimie, 12 November):** the entries are judged **without knowing ages**, and NBCC asks the age when it rings the parent.
+   - The entry never asks for an age, and the site never stores one.
+   - The rules' sentence about judging "taking age into account" stays as it is (my call), because age is still weighed on the call.
 4. **Winners.** Is there one winner, or one in each age group, and any runners up? Is anyone told on the site, such as a line on the calendar on Christmas Day?
 5. **The closing time with the clues.** Should families see the hiding place's closing time alongside the clues, so they know their deadline (a small hint), or only once they know the place? Today the site deliberately never tells a family how late a place is open.
 6. **After Christmas.** Should the places, and the photos, appear on the calendar for everyone as a thank you to the businesses? If so, from Christmas Day or from 1 January? And should December's doors, and having a go, stay on into January, or switch off after Christmas?

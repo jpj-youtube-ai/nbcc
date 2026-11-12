@@ -2,7 +2,7 @@
 
 Date: 2026-07-05
 Status: approved (pending spec review)
-Task: TASK-NNN (to be assigned; branch task-claims-gift-aid-pipeline)
+Task: TASK-619 (to be assigned; branch task-claims-gift-aid-pipeline)
 
 ## Problem
 
@@ -114,7 +114,7 @@ eligible (that is the webhook's job).
 ## Workflow notes
 
 - Branch `task-claims-gift-aid-pipeline`; PR title must be prefixed with the assigned
-  `[TASK-NNN]` before merge (squash convention); drive `pr.yml` green; self-merge.
+  `[TASK-619]` before merge (squash convention); drive `pr.yml` green; self-merge.
 - New routes → follow the `/new-route` recipe (router + mount already exist; add the
   handlers + a feature scenario + unit tests). No new config, no infra.
 </content>

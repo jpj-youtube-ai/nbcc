@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AREA_TITLES } from "../../src/admin/whats-new";
 
-// The Notifications screen (TASK-NNN): turning your own phone on, and choosing what buzzes.
+// The Notifications screen (TASK-619): turning your own phone on, and choosing what buzzes.
 
 const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");

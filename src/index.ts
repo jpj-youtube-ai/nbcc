@@ -31,7 +31,7 @@ app.listen(config.PORT, () => {
   startElfWorker();
   // Site analytics: look visitors' towns up in the DB-IP file, when the image has it.
   startPlaceLookups();
-  // TASK-NNN: push new arrivals to the staff phones that have asked for them. Started HERE for the
+  // TASK-619: push new arrivals to the staff phones that have asked for them. Started HERE for the
   // same reason as the two workers above. It does nothing at all until both VAPID keys are real,
   // and every notification is claimed in admin_notified before it goes, so several ECS tasks
   // ticking at once never buzz the same phone twice.

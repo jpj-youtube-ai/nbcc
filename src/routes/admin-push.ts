@@ -6,7 +6,7 @@ import { pushIsConfigured } from "../config/schema";
 import { deleteSubscription, getPrefs, saveSubscription, setPrefs, subscriptionsFor } from "../db/admin-push";
 import { isArea } from "../admin/whats-new";
 
-// Turning phone notifications on, and choosing what buzzes (TASK-NNN).
+// Turning phone notifications on, and choosing what buzzes (TASK-619).
 //
 //   GET    /api/admin/push/key            { publicKey, configured } — what the browser subscribes with
 //   GET    /api/admin/push/subscription   { phones: n } — whether THIS person has any phone on

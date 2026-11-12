@@ -7,7 +7,7 @@ import {
   verifyAdminSession,
 } from "../../src/admin/session";
 
-// How long a signed-in admin stays signed in (TASK-NNN).
+// How long a signed-in admin stays signed in (TASK-619).
 //
 // A browser tab keeps the 8 hours it always had. The admin pinned to a phone's home screen gets
 // 30 days, because iOS shuts a backgrounded web app whenever it likes: without this, a

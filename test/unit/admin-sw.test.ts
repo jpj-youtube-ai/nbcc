@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-// The admin's service worker, and where a tapped notification lands (TASK-NNN).
+// The admin's service worker, and where a tapped notification lands (TASK-619).
 
 const ROOT = resolve(__dirname, "../..");
 const sw = readFileSync(resolve(ROOT, "assets/js/admin/admin-sw.js"), "utf8");

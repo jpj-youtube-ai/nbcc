@@ -3,7 +3,7 @@ import { BURST_CAP, dueNotifications, quietNow, type PendingArea } from "../../s
 import type { NotifyPrefs } from "../../src/admin/push";
 import type { ArrivalItem } from "../../src/admin/whats-new";
 
-// What actually gets sent to a phone (TASK-NNN). Pure decisions only — no database, no network.
+// What actually gets sent to a phone (TASK-619). Pure decisions only — no database, no network.
 //
 // Jaimie asked for a buzz every single time, with no bundling and no quiet hours, and that is the
 // default these tests pin. The switches exist so that changing her mind costs a tap rather than

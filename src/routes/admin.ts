@@ -244,7 +244,7 @@ const loginSchema = z.object({
   // Admin management Phase 3 (TASK-188): a 30-day "remember this device" token, replayed by the
   // front end from localStorage. Optional — its absence is the normal case (2FA required).
   deviceToken: z.string().optional(),
-  // TASK-NNN: true when this is the app pinned to a phone's home screen, which earns the 30-day
+  // TASK-619: true when this is the app pinned to a phone's home screen, which earns the 30-day
   // session instead of 8 hours. Optional, because a browser tab does not send it.
   installed: z.boolean().optional(),
 });

@@ -35,7 +35,7 @@ exports.up = (pgm) => {
       // this counts the wobbles, so a persistently broken one can be found and looked at.
       failures: { type: "integer", notNull: true, default: 0 },
     },
-    { comment: "One phone that has turned admin notifications on (TASK-NNN)." },
+    { comment: "One phone that has turned admin notifications on (TASK-619)." },
   );
 
   pgm.createIndex("admin_push_subscriptions", "user_id");
@@ -56,7 +56,7 @@ exports.up = (pgm) => {
       areas_off: { type: "text[]", notNull: true, default: pgm.func("'{}'::text[]") },
       updated_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
     },
-    { comment: "Per person: bundling, quiet hours and which areas never buzz (TASK-NNN)." },
+    { comment: "Per person: bundling, quiet hours and which areas never buzz (TASK-619)." },
   );
 
   pgm.createTable(
@@ -66,7 +66,7 @@ exports.up = (pgm) => {
       area: { type: "text", notNull: true },
       notified_at: { type: "timestamptz", notNull: true },
     },
-    { comment: "How far each person has been notified, per area. The sweep claims a row (TASK-NNN)." },
+    { comment: "How far each person has been notified, per area. The sweep claims a row (TASK-619)." },
   );
 
   pgm.addConstraint("admin_notified", "admin_notified_pkey", { primaryKey: ["user_id", "area"] });

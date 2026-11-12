@@ -10,7 +10,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
-// The admin pinned to a phone's home screen (TASK-NNN). iOS shuts a backgrounded web app whenever
+// The admin pinned to a phone's home screen (TASK-619). iOS shuts a backgrounded web app whenever
 // it likes, so on the 8-hour session a notification at 2am would buzz the phone, the tap would
 // open the app, and the app would ask for a password instead of showing the donation — the
 // feature failing at its last step. Jaimie chose 30 days on 12 Nov 2026, knowing that anybody

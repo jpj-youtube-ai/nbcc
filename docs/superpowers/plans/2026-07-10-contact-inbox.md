@@ -161,7 +161,7 @@ Expected: PASS (both cases).
 
 ```bash
 git add src/config/schema.ts src/db/contact-pool.ts .env.example test/unit/config-contact-url.test.ts
-git commit -m "[TASK-NNN] contact inbox: config key + isolated pool"
+git commit -m "[TASK-619] contact inbox: config key + isolated pool"
 ```
 
 ---
@@ -253,7 +253,7 @@ Expected: PASS (all six cases).
 
 ```bash
 git add src/contact/schema.ts test/unit/contact-schema.test.ts
-git commit -m "[TASK-NNN] contact inbox: submission schema"
+git commit -m "[TASK-619] contact inbox: submission schema"
 ```
 
 ---
@@ -436,7 +436,7 @@ Expected: applies `create-contact-enquiries`. (In CI this runs against a fresh D
 
 ```bash
 git add package.json migrations-contact src/db/contact.ts
-git commit -m "[TASK-NNN] contact inbox: migration + DB access layer"
+git commit -m "[TASK-619] contact inbox: migration + DB access layer"
 ```
 
 ---
@@ -692,7 +692,7 @@ Expected: PASS — the guard now sees `bootstrap:contact`/`migrate:contact` in t
 
 ```bash
 git add scripts/bootstrap-contact-db.mjs Dockerfile docker-compose.yml .github/workflows/pr.yml .github/workflows/deploy-staging.yml .github/workflows/deploy-prod.yml test/unit/dockerfile-scripts-shipped.test.ts test/unit/bootstrap-contact-url.test.ts
-git commit -m "[TASK-NNN] contact inbox: DB provisioning (bootstrap, Dockerfile, CI, deploy)"
+git commit -m "[TASK-619] contact inbox: DB provisioning (bootstrap, Dockerfile, CI, deploy)"
 ```
 
 ---
@@ -852,7 +852,7 @@ Expected: PASS (no dangling `forwardEnquiry` reference).
 
 ```bash
 git add src/routes/api.ts src/app.ts contact.html features/contact.feature test/unit/contact-endpoint.test.ts test/unit/contact.test.ts
-git commit -m "[TASK-NNN] contact inbox: store submissions, retire external forward"
+git commit -m "[TASK-619] contact inbox: store submissions, retire external forward"
 ```
 
 ---
@@ -962,7 +962,7 @@ Expected: PASS (all cases).
 
 ```bash
 git add assets/js/gmail-reply.js test/unit/gmail-reply.test.ts
-git commit -m "[TASK-NNN] contact inbox: Gmail reply URL builder"
+git commit -m "[TASK-619] contact inbox: Gmail reply URL builder"
 ```
 
 ---
@@ -1180,7 +1180,7 @@ Expected: PASS.
 
 ```bash
 git add src/routes/admin.ts test/unit/admin-contact-routes.test.ts
-git commit -m "[TASK-NNN] contact inbox: admin API routes"
+git commit -m "[TASK-619] contact inbox: admin API routes"
 ```
 
 ---
@@ -1341,7 +1341,7 @@ Expected: all PASS.
 
 ```bash
 git add admin.html assets/js/app.js assets/js/main.js README.md test/unit/contact.test.ts
-git commit -m "[TASK-NNN] contact inbox: admin tab, Gmail reply, honest-save form, README"
+git commit -m "[TASK-619] contact inbox: admin tab, Gmail reply, honest-save form, README"
 ```
 
 ---
@@ -1365,7 +1365,7 @@ git commit -m "[TASK-NNN] contact inbox: admin tab, Gmail reply, honest-save for
 - [ ] **Task 4, Step 6a: SSM parameter (`infra/modules/app/main.tf`).** Copy the `random_password.stories` + `aws_ssm_parameter.stories_db_url` resources to `contact` equivalents (`random_password.contact`, `aws_ssm_parameter.contact_db_url`), assembling the URL with `sslmode=no-verify` exactly as the stories param does (same host/db-name assembly, `contact`/`contact_app`).
 - [ ] **Task 4, Step 6b: task-def secret + IAM (`infra/modules/app/ecs.tf`).** Add a `CONTACT_DATABASE_URL` entry to the task-def `secrets` block next to `STORIES_DATABASE_URL`, AND add the new SSM param's ARN to the `exec_secrets` IAM policy resource list (the three-places gotcha from CLAUDE.md — SSM param + task-def secret + IAM, or the task won't start).
 
-These are infra-only edits; they're validated by the `infra.yml` plan on the PR and applied via the Infra workflow at deploy time (`/ship` applies staging infra when the diff touches `infra/`). Group the commit with Task 4 or as its own `[TASK-NNN] contact inbox: infra (SSM param, task-def secret, IAM)` commit.
+These are infra-only edits; they're validated by the `infra.yml` plan on the PR and applied via the Infra workflow at deploy time (`/ship` applies staging infra when the diff touches `infra/`). Group the commit with Task 4 or as its own `[TASK-619] contact inbox: infra (SSM param, task-def secret, IAM)` commit.
 
 **Placeholder scan:** No TBD/TODO. The two deploy-workflow steps (Task 4 Step 9) and the compose entries (Step 7) are described as "copy the stories step, swap the script name" rather than pasted verbatim — acceptable because the source is an exact, named, in-repo block the implementer copies mechanically; every other code step shows full code.
 

@@ -241,7 +241,7 @@ resource "aws_ecs_task_definition" "app" {
       { name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.stripe_webhook_secret.arn },
       # Cloudflare Turnstile SECRET key (TASK-490). Its ARN is also in exec_secrets above.
       { name = "TURNSTILE_SECRET_KEY", valueFrom = aws_ssm_parameter.turnstile_secret_key.arn },
-      # The VAPID pair for admin phone notifications (TASK-NNN). Both ARNs are also in
+      # The VAPID pair for admin phone notifications (TASK-619). Both ARNs are also in
       # exec_secrets above. The public half is not a secret, but it is injected the same way so
       # the pair is generated, stored and rotated as one thing.
       { name = "VAPID_PUBLIC_KEY", valueFrom = aws_ssm_parameter.vapid_public_key.arn },

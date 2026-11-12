@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
 
-// The admin pinned to a phone's home screen as its own app (TASK-NNN).
+// The admin pinned to a phone's home screen as its own app (TASK-619).
 //
 // Two of these tests look fussy and are not. `display: "standalone"` is what makes iOS treat the
 // pinned page as a web app rather than a bookmark, and a web app is the ONLY thing iOS will deliver

@@ -474,7 +474,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // Shared CSS/JS/fonts/images — the only directory exposed wholesale.
   router.use("/assets", express.static(join(siteRoot, "assets"), { setHeaders: assetHeaders }));
 
-  // The admin's service worker (TASK-NNN), served from the ROOT rather than from under /assets.
+  // The admin's service worker (TASK-619), served from the ROOT rather than from under /assets.
   // A worker may only control pages at or below its own path, so one served from /assets could
   // never control /admin; the Service-Worker-Allowed header is what lets this one widen its
   // scope to /admin from the root. The file itself is still the one in assets/js/admin.

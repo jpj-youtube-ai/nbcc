@@ -20,7 +20,7 @@ Copied verbatim from the spec + CLAUDE.md; every task below implicitly includes 
 - **Every change is a green PR with tests** (golden rule 1 + 5): Vitest for logic/markup, Cucumber for the served page. Run `npm run lint && npm run build && npm run test:unit` before pushing.
 - **Local environment has no Docker/Postgres**, so BDD (`npm run test:bdd`, needs the server + DB) **cannot run locally** — it is verified by CI's `pr.yml`. The portable **local** gate for the clean URL is the existing static `test/unit/clean-urls.test.ts` (parses `_redirects`, no server). Extend its `URL_MAP` for `/my-story`; keep the feature files correct for CI.
 - **README.md updated in the same PR** (golden rule 7).
-- **Branch `task-<key>-<slug>`, PR title `[TASK-NNN]`, squash-merge** — number assigned by the board at claim time.
+- **Branch `task-<key>-<slug>`, PR title `[TASK-619]`, squash-merge** — number assigned by the board at claim time.
 - **Identifier consent opt-ins default OFF** (data minimisation). Email/phone labelled "never published".
 
 ---
@@ -142,7 +142,7 @@ Expected: PASS — the `/my-story` rule + page + title are all present. (BDD `fe
 
 ```bash
 git add my-story.html _redirects features/my-story.feature features/site.feature
-git commit -m "[TASK-NNN] My Story: page shell, intro and clean URL (REQ-NNN)"
+git commit -m "[TASK-619] My Story: page shell, intro and clean URL (REQ-NNN)"
 ```
 
 ---
@@ -259,7 +259,7 @@ Expected: PASS — all structure/copy/accessibility assertions green.
 
 ```bash
 git add my-story.html test/unit/my-story.test.ts
-git commit -m "[TASK-NNN] My Story: 3-step form markup with consent + safeguarding fields (REQ-NNN)"
+git commit -m "[TASK-619] My Story: 3-step form markup with consent + safeguarding fields (REQ-NNN)"
 ```
 
 ---
@@ -309,7 +309,7 @@ Expected: PASS + clean lint.
 
 ```bash
 git add assets/css/styles.css test/unit/my-story.test.ts
-git commit -m "[TASK-NNN] My Story: token-only page styles (REQ-NNN)"
+git commit -m "[TASK-619] My Story: token-only page styles (REQ-NNN)"
 ```
 
 ---
@@ -406,7 +406,7 @@ Expected: PASS across the board (new + existing 1296 tests), clean lint, clean b
 
 ```bash
 git add assets/js/main.js test/unit/my-story.test.ts
-git commit -m "[TASK-NNN] My Story: guided-step controller with consent reveals and preview submit (REQ-NNN)"
+git commit -m "[TASK-619] My Story: guided-step controller with consent reveals and preview submit (REQ-NNN)"
 ```
 
 ---
@@ -441,7 +441,7 @@ Expected: PASS — footer test green on all pages, my-story tests green.
 
 ```bash
 git add *.html README.md test/unit/my-story.test.ts
-git commit -m "[TASK-NNN] My Story: link from footer and document the route (REQ-NNN)"
+git commit -m "[TASK-619] My Story: link from footer and document the route (REQ-NNN)"
 ```
 
 ---
@@ -450,7 +450,7 @@ git commit -m "[TASK-NNN] My Story: link from footer and document the route (REQ
 
 - [ ] Run `npm run lint && npm run build && npm run test:unit` — all green.
 - [ ] Bring up the server + DB and run BDD: `features/my-story.feature` + `features/site.feature` green.
-- [ ] Open the PR (`[TASK-NNN]` title), watch `pr.yml` to green, squash-merge with `--delete-branch`.
+- [ ] Open the PR (`[TASK-619]` title), watch `pr.yml` to green, squash-merge with `--delete-branch`.
 - [ ] Use `superpowers:verification-before-completion` before claiming done.
 
 ## Design-skill pass (repo UI rule)

@@ -49,7 +49,7 @@
   var GI_VIEW = "get-involved";
   var GI_SECTIONS = ["signups", "events", "tickets", "emails", "settings"];
   // Menu links with no permission behind them, shown to everyone. Overview is the landing screen;
-  // Notifications (TASK-NNN) is about this person's own phone, and what they actually receive is
+  // Notifications (TASK-619) is about this person's own phone, and what they actually receive is
   // filtered by their permissions when it is sent, not by whether they can open this screen.
   var UNGATED_VIEWS = ["overview", "notifications"];
   var GI_OLD_VIEWS = { events: "events", fundraising: "signups" }; // old tab -> the section it opens
@@ -98,7 +98,7 @@
     return rolePresetPermissions(u.role);
   }
 
-  // TASK-NNN: true when the admin is running as the app pinned to a phone's home screen rather
+  // TASK-619: true when the admin is running as the app pinned to a phone's home screen rather
   // than in a browser tab. iOS reports it through navigator.standalone; everything else through
   // the display-mode media query, which matches the manifest's "standalone".
   function isInstalledApp() {
@@ -191,7 +191,7 @@
     if (email && email.focus) email.focus();
   }
 
-  // TASK-NNN: where a tapped notification wants to land. Captured at load, BEFORE any sign-in,
+  // TASK-619: where a tapped notification wants to land. Captured at load, BEFORE any sign-in,
   // because a 2am tap on a phone whose session has lapsed shows the password box first and the
   // destination must survive that. The admin has no URL routing of its own, so this is all of it:
   // read it once, strip it from the address bar so a refresh does not re-trigger it, and apply it
@@ -239,7 +239,7 @@
     registerPushWorker();
   }
 
-  // TASK-NNN: the service worker that receives notifications. Registered only once somebody is
+  // TASK-619: the service worker that receives notifications. Registered only once somebody is
   // signed in — there is nothing to notify an anonymous visitor about — and from /admin-sw.js at
   // the root, because a worker served from /assets could never control /admin.
   function registerPushWorker() {
@@ -747,7 +747,7 @@
     });
   });
 
-  // ---- Notifications on this phone (TASK-NNN) ----
+  // ---- Notifications on this phone (TASK-619) ----
   // Every area a notification can be about, with the wording the admin's own menu uses. Mirrors
   // AREA_TITLES in src/admin/whats-new.ts; the server filters by permission at send time, so a
   // switch here that somebody cannot see anyway is harmless, just pointless.
@@ -777,14 +777,20 @@
       unsupported.textContent = "This browser cannot show notifications. On an iPhone, add the admin to your home screen and open it from there.";
       unsupported.hidden = false;
       setup.hidden = true;
+      el("pushEnable").disabled = true;
     } else if (!isInstalledApp() && /iPhone|iPad/i.test(window.navigator.userAgent || "")) {
       // An iPhone will not deliver a notification to a Safari tab, only to a home-screen app, so
       // saying this BEFORE the button is the difference between a setting that works and one
       // that silently never fires.
       unsupported.textContent = "Add the admin to your home screen first, then open it from that icon. An iPhone only sends notifications to the app, never to a Safari tab.";
       unsupported.hidden = false;
+      // Pressing it here would ask iOS for permission in a Safari tab, which it only grants once
+      // ever — spending the single prompt on a context that can never receive a notification.
+      el("pushEnable").disabled = true;
     } else {
       unsupported.hidden = true;
+      setup.hidden = false;
+      el("pushEnable").disabled = false;
     }
 
     authFetch("/api/admin/push/subscription").then(j).then(function (d) {

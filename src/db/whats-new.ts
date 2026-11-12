@@ -72,7 +72,7 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag" | "
   fundraising: { db: "main", sql: "SELECT max(created_at) AS at FROM fundraisers WHERE created_at > $1" },
 };
 
-// ---- The same arrivals, itemised, for phone notifications (TASK-NNN) ----
+// ---- The same arrivals, itemised, for phone notifications (TASK-619) ----
 //
 // A New pill only needs the latest time. A notification has to say what each arrival WAS, so
 // these are the sibling queries that return the rows rather than a max(). Same tables, same

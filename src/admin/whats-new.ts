@@ -47,7 +47,7 @@ export function isArea(value: unknown): value is Area {
   return AREAS.some((a) => a.area === value);
 }
 
-// ---- What a phone notification says about an arrival (TASK-NNN) ----
+// ---- What a phone notification says about an arrival (TASK-619) ----
 //
 // A New pill only needs to know THAT something arrived. A notification has to say what, in one
 // line read off a lock screen — and deliberately without naming anybody: Jaimie's phone sits on a

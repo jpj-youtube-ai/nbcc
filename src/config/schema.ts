@@ -250,7 +250,7 @@ export const configSchema = z.object({
   // a CloudWatch alarm on the absence of a success metric (infra/modules/app/backups.tf), because
   // an alert that shares fate with the thing it watches is not an alert.
 
-  // ---- Admin phone notifications (TASK-NNN) ----
+  // ---- Admin phone notifications (TASK-619) ----
   // The VAPID key pair that signs a push to a staff phone (RFC 8292). The PUBLIC key also goes to
   // the browser, which uses it to create the subscription; the PRIVATE one never leaves the task.
   //

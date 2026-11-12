@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { configSchema, productionConfigProblems, pushIsConfigured, vapidSubject } from "../../src/config/schema";
 
-// The VAPID keys for admin phone notifications (TASK-NNN).
+// The VAPID keys for admin phone notifications (TASK-619).
 //
 // They default to empty like the Turnstile pair, and for the same reason: Terraform creates the
 // SSM parameters holding REPLACE_ME and the real keys are pasted in out of band, so CI, a laptop

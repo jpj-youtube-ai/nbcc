@@ -6888,7 +6888,7 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
-## The admin as a phone app, with notifications (TASK-NNN)
+## The admin as a phone app, with notifications (TASK-619)
 
 The admin can be pinned to a phone's home screen as its own app, and will then push a notification
 whenever something new arrives. It is the SAME "new" as the New pills above — the same areas, the

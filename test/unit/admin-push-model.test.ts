@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { prefsFromRow, subscriptionRow } from "../../src/admin/push";
 
-// What we store about a phone, and what each person wants on it (TASK-NNN).
+// What we store about a phone, and what each person wants on it (TASK-619).
 //
 // Unit tests stay database-free (golden rule 5), so these cover the two pure mappings either side
 // of the SQL: browser subscription in, row out; row out of the database, settings in.

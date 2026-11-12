@@ -152,7 +152,7 @@ resource "aws_ssm_parameter" "turnstile_secret_key" {
   lifecycle { ignore_changes = [value] }
 }
 
-# The VAPID pair that signs push notifications to staff phones (TASK-NNN). Both created holding
+# The VAPID pair that signs push notifications to staff phones (TASK-619). Both created holding
 # REPLACE_ME; the real pair is generated once and pasted in out of band (the recipe is in
 # .env.example), and the apply never overwrites it. Until then pushIsConfigured() is false and the
 # sweep never starts, so nobody's phone buzzes and nothing else is affected.

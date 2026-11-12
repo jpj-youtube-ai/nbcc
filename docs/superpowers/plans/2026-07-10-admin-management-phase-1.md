@@ -87,7 +87,7 @@ Expected: migration applies; tsc clean.
 
 ```bash
 git add migrations
-git commit -m "[TASK-NNN] admin mgmt: user lifecycle columns (status, invited_at, last_login_at)"
+git commit -m "[TASK-619] admin mgmt: user lifecycle columns (status, invited_at, last_login_at)"
 ```
 
 ---
@@ -225,7 +225,7 @@ export function adminActionLink(baseUrl: string, path: "/invite" | "/reset", tok
 ```
 
 - [ ] **Step 4: Run test + build** — `npx vitest run test/unit/admin-tokens.test.ts` PASS; `npm run build` clean.
-- [ ] **Step 5: Commit** — `[TASK-NNN] admin mgmt: invite/reset action tokens`.
+- [ ] **Step 5: Commit** — `[TASK-619] admin mgmt: invite/reset action tokens`.
 
 ---
 
@@ -280,7 +280,7 @@ describe("last-admin guard", () => {
 - [ ] **Step 3: Implement `src/db/admin-users.ts`.** Extract the guard decision as a **pure** exported function `wouldOrphanAdmins(target, change, enabledAdminCount)` so it is unit-testable without a DB; the DB helpers call `countEnabledAdmins()` and pass the count in. Mirror `src/db/admin.ts`'s `writeWithAudit` usage for every mutating function (actor threaded through, one audit row per write). Return `ManagedUser` shapes (never select `password_hash` into the returned object). Full code (write it; do not abbreviate) covering all Interfaces above — model the SQL and the `writeWithAudit` calls on `submitClaimBatch`/`markGasdsClaimed` in `src/db/admin.ts`, and the `pg` unique-violation handling (`err.code === "23505"` → `DuplicateEmailError`).
 
 - [ ] **Step 4: Run test + build** — guard test PASS; `npm run build` clean.
-- [ ] **Step 5: Commit** — `[TASK-NNN] admin mgmt: user CRUD + last-admin guard (audited)`.
+- [ ] **Step 5: Commit** — `[TASK-619] admin mgmt: user CRUD + last-admin guard (audited)`.
 
 ---
 
@@ -301,7 +301,7 @@ describe("last-admin guard", () => {
 - [ ] **Step 2: run → FAIL.**
 - [ ] **Step 3: implement** the four Zod schemas with the exact bounds above.
 - [ ] **Step 4: run → PASS; build clean.**
-- [ ] **Step 5: Commit** — `[TASK-NNN] admin mgmt: user request schemas`.
+- [ ] **Step 5: Commit** — `[TASK-619] admin mgmt: user request schemas`.
 
 ---
 
@@ -331,7 +331,7 @@ describe("last-admin guard", () => {
 
 - [ ] **Step 4: Implement `src/routes/admin-users.ts`.** Full handlers per Interfaces. Use `const claims = authorizeAdmin(req, res, "admin"); if (!claims) return;` for the gated routes and `actorOf(claims)` as the audit actor. Rate-limit `/forgot` and `/set-password` with `createRateLimiter`. Never log tokens/passwords. Mount `app.use(adminUsersRouter)` in `src/app.ts` next to the other routers.
 
-- [ ] **Step 5: run test + build + lint → all pass. Commit** — `[TASK-NNN] admin mgmt: user-management + forgot/reset endpoints`.
+- [ ] **Step 5: run test + build + lint → all pass. Commit** — `[TASK-619] admin mgmt: user-management + forgot/reset endpoints`.
 
 ---
 
@@ -348,7 +348,7 @@ describe("last-admin guard", () => {
 - [ ] **Step 2: failing test** — a `disabled` user with a correct password gets 401 (not a session); a successful login calls `touchLastLogin`. (Mock the db; mirror the existing login test.)
 - [ ] **Step 3: run → FAIL.**
 - [ ] **Step 4: implement** — in `postLogin`, after the password verifies, reject when `status === "disabled" || status === "invited"` (return the same generic 401 as a bad password — no enumeration), else `await touchLastLogin(user.id)` and issue the session as today.
-- [ ] **Step 5: run → PASS; full `npm run test:unit`. Commit** — `[TASK-NNN] admin mgmt: block disabled/invited logins, stamp last_login`.
+- [ ] **Step 5: run → PASS; full `npm run test:unit`. Commit** — `[TASK-619] admin mgmt: block disabled/invited logins, stamp last_login`.
 
 ---
 
@@ -364,7 +364,7 @@ describe("last-admin guard", () => {
 - [ ] **Step 1:** Create `set-password.html` — a standalone page (mirror `portal.html`'s standalone head + brand styling, no public nav): a password field + confirm, honest-save (success only on 200), inline error. Both `/invite` and `/reset` use this one page (the token's `purpose` differs but the accept flow is identical: set a password).
 - [ ] **Step 2:** Add to `_redirects`: `/invite  /set-password.html  200` and `/reset  /set-password.html  200` (and the canonical `301!` lines); add `set-password.html` to the `Dockerfile` COPY list (the `dockerfile-site-assets` guard enforces this).
 - [ ] **Step 3:** `npm run test:unit` (the dockerfile-site-assets + copy-rules guards must stay green) + `npm run build`.
-- [ ] **Step 4: Commit** — `[TASK-NNN] admin mgmt: set-password page for invite/reset`.
+- [ ] **Step 4: Commit** — `[TASK-619] admin mgmt: set-password page for invite/reset`.
 
 ---
 
@@ -381,7 +381,7 @@ describe("last-admin guard", () => {
 - [ ] **Step 2: app.js** — add `else if (name === "team") loadTeam();` to `selectView`; implement `loadTeam()` (GET `/api/admin/users` → table: Name, Email, Role select, Status, Last login, actions [Reset password, Disable/Enable, Remove]); wire the invite form (POST); wire role change (PATCH `{role}`), status toggle (PATCH `{status}`), reset (POST `/:id/reset`), remove (DELETE, with confirm). Use `H.escapeHtml` on every interpolated value; gate all write controls behind `H.roleCan(currentRole, "admin")`. Show a 409 `last_admin` error inline ("this is the last admin — promote someone else first"). This is DOM glue (not unit-tested); cross-check every id against admin.html in the report.
 - [ ] **Step 3: features/admin-users.feature** — scenarios: invite a user (201 + an email would be sent); accept via set-password then log in; forgot-password returns 200 for unknown + known; admin disables a user and their login is blocked; a non-admin gets 403 from `/api/admin/users`; the last-admin guard returns 409. Mirror existing `features/*.feature` step style (`@db` where a real DB is needed).
 - [ ] **Step 4: README** — document the Team tab, the invite/reset flow, the new `/api/admin/users*` + `/api/admin/forgot` + `/api/admin/set-password` routes, and the `/invite` /`/reset` pages.
-- [ ] **Step 5:** `npm run lint && npm run build && npm run test:unit` all green. Commit — `[TASK-NNN] admin mgmt: Team view, BDD, README`.
+- [ ] **Step 5:** `npm run lint && npm run build && npm run test:unit` all green. Commit — `[TASK-619] admin mgmt: Team view, BDD, README`.
 
 ---
 

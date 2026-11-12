@@ -9,7 +9,7 @@ import {
   vapidAuthHeader,
 } from "../../src/admin/web-push";
 
-// Web Push encryption, written from the RFCs (TASK-NNN).
+// Web Push encryption, written from the RFCs (TASK-619).
 //
 // There is no `web-push` package in this repo and there cannot be: the npm registry is blocked on
 // the owner's machine, which is why the AWS SigV4 signer and the QR encoder are hand-written too.

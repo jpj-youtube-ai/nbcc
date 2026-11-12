@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AREAS, arrivalLine, type Area } from "../../src/admin/whats-new";
 
-// What a notification actually says (TASK-NNN).
+// What a notification actually says (TASK-619).
 //
 // The New pills only ever need to know THAT something arrived. A notification has to say what,
 // in a line somebody reads on a lock screen without unlocking the phone — and, deliberately,

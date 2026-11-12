@@ -1,5 +1,5 @@
 @admin @notifications
-Feature: Phone notifications are behind the admin session (TASK-NNN)
+Feature: Phone notifications are behind the admin session (TASK-619)
   Turning notifications on, listing your phones and changing your settings all need a signed-in
   admin. Nobody else can reach them, and trying does not disturb the site.
 

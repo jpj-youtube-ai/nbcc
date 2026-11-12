@@ -5,6 +5,7 @@ import { ensureElfDoors, findElfDoorByPosterCode, getElfDoor, listElfDoors } fro
 import { getPractice, markPracticeFound, clearPractice, inTransaction } from "./elf-practice";
 import type { MadePicture } from "./fundraiser-pictures";
 import { closingInstant, doorInstant, DOOR_COUNT, eveningFor, type Door } from "../elf/calendar";
+import type { FamilyKnowledge } from "../elf/catch-up";
 import { doorSeason, emptyDoor, staffEveningOf, type DoorSetup } from "../elf/door-setup";
 import { doorState, openedAt, type DoorFacts, type DoorState } from "../elf/doors";
 import { isUsableSecretWord } from "../elf/claim";
@@ -259,25 +260,45 @@ interface GuessRow {
 
 const savedGuess = (r: GuessRow): SavedGuess => ({ text: r.text, norm: r.norm, at: r.saved_at, late: r.late === true });
 
-/** Saves a family's guess for a door, replacing its earlier one. */
+/** Saves a family's guess on the night for a door, replacing its earlier one. A go is never replaced:
+ *  the update runs only on a guess from the night. */
 export async function saveGuess(year: number, door: number, familyId: number, guess: { text: string; norm: string }, at: Date): Promise<void> {
   await pool.query(
     `INSERT INTO elf_guesses (year, door, family_id, text, norm, saved_at) VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (year, door, family_id) DO UPDATE SET text = EXCLUDED.text, norm = EXCLUDED.norm, saved_at = EXCLUDED.saved_at`,
+     ON CONFLICT (year, door, family_id) DO UPDATE SET text = EXCLUDED.text, norm = EXCLUDED.norm, saved_at = EXCLUDED.saved_at
+       WHERE NOT elf_guesses.late`,
     [year, door, familyId, guess.text, guess.norm, at],
   );
 }
 
+/** Saves a family's go at a door: one insert, which never overwrites anything. "already" when no row
+ *  comes back, because the family has a guess at the door, from the night or a go; so two tabs or two
+ *  phones locking in at the same moment save one go between them. */
+export async function saveLateGuess(
+  year: number,
+  door: number,
+  familyId: number,
+  guess: { text: string; norm: string },
+  at: Date,
+): Promise<"saved" | "already"> {
+  const r = await pool.query<{ family_id: number }>(
+    `INSERT INTO elf_guesses (year, door, family_id, text, norm, saved_at, late) VALUES ($1, $2, $3, $4, $5, $6, true)
+     ON CONFLICT (year, door, family_id) DO NOTHING RETURNING family_id`,
+    [year, door, familyId, guess.text, guess.norm, at],
+  );
+  return r.rows.length > 0 ? "saved" : "already";
+}
+
 /** A family's guesses, by door. */
 export async function familyGuesses(year: number, familyId: number): Promise<Map<number, SavedGuess>> {
-  const r = await pool.query<GuessRow>("SELECT door, text, norm, saved_at FROM elf_guesses WHERE year = $1 AND family_id = $2", [year, familyId]);
+  const r = await pool.query<GuessRow>("SELECT door, text, norm, saved_at, late FROM elf_guesses WHERE year = $1 AND family_id = $2", [year, familyId]);
   return new Map(r.rows.map((row) => [row.door, savedGuess(row)]));
 }
 
 /** Every guess for a door, leaving removed families out. */
 export async function doorGuesses(year: number, door: number): Promise<{ familyId: number; guess: SavedGuess }[]> {
   const r = await pool.query<GuessRow>(
-    `SELECT g.family_id, g.text, g.norm, g.saved_at FROM elf_guesses g
+    `SELECT g.family_id, g.text, g.norm, g.saved_at, g.late FROM elf_guesses g
        JOIN elf_families f ON f.id = g.family_id
       WHERE g.year = $1 AND g.door = $2 AND f.removed_at IS NULL`,
     [year, door],
@@ -397,6 +418,17 @@ export async function familyVisits(
     [year, familyId],
   );
   return r.rows.map((row) => ({ door: row.door as Door | 0, detectiveId: Number(row.detective_id), countsFrom: row.counts_from, found: row.found }));
+}
+
+/** What a family has done, door by door: its guesses, from the night or a go, and every door where
+ *  one of its detectives has typed the tag's word (the find or a visit), whether or not it counts
+ *  yet. The two reads run at once. */
+export async function familyKnowledge(year: number, familyId: number): Promise<FamilyKnowledge> {
+  const [guesses, visits] = await Promise.all([
+    familyGuesses(year, familyId),
+    pool.query<{ door: number }>("SELECT DISTINCT door FROM elf_visits WHERE year = $1 AND family_id = $2", [year, familyId]),
+  ]);
+  return { guesses, typed: new Set(visits.rows.map((row) => row.door)) };
 }
 
 /** The name parts of the detectives who found the door's elf, leaving a removed family out. */

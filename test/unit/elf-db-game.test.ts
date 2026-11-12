@@ -24,6 +24,7 @@ import {
   familyDoorsDone,
   familyGuesses,
   familyHasWon,
+  familyKnowledge,
   familyPhoto,
   familyVisits,
   familyWordTries,
@@ -40,6 +41,7 @@ import {
   runOf,
   runsFor,
   saveGuess,
+  saveLateGuess,
   sendElfPhoto,
   takeDownOwnPhoto,
   takeWordTry,
@@ -421,6 +423,9 @@ describe("the loaders", () => {
 });
 
 describe("guesses", () => {
+  /** The columns a guess read selects: everything before its FROM. */
+  const selected = (sql: string) => sql.slice(0, sql.indexOf(" FROM elf_guesses"));
+
   it("upserts a guess", async () => {
     await saveGuess(2026, 7, 3, { text: "The Cone", norm: "the cone" }, FIVE_31);
     const [sql, params] = query.mock.calls[0];
@@ -429,17 +434,132 @@ describe("guesses", () => {
     expect(params).toEqual([2026, 7, 3, "The Cone", "the cone", FIVE_31]);
   });
 
+  it("never lets the night's save overwrite a go", async () => {
+    await saveGuess(2026, 7, 3, { text: "The Cone", norm: "the cone" }, FIVE_31);
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("WHERE NOT elf_guesses.late");
+    // The condition is the update's own, so a family's first guess is still saved.
+    expect(sql.indexOf("WHERE NOT elf_guesses.late")).toBeGreaterThan(sql.indexOf("DO UPDATE SET"));
+  });
+
   it("maps a family's guesses by door", async () => {
-    query.mockResolvedValueOnce({ rows: [{ door: 7, text: "The Cone", norm: "the cone", saved_at: FIVE_31 }] });
+    query.mockResolvedValueOnce({ rows: [{ door: 7, text: "The Cone", norm: "the cone", saved_at: FIVE_31, late: false }] });
     const m = await familyGuesses(2026, 3);
     expect(m.get(7)).toEqual({ text: "The Cone", norm: "the cone", at: FIVE_31, late: false });
   });
 
-  it("leaves removed families out of a door's guesses", async () => {
-    query.mockResolvedValueOnce({ rows: [{ family_id: 3, text: "The Cone", norm: "the cone", saved_at: FIVE_31 }] });
+  it("reads whether each of a family's guesses is a go", async () => {
+    query.mockResolvedValueOnce({ rows: [{ door: 6, text: "Corner Bakehouse", norm: "cornerbakehouse", saved_at: SIX_10, late: true }] });
+    const m = await familyGuesses(2026, 3);
+    expect(m.get(6)).toEqual({ text: "Corner Bakehouse", norm: "cornerbakehouse", at: SIX_10, late: true });
+    expect(selected(String(query.mock.calls[0][0]))).toMatch(/\blate\b/);
+  });
+
+  it("leaves removed families out of a door's guesses, and reads whether each is a go", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        { family_id: 3, text: "The Cone", norm: "the cone", saved_at: FIVE_31, late: false },
+        { family_id: 4, text: "Corner Bakehouse", norm: "cornerbakehouse", saved_at: SIX_10, late: true },
+      ],
+    });
     const list = await doorGuesses(2026, 7);
-    expect(String(query.mock.calls[0][0])).toContain("removed_at IS NULL");
-    expect(list).toEqual([{ familyId: 3, guess: { text: "The Cone", norm: "the cone", at: FIVE_31, late: false } }]);
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("removed_at IS NULL");
+    expect(selected(sql)).toMatch(/\bg\.late\b/);
+    expect(list).toEqual([
+      { familyId: 3, guess: { text: "The Cone", norm: "the cone", at: FIVE_31, late: false } },
+      { familyId: 4, guess: { text: "Corner Bakehouse", norm: "cornerbakehouse", at: SIX_10, late: true } },
+    ]);
+  });
+});
+
+describe("saveLateGuess", () => {
+  // A go at door 7, made the evening after its place was shown.
+  const NEXT_EVENING = at("2026-12-08T18:10:00Z");
+  const go = { text: "Corner Bakehouse", norm: "cornerbakehouse" };
+
+  it("saves a go with one insert that never overwrites a guess, late written as the literal true", async () => {
+    query.mockResolvedValueOnce({ rows: [{ family_id: 3 }], rowCount: 1 });
+    expect(await saveLateGuess(2026, 7, 3, go, NEXT_EVENING)).toBe("saved");
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, params] = query.mock.calls[0];
+    const s = String(sql);
+    expect(s).toContain("INSERT INTO elf_guesses");
+    expect(s).toContain("ON CONFLICT (year, door, family_id) DO NOTHING");
+    expect(s).toContain("RETURNING");
+    expect(s).not.toContain("DO UPDATE");
+    // late takes the literal true in its own column's place, never a value from the params.
+    const [, columns, values] = /INSERT INTO elf_guesses \(([^)]*)\) VALUES \(([^)]*)\)/.exec(s)!;
+    const items = (list: string) => list.split(",").map((item) => item.trim());
+    expect(items(values)[items(columns).indexOf("late")]).toBe("true");
+    expect(params).toEqual([2026, 7, 3, "Corner Bakehouse", "cornerbakehouse", NEXT_EVENING]);
+  });
+
+  it("answers already when no row comes back: the family has a guess at the door", async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    expect(await saveLateGuess(2026, 7, 3, go, NEXT_EVENING)).toBe("already");
+  });
+
+  it("saves exactly one go when two tabs lock in at the same moment, and the other answers already", async () => {
+    // A pretend elf_guesses, kept as Postgres keeps it: the primary key lets one row in, and on a
+    // conflict DO NOTHING writes nothing and answers no row (an upsert would overwrite the row).
+    const keys = new Set<string>();
+    const written: unknown[][] = [];
+    query.mockImplementation(async (sql: string, params: unknown[]) => {
+      const key = params.slice(0, 3).join("/");
+      if (keys.has(key) && /DO NOTHING/.test(String(sql))) return { rows: [], rowCount: 0 };
+      keys.add(key);
+      written.push(params);
+      return { rows: [{ family_id: params[2] }], rowCount: 1 };
+    });
+    const tabs = await Promise.all([
+      saveLateGuess(2026, 7, 3, go, NEXT_EVENING),
+      saveLateGuess(2026, 7, 3, { text: "The Example Bakehouse", norm: "examplebakehouse" }, NEXT_EVENING),
+    ]);
+    // Either tab may get there first, so the two answers are compared sorted.
+    expect([...tabs].sort()).toEqual(["already", "saved"]);
+    expect(written).toHaveLength(1);
+  });
+});
+
+describe("familyKnowledge", () => {
+  /** The two reads run at once, so each is answered by its SQL, never by the order they are sent in. */
+  function knowledgeDb(o: { guesses: Record<string, unknown>[]; visits: Record<string, unknown>[] }) {
+    query.mockImplementation(async (sql: string) => {
+      const s = String(sql);
+      if (/FROM elf_guesses/.test(s)) return { rows: o.guesses };
+      if (/FROM elf_visits/.test(s)) return { rows: o.visits };
+      return { rows: [] };
+    });
+  }
+
+  it("answers the practice door's guess under door 0, and door 0 as typed from its visits", async () => {
+    knowledgeDb({
+      guesses: [{ door: 0, text: "Corner Bakehouse", norm: "cornerbakehouse", saved_at: FIVE_31, late: false }],
+      visits: [{ door: 0 }],
+    });
+    const k = await familyKnowledge(0, 3);
+    expect([...k.guesses]).toEqual([[0, { text: "Corner Bakehouse", norm: "cornerbakehouse", at: FIVE_31, late: false }]]);
+    expect([...k.typed]).toEqual([0]);
+    expect(query).toHaveBeenCalledTimes(2);
+    for (const c of query.mock.calls) expect(c[1]).toEqual([0, 3]);
+  });
+
+  it("holds every door a detective of the family typed the word at, whether or not the visit counts yet", async () => {
+    knowledgeDb({ guesses: [], visits: [{ door: 3 }, { door: 7 }] });
+    const k = await familyKnowledge(2026, 3);
+    expect(k.guesses.size).toBe(0);
+    expect([...k.typed].sort((a, b) => a - b)).toEqual([3, 7]);
+    const visits = String(query.mock.calls.find((c) => /FROM elf_visits/.test(String(c[0])))![0]);
+    expect(visits).toContain("SELECT DISTINCT door FROM elf_visits WHERE year = $1 AND family_id = $2");
+    expect(visits).not.toContain("counts_from");
+  });
+
+  it("sends both reads before either answers", async () => {
+    knowledgeDb({ guesses: [], visits: [] });
+    const reading = familyKnowledge(2026, 3);
+    expect(query).toHaveBeenCalledTimes(2);
+    await reading;
   });
 });
 

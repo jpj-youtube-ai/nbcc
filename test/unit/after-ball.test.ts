@@ -83,6 +83,18 @@ vi.mock("../../src/ball/preview-access", () => ({
   holdsPreviewCookie: async () => state.preview,
   previewSecret: () => "an-invented-secret",
 }));
+// A thank you that will not draw, when a test asks for one.
+const drawing = vi.hoisted(() => ({ fail: false }));
+vi.mock("../../src/ball/thank-you-page", async (orig) => {
+  const real = await orig<typeof import("../../src/ball/thank-you-page")>();
+  return {
+    ...real,
+    renderBallThankYou: (...a: Parameters<typeof real.renderBallThankYou>) => {
+      if (drawing.fail) throw new Error("a page that will not draw");
+      return real.renderBallThankYou(...a);
+    },
+  };
+});
 
 import { AFTER_BALL_AT, afterBall, showAfterBall } from "../../src/site/after-ball";
 import { createSiteRouter } from "../../src/routes/site";
@@ -437,6 +449,22 @@ describe("the Festive Ball's guest details and thank you", () => {
     expect(navList(on)).toContain('<li><a href="/get-involved">Get involved</a></li>');
     state.eventsOn = false;
     expect(navList(await body(path))).not.toContain('href="/get-involved"');
+  });
+
+  // It waits for the menu's extras before it goes out, so a thank you that fails to draw must still be
+  // an answer: a plain 500, never cached, rather than a rejected promise that would take the server down.
+  it("answers 500, never a promise left to reject, when the thank you will not draw", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    drawing.fail = true;
+    try {
+      const r = await get("/ball/thank-you");
+      expect(r.status).toBe(500);
+      expect(r.headers.get("cache-control")).toBe("no-store");
+      expect(await r.text()).toBe("Something went wrong just now. Please try again in a few minutes.");
+    } finally {
+      drawing.fail = false;
+      logged.mockRestore();
+    }
   });
 });
 

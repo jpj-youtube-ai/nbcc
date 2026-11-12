@@ -23,6 +23,30 @@ vi.mock("../../src/routes/site", () => ({
   },
 }));
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
+// A page that will not draw, when a test asks for one (TASK-615: the route answers 500, never a
+// promise left to reject).
+const drawing = vi.hoisted(() => {
+  const state = { fail: false };
+  const breakable =
+    <A extends unknown[]>(draw: (...a: A) => string) =>
+    (...a: A): string => {
+      if (state.fail) throw new Error("a page that will not draw");
+      return draw(...a);
+    };
+  return { state, breakable };
+});
+vi.mock("../../src/elf/pages/rules", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/pages/rules")>();
+  return { ...real, renderRulesPage: drawing.breakable(real.renderRulesPage) };
+});
+vi.mock("../../src/elf/pages/sign-in", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/pages/sign-in")>();
+  return { ...real, renderSignInPage: drawing.breakable(real.renderSignInPage), renderWelcomePage: drawing.breakable(real.renderWelcomePage) };
+});
+vi.mock("../../src/elf/pages/join", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/pages/join")>();
+  return { ...real, renderJoinPage: drawing.breakable(real.renderJoinPage) };
+});
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
 import { elfRouter } from "../../src/routes/elf";
@@ -103,6 +127,26 @@ describe("the private preview", () => {
       expect(r.body, path).toContain("<!-- dressed --></footer>");
     }
     expect(dressed.cookies).toEqual([cookie, cookie, cookie, cookie]);
+  });
+
+  // TASK-615: these pages now wait for the menu's extras before they go out, so a page that fails to
+  // draw must still be an answer: a plain 500, never cached, rather than a rejected promise that
+  // would take the whole server down.
+  it("answers 500, never a promise left to reject, when a page will not draw", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    drawing.state.fail = true;
+    try {
+      for (const path of ["/elf/rules", "/elf/sign-in", "/elf/join", "/elf/welcome"]) {
+        const r = await get(path, `nbcc_elf_preview=${TOKEN}`);
+        expect(r.status, path).toBe(500);
+        expect(r.body, path).toBe("Something went wrong just now. Please try again in a few minutes.");
+        expect(r.headers["Cache-Control"], path).toBe("no-store");
+      }
+      expect(logged).toHaveBeenCalledTimes(4);
+    } finally {
+      drawing.state.fail = false;
+      logged.mockRestore();
+    }
   });
 
   it("is not found without the code, or with a wrong one", async () => {

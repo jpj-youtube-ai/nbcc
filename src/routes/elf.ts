@@ -235,8 +235,12 @@ async function joiningFamily(req: Request): Promise<FamilyRow | null> {
 }
 
 elfRouter.get("/elf/join", schoolOn, async (req, res) => {
-  const family = await joiningFamily(req);
-  await sendJoinPage(req, res, 200, family ? { signedIn: { grownUpName: family.grownUpName, email: family.email } } : {});
+  try {
+    const family = await joiningFamily(req);
+    await sendJoinPage(req, res, 200, family ? { signedIn: { grownUpName: family.grownUpName, email: family.email } } : {});
+  } catch (err) {
+    gameFailed(res, "join page", err, false);
+  }
 });
 
 /** Enrolments each address may make: loose enough for a family enrolling its children one at a time,
@@ -380,7 +384,13 @@ function sendSignInPage(req: Request, res: Response, status: number, view: Param
   return sendPage(req, res, renderSignInPage(view));
 }
 
-elfRouter.get("/elf/sign-in", schoolOn, (req, res) => sendSignInPage(req, res, 200, { stage: "email" }));
+elfRouter.get("/elf/sign-in", schoolOn, async (req, res) => {
+  try {
+    await sendSignInPage(req, res, 200, { stage: "email" });
+  } catch (err) {
+    gameFailed(res, "sign in page", err, false);
+  }
+});
 
 export async function postSignInRequest(req: Request, res: Response): Promise<Response | void> {
   const json = wantsJson(req);
@@ -453,6 +463,14 @@ export async function postSignOut(req: Request, res: Response): Promise<Response
 }
 
 export async function getWelcome(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await welcome(req, res);
+  } catch (err) {
+    return gameFailed(res, "welcome", err, false);
+  }
+}
+
+async function welcome(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const raw = req.query.elf_session;
   const sessionId = typeof raw === "string" && /^cs_[A-Za-z0-9_]{1,200}$/.test(raw) ? raw : null;
@@ -502,6 +520,8 @@ async function familyOr(req: Request, res: Response): Promise<FamilyRow | null> 
  *  error's own message only (a place, a clue or a tag word never goes in a log or an answer). */
 function gameFailed(res: Response, what: string, err: unknown, json: boolean): Response {
   console.error(`elf ${what} failed:`, err instanceof Error ? err.message : err);
+  // An answer already on its way cannot be changed, and trying would throw from the catch.
+  if (res.headersSent) return res;
   res.setHeader("Cache-Control", "no-store");
   const words = "Something went wrong just now. Please try again in a few minutes.";
   return json ? res.status(500).json({ error: words }) : res.status(500).type("text/plain").send(words);
@@ -767,8 +787,12 @@ export async function getMe(req: Request, res: Response): Promise<Response | voi
 elfRouter.get("/elf", schoolOn, getCalendarPage);
 
 elfRouter.get("/elf/rules", schoolOn, async (req, res) => {
-  publicCache(res);
-  await sendPage(req, res, renderRulesPage({ settings: settingsOf(res) }));
+  try {
+    publicCache(res);
+    await sendPage(req, res, renderRulesPage({ settings: settingsOf(res) }));
+  } catch (err) {
+    gameFailed(res, "rules", err, false);
+  }
 });
 
 elfRouter.get("/api/elf/calendar", schoolOn, getCalendarFeed);

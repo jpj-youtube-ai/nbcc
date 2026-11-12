@@ -48,7 +48,7 @@ import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken, guestsFromForm } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
 import { renderBallThankYou } from "../ball/thank-you-page";
-import { dressPage } from "../site/chrome";
+import { dressPage, pageFailed } from "../site/chrome";
 import { getBookingByGuestToken, getBookingBySessionId, joinWaitingList, saveGuests } from "../db/ball";
 import { verifyPassword } from "../admin/password";
 import { checkboxValue, waitingListSchema } from "../ball/waiting-list";
@@ -667,5 +667,10 @@ ballRouter.get("/ball/thank-you", async (req, res) => {
   // A personal receipt with a booking reference on it. Never cached, and never by anything
   // shared: this is the page someone lands on straight after paying.
   res.setHeader("Cache-Control", "private, no-store");
-  await sendPage(req, res, renderBallThankYou(booking));
+  try {
+    await sendPage(req, res, renderBallThankYou(booking));
+  } catch (err) {
+    // An answer, never a promise left to reject (TASK-615).
+    pageFailed(res, "ball thank you", err);
+  }
 });

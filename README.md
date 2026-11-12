@@ -12016,7 +12016,10 @@ and its declaration stay on the order (as the Festive Ball keeps its gift on the
 whose family has already paid must sign in to add detectives, so nobody can add children to someone
 else's family by typing their email. Each address may enrol 10 times every 10 minutes (`JOIN_LIMIT` in
 `src/routes/elf.ts`), loose enough for a family enrolling its children one at a time or a busy shared
-connection; a request made on the box itself skips the limit.
+connection; a request made on the box itself skips the limit. If the database fails while someone signs
+up, asks for a sign in code or signs in, they get a plain, uncached 500 (`gameFailed`), never a
+rejected promise that would stop the server; an answer already given, such as the code request's
+"check your email", stays as it was.
 
 ### Where it lives, and tests
 
@@ -14265,7 +14268,9 @@ stopped *everything*. Now a person can choose.
   is its own submit button, so the way out stays one click; a preference centre that makes leaving
   harder than it was is a dark pattern and a PECR problem. Since TASK-507 it also records the address
   on `email_opt_outs` (and turning thank yous off does too; turning them on lifts it), which a
-  fundraiser's thank you to its givers respects: see **Thank your supporters (TASK-507)**.
+  fundraiser's thank you to its givers respects: see **Thank your supporters (TASK-507)**. Every
+  answer from `/preferences/:token`, GET or POST and the 400s and 500s too, is sent
+  `Cache-Control: no-store`, because the page shows the address the link belongs to.
 - **Donor consent is split.** `email_consent` keeps its exact meaning for the newsletter;
   `thankyou_consent` (new) gates thank-you letters, so a donor can stop one and keep the other. The
   migration backfills `thankyou_consent = email_consent` rather than defaulting everyone to true —

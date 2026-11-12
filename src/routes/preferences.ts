@@ -30,6 +30,12 @@ export const preferencesRouter = Router();
 
 const invalid = (req: Request, res: Response) => sendSitePage(req, res.status(400), preferencesInvalidPage());
 
+/** The pages show the address the link belongs to, so no answer, the 400s and 500s too, is ever kept by a
+ *  browser or a cache. Set before anything else, so every answer carries it. */
+const neverStored = (res: Response): void => {
+  res.setHeader("Cache-Control", "no-store");
+};
+
 /** Resolve the token to ONE address. Everything else is looked up from that address, never from the token. */
 async function emailForToken(token: string): Promise<string | null> {
   let claims: { kind: "donor" | "subscriber"; id: number };
@@ -64,6 +70,7 @@ async function viewFor(email: string): Promise<{ view: PreferenceView; offers: O
 
 preferencesRouter.get("/preferences/:token", async (req: Request, res: Response) => {
   try {
+    neverStored(res);
     const email = await emailForToken(req.params.token);
     if (!email) return await invalid(req, res);
     const { view, offers } = await viewFor(email);
@@ -76,6 +83,7 @@ preferencesRouter.get("/preferences/:token", async (req: Request, res: Response)
 // Exported so it can be unit tested without a server (test/unit/preferences-opt-out.test.ts).
 export async function postPreferences(req: Request, res: Response): Promise<Response | void> {
   try {
+    neverStored(res);
     return await savePreferences(req, res);
   } catch (err) {
     pageFailed(res, "email choices", err);

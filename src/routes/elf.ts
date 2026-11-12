@@ -248,7 +248,19 @@ elfRouter.get("/elf/join", schoolOn, async (req, res) => {
 export const JOIN_LIMIT = { max: 10, windowMs: 10 * 60_000 } as const;
 const joinLimiter = createRateLimiter(JOIN_LIMIT);
 
+// The sign up, the sign in code request and the sign in each read the database before or after they
+// answer. A failure there is said plainly (gameFailed: a 500, never cached), never a rejected promise,
+// which would stop the whole server: src has no unhandledRejection handler. An answer already given
+// stays as it was.
 export async function postJoin(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerJoin(req, res);
+  } catch (err) {
+    return gameFailed(res, "join", err, wantsJson(req));
+  }
+}
+
+async function answerJoin(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const json = wantsJson(req);
   const sent: Record<string, unknown> = { ...(json ? (req.body ?? {}) : joinBodyFromForm(req.body ?? {})) };
@@ -393,6 +405,14 @@ elfRouter.get("/elf/sign-in", schoolOn, async (req, res) => {
 });
 
 export async function postSignInRequest(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerSignInRequest(req, res);
+  } catch (err) {
+    return gameFailed(res, "sign in code request", err, wantsJson(req));
+  }
+}
+
+async function answerSignInRequest(req: Request, res: Response): Promise<Response | void> {
   const json = wantsJson(req);
   if (!ourOwnPage(req)) {
     if (json) return res.status(403).json({ error: ELF_NOT_OURS });
@@ -420,6 +440,14 @@ export async function postSignInRequest(req: Request, res: Response): Promise<Re
 }
 
 export async function postSignIn(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerSignIn(req, res);
+  } catch (err) {
+    return gameFailed(res, "sign in", err, wantsJson(req));
+  }
+}
+
+async function answerSignIn(req: Request, res: Response): Promise<Response | void> {
   const json = wantsJson(req);
   const email = emailSchema.safeParse(req.body?.email);
   const back = (status: number, words: string) => {

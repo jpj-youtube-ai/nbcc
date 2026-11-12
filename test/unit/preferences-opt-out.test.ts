@@ -26,8 +26,17 @@ import { signUnsubscribeToken } from "../../src/donors/unsubscribe-token";
 const TOKEN = signUnsubscribeToken(5, "a-test-secret");
 
 function mockRes() {
-  const res = { statusCode: 200, html: "" } as { statusCode: number; html: string; status: (c: number) => unknown; type: (t: string) => unknown; send: (b: string) => unknown };
+  const res = { statusCode: 200, html: "", headers: {} } as {
+    statusCode: number;
+    html: string;
+    headers: Record<string, string>;
+    status: (c: number) => unknown;
+    type: (t: string) => unknown;
+    send: (b: string) => unknown;
+    setHeader: (k: string, v: string) => unknown;
+  };
   res.status = (c: number) => ((res.statusCode = c), res);
+  res.setHeader = (k: string, v: string) => ((res.headers[k] = v), res);
   res.type = () => res;
   res.send = (b: string) => ((res.html = b), res);
   return res;
@@ -73,6 +82,7 @@ describe("the preference centre and the opt out list", () => {
     optOuts.addOptOut.mockRejectedValue(new Error("db down"));
     const res = await post({ all: "off" });
     expect(res.statusCode).toBe(200);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
     expect(newsletters.setDonorConsents).toHaveBeenCalledWith("robin@example.com", { newsletter: false, thankYou: false });
     expect(lists.unsubscribeListMember).toHaveBeenCalledWith(11);
     expect(String(err.mock.calls[0]?.[0])).toMatch(/opt out/i);

@@ -269,6 +269,13 @@ describe("the email choices link", () => {
     expect(html).toContain("<b>Saved.</b>");
   });
 
+  // They show the address the link belongs to, so no answer is ever kept by a browser or a cache.
+  it("is never stored: every answer says no-store, whether it shows the choices, saves them or turns the link away", async () => {
+    const answers = [await get(CHOICES), await post(CHOICES, { all: "off" }), await get("/preferences/not-a-token"), await post("/preferences/not-a-token")];
+    expect(answers.map((r) => r.status)).toEqual([200, 200, 400, 400]);
+    for (const r of answers) expect(r.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("answers a link that is not ours with 400 and a page of the site", async () => {
     const r = await get("/preferences/not-a-token");
     expect(r.status).toBe(400);

@@ -12017,7 +12017,7 @@ whose family has already paid must sign in to add detectives, so nobody can add 
 else's family by typing their email. Each address may enrol 10 times every 10 minutes (`JOIN_LIMIT` in
 `src/routes/elf.ts`), loose enough for a family enrolling its children one at a time or a busy shared
 connection; a request made on the box itself skips the limit. If the database fails while someone signs
-up, asks for a sign in code or signs in, they get a plain, uncached 500 (`gameFailed`), never a
+up, asks for a sign in code, signs in or signs out, they get a plain, uncached 500 (`gameFailed`), never a
 rejected promise that would stop the server; an answer already given, such as the code request's
 "check your email", stays as it was.
 

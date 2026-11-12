@@ -483,6 +483,14 @@ async function answerSignIn(req: Request, res: Response): Promise<Response | voi
 }
 
 export async function postSignOut(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerSignOut(req, res);
+  } catch (err) {
+    return gameFailed(res, "sign out", err, wantsJson(req));
+  }
+}
+
+async function answerSignOut(req: Request, res: Response): Promise<Response | void> {
   if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
   const id = sessionIdOf(req);
   if (id) await deleteElfSession(hashSessionId(id));

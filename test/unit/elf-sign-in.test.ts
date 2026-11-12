@@ -382,6 +382,42 @@ describe("a database hiccup while signing up or signing in", () => {
     expect(res.html).toBe(WORDS);
   });
 
+  it("signs out as it always has: refused from another website's page, otherwise the session ended and the cookie cleared", async () => {
+    const { postSignOut } = await import("../../src/routes/elf");
+    const cookie = `${ELF_SESSION_COOKIE}=abcDEF123_-xyz`;
+    const elsewhere = req({ json: true, cookie }) as unknown as { headers: Record<string, string> };
+    elsewhere.headers["sec-fetch-site"] = "cross-site";
+    elsewhere.headers.origin = "https://evil.example";
+    const refused = fakeRes();
+    await postSignOut(elsewhere as never, refused as never);
+    expect(refused.statusCode).toBe(403);
+    expect(db.deleteElfSession).not.toHaveBeenCalled();
+
+    const viaScript = fakeRes();
+    await postSignOut(fromElsewhere({ json: true, cookie }), viaScript as never);
+    expect([viaScript.statusCode, viaScript.body, viaScript.cleared]).toEqual([200, { status: "signed_out" }, [ELF_SESSION_COOKIE]]);
+
+    const viaForm = fakeRes();
+    await postSignOut(fromElsewhere({ cookie }), viaForm as never);
+    expect([viaForm.redirected, viaForm.cleared]).toEqual([{ status: 303, url: "/elf" }, [ELF_SESSION_COOKIE]]);
+    expect(db.deleteElfSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("answers a sign out 500 when the session cannot be ended, from the page's script and from the plain form", async () => {
+    const { postSignOut } = await import("../../src/routes/elf");
+    db.deleteElfSession.mockRejectedValue(new Error("database down"));
+    for (const json of [true, false]) {
+      const res = fakeRes();
+      await postSignOut(fromElsewhere({ json, cookie: `${ELF_SESSION_COOKIE}=abcDEF123_-xyz` }), res as never);
+      expect(res.statusCode).toBe(500);
+      expect(res.headers["Cache-Control"]).toBe("no-store");
+      if (json) expect(res.body).toEqual({ error: WORDS });
+      else expect(res.html).toBe(WORDS);
+      expect(res.redirected).toBeNull();
+    }
+    expect(logged.mock.calls.map((c) => c[0])).toEqual(["elf sign out failed:", "elf sign out failed:"]);
+  });
+
   it("answers a sign in 500 when the code cannot be looked up: in its own words to the page's script, and plainly when the page to say so will not draw", async () => {
     db.countElfCodeTry.mockRejectedValue(new Error("database down"));
     const viaScript = fakeRes();

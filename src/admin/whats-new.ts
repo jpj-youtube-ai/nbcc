@@ -55,6 +55,30 @@ export function isArea(value: unknown): value is Area {
 // until she taps through. `arrivalLine` is handed whatever the query selected and is the single
 // place that decides what leaves the building.
 
+export interface ArrivalItem {
+  at: Date;
+  area: Area;
+  /** The line a notification shows, already stripped of anything identifying. */
+  line: string;
+}
+
+/** What each area is called on a notification. The admin's own menu wording. */
+export const AREA_TITLES: Record<Area, string> = {
+  contact: "Contact form",
+  stories: "Stories",
+  donations: "Donations",
+  monthly: "Monthly givers",
+  fulfilments: "Business supporters",
+  ball: "Festive Ball",
+  newsletter: "Newsletter",
+  events: "Events",
+  analytics: "Analytics",
+  qr: "QR codes",
+  fundraising: "Get involved",
+  "red-bag": "Fill a Red Bag",
+  invoices: "Invoices",
+};
+
 /** Pennies as a person would say them: £25, £5.05, £1,500. */
 function amount(pence: number): string {
   const pounds = pence / 100;

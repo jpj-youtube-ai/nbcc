@@ -1,7 +1,7 @@
 import { pool } from "./pool";
 import { contactPool } from "./contact-pool";
 import { storiesPool } from "./stories-pool";
-import { arrivalLine, type Area } from "../admin/whats-new";
+import { arrivalLine, type Area, type ArrivalItem } from "../admin/whats-new";
 
 // TASK-478: the reads and writes behind the New pills. The rules are in src/admin/whats-new.ts.
 
@@ -131,13 +131,6 @@ const DETAILS: Record<keyof typeof LATEST, { db: "main" | "contact" | "stories";
   },
 };
 
-export interface ArrivalItem {
-  at: Date;
-  area: Area;
-  /** The line a notification shows, already stripped of anything identifying. */
-  line: string;
-}
-
 /**
  * Everything that arrived in a section after `since`, as lines ready to send.
  *
@@ -145,6 +138,8 @@ export interface ArrivalItem {
  * and there is no point reading them all when the caller collapses anything over twenty into a
  * single "N new things" anyway.
  */
+export type { ArrivalItem };
+
 export async function arrivalDetails(area: Area, since: Date, limit = 50): Promise<ArrivalItem[]> {
   const q = (DETAILS as Partial<Record<Area, { db: "main" | "contact" | "stories"; sql: string }>>)[area];
   if (!q) return [];

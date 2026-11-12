@@ -14,7 +14,7 @@ Feature: Phone notifications are behind the admin session (TASK-619)
   # The fault was everything that happened after it, which only "the site is still answering"
   # can see.
   Scenario Outline: An anonymous request is refused and leaves the site standing
-    When I <method> the admin path "<path>" without a token
+    When I send a <method> to the admin path "<path>" without a token
     Then the admin response status should be 401
     And the site is still answering
 

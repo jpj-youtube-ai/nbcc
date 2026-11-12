@@ -16,7 +16,7 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 // Which is why "the site is still answering" is a step. Asserting the 401 alone would have passed
 // against the broken code: the 401 WAS sent. The fault was everything after it.
 
-When("I {word} the admin path {string} without a token", async function (method, path) {
+When("I send a {word} to the admin path {string} without a token", async function (method, path) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: method.toUpperCase(),
     headers: { "Content-Type": "application/json" },

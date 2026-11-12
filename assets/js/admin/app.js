@@ -224,6 +224,8 @@
     currentRole = claims.role || "viewer";
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
+    // The phone menu's foot says it too, since the top bar is hidden there (2026-11-12).
+    el("pmWho").textContent = "Signed in as " + (claims.email || "") + (claims.role ? " · " + claims.role : "");
     // TASK-478: a fresh start for whoever has signed in, so nobody sees the last person's pills.
     resetWhatsNew();
     refreshWhatsNew();
@@ -484,6 +486,14 @@
 
   // My account (Admin Phase 4, TASK-197): topbar entry point, reachable by every signed-in user
   // regardless of section permissions - not a nav-link, so it isn't part of applyNavFiltering.
+  // The phone menu's foot (2026-11-12): its two buttons press the top bar's own, so they can never
+  // drift from what those do.
+  bindClick("pmAccountBtn", function () {
+    el("accountBtn").click();
+  });
+  bindClick("pmLogoutBtn", function () {
+    el("logoutBtn").click();
+  });
   bindClick("accountBtn", function () {
     selectView("account");
   });

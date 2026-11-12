@@ -183,3 +183,42 @@
 @media (prefers-reduced-motion: no-preference) {
   #view-contact .ct-act, #view-contact .ct-seg { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1); }
 }
+
+/* ---- the phone's top bar and menu (below 860px) ----
+   One maroon bar, pinned, holding the logo and the Menu button, in place of the tall top bar and the
+   separate cream Menu bar. The open menu is the same groups, screens and order as ever, drawn as a
+   two-column grid of tiles on cream. Built on the menu's own mechanism: .is-open opens it, and the
+   closed list is still hidden by admin.css with visibility, never display:none, because a refresh
+   finds your section by its link's offsetParent (TASK-443). Wider than 860px nothing here applies:
+   the banner is admin.css's own, and test/unit/admin-top-banner.test.ts's. */
+.pm-brand, .pm-me { display: none; }
+@media (max-width: 860px) {
+  .admin-topbar { display: none; }
+  .admin-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 10px; padding: 8px 12px; background: var(--ov-maroon); border-bottom: var(--ov-line); }
+  .pm-brand { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 44px; color: var(--ov-on-dark); font-family: var(--ov-head); font-weight: 800; font-size: 1.12rem; line-height: 1.1; text-decoration: none; }
+  .pm-brand img { flex: none; width: 30px; height: 30px; }
+  .pm-brand:focus-visible { outline: 3px solid var(--ov-gold-soft); outline-offset: 3px; }
+  .admin-nav .admin-nav-toggle { flex: none; width: auto; gap: 10px; padding: 0 14px; border: 2px solid var(--ov-on-dark); border-radius: 12px; background: transparent; color: var(--ov-on-dark); }
+  .admin-nav .admin-nav-toggle:focus-visible { outline: 3px solid var(--ov-gold-soft); outline-offset: 2px; }
+  /* The open menu, on cream, the bar's full width. */
+  .admin-nav #adminNavList { flex-basis: 100%; }
+  /* Negative margins do not widen a flex item, so its basis is the bar plus its 12px sides. */
+  .admin-nav.is-open #adminNavList { flex-basis: calc(100% + 24px); margin: 8px -12px 0; padding: 14px 16px 8px; background: var(--ov-cream); }
+  .admin-nav .admin-nav-group { margin: 14px 0 0; padding: 0; border-top: 0; }
+  .admin-nav .admin-nav-group:first-child { margin-top: 0; }
+  .admin-nav .admin-nav-grouplabel { display: block; padding: 0 2px; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ov-soft); }
+  .admin-nav .admin-nav-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .admin-nav.is-open .admin-nav-panel { margin-top: 7px; }
+  .admin-nav .admin-nav-panel > li { min-width: 0; }
+  .admin-nav .admin-nav-link { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-height: 46px; padding: 6px 11px; border: var(--ov-line); border-radius: 14px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font-weight: 600; font-size: 0.9rem; line-height: 1.15; text-align: left; overflow-wrap: anywhere; }
+  .admin-nav .admin-nav-link.is-active { background: var(--ov-maroon); color: var(--ov-on-dark); transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+  .admin-nav .admin-nav-link:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+  .admin-nav .admin-nav-link:focus-visible { outline: 3px solid var(--ov-gold-ink); outline-offset: 3px; }
+  /* The foot: who is signed in, My account and Sign out. */
+  .admin-nav .pm-me { display: grid; gap: 8px; flex-basis: calc(100% + 24px); margin: 0 -12px; padding: 14px 16px 16px; border-top: 2px dashed var(--ov-rule); background: var(--ov-cream); }
+  .admin-nav:not(.is-open) .pm-me { display: none; }
+  .pm-me__who { margin: 0; font-size: 0.88rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+  .pm-me__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .pm-me__btn { min-height: 46px; padding: 6px 11px; border: var(--ov-line); border-radius: 14px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-weight: 600; font-size: 0.9rem; text-align: left; cursor: pointer; }
+  .pm-me__btn:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+}

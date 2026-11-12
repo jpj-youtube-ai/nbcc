@@ -116,6 +116,10 @@
 
         <div class="admin-body-grid">
           <nav class="admin-nav" aria-label="Dashboard sections">
+            <!-- On a phone (2026-11-12) the tall top bar is hidden and this one pinned bar carries the logo
+                 and the Menu button, as the mockup Jaimie approved. Hidden wider than 860px, where the top
+                 bar shows as before. Not a menu link, so nothing counting the menu's screens counts it. -->
+            <a class="pm-brand" href="/admin"><img src="/assets/img/nbcc-logo-white.svg" alt="" width="30" height="30" /><span>NBCC Admin</span></a>
             <!-- TASK-454: below 860px the sections sit behind this button (admin.css hides it wider
                  than that), which opens the whole list wrapped into its groups. It replaces a line of
                  twenty buttons that scrolled sideways. -->
@@ -199,6 +203,16 @@
                 </ul>
               </li>
             </ul>
+            <!-- The open phone menu's foot: who is signed in, and the top bar's two buttons, which the top
+                 bar no longer shows on a phone. They press the top bar's own buttons, so they do exactly what
+                 those do. Outside #adminNavList, so it is not a group of the menu. -->
+            <div class="pm-me">
+              <p class="pm-me__who" id="pmWho"></p>
+              <div class="pm-me__actions">
+                <button class="pm-me__btn" type="button" id="pmAccountBtn">My account</button>
+                <button class="pm-me__btn" type="button" id="pmLogoutBtn">Sign out</button>
+              </div>
+            </div>
           </nav>
 
           <div class="admin-content">

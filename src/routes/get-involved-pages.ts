@@ -1,4 +1,5 @@
 import type { Router } from "express";
+import { markDropOffHere } from "../site/dropoff-nav";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { addElfCard } from "../elf/promo";
@@ -42,6 +43,9 @@ function markSection(html: string): string {
   return html.replace(EVENTS_NAV_ITEM, IN_SECTION);
 }
 
+/** And on the drop-off points page, Drop-off points as the page you are on (src/site/dropoff-nav.ts). */
+const markHere = (path: string) => (html: string): string => (path === DROP_OFF_PATH ? markDropOffHere(markSection(html)) : markSection(html));
+
 export function addShortPageRoutes(router: Router, siteRoot: string, deps: ShortPageDeps): void {
   for (const { path } of SHORT_PAGES) {
     const file = join(siteRoot, `get-involved-${path.slice("/get-involved/".length)}.html`);
@@ -57,7 +61,7 @@ export function addShortPageRoutes(router: Router, siteRoot: string, deps: Short
         );
         // The menu items depend on the database, and the page does not: it goes out without them
         // rather than not at all, as the plain pages do.
-        const html = await deps.decorate(page, req.headers.cookie, query).then(markSection, (err: unknown) => {
+        const html = await deps.decorate(page, req.headers.cookie, query).then(markHere(path), (err: unknown) => {
           console.error("short page menu failed:", err instanceof Error ? err.message : err);
           return page;
         });

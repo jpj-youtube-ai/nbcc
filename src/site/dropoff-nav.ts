@@ -14,8 +14,6 @@
 //
 // Pure: the time is always handed in.
 
-import { MENU_FIT } from "../events/menu-fit";
-
 export const DROPOFF_PATH = "/get-involved/drop-off-points";
 export const DROPOFF_NAV_ITEM = `<li><a href="${DROPOFF_PATH}">Drop-off points</a></li>`;
 
@@ -88,10 +86,7 @@ export function addDropOffMenuFit(html: string): string {
   if (listEnd === -1 || !html.slice(listStart, listEnd).includes(`href="${DROPOFF_PATH}"`)) return html;
   const headEnd = html.indexOf("</head>");
   if (headEnd === -1) return html;
-  // It was measured on top of the tablet fit (MENU_FIT), so it brings that along where the page has not
-  // got it (a page whose menu has no Get involved).
-  const styles = html.includes(MENU_FIT) ? DROPOFF_MENU_FIT : `${MENU_FIT}${DROPOFF_MENU_FIT}`;
-  return `${html.slice(0, headEnd)}${styles}${html.slice(headEnd)}`;
+  return `${html.slice(0, headEnd)}${DROPOFF_MENU_FIT}${html.slice(headEnd)}`;
 }
 
 /** On the drop-off points page itself, the item is marked as the page you are on. */

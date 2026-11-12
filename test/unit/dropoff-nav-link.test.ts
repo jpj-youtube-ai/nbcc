@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import { addDropOffNavLink, dropOffNavShown, DROPOFF_NAV_ITEM, DROPOFF_MENU_FIT, addDropOffMenuFit } from "../../src/site/dropoff-nav";
 import { addEventsNavLink } from "../../src/events/nav-link";
 import { addElfNavLink } from "../../src/elf/nav-link";
-import { MENU_FIT } from "../../src/events/menu-fit";
 
 // Jaimie, 12 November 2026: "Drop-off points" in the main menu, straight after Get involved, until the
 // collection ends (taken off after Sunday 20 December 2026). Every page gains it as it goes out.
@@ -75,12 +74,6 @@ describe("the menu's fit with one more item", () => {
     expect(fitted.indexOf(DROPOFF_MENU_FIT)).toBeLessThan(fitted.indexOf("</head>"));
     expect(addDropOffMenuFit(fitted)).toBe(fitted);
     expect(addDropOffMenuFit(contact)).toBe(contact);
-  });
-
-  it("brings the menu's tablet fit along on a page that has not got it", () => {
-    const page = addDropOffMenuFit(addDropOffNavLink(contact));
-    expect(page.split(MENU_FIT).length - 1).toBe(1);
-    expect(page.indexOf(MENU_FIT)).toBeLessThan(page.indexOf(DROPOFF_MENU_FIT));
   });
 
   it("never lets the menu scroll inside a box", () => {

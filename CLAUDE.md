@@ -223,6 +223,9 @@ conflicts rare and trivial, `git rebase main` often on small, single-task PRs.
   (TASK-250 hit exactly this).
 - **A config value:** schema + `.env.example` + SSM param + task def env/secret.
   The `/add-config` skill scaffolds all of these at once.
+- **A public page:** it must take its header and footer from the shared chrome module,
+  `src/site/chrome.ts` (`siteHeader()`, `siteFooter()`, and `dressPage()` as it goes out), never
+  draw its own; `test/unit/site-chrome-everywhere.test.ts` enforces this.
 
 ## Claude Code automation (`.claude/`)
 

@@ -56,6 +56,12 @@ import { readFileSync } from "node:fs";
 import { createSiteRouter, decorateSitePage } from "../../src/routes/site";
 import { ELF_NAV_ITEM } from "../../src/elf/nav-link";
 import { ELF_MENU_FIT } from "../../src/elf/menu-fit";
+import { EVENTS_NAV_ITEM } from "../../src/events/nav-link";
+import { MENU_FIT } from "../../src/events/menu-fit";
+import { renderRulesPage } from "../../src/elf/pages/rules";
+import { ELF_DEFAULTS } from "../../src/elf/settings";
+import { renderGuestPage } from "../../src/ball/guest-page";
+import { renderBallThankYou } from "../../src/ball/thank-you-page";
 
 const ROOT = resolve(__dirname, "../..");
 const CARD = 'id="elfCard"';
@@ -264,5 +270,24 @@ describe("a page drawn outside the site router", () => {
     expect(await decorateSitePage(contact(), undefined, new Date("2026-11-13T10:00:00Z"))).toContain(ELF_NAV_ITEM);
     state.schoolOn = false;
     expect(await decorateSitePage(contact(), undefined, new Date("2026-11-13T10:00:00Z"))).not.toContain(ELF_NAV_ITEM);
+  });
+
+  // TASK-615: the pages built in code wear the site's own banner (src/site/chrome.ts), so they gain the
+  // menu's items as the site's own pages do: Get involved and its fit while the events switch is on (it
+  // is, here), and Elf Detective School and its fit only from 10am on Friday 13 November.
+  it.each([
+    ["an Elf Detective School page", () => renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
+    ["the Festive Ball's guest details", () => renderGuestPage({ booking: { reference: "BALL-K7M2PQ", kind: "seat", quantity: 1, seats: 1, buyerName: "Sam Example", tableName: null }, guests: [], token: "tok123" })],
+    ["the Festive Ball's thank you", () => renderBallThankYou(null)],
+  ])("%s gains the menu's items as every other page does", async (_name, draw) => {
+    state.schoolOn = true;
+    const before = await decorateSitePage(draw(), undefined, new Date("2026-11-13T09:59:59Z"));
+    expect(navList(before)).toContain(EVENTS_NAV_ITEM);
+    expect(before).toContain(MENU_FIT);
+    expect(count(navList(before), ELF_NAV_ITEM)).toBe(0);
+    expect(before).not.toContain(ELF_MENU_FIT);
+    const after = await decorateSitePage(draw(), undefined, new Date("2026-11-13T10:00:00Z"));
+    expect(count(navList(after), ELF_NAV_ITEM)).toBe(1);
+    expect(after).toContain(ELF_MENU_FIT);
   });
 });

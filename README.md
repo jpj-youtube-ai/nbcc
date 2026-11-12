@@ -158,8 +158,10 @@ while Elf Detective School is switched on, from 10am on Friday 13 November 2026 
 (`ELF_MENU_FIT`, `src/elf/menu-fit.ts`, and `MENU_FIT` too when Get involved has not brought it): no
 label wraps above the burger, and from 681px to 760px the menu tightens a little more. Measured in a
 browser: one line at every width from 681px up, Donate in view, no sideways scroll, and the burger's
-list one item to a line at 360px and 390px. Ball pages and Elf Detective School's own pages
-(`src/elf/pages/shell.ts`) keep their own menus.
+list one item to a line at 360px and 390px. The Festive Ball's own pages (`ball.html` and its terms and
+donate pages, decorated by `src/ball/page-decor.ts`) keep their old menu. Every page built in code,
+Elf Detective School's included, wears the site's own menu and gains these items as it goes out (see
+"Every page wears the site's own banner, menu bar and footer" below).
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -205,8 +207,24 @@ lists any page out of step. `test/unit/footer-master.test.ts` fails when a page'
 from the master, so a footer edited by hand in one page, or a new page given an old footer, cannot
 ship. Every page now has the same full footer: the seven pages that once had a shorter one (no
 "Find us at" line, two "Ways to give" links) were brought into line, and the Get involved page lost
-its footer link to itself. The Festive Ball's server-built pages (guest details, thank you) carry
-only the legal strip and are not part of this.
+its footer link to itself. Pages built in code take theirs from the home page (below), so they follow
+the master too.
+
+### Every page wears the site's own banner, menu bar and footer (TASK-615)
+
+Every public page gets its banner (the logo, the menu bar and the Donate button) and its footer from
+one place. The files at the root share the home page's; a page built in code takes both from
+`src/site/chrome.ts` (`siteHeader()`, `siteFooter()`), which reads them from `index.html`, and its route
+sends it through `dressPage()`, which adds what every page gains as it goes out (the menu's items that
+are switched on and the footer's links, `decorateSitePage` in `src/routes/site.ts`). Elf Detective
+School's pages, the Festive Ball's guest details and thank you and the Santa Sleigh's pages are built
+that way. `test/unit/site-chrome-everywhere.test.ts` enforces it: it draws every kind of page built in
+code and holds its banner and footer to the home page's, holds every file at the root to the home
+page's banner, and fails if any file under `src/` writes the banner's or the footer's markup itself, or
+writes a whole page without the shared module. To make a new page pass, load `styles.css` and `main.js`
+(the menu's burger needs it), put `siteHeader()` before its `<main>` and `siteFooter()` after it, send it
+with `dressPage()`, and add it to that test's list of pages. A whole page that is not a page of the site
+(an email, a sheet to print, a staff screen) goes in the test's `NOT_SITE_PAGES`, with its reason.
 
 ### Pages served below the top level use absolute asset addresses (TASK-564)
 
@@ -12371,9 +12389,15 @@ for byte whatever is already its size, so it runs only on the computer that has 
 `test/unit/elf-paper-pictures.test.ts` checks every picture is there, on the right canvas and within
 its weight, and that nothing else is.
 
-**The paper look.** Every elf page is cut from paper. The page shell (`src/elf/pages/shell.ts`) lays
-torn holly and crimson bands under the bar, a few paper stars and snowflakes drifting behind the page
-(still for a visitor who asked for less motion) and cut paper hills running into the footer.
+**The paper look.** Every elf page is cut from paper, under the site's own banner, menu bar and footer
+(TASK-615, `src/site/chrome.ts`, exactly as on every other page). The page shell
+(`src/elf/pages/shell.ts`) puts Elf Detective School's own strip of holly paper straight under the
+banner, with Elf Detective School's name leading back to the calendar and the page's own button (Join,
+Sign in, The calendar or Detective HQ; its logo is the calendar's heading, and the logo's lettering
+cannot sit on holly); lays torn holly and crimson bands under the strip, as its bottom edge; lets a few paper stars
+and snowflakes drift behind the page, below the banner (still for a visitor who asked for less motion);
+and runs cut paper hills into the footer. The private preview's notice sits between the banner and the
+strip.
 `src/elf/pages/paper.ts` draws the pieces that carry words or the page's colours, each from a fixed seed
 so it is the same on every visit: `tornBands`, `paperHills`, `paperSky`, `paperSprite` (the one shared
 shadow), `titleStrip`, `headingStrip`, `scrap`, `rosette`, `giftTag` and `paperCircle`. The paper section
@@ -12410,7 +12434,7 @@ the ones `elf-join.js` adds too. The rules (`rules.ts`) are one taped sheet torn
 heading on a torn strip and each rule marked with a small paper circle. Signing in and the welcome
 (`sign-in.ts`) are on card sheets with torn buttons; the welcome has the three painted presents and a
 fall of paper stars, which lie still for a visitor who asked for less motion. Every page's top section
-clears the bar and the torn bands under it.
+clears the strip and the torn bands under it.
 
 **Detective HQ** (`hq.ts`) has its title strip under the school's name on a torn label; the day's case
 on a taped note (a holly sheet under it while its elf is hunted, the clue on a slip of paper, each
@@ -13202,7 +13226,7 @@ Design: `docs/superpowers/specs/2026-11-10-santa-sleigh-design.md`; plan:
   sleigh drives to tonight's), the give form, who NBCC is, other ways in. Motion is transform and
   opacity only and stops for reduced motion.
 - **The site's menu and footer** (TASK-612): the page and its thank you wear the site's own menu bar
-  and footer, taken from `index.html` (so they follow `partials/footer.html`), with `styles.css` and
+  and footer, taken from `index.html` by `src/site/chrome.ts` (so they follow `partials/footer.html`), with `styles.css` and
   `main.js` loaded before the sleigh's own files. The bar stays solid cream over the night sky; its
   Donate button goes to the page's own give form, so the gift counts as the sleigh's. As they go out,
   both pages gain what every page gains (`decorateSitePage` in `src/routes/site.ts`: the menu items that

@@ -34,14 +34,15 @@ describe.each([
     expect(follows(video, doc.querySelector(".elf-calendar")!)).toBe(true);
   });
 
-  it("plays by itself without sound, once, with the controls and the poster", () => {
-    expect(video.hasAttribute("autoplay")).toBe(true);
+  it("is set to play without sound, once, with the controls and the poster, and is started by the script", () => {
+    // The script starts it (elf-film.js), so a browser never starts it for someone who asked for
+    // less motion or data saving.
+    expect(video.hasAttribute("autoplay")).toBe(false);
     expect(video.hasAttribute("muted")).toBe(true);
     expect(video.hasAttribute("playsinline")).toBe(true);
     expect(video.hasAttribute("controls")).toBe(true);
     expect(video.hasAttribute("loop")).toBe(false);
-    // Only its first bytes are asked for until it plays, so a person who asked for less motion or data
-    // saving, whom the script takes autoplay from, has not downloaded the film.
+    // Only the start of the file (its index) is asked for until the film plays.
     expect(video.getAttribute("preload")).toBe("metadata");
     expect(video.getAttribute("poster")).toBe("/assets/video/elf-detective-school-poster.jpg");
     expect(video.querySelector("source")?.getAttribute("src")).toBe("/assets/video/elf-detective-school.mp4");

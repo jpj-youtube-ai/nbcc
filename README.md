@@ -11914,11 +11914,13 @@ when people arrive (11 November 2026).
   (1280 by 720, a frame about 2 seconds in). Like the Get involved film they are served from `/assets/video`,
   which the browser keeps for a week (`assetHeaders`, `src/routes/site.ts`), so a new cut ships under a NEW
   file name. The markup is `src/elf/pages/film.ts`; the script is `assets/js/elf-film.js`.
-- **Autoplay rules:** it plays by itself without sound (`autoplay muted playsinline`, with controls), once and
-  no more. A paper button, "Turn the sound on", sits on its top left corner while it plays muted; pressing it
-  unmutes and it goes away (the browser's own sound control does the same). People who asked for less motion
+- **Autoplay rules:** it plays by itself without sound (`muted playsinline`, with controls), once and
+  no more. The script starts it: the video has no `autoplay` attribute. A paper button, "Turn the sound on",
+  sits on its top left corner while it plays muted; pressing it unmutes, moves keyboard focus to the film and
+  goes away (the browser's own sound control does the same). People who asked for less motion
   (`prefers-reduced-motion: reduce`) or are saving data (`navigator.connection.saveData`) see the poster and
-  the browser's play button; a few lines right after the video take autoplay off before it can start. While
+  the browser's play button: the script never plays the film for them, and the video is `preload="metadata"`,
+  so nothing beyond the start of the file (its index) is downloaded until they press play. While
   it plays it pauses when scrolled fully out of view and carries on when it is back, but never starts again
   once it has ended or once the person has paused it.
 - **Captions:** there are none yet. When the charity sends the words, add `assets/video/elf-detective-school.en.vtt`

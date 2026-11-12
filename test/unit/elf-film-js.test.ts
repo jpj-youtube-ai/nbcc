@@ -87,7 +87,7 @@ describe("playing by itself when people arrive", () => {
     await flush();
     expect(t.play).toHaveBeenCalled();
     expect(t.video.muted).toBe(true);
-    expect(t.video.hasAttribute("autoplay")).toBe(true);
+    expect(t.video.hasAttribute("autoplay")).toBe(false);
   });
 
   it("does not ask again when the browser has already started it", async () => {
@@ -122,6 +122,15 @@ describe("the sound button", () => {
     t.sound.click();
     expect(t.video.muted).toBe(false);
     expect(t.sound.hidden).toBe(true);
+  });
+
+  it("leaves keyboard focus on the film, not the page body, when it goes away", async () => {
+    const t = setUp();
+    await flush();
+    const focus = vi.fn();
+    Object.assign(t.video, { focus });
+    t.sound.click();
+    expect(focus).toHaveBeenCalledTimes(1);
   });
 
   it("is not needed once the sound is on by the controls", async () => {
@@ -161,15 +170,19 @@ describe("less motion and saving data", () => {
     await flush();
     expect(t.play).not.toHaveBeenCalled();
     expect(t.video.hasAttribute("autoplay")).toBe(false);
-    expect(t.video.getAttribute("preload")).toBe("none");
+    expect(t.video.getAttribute("preload")).toBe("metadata");
     expect(t.video.hasAttribute("controls")).toBe(true);
     expect(t.video.getAttribute("poster")).toBe("/assets/video/elf-detective-school-poster.jpg");
   });
 
-  it("stops a film the browser had already started", async () => {
-    const t = setUp({ reducedMotion: true, started: true });
+  it("never plays it, even when it scrolls into view", async () => {
+    const t = setUp({ reducedMotion: true });
     await flush();
-    expect(t.pause).toHaveBeenCalled();
+    t.scrollTo(1);
+    t.scrollTo(0);
+    t.scrollTo(1);
+    expect(t.play).not.toHaveBeenCalled();
+    expect(t.state.paused).toBe(true);
     expect(t.state.paused).toBe(true);
   });
 

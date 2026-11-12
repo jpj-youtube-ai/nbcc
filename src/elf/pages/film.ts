@@ -5,10 +5,11 @@
 //     doors on and off, in the paper look: a photo taped to the page (.elf-film in assets/css/elf.css);
 //   - it plays by itself when people arrive, without sound (no browser allows anything else), once and
 //     no more, with the browser's own controls, and a clear paper button, "Turn the sound on", that
-//     unmutes and then goes away (assets/js/elf-film.js);
-//   - anyone who has asked for less motion, or to save data, sees the poster and a play button (the
-//     script takes autoplay off; the house rule is that every script is a deferred file, so there is no
-//     inline script to do it sooner, and the video only asks for its first bytes until it plays);
+//     unmutes, hands focus to the film and then goes away (assets/js/elf-film.js);
+//   - the script is the only thing that starts it: the video has no autoplay attribute. Anyone who has
+//     asked for less motion, or to save data, sees the poster and a play button, and the film is never
+//     started for them. The video is preload="metadata", so until it plays (or the script plays it) a
+//     browser asks only for the start of the file, where its index is, and no pictures;
 //   - while it plays it waits whenever it is scrolled fully out of view, and never starts again once it
 //     has ended or once the person has paused it.
 //
@@ -33,7 +34,7 @@ export function elfFilm(): string {
     `<figure class="elf-frame elf-film" data-elf-film>` +
     `<span class="elf-tape" aria-hidden="true"></span>` +
     `<div class="elf-film__stage">` +
-    `<video class="elf-film__video" id="elf-film-video" data-elf-film-video autoplay muted playsinline controls preload="metadata" width="1920" height="1080" ` +
+    `<video class="elf-film__video" id="elf-film-video" data-elf-film-video muted playsinline controls preload="metadata" width="1920" height="1080" ` +
     `poster="${ELF_FILM_POSTER}" aria-label="${ELF_FILM_NAME}">` +
     `<source src="${ELF_FILM_SRC}" type="video/mp4" />` +
     `</video>` +

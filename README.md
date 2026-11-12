@@ -11902,6 +11902,30 @@ reads the moment from `src/elf/links-at.ts`), so it passes on either side of Fri
 page answers at once; the home page, Your school, the menu and the site map link to it only from the
 moment; and switched off, nothing links to it.
 
+### The film on the front page (TASK-616)
+
+Elf Detective School's own short film (1920 by 1080, about 1 minute 39, 37 MB) is near the top of `/elf`,
+after the title and its opening words, with December's doors on and off. It is a photo taped to the page in
+the paper look (`.elf-film`, `assets/css/elf.css`); beside the opening words on a laptop, full width in the
+column on a phone, 16 to 9 with its size on it so nothing jumps as it loads. Jaimie asked for it to play
+when people arrive (11 November 2026).
+
+- **Files:** `assets/video/elf-detective-school.mp4` and its poster `assets/video/elf-detective-school-poster.jpg`
+  (1280 by 720, a frame about 2 seconds in). Like the Get involved film they are served from `/assets/video`,
+  which the browser keeps for a week (`assetHeaders`, `src/routes/site.ts`), so a new cut ships under a NEW
+  file name. The markup is `src/elf/pages/film.ts`; the script is `assets/js/elf-film.js`.
+- **Autoplay rules:** it plays by itself without sound (`autoplay muted playsinline`, with controls), once and
+  no more. A paper button, "Turn the sound on", sits on its top left corner while it plays muted; pressing it
+  unmutes and it goes away (the browser's own sound control does the same). People who asked for less motion
+  (`prefers-reduced-motion: reduce`) or are saving data (`navigator.connection.saveData`) see the poster and
+  the browser's play button; a few lines right after the video take autoplay off before it can start. While
+  it plays it pauses when scrolled fully out of view and carries on when it is back, but never starts again
+  once it has ended or once the person has paused it.
+- **Captions:** there are none yet. When the charity sends the words, add `assets/video/elf-detective-school.en.vtt`
+  and a `<track kind="captions" srclang="en" label="English" src="/assets/video/elf-detective-school.en.vtt" default />`
+  inside the video in `src/elf/pages/film.ts`, as the Get involved film has.
+- **Tests:** `test/unit/elf-film.test.ts` (the page, the files) and `test/unit/elf-film-js.test.ts` (the script).
+
 ### Data (`migrations/1791200000310_elf-school.js`, additive only)
 
 `elf_settings` (one row), `elf_families` (one per grown up's email), `elf_detectives` (first name

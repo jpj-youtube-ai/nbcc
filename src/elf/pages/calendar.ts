@@ -2,6 +2,7 @@ import { DOOR_COUNT } from "../calendar";
 import { SCHOOL_NAME, schoolLogo } from "../logo";
 import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
 import { GUESS_LINE, doorDetail, doorTile } from "./door";
+import { elfFilm } from "./film";
 import { candyCane, icon } from "./icons";
 import { headingStrip, rosette } from "./paper";
 import { elfPage, escapeHtml, sitePath } from "./shell";
@@ -182,10 +183,13 @@ export function renderCalendarPage(view: CalendarView, servedAt: Date = view.now
   // page), in the words the rules use for it (src/elf/pages/rules.ts), with the doors off too.
   const main = `  <section class="page-top elf-top" aria-labelledby="elf-heading">
     <div class="wrap elf-top__grid">
-      <div class="elf-top__words">
+      <div class="elf-top__words elf-top__intro">
         <h1 id="elf-heading">${schoolLogo(260, SCHOOL_NAME, "elf-top__logo")}</h1>
         <p class="elf-label elf-top__class">Class of ${view.year}</p>
         <p class="lede">24 cheeky elves have escaped from the Elves' Workshop. Find them all by the Night Before Christmas.</p>
+      </div>
+      ${elfFilm()}
+      <div class="elf-top__words elf-top__rest">
         <p class="elf-top__prize">Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest elf at home for the grand prize, judged by Jodie, our Head Elf.</p>
         <p class="elf-top__actions">
           <a class="elf-btn elf-btn--crimson" href="${join}">Join Elf Detective School</a>
@@ -245,7 +249,7 @@ ${board}
       "NBCC's advent elf hunt. 24 cheeky elves are hiding across South West Scotland this December: crack the clues, find the elves and collect your candy canes.",
     cta: { href: view.joinUrl, label: "Join" },
     main,
-    scripts: ["elf-calendar.js"],
+    scripts: ["elf-calendar.js", "elf-film.js"],
     listed: true,
   });
 }

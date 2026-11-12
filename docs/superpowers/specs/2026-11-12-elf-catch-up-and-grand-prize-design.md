@@ -158,7 +158,11 @@ Everyone else, including anyone not signed in, sees who found the elf, and never
 
 **The day before** (23 December): that day's clue email adds a line saying tomorrow is Christmas Eve, so the clues start at 10am and places close early. Families give us only an email address, so this goes by email (my call, from the playback).
 
-**The closing time.** On a door's own day, a family that can see the place is also told when it closes that day: "Corner Bakehouse closes at 2pm today." It is drawn from the door's own closing time. My call: this is on every door's own day, not only door 24's, because it is the same need every day.
+**The closing time** (Jaimie, 12 November: families should see it).
+- On a door's own day, from clue 1, the clues say when the hiding place closes that day, without naming it: "The hiding place closes at 2pm today."
+- Once a family knows the place: "Corner Bakehouse closes at 2pm today."
+- It is drawn from the door's own closing time, and is on every door's own day, not only door 24's (my call).
+- This replaces today's deliberate rule that a family is never told how late a place is open (`revealFor`, src/elf/views.ts). The time is a small hint, and Jaimie accepted that.
 
 **The entry.**
 - It is for each detective, not each family, because the rules say "Every detective who does all 24 doors can send in a drawing or a photo".
@@ -245,7 +249,7 @@ Also:
    - The entry never asks for an age, and the site never stores one.
    - The rules' sentence about judging "taking age into account" stays as it is (my call), because age is still weighed on the call.
 4. **Winners. ANSWERED (Jaimie, 12 November): just one winner.** Head Elf HQ's Grand prize part lets a head elf mark one entry as the winner, and marking another moves the mark. The site announces nothing (my call, as nothing was asked for). NBCC rings the winner's grown up.
-5. **The closing time with the clues.** Should families see the hiding place's closing time alongside the clues, so they know their deadline (a small hint), or only once they know the place? Today the site deliberately never tells a family how late a place is open.
+5. **The closing time with the clues. ANSWERED (Jaimie, 12 November): yes,** families see it with the clues (see "The closing time" above).
 6. **After Christmas.** Should the places, and the photos, appear on the calendar for everyone as a thank you to the businesses? If so, from Christmas Day or from 1 January? And should December's doors, and having a go, stay on into January, or switch off after Christmas?
 
 ## For the builder: where the place shows today

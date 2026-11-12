@@ -237,7 +237,10 @@ Also:
 ## Questions only Jaimie can answer (one at a time, most important first)
 
 1. **Christmas Eve timings. ANSWERED (Jaimie, 12 November):** entries close at **5pm on Christmas Eve**. That is the default in Head Elf HQ > Settings, which a head elf can change. Door 24's place must therefore close by 4pm, and Head Elf HQ warns while door 24's closing time is later than an hour before the entries close.
-2. **Brothers and sisters.** If one child visits a hiding place and their brother or sister doesn't, should that door count as done for both? The candy cane stamp would stay with the child who went. My suggestion is yes: the family found it together, and the grand prize is per detective.
+2. **Brothers and sisters. ANSWERED (Jaimie, 12 November): yes.**
+   - When any detective in a family visits a door's place (the find or a visit), that door is **done for every detective in the family**, towards ranks, costumes, presents, graduating and the grand prize.
+   - The candy cane stamp, the gold seal and the elf on the door stay with the child who went.
+   - So a detective's doors done = the family's cracks, plus the family's visits, plus snow days. The gold seal still counts only that detective's own visits.
 3. **Age.** The rules say the grand prize is judged "taking age into account", but also "We never ask for a real surname, a school or an age." Should each entry ask the detective's age, only for judging and deleted in January (the rules would then say so)? Or is it judged without ages?
 4. **Winners.** Is there one winner, or one in each age group, and any runners up? Is anyone told on the site, such as a line on the calendar on Christmas Day?
 5. **The closing time with the clues.** Should families see the hiding place's closing time alongside the clues, so they know their deadline (a small hint), or only once they know the place? Today the site deliberately never tells a family how late a place is open.

@@ -156,6 +156,10 @@
 /* A message. Its summary is the button; the opened part sits beside it, inside the same card. */
 #view-contact .ct-msg { min-width: 0; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
 #view-contact .ct-msg--open { box-shadow: var(--ov-pop-lg); }
+/* Brought back into view on opening (openContact), clear of the pinned bar above and the phone's
+   bar below. */
+#view-contact .ct-msg__summary { scroll-margin: 72px 0 96px; }
+#view-contact .ct-msg__by { font-size: 0.82rem; color: var(--ov-soft); overflow-wrap: anywhere; }
 #view-contact .ct-msg__summary { display: grid; gap: 6px; width: 100%; margin: 0; padding: 14px 16px; border: 0; border-radius: 16px; background: transparent; color: var(--ov-text); font: inherit; text-align: left; cursor: pointer; }
 #view-contact .ct-msg__summary:hover { background: var(--ov-hover); }
 #view-contact .ct-msg--open .ct-msg__summary { border-radius: 16px 16px 0 0; }
@@ -170,6 +174,10 @@
 #view-contact .ct-mark { display: inline-flex; padding: 1px 8px; border: 2px solid currentColor; border-radius: 999px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.4; }
 #view-contact .ct-mark--done { color: var(--ov-soft); background: var(--ov-card); }
 #view-contact .ct-msg__more { display: grid; gap: 14px; margin: 0 16px; padding: 14px 0 16px; border-top: 2px dashed var(--ov-rule); }
+/* The status line under the buttons takes no room until it has something to say. It stays in the
+   page (not display:none), so a screen reader still hears it when it does. */
+#view-contact .ct-msg__more > .admin-action-status { margin: 0; }
+#view-contact .ct-msg__more > .admin-action-status:empty { margin-top: -14px; }
 #view-contact .ct-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 0.9rem; }
 #view-contact .ct-facts dt { color: var(--ov-soft); }
 #view-contact .ct-facts dd { margin: 0; overflow-wrap: anywhere; }
@@ -194,7 +202,9 @@
 .pm-brand, .pm-me { display: none; }
 @media (max-width: 860px) {
   .admin-topbar { display: none; }
-  .admin-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 10px; padding: 8px 12px; background: var(--ov-maroon); border-bottom: var(--ov-line); }
+  /* 61px tall, as the Festive Ball's sections bar pins under it (#view-ball .ball-sections): 8 + the
+     44px button + 8 + a 1px rule. */
+  .admin-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 10px; padding: 8px 12px; background: var(--ov-maroon); border-bottom: 1px solid var(--ov-ink); }
   .pm-brand { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 44px; color: var(--ov-on-dark); font-family: var(--ov-head); font-weight: 800; font-size: 1.12rem; line-height: 1.1; text-decoration: none; }
   .pm-brand img { flex: none; width: 30px; height: 30px; }
   .pm-brand:focus-visible { outline: 3px solid var(--ov-gold-soft); outline-offset: 3px; }

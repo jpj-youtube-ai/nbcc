@@ -40,8 +40,8 @@ function respond(url: string) {
   });
   const path = url.split("?")[0];
   if (path === "/api/admin/login") return j({ token, user: { email: "admin@nbcc", role: "admin" } });
-  if (path === "/api/admin/me") return j({ email: "admin@nbcc", permissions: effectivePermissions({ role: "admin", permissions: null }) });
   if (path in served) return j(served[path]);
+  if (path === "/api/admin/me") return j({ email: "admin@nbcc", permissions: effectivePermissions({ role: "admin", permissions: null }) });
   return j({ results: [] });
 }
 const settle = async () => {
@@ -236,6 +236,21 @@ describe("Recent donations", () => {
 });
 
 // Review Focus 5: anything a person typed, and anything the server words, is shown as text.
+describe("See them all", () => {
+  it("is there for someone who may see Donations", async () => {
+    await signIn();
+    expect((document.querySelector("#view-overview .ov-see-all") as HTMLElement).hidden).toBe(false);
+  });
+
+  // A button to a screen that would only say no is a button that looks tappable and is not.
+  it("is not there for someone who may not", async () => {
+    const perms = effectivePermissions({ role: "admin", permissions: null }) as unknown as Record<string, unknown>;
+    served["/api/admin/me"] = { email: "admin@nbcc", permissions: { ...perms, donations: "none" } };
+    await signIn();
+    expect((document.querySelector("#view-overview .ov-see-all") as HTMLElement).hidden).toBe(true);
+  });
+});
+
 describe("markup in the data is shown as text", () => {
   it.each([
     ["a need's words", { needs: [need({ words: XSS })] }, "overviewNeeds"],

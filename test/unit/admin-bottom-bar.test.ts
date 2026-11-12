@@ -180,6 +180,22 @@ describe("in use", () => {
     expect(tab("donations").classList.contains("pm-tab--new")).toBe(false);
   });
 
+  // A donor, a story or a business is not one of the menu's screens, so nothing is marked.
+  it("marks nothing when a detail screen opens, as the menu marks nothing", async () => {
+    await signIn();
+    document.getElementById("overviewRecent")!.insertAdjacentHTML("beforeend", '<button type="button" id="pretendGift" data-donor="5">A gift</button>');
+    document.getElementById("pretendGift")!.click();
+    await settle();
+    expect(document.getElementById("view-donor")!.hidden).toBe(false);
+    expect(document.querySelector('.pm-bar [aria-current="page"]')).toBeNull();
+  });
+
+  it("takes you to the first screen in the menu when Everything opens it", async () => {
+    await signIn();
+    everything().click();
+    expect(document.activeElement).toBe(document.querySelector('#adminNavList .admin-nav-link[data-view="overview"]'));
+  });
+
   it("opens the whole menu from Everything, and closes it again", async () => {
     await signIn();
     const nav = document.querySelector(".admin-nav")!;

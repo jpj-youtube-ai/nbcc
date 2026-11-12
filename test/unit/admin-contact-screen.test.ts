@@ -38,6 +38,9 @@ let list: unknown[] = [];
 let detailFails = false;
 let patches: string[] = [];
 let requested: string[] = [];
+let listFails = false;
+// A message's details held back until released, to put two replies in the order a slow network might.
+let held: Record<number, Promise<void>> = {};
 
 function respond(url: string, init?: { method?: string; body?: string }) {
   const j = (body: unknown, status = 200) => ({
@@ -50,13 +53,14 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   const token = signAdminSession({ sub: 3, email: "a@nbcc", role, now: new Date(), secret: "s" }).token;
   if (path === "/api/admin/login") return j({ token, user: { email: "a@nbcc", role } });
   if (path === "/api/admin/me") return j({ email: "a@nbcc", permissions: effectivePermissions({ role, permissions: null }) });
-  if (path === "/api/admin/contact") return j({ results: list });
+  if (path === "/api/admin/contact") return listFails ? j({ error: "Admin is temporarily unavailable" }, 500) : j({ results: list });
   const one = /^\/api\/admin\/contact\/(\d+)$/.exec(path);
   if (one) {
     if (method === "PATCH") {
       patches.push(init?.body || "");
       const row = (list as Array<{ id: number }>).find((r) => r.id === Number(one[1]));
-      return j({ ...row, status: JSON.parse(init?.body || "{}").status, replied_by: "jaimie@nbcc.scot" });
+      const status = JSON.parse(init?.body || "{}").status;
+      return j({ ...row, status, replied_by: status === "replied" ? "jaimie@nbcc.scot" : null, replied_at: status === "replied" ? "2026-09-22T13:03:00.000Z" : null });
     }
     if (detailFails) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j((list as Array<{ id: number }>).find((r) => r.id === Number(one[1])));
@@ -89,8 +93,13 @@ beforeEach(() => {
   window.confirm = () => true;
   (window as unknown as { formatReceived: (s: string) => string }).formatReceived = (s) => "received " + String(s);
   (window as unknown as { buildGmailReplyUrl: () => string }).buildGmailReplyUrl = () => "https://mail.google.com/x";
-  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown, init?: unknown) =>
-    Promise.resolve(respond(String(url), init as { method?: string; body?: string }));
+  listFails = false;
+  held = {};
+  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown, init?: unknown) => {
+    const one = /^\/api\/admin\/contact\/(\d+)$/.exec(String(url));
+    const wait = one && !(init as { method?: string } | undefined)?.method ? held[Number(one[1])] : undefined;
+    return (wait || Promise.resolve()).then(() => respond(String(url), init as { method?: string; body?: string }));
+  };
   // eslint-disable-next-line no-eval
   (0, eval)(appSrc);
 });
@@ -118,11 +127,36 @@ describe("the list", () => {
   });
 
   it("marks a waiting message, and says who replied to a replied one", async () => {
-    list = [msg(1), msg(2, { status: "replied", replied_summary: "Replied by Jaimie · yesterday" })];
+    // repliedSummary (src/contact/enquiry-summary.ts) sends "by <email>, <day> <month> <time>".
+    list = [msg(1), msg(2, { status: "replied", replied_summary: "by pretend@example.com, 22 Sep 14:03" })];
     await openContactForm();
     expect(card(1).classList.contains("ct-msg--waiting")).toBe(true);
     expect(card(2).classList.contains("ct-msg--waiting")).toBe(false);
-    expect(card(2).textContent).toContain("Replied by Jaimie · yesterday");
+    expect(card(2).querySelector(".ct-mark--done")!.textContent).toBe("Replied");
+    expect(card(2).querySelector(".ct-msg__mark")!.textContent!.replace(/\s+/g, " ").trim()).toBe("Replied by pretend@example.com, 22 Sep 14:03");
+  });
+
+  it("says Replied on its own when the server has no more to say", async () => {
+    list = [msg(2, { status: "replied", replied_summary: null })];
+    await openContactForm();
+    expect(card(2).querySelector(".ct-msg__mark")!.textContent!.trim()).toBe("Replied");
+  });
+
+  // TASK-476: never last load's numbers under a message that says nothing could load.
+  it("clears the counts when the list could not load", async () => {
+    list = [msg(1), msg(2)];
+    await openContactForm();
+    listFails = true;
+    (document.querySelector('.admin-nav-link[data-view="contact"]') as HTMLElement).click();
+    await settle();
+    expect(el("contactTable").textContent).toContain("Enquiries are unavailable.");
+    for (const c of document.querySelectorAll("#contactStatusFilter .ct-seg__count")) expect(c.textContent).toBe("");
+    expect(el("ctWaitingLine").textContent).toBe("");
+  });
+
+  // Opening a message used to redraw the list, and a live list read the whole inbox out each time.
+  it("is not a live region, so opening a message does not read out the inbox", () => {
+    expect(el("contactTable").hasAttribute("aria-live")).toBe(false);
   });
 
   it("keeps the words for an empty inbox and for one that could not load", async () => {
@@ -215,6 +249,64 @@ describe("a message opens where it is", () => {
     expect(el("contactActionStatus").textContent).toBe("Marked as replied");
     expect(card(700).classList.contains("ct-msg--waiting")).toBe(false);
     expect(document.querySelector('#contactStatusFilter [data-status="new"] .ct-seg__count')!.textContent).toBe("1");
+    // As a reload would draw it: the server's words, in UK time (14:03 in September is BST).
+    expect(card(700).querySelector(".ct-msg__mark")!.textContent!.replace(/\s+/g, " ").trim()).toBe("Replied by jaimie@nbcc.scot, 22 Sep 14:03");
+  });
+
+  it("keeps your place: the card you pressed stays the same card, with the focus on it", async () => {
+    list = [msg(700), msg(701)];
+    await openContactForm();
+    const before = summary(701);
+    before.focus();
+    before.click();
+    await settle();
+    expect(summary(701)).toBe(before);
+    expect(document.activeElement).toBe(before);
+    expect(before.getAttribute("aria-expanded")).toBe("true");
+    before.click();
+    await settle();
+    expect(summary(701)).toBe(before);
+    expect(before.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("never shows one message's details in another's card, whichever reply comes back first", async () => {
+    list = [msg(700, { email: "first@example.com" }), msg(701, { email: "second@example.com" })];
+    await openContactForm();
+    let release = () => {};
+    held[700] = new Promise<void>((r) => { release = r; });
+    summary(700).click();
+    await settle();
+    summary(701).click();
+    await settle();
+    release();
+    await settle();
+    expect(card(700).querySelector(".ct-msg__more")).toBeNull();
+    expect(el("contactDetail").textContent).toContain("second@example.com");
+    expect(el("contactDetail").textContent).not.toContain("first@example.com");
+  });
+
+  it("puts a reply that comes back after you moved on only on its own card", async () => {
+    list = [msg(700), msg(701)];
+    await openContactForm();
+    summary(700).click();
+    await settle();
+    el("contactMarkRepliedBtn").click();
+    summary(701).click();
+    await settle();
+    expect(card(700).classList.contains("ct-msg--waiting")).toBe(false);
+    expect(el("contactActionStatus").textContent).toBe("");
+    expect(el("contactMarkRepliedBtn")).not.toBeNull();
+  });
+
+  // The Search screen's kind buttons used to answer every segmented button on the page, so pressing
+  // one took the pressed look off the Contact form's chosen tile.
+  it("keeps the chosen tile pressed when a button on another screen is pressed", async () => {
+    list = [msg(1)];
+    await openContactForm();
+    const waiting = document.querySelector('#contactStatusFilter [data-status="new"]') as HTMLElement;
+    waiting.click();
+    (document.querySelector('[data-kind="declarations"]') as HTMLElement).click();
+    expect(waiting.classList.contains("is-active")).toBe(true);
   });
 
   it("says so in place when a message could not be loaded", async () => {

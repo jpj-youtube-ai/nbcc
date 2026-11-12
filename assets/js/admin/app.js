@@ -497,7 +497,14 @@
     });
   });
   bindClick("pmEverything", function () {
-    el("adminNavToggle").click();
+    var toggle = el("adminNavToggle");
+    toggle.click();
+    // Opened from the foot of the page, the focus would stay down here, after everything in the
+    // menu. Take it to the menu's first screen instead.
+    if (toggle.getAttribute("aria-expanded") === "true") {
+      var first = doc.querySelector("#adminNavList .admin-nav-link:not([hidden])");
+      if (first && first.focus) first.focus();
+    }
   });
   bindClick("pmAccountBtn", function () {
     el("accountBtn").click();
@@ -1576,6 +1583,9 @@
         showComing([]);
         el("overviewUpdated").textContent = "";
       });
+    // A button to a screen that would only say no is one that looks tappable and is not.
+    var seeAll = doc.querySelector("#view-overview .ov-see-all");
+    if (seeAll) seeAll.hidden = !canView("donations");
     authFetch("/api/admin/donations?limit=5")
       .then(okJson)
       .then(function (d) {
@@ -1592,10 +1602,12 @@
 
   // ---- search ----
   var searchKind = "donors";
-  Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg"), function (b) {
+  // Only Search's own kind buttons (data-kind). Bound to every .admin-seg, as it was, a press on
+  // any other screen's segmented buttons took the pressed look off whichever was chosen there.
+  Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (b) {
     b.addEventListener("click", function () {
       searchKind = b.getAttribute("data-kind");
-      Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg"), function (x) {
+      Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (x) {
         x.classList.toggle("is-active", x === b);
       });
     });
@@ -3289,6 +3301,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     storyStatus("");
     var wrap = el("storyDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -3542,10 +3555,25 @@
   function ctName(r) {
     return ((r.first_name || "") + " " + (r.last_name || "")).trim();
   }
+  // The server's own words for who replied and when (repliedSummary, src/contact/enquiry-summary.ts):
+  // "by jaimie@nbcc.scot, 22 Sep 14:03", in UK time, with its own month names. Made here too so a
+  // message marked replied just now reads exactly as it will after a reload.
+  var CT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function ctRepliedSummary(by, at) {
+    if (!at) return null;
+    var when = new Date(at);
+    if (isNaN(when.getTime())) return null;
+    var parts = {};
+    new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/London" })
+      .formatToParts(when)
+      .forEach(function (p) { parts[p.type] = p.value; });
+    var stamp = Number(parts.day) + " " + CT_MONTHS[Number(parts.month) - 1] + " " + parts.hour + ":" + parts.minute;
+    return by ? "by " + by + ", " + stamp : stamp;
+  }
   function ctMarkHtml(r) {
     var esc = H.escapeHtml;
     return r.status === "replied"
-      ? '<span class="ct-mark ct-mark--done">' + esc(r.replied_summary || "Replied") + "</span>"
+      ? '<span class="ct-mark ct-mark--done">Replied</span>' + (r.replied_summary ? ' <span class="ct-msg__by">' + esc(r.replied_summary) + "</span>" : "")
       // The red dot by the name says it to the eye, as in the mockup Jaimie approved; these words
       // say it to a screen reader, which a colour alone cannot.
       : '<span class="sr-only">Waiting for a reply</span>';
@@ -3554,24 +3582,23 @@
     var esc = H.escapeHtml;
     var GL = window.AdminGiftLog;
     var id = Number(r.id);
-    var open = id === ctOpenId;
     var waiting = r.status !== "replied";
     var text = String(r.message || "");
     return (
-      '<article class="ct-msg' + (waiting ? " ct-msg--waiting" : "") + (open ? " ct-msg--open" : "") + '" data-ct-id="' + id + '">' +
-      '<button type="button" class="ct-msg__summary" data-contact="' + id + '" aria-expanded="' + (open ? "true" : "false") + '">' +
+      '<article class="ct-msg' + (waiting ? " ct-msg--waiting" : "") + '" data-ct-id="' + id + '">' +
+      '<button type="button" class="ct-msg__summary" data-contact="' + id + '" aria-expanded="false">' +
       '<span class="ct-msg__top"><span class="ct-msg__name">' + esc(ctName(r)) + "</span>" +
       '<span class="ct-msg__time">' + esc(GL && GL.timeLabel ? GL.timeLabel(r.created_at) : H.fmtDate(r.created_at)) + "</span></span>" +
       '<span class="ct-msg__snippet">' + esc(text.length > 240 ? text.slice(0, 240) + "…" : text) + "</span>" +
       '<span class="ct-msg__mark">' + ctMarkHtml(r) + "</span>" +
       "</button>" +
-      (open
-        ? '<div class="ct-msg__more"><div id="contactDetail" aria-live="polite"></div>' +
-          '<p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p></div>'
-        : "") +
       "</article>"
     );
   }
+  // The open part of a card, added beside its summary button when it opens (openContact).
+  var CT_MORE_HTML =
+    '<div class="ct-msg__more"><div id="contactDetail" aria-live="polite"></div>' +
+    '<p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p></div>';
   function ctListHtml(rows) {
     var esc = H.escapeHtml;
     var GL = window.AdminGiftLog;
@@ -3598,7 +3625,9 @@
     var line = el("ctWaitingLine");
     if (line) line.textContent = waiting === 0 ? "Nothing waiting for a reply." : waiting === 1 ? "1 waiting for a reply." : waiting + " waiting for a reply.";
   }
+  // Redraws the list, every card closed.
   function ctDraw() {
+    ctOpenId = null;
     ctCounts();
     var shown = contactStatusFilter
       ? ctRows.filter(function (r) { return contactStatusFilter === "replied" ? r.status === "replied" : r.status !== "replied"; })
@@ -3630,44 +3659,73 @@
       .catch(function () {
         ctRows = [];
         wrap.innerHTML = unavailableHtml("Enquiries are unavailable.");
+        // TASK-476: never the last load's numbers under a message that says nothing could load.
         var line = el("ctWaitingLine");
         if (line) line.textContent = "";
+        Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .ct-seg__count"), function (c) {
+          c.textContent = "";
+        });
       });
   }
   function contactStatus(msg) {
     var s = el("contactActionStatus");
     if (s) s.textContent = msg || "";
   }
-  // A message opens where it is. Pressing an open one's card again closes it.
+  // A message opens where it is, and pressing its card again closes it. It is done in place, never
+  // by redrawing the list: the card you pressed stays the same button with the focus on it, and
+  // nothing else on the list changes. Only one is ever open, so #contactDetail stays unique.
+  function ctClose() {
+    if (ctOpenId === null) return;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + ctOpenId + '"]');
+    ctOpenId = null;
+    if (!card) return;
+    card.classList.remove("ct-msg--open");
+    var more = card.querySelector(".ct-msg__more");
+    if (more) more.remove();
+    var btn = card.querySelector(".ct-msg__summary");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
   function openContact(id) {
     id = Number(id);
-    if (ctOpenId === id) {
-      ctOpenId = null;
-      ctDraw();
-      return;
-    }
+    var was = ctOpenId;
+    ctClose();
+    if (was === id) return;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + id + '"]');
+    if (!card) return;
     ctOpenId = id;
     currentContactId = id;
-    ctDraw();
-    var wrap = el("contactDetail");
-    if (!wrap) return;
+    card.classList.add("ct-msg--open");
+    var btn = card.querySelector(".ct-msg__summary");
+    btn.setAttribute("aria-expanded", "true");
+    card.insertAdjacentHTML("beforeend", CT_MORE_HTML);
+    // Closing a long message above this one moves this one up the page, and iOS Safari does not
+    // keep your place for you, so bring it back into view (clear of the pinned bars: scroll-margin).
+    if (btn.scrollIntoView) btn.scrollIntoView({ block: "nearest" });
+    var wrap = card.querySelector("#contactDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    // A reply for a message you have since closed, or moved on from, is dropped: it belongs to a card
+    // that is no longer open, and drawn into the open one it would show one person's message, and
+    // buttons, in another person's card.
+    var stillOpen = function () { return ctOpenId === id; };
     authFetch("/api/admin/contact/" + id)
       .then(function (res) {
+        if (!stillOpen()) throw new Error("moved on");
         if (res.status === 404) {
           wrap.innerHTML = '<p class="admin-empty">Enquiry not found.</p>';
           throw new Error("not found");
         }
         return okJson(res);
       })
-      .then(renderContact)
+      .then(function (c) {
+        if (stillOpen()) renderContact(c, wrap);
+      })
       .catch(function (err) {
         // TASK-476: a failure is not a record with nothing in it. "Not found" has said so already.
-        if (err && err.message === "not found") return;
+        if (!stillOpen() || (err && err.message === "not found")) return;
         wrap.innerHTML = unavailableHtml("Could not load this enquiry. Please try again.");
       });
   }
-  function renderContact(c) {
+  function renderContact(c, into) {
     var esc = H.escapeHtml;
     var canWrite = canEdit("contact");
     var facts =
@@ -3694,7 +3752,7 @@
         '<button class="ct-act ct-act--danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
         "</div>";
     }
-    var wrap = el("contactDetail");
+    var wrap = into || el("contactDetail");
     if (!wrap) return;
     wrap.innerHTML = facts + actions;
     if (canWrite) wireContactActions(c);
@@ -3705,7 +3763,7 @@
     var row = ctRows.find(function (r) { return Number(r.id) === Number(updated.id); });
     if (!row) return;
     row.status = updated.status;
-    row.replied_summary = updated.status === "replied" ? "Replied by " + (updated.replied_by || "you") : null;
+    row.replied_summary = updated.status === "replied" ? ctRepliedSummary(updated.replied_by, updated.replied_at) : null;
     var card = doc.querySelector('.ct-msg[data-ct-id="' + Number(row.id) + '"]');
     if (card) {
       card.classList.toggle("ct-msg--waiting", row.status !== "replied");
@@ -3715,7 +3773,11 @@
     ctCounts();
   }
   function patchContact(body, okMsg, errMsg) {
-    return authFetch("/api/admin/contact/" + currentContactId, {
+    // The card the change is for. If you have opened another by the time the answer comes, that
+    // card's mark and the counts still follow, but its open part and its status line are left alone.
+    var id = Number(currentContactId);
+    var stillOpen = function () { return ctOpenId === id; };
+    return authFetch("/api/admin/contact/" + id, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -3725,14 +3787,16 @@
       })
       .then(function (updated) {
         if (updated) {
-          renderContact(updated);
           ctRowChanged(updated);
-          contactStatus(okMsg);
+          if (stillOpen()) {
+            renderContact(updated);
+            contactStatus(okMsg);
+          }
           refreshEnquiryNotice(); // one fewer waiting, or one more if it was un-marked
-        } else contactStatus(errMsg);
+        } else if (stillOpen()) contactStatus(errMsg);
       })
       .catch(function () {
-        contactStatus(errMsg);
+        if (stillOpen()) contactStatus(errMsg);
       });
   }
   function wireContactActions(c) {
@@ -5425,6 +5489,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     el("teamPermStatus").textContent = "";
     renderTeamPermMatrix(u);
   }
@@ -9172,6 +9237,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     donorStatus("");
     var wrap = el("donorDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -10818,6 +10884,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     businessSay("businessOutcomeStatus", "");
     businessSay("businessNoteStatus", "");
     el("businessDetail").innerHTML = '<p class="admin-loading">Loading…</p>';

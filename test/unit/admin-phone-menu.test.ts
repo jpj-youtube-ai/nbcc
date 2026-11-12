@@ -85,6 +85,10 @@ describe("on a phone", () => {
     const bar = ruleFor(phone, ".admin-nav");
     expect(bar).toMatch(/background:\s*var\(--ov-maroon\)/);
     expect(bar).toMatch(/display:\s*flex/);
+    // 61px tall, as the Festive Ball's sections bar pins under it (#view-ball .ball-sections top:61px):
+    // 8 + the 44px button + 8 + a 1px rule.
+    expect(bar).toMatch(/padding:\s*8px 12px/);
+    expect(bar).toMatch(/border-bottom:\s*1px solid/);
   });
 
   it("draws the open menu as a two-column grid of tiles", () => {

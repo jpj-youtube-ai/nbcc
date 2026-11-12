@@ -4,6 +4,7 @@ import { londonDate } from "../ball/sales-report";
 import { publicNights, publicSettings, sleighTotals } from "../db/sleigh";
 import { SLEIGH_OLD_PATH, SLEIGH_PATH, SLEIGH_THANKS_PATH, roadStop, sleighPhase, type SleighNight, type SleighSettings } from "../sleigh/model";
 import { amountFromSession, renderSleighPage, renderSleighThanks } from "../sleigh/page";
+import { dressPage } from "../site/chrome";
 
 // The Kilmarnock Santa Sleigh (src/sleigh/page.ts): /sleigh, its thank you, and the long address.
 // Mounted before the site router, whose catch all is the 404.
@@ -34,26 +35,9 @@ const defaults: SleighRouterDeps = {
   decorate: async (html, cookieHeader) => (await import("./site")).decorateSitePage(html, cookieHeader),
 };
 
-// The menu's extras are read from the database. A slow read never holds a QR scan up: after this
-// long, or on any failure, the page goes out with the site's menu and footer as they are in the file.
-const DECORATE_WAIT_MS = 1500;
-
-async function dressed(d: SleighRouterDeps, html: string, cookieHeader: string | undefined): Promise<string> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      d.decorate(html, cookieHeader),
-      new Promise<string>((done) => {
-        timer = setTimeout(() => done(html), DECORATE_WAIT_MS);
-      }),
-    ]);
-  } catch (err) {
-    console.error("sleigh page: could not add the menu's extras:", err instanceof Error ? err.message : err);
-    return html;
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// The menu's extras are read from the database, and a slow read never holds a QR scan up: after 1.5s,
+// or on any failure, the page goes out with the site's menu and footer as they are (src/site/chrome.ts).
+const dressed = (d: SleighRouterDeps, html: string, cookieHeader: string | undefined): Promise<string> => dressPage(html, cookieHeader, d.decorate);
 
 // A Checkout Session id as Stripe writes it ("cs_test_..." or "cs_live_...").
 const CHECKOUT_SESSION_ID = /^cs_[A-Za-z0-9_]{1,250}$/;

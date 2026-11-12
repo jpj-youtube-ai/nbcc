@@ -16,6 +16,9 @@ vi.mock("../../src/db/newsletters", () => newsletters);
 vi.mock("../../src/db/subscriber-lists", () => lists);
 vi.mock("../../src/db/email-opt-outs", () => optOuts);
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "a-test-secret" } }));
+// TASK-615: the page goes out as every page of the site does (src/routes/site.ts adds the menu's
+// extras); here it goes out as drawn, so this file stays about the save.
+vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string) => html }));
 
 import { postPreferences } from "../../src/routes/preferences";
 import { signUnsubscribeToken } from "../../src/donors/unsubscribe-token";

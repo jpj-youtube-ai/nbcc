@@ -18,6 +18,8 @@ import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render"
 import { config } from "../config";
 import { grossedUpFeePence, DEFAULT_CARD_FEE, type CardFeeRate } from "../ball/pricing";
 import { storySubmissionSchema, buildStoryRecord } from "../stories/schema";
+import { storyCheckPage, storyFailedPage, storyThanksPage, storyTooManyPage } from "../stories/answer-pages";
+import { pageFailed, sendSitePage } from "../site/chrome";
 import { insertStory } from "../db/stories";
 import { contactEnquirySchema } from "../contact/schema";
 import { insertEnquiry } from "../db/contact";
@@ -1082,28 +1084,19 @@ apiRouter.post("/api/gift-aid/:token", express.urlencoded({ extended: false }), 
 // fields) — mirrors the security checklist in the spec.
 const myStoryLimiter = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
 
-function myStoryThankYouHtml(): string {
-  // Self-contained, minimal thank-you page for the no-JS path (no new static file):
-  // links the real site stylesheet so it matches the brand, warm closing line per spec.
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Thank you | Night Before Christmas Campaign</title>
-<link rel="stylesheet" href="/assets/css/styles.css" />
-</head>
-<body>
-<main class="my-story-thanks" style="max-width: 40rem; margin: 4rem auto; padding: 0 1.5rem; text-align: center;">
-<h1>Thank you</h1>
-<p>Your story becomes part of ours.</p>
-<p><a href="/">Back to the home page</a></p>
-</main>
-</body>
-</html>`;
+// TASK-615: the no-JS form's answers (the thank you and the three ways back) are pages of the site,
+// with its banner and footer (src/stories/answer-pages.ts), and go out as every page does. The JSON
+// answers are as they were. A failure while answering is a 500, never a promise left to reject.
+export async function postMyStory(req: Request, res: Response): Promise<Response | void> {
+  try {
+    return await answerMyStory(req, res);
+  } catch (err) {
+    // Never log story PII: only the error's own message, never the payload.
+    pageFailed(res, "my-story answer", err);
+  }
 }
 
-export async function postMyStory(req: Request, res: Response): Promise<Response | void> {
+async function answerMyStory(req: Request, res: Response): Promise<Response> {
   const isJson = Boolean(req.is("application/json"));
   const parsed = storySubmissionSchema.safeParse(req.body ?? {});
 
@@ -1111,18 +1104,13 @@ export async function postMyStory(req: Request, res: Response): Promise<Response
     if (isJson) {
       return res.status(400).json({ error: "Please check your story details and try again" });
     }
-    return res.status(400).type("html").send(
-      "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><title>Please check your details</title></head>" +
-        "<body><main><h1>Please check your details</h1><p>Some required details were missing or invalid. Please go back and try again.</p></main></body></html>",
-    );
+    return sendSitePage(req, res.status(400), storyCheckPage());
   }
 
   // Honeypot: a real visitor never fills this hidden field. Respond exactly as a
   // successful submission would, but silently drop it — no insert, no error surfaced.
   if (parsed.data.website && parsed.data.website.trim().length > 0) {
-    return isJson
-      ? res.status(200).json({ ok: true })
-      : res.status(200).type("html").send(myStoryThankYouHtml());
+    return isJson ? res.status(200).json({ ok: true }) : sendSitePage(req, res.status(200), storyThanksPage());
   }
 
   // Per-IP rate limit (spam/abuse guard, mirrors src/portal/request-limiter usage in
@@ -1130,10 +1118,7 @@ export async function postMyStory(req: Request, res: Response): Promise<Response
   if (!myStoryLimiter.allow(req.ip ?? "unknown", Date.now())) {
     return isJson
       ? res.status(429).json({ error: "Too many submissions, please try again later" })
-      : res.status(429).type("html").send(
-          "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><title>Please try again later</title></head>" +
-            "<body><main><h1>Please try again later</h1><p>Too many submissions from this connection. Please try again later.</p></main></body></html>",
-        );
+      : sendSitePage(req, res.status(429), storyTooManyPage());
   }
 
   try {
@@ -1144,16 +1129,13 @@ export async function postMyStory(req: Request, res: Response): Promise<Response
     if (isJson) {
       return res.status(500).json({ error: "We could not save your story right now" });
     }
-    return res.status(500).type("html").send(
-      "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><title>Something went wrong</title></head>" +
-        "<body><main><h1>Something went wrong</h1><p>We could not save your story right now. Please try again later.</p></main></body></html>",
-    );
+    return sendSitePage(req, res.status(500), storyFailedPage());
   }
 
   if (isJson) {
     return res.status(200).json({ ok: true });
   }
-  return res.status(200).type("html").send(myStoryThankYouHtml());
+  return sendSitePage(req, res.status(200), storyThanksPage());
 }
 
 // Body-size guard for the public, unauthenticated JSON path of this route. It reads

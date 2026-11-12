@@ -11,6 +11,8 @@ import {
 import { bandHasPlatinumPerks, perksForBand, fulfilmentBandFor, type BandPerks } from "../donors/fulfilment";
 import { containsBlockedWord } from "../donors/display-name-filter";
 import { buildCertificateHtml, certificateHeroName, formatMonthYear } from "../business/certificate";
+import { certificateNotFoundPage } from "../business/certificate-not-found";
+import { pageFailed, sendSitePage } from "../site/chrome";
 import { buildCaptureConfirmationEmail } from "../business/capture-confirmation-email";
 import { createRateLimiter } from "../portal/request-limiter";
 import { stripe } from "../clients/stripe";
@@ -27,31 +29,24 @@ import { config } from "../config";
 // token, so a non-eligible token can't be distinguished from a missing one.
 export const businessRouter = Router();
 
-// A small, self-contained 404 page (mirrors the notice pattern in src/routes/thank-you.ts).
-function notFound(res: Response): Response {
-  return res
-    .status(404)
-    .type("html")
-    .send(
-      `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Certificate | Night Before Christmas Campaign</title></head>
-<body style="font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem">
-<h1>Certificate not found</h1><p>This certificate link is not valid.</p></body></html>`,
-    );
-}
-
-export async function getCertificate(req: Request, res: Response): Promise<Response> {
-  const ctx = await getCertificateContextByToken(req.params.token);
-  // Gate: unknown token, not a platinum band, or the business did not opt into a certificate.
-  if (!ctx || !bandHasPlatinumPerks(ctx.band) || !ctx.wantCertificate) {
-    return notFound(res);
+// The 404 is a page of the site, with its banner and footer (TASK-615,
+// src/business/certificate-not-found.ts), sent as every page goes out. The certificate itself stays a
+// sheet to print. A failure is a plain 500, never a promise left to reject.
+export async function getCertificate(req: Request, res: Response): Promise<Response | void> {
+  try {
+    const ctx = await getCertificateContextByToken(req.params.token);
+    // Gate: unknown token, not a platinum band, or the business did not opt into a certificate.
+    if (!ctx || !bandHasPlatinumPerks(ctx.band) || !ctx.wantCertificate) {
+      return await sendSitePage(req, res.status(404), certificateNotFoundPage());
+    }
+    const businessName = certificateHeroName(ctx);
+    // "Supporting since" = the Month Year of their earliest donation (defaulting to now in the
+    // degenerate no-donations case, so the page always renders).
+    const since = formatMonthYear(ctx.supportingSince ?? new Date());
+    return res.status(200).type("html").send(buildCertificateHtml({ businessName, since }));
+  } catch (err) {
+    pageFailed(res, "business certificate", err);
   }
-  const businessName = certificateHeroName(ctx);
-  // "Supporting since" = the Month Year of their earliest donation (defaulting to now in the
-  // degenerate no-donations case, so the page always renders).
-  const since = formatMonthYear(ctx.supportingSince ?? new Date());
-  return res.status(200).type("html").send(buildCertificateHtml({ businessName, since }));
 }
 
 businessRouter.get("/business/certificate/:token", getCertificate);

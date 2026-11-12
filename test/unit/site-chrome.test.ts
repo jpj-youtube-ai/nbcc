@@ -103,6 +103,48 @@ describe("a home page that cannot be read", () => {
     vi.doUnmock("node:fs");
     vi.resetModules();
     vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  // Not a read and a line in the log on every page view: said once, then tried again after a minute.
+  it("says so once, and reads it again only after a minute", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-13T10:00:00Z"));
+    let readable = false;
+    let reads = 0;
+    vi.resetModules();
+    vi.doMock("node:fs", async (orig) => {
+      const real = await orig<typeof import("node:fs")>();
+      return {
+        ...real,
+        readFileSync: ((path: unknown, ...rest: unknown[]) => {
+          if (String(path).endsWith("index.html")) {
+            reads += 1;
+            if (!readable) throw new Error("no such file");
+          }
+          return (real.readFileSync as (...a: unknown[]) => unknown)(path, ...rest);
+        }) as typeof real.readFileSync,
+      };
+    });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fresh = await import("../../src/site/chrome");
+    for (let view = 0; view < 5; view += 1) {
+      expect(fresh.siteHeader()).toBe("");
+      expect(fresh.siteFooter()).toBe("");
+    }
+    expect(reads).toBe(1);
+    expect(log).toHaveBeenCalledOnce();
+
+    readable = true;
+    vi.setSystemTime(new Date("2026-11-13T10:00:59Z"));
+    expect(fresh.siteHeader()).toBe("");
+    expect(reads).toBe(1);
+
+    vi.setSystemTime(new Date("2026-11-13T10:01:00Z"));
+    expect(fresh.siteHeader()).toContain('<a class="nav-cta" href="/donate">Donate</a>');
+    expect(fresh.siteFooter()).toContain('<footer class="site-footer"');
+    expect(reads).toBe(2);
+    expect(log).toHaveBeenCalledOnce();
   });
 
   it("leaves the banner and the footer out rather than taking a page down, and says so", async () => {

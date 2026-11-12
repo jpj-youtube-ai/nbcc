@@ -64,6 +64,19 @@ export function subscriptionRow(userId: number, sub: BrowserSubscription): Subsc
   const auth = (sub.keys?.auth ?? "").trim();
   if (!p256dh || !auth) throw new Error("A push subscription needs both keys (p256dh and auth)");
 
+  // Checked for LENGTH here, not just for presence. base64url decoding never throws — "!" decodes
+  // to zero bytes without complaint — so a non-empty string says nothing about what is in it. A
+  // subscription stored with a junk key encrypts, sends, is accepted by the push service, and
+  // shows nothing on the phone, forever, with no error to find. The encryption refuses these
+  // too (src/admin/web-push.ts), but by then the row is in the table failing every sweep.
+  const key = Buffer.from(p256dh, "base64url");
+  if (key.length !== 65 || key[0] !== 0x04) {
+    throw new Error("A push subscription's p256dh key must be a 65-byte uncompressed P-256 point");
+  }
+  if (Buffer.from(auth, "base64url").length !== 16) {
+    throw new Error("A push subscription's auth secret must be 16 bytes");
+  }
+
   return { userId, endpoint, p256dh, auth };
 }
 

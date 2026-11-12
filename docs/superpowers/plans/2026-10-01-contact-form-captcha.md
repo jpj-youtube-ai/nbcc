@@ -10,7 +10,7 @@
 
 **Conventions for whoever runs this plan:**
 - Work only in the worktree `C:/Users/jomcfarl/Downloads/nbcc-scot/nbcc/.claude/worktrees/contact-captcha` (branch `contact-form-captcha`). Other sessions use the main checkout and other worktrees.
-- `TASK-619` in new comments is a stand-in for the task number. It is claimed at PR time (Task 11) and replaced then, never earlier, because other sessions claim numbers too.
+- `TASK-NNN` in new comments is a stand-in for the task number. It is claimed at PR time (Task 11) and replaced then, never earlier, because other sessions claim numbers too.
 - Test command: `npx vitest run <files>`. On this Windows machine `test/unit/perf-budget.test.ts` always fails because of CRLF line endings; that is a known artifact (Task 10 measures the real budget).
 - No local database exists. Never start the real server; use the unit tests and the stand-in in Task 10.
 
@@ -59,7 +59,7 @@ Create `test/unit/config-turnstile.test.ts`:
 import { describe, it, expect } from "vitest";
 import { configSchema, productionConfigProblems } from "../../src/config/schema";
 
-// TASK-619: the contact form's Cloudflare Turnstile keys. Off (empty) by default so local dev and
+// TASK-NNN: the contact form's Cloudflare Turnstile keys. Off (empty) by default so local dev and
 // CI boot with no call to Cloudflare; required in production, so the check can never silently
 // switch itself off there.
 
@@ -126,7 +126,7 @@ In `src/config/schema.ts`, directly after the line `STRIPE_PUBLISHABLE_KEY: z.st
 
 ```ts
 
-  // Cloudflare Turnstile on the contact form (TASK-619). The SITE key is public: the browser draws
+  // Cloudflare Turnstile on the contact form (TASK-NNN). The SITE key is public: the browser draws
   // the box with it, so it is a plain task-def env value like STRIPE_PUBLISHABLE_KEY. The SECRET is
   // an SSM SecureString. The check is on only when BOTH are set: a secret without a site key would
   // refuse every message, because the page could not show the box. Empty outside production, so
@@ -145,7 +145,7 @@ At the end of `src/config/schema.ts`, after `export type Config = z.infer<typeof
 export function productionConfigProblems(c: Config): string[] {
   if (c.NODE_ENV !== "production") return [];
   const problems: string[] = [];
-  // TASK-619: without both keys the contact form's spam check would silently be off.
+  // TASK-NNN: without both keys the contact form's spam check would silently be off.
   if (!c.TURNSTILE_SITE_KEY) problems.push("TURNSTILE_SITE_KEY is required in production");
   if (!c.TURNSTILE_SECRET_KEY) problems.push("TURNSTILE_SECRET_KEY is required in production");
   return problems;
@@ -183,7 +183,7 @@ export const config = parsed.data;
 In `.env.example`, directly after the line `STRIPE_PUBLISHABLE_KEY=`, add:
 
 ```
-# Cloudflare Turnstile on the contact form (TASK-619). OPTIONAL locally: leave BOTH blank and the
+# Cloudflare Turnstile on the contact form (TASK-NNN). OPTIONAL locally: leave BOTH blank and the
 # check is off (no box on the page, no call to Cloudflare). To try it, use Cloudflare's test keys:
 # site key 1x00000000000000000000AA with secret 1x0000000000000000000000000000000AA always pass;
 # site key 2x00000000000000000000AB always blocks. Production requires both: the site key is a
@@ -219,7 +219,7 @@ Create `test/unit/turnstile-client.test.ts`:
 ```ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// TASK-619: asking Cloudflare whether a pass from the contact form's box is genuine. Every verdict,
+// TASK-NNN: asking Cloudflare whether a pass from the contact form's box is genuine. Every verdict,
 // with fetch injected, so no network is touched. The config is mocked: the real one would validate
 // process.env and exit.
 
@@ -354,7 +354,7 @@ Create `src/clients/turnstile.ts`:
 ```ts
 import { config } from "../config";
 
-// Cloudflare Turnstile (TASK-619): is a pass from the contact form's box genuine? This is the only
+// Cloudflare Turnstile (TASK-NNN): is a pass from the contact form's box genuine? This is the only
 // code that knows Cloudflare's error codes, so its callers see one of three answers:
 //   passed      - carry on
 //   refused     - the visitor's pass is missing, invalid, expired or already used: store nothing
@@ -455,7 +455,7 @@ Create `test/unit/contact-captcha-endpoint.test.ts`:
 ```ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// TASK-619: POST /api/contact with the Cloudflare Turnstile check. The order is honeypot, rate
+// TASK-NNN: POST /api/contact with the Cloudflare Turnstile check. The order is honeypot, rate
 // limit, the check, validation, store. A refused pass stores nothing; a check that cannot answer
 // keeps the message and logs why. The Turnstile client, the contact DB, Stripe and config are
 // mocked, so no network or env is touched. Each test posts from its own IP, because the rate
@@ -614,7 +614,7 @@ import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnst
 Inside `postContact`, directly after the rate-limit block (the `if (!contactLimiter.allow(...)) { ... }` that returns 429) and before `const parsed = contactEnquirySchema.safeParse(req.body);`, add:
 
 ```ts
-  // TASK-619: Cloudflare Turnstile, when it is on. Before validation, so a bot without a valid pass
+  // TASK-NNN: Cloudflare Turnstile, when it is on. Before validation, so a bot without a valid pass
   // learns nothing about what the form expects. A refused pass stores nothing; a check that cannot
   // answer keeps the message and logs why, so a genuine enquiry is never lost to the checker.
   if (captchaEnabled()) {
@@ -642,7 +642,7 @@ add:
 
 ```ts
 
-// TASK-619: the contact page asks for the Turnstile site key and shows the box only if it gets one
+// TASK-NNN: the contact page asks for the Turnstile site key and shows the box only if it gets one
 // (assets/js/contact-captcha.js). Public: the site key is in every visitor's browser anyway.
 export function getContactCaptcha(_req: Request, res: Response): Response {
   return res.status(200).json({ siteKey: captchaSiteKey() });
@@ -677,9 +677,9 @@ Append to `test/unit/contact.test.ts`:
 
 ```ts
 
-// TASK-619: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only when the server
+// TASK-NNN: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only when the server
 // says the check is on. Nothing is loaded from Cloudflare by the page itself.
-describe("the contact form's spam check (TASK-619)", () => {
+describe("the contact form's spam check (TASK-NNN)", () => {
   const form = doc.getElementById("contactForm");
 
   it("has a place for the box above Send, hidden until it is drawn", () => {
@@ -729,7 +729,7 @@ In `contact.html`, directly after the line `<script defer src="/assets/js/pulse.
 In `contact.html`, directly before the line `<button class="btn btn-holly" type="submit">Send message</button>`, add (with the same indentation):
 
 ```html
-                <!-- TASK-619: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only
+                <!-- TASK-NNN: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only
                      when the server says the check is on. The hidden field carries its pass, and
                      main.js sends it with the message. -->
                 <div class="field" id="contactCaptcha" hidden></div>
@@ -763,7 +763,7 @@ In `test/unit/contact.test.ts`, inside `describe("contact form behaviour (jsdom)
 
 ```ts
 
-  it("sends the spam check's pass from its hidden field with the message (TASK-619)", async () => {
+  it("sends the spam check's pass from its hidden field with the message (TASK-NNN)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     (window as unknown as { fetch: unknown }).fetch = fetchMock;
     set("firstName", "Ada");
@@ -794,7 +794,7 @@ to
 
 ```js
         message: value("message"),
-        captchaToken: value("captchaToken"), // TASK-619: set by contact-captcha.js
+        captchaToken: value("captchaToken"), // TASK-NNN: set by contact-captcha.js
       };
 ```
 
@@ -832,7 +832,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
-// TASK-619: assets/js/contact-captcha.js, the contact page's Cloudflare Turnstile box. jsdom does
+// TASK-NNN: assets/js/contact-captcha.js, the contact page's Cloudflare Turnstile box. jsdom does
 // not fetch external scripts, so each test stands in for Cloudflare: it sets window.turnstile and
 // calls the onload callback the script asked Cloudflare to call.
 
@@ -1005,7 +1005,7 @@ Expected: FAIL, cannot find `assets/js/contact-captcha.js`.
 Create `assets/js/contact-captcha.js`:
 
 ```js
-// Contact form spam check (TASK-619): Cloudflare Turnstile, on the contact page only.
+// Contact form spam check (TASK-NNN): Cloudflare Turnstile, on the contact page only.
 //
 // Asks the server whether the check is on (GET /api/contact/captcha). Only when it gets a site key
 // does it load Cloudflare's script and draw the box, so no other page, and no page in development
@@ -1159,7 +1159,7 @@ add:
 
 ```hcl
 
-# Cloudflare Turnstile SITE key for the contact form's spam check (TASK-619). PUBLIC: every visitor's
+# Cloudflare Turnstile SITE key for the contact form's spam check (TASK-NNN). PUBLIC: every visitor's
 # browser draws the box with it, so it is a plain env value like stripe_publishable_key. Empty by
 # default; production sets it, and the app refuses to start production without it.
 variable "turnstile_site_key" {
@@ -1174,7 +1174,7 @@ In `infra/modules/app/main.tf`, after the whole `resource "aws_ssm_parameter" "s
 
 ```hcl
 
-# Cloudflare Turnstile SECRET key (TASK-619): checks the contact form's passes with Cloudflare. A
+# Cloudflare Turnstile SECRET key (TASK-NNN): checks the contact form's passes with Cloudflare. A
 # SecureString like the Stripe secret, created holding REPLACE_ME. The real value is pasted in out of
 # band (aws ssm put-parameter --overwrite) and the apply never overwrites it. Until it is, every
 # check reports our secret as invalid, and the contact form keeps messages and logs a warning.
@@ -1191,21 +1191,21 @@ resource "aws_ssm_parameter" "turnstile_secret_key" {
 In `infra/modules/app/ecs.tf`, inside `data "aws_iam_policy_document" "exec_secrets"`, after the line `aws_ssm_parameter.stripe_webhook_secret.arn,`, add:
 
 ```hcl
-      # Cloudflare Turnstile secret (TASK-619), injected via valueFrom like the Stripe secret.
+      # Cloudflare Turnstile secret (TASK-NNN), injected via valueFrom like the Stripe secret.
       aws_ssm_parameter.turnstile_secret_key.arn,
 ```
 
 In the container's `environment` list, after the line `{ name = "STRIPE_PUBLISHABLE_KEY", value = var.stripe_publishable_key },`, add:
 
 ```hcl
-      # Cloudflare Turnstile SITE key (TASK-619): public, so a plain env value like the publishable key.
+      # Cloudflare Turnstile SITE key (TASK-NNN): public, so a plain env value like the publishable key.
       { name = "TURNSTILE_SITE_KEY", value = var.turnstile_site_key },
 ```
 
 In the container's `secrets` list, after the line `{ name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.stripe_webhook_secret.arn },`, add:
 
 ```hcl
-      # Cloudflare Turnstile SECRET key (TASK-619). Its ARN is also in exec_secrets above.
+      # Cloudflare Turnstile SECRET key (TASK-NNN). Its ARN is also in exec_secrets above.
       { name = "TURNSTILE_SECRET_KEY", valueFrom = aws_ssm_parameter.turnstile_secret_key.arn },
 ```
 
@@ -1215,7 +1215,7 @@ In `infra/envs/production/main.tf`, after the line that sets `stripe_publishable
 
 ```hcl
 
-  # Cloudflare Turnstile SITE key for the contact form (TASK-619). PUBLIC, from the widget
+  # Cloudflare Turnstile SITE key for the contact form (TASK-NNN). PUBLIC, from the widget
   # "nbcc.scot contact form" in the charity's Cloudflare account (hostname nbcc.scot, which covers
   # www). Verified 2026-10-01: Cloudflare draws the box for nbcc.scot and refuses localhost.
   turnstile_site_key = "0x4AAAAAAFLWXsnTJas6eb4L"
@@ -1249,7 +1249,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// TASK-619: the privacy notice names the contact form's spam check, what Cloudflare receives, the
+// TASK-NNN: the privacy notice names the contact form's spam check, what Cloudflare receives, the
 // lawful basis, and Cloudflare's own Turnstile privacy addendum.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -1317,7 +1317,7 @@ git commit -m "Captcha: the privacy notice says what Cloudflare Turnstile receiv
 
 ```markdown
 
-**A spam check on the contact form (TASK-619).** Bot spam was reaching Admin → Contact form past the
+**A spam check on the contact form (TASK-NNN).** Bot spam was reaching Admin → Contact form past the
 honeypot and the rate limit, so `POST /api/contact` now checks a Cloudflare Turnstile pass between
 the rate limit and validation whenever the check is on: both `TURNSTILE_SITE_KEY` and
 `TURNSTILE_SECRET_KEY` set. Production refuses to start without them (`productionConfigProblems` in
@@ -1554,14 +1554,14 @@ Dispatch the `config-drift-reviewer` agent on the branch (the two keys through s
 Use `/ship`, which takes the latest number in GitHub +1. Also check local branches, because other sessions hold numbers locally:
 `{ gh run list --limit 200 --json headBranch,displayTitle --jq '.[].headBranch, .[].displayTitle'; gh pr list --state all --limit 200 --json title --jq '.[].title'; git branch -a --format='%(refname:short)'; } | grep -oiE 'task[-_ ]?[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1`
 
-Then replace the stand-in in **this branch's files only**, rename the branch, and commit. `TASK-619`
+Then replace the stand-in in **this branch's files only**, rename the branch, and commit. `TASK-NNN`
 is also a generic placeholder elsewhere in the repo (`CLAUDE.md`, including its machine-managed
 block, `.claude/skills/ship/SKILL.md`, older plans and a test), and the guard hook does not see a
 Bash `sed`, so a repo-wide replace would quietly rewrite them. This plan is left out too, because
 its own steps use the placeholder:
-`git grep -l "TASK-619" -- $(git diff --name-only origin/main...HEAD | grep -v '^docs/superpowers/plans/') | xargs sed -i 's/TASK-619/TASK-<number>/g' && git diff --stat && git branch -m contact-form-captcha task-<number>-contact-form-captcha && git commit -am "[TASK-<number>] Number the captcha change"`
+`git grep -l "TASK-NNN" -- $(git diff --name-only origin/main...HEAD | grep -v '^docs/superpowers/plans/') | xargs sed -i 's/TASK-NNN/TASK-<number>/g' && git diff --stat && git branch -m contact-form-captcha task-<number>-contact-form-captcha && git commit -am "[TASK-<number>] Number the captcha change"`
 
-Done for TASK-490: 29 lines in 19 files; none of them held `TASK-619` on `main`. On Windows, `sed -i`
+Done for TASK-490: 29 lines in 19 files; none of them held `TASK-NNN` on `main`. On Windows, `sed -i`
 rewrites CRLF files as LF. Git stores LF either way, but `test/unit/footer.test.ts` (byte-identical
 footers) then fails locally until those files are checked out again.
 

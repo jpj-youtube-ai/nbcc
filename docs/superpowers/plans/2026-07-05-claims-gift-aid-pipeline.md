@@ -15,7 +15,7 @@
 - No migration, no schema change (all columns exist). No new config, no infra.
 - `claim_batches` defaults: `status='open'`, `regulator='OSCR'`, `charity_number='SC047995'`; `hmrc_reference` nullable.
 - Export CSV columns (fixed, HMRC order): Title, First name, Last name, House name/number, Postcode, Donation date, Amount (`CHARITIES_ONLINE_COLUMNS`, `src/claims/charities-online.ts`).
-- README.md tracks changes (golden rule 7). Branch `task-claims-gift-aid-pipeline`; PR prefixed `[TASK-619]` before merge; drive `pr.yml` green; self-merge.
+- README.md tracks changes (golden rule 7). Branch `task-claims-gift-aid-pipeline`; PR prefixed `[TASK-NNN]` before merge; drive `pr.yml` green; self-merge.
 
 Confirmed DB shapes: `donations(claim_status, claim_batch_id, declaration_id, …)`; `claim_status` lifecycle `eligible → batched → claimed` (also `not_eligible`, `adjustment_due`). `assignDonationToBatch(donationId, claimBatchId, actor)` sets `claim_batch_id` + `claim_status='batched'`, throws `BatchAssignmentError(reason, donationId)` (`reason ∈ not_found|not_eligible|already_batched|…`). `submitClaimBatch(batchId, actor)`. `listClaimBatches()`, `listAdjustmentDueDonations()`, `listClaimableDonationsForExport(claimBatchId?)`.
 
@@ -112,7 +112,7 @@ Run: `npm run lint && npm run build` → clean.
 
 ```bash
 git add src/db/donations.ts test/unit/charities-online-query.test.ts
-git commit -m "[TASK-619] Fix empty claim-batch CSV: export by batch id, not claim_status='eligible'"
+git commit -m "[TASK-NNN] Fix empty claim-batch CSV: export by batch id, not claim_status='eligible'"
 ```
 
 ---
@@ -215,7 +215,7 @@ Add the two step defs to `admin-api.steps.js` mirroring the existing auth-fetch 
 
 ```bash
 git add src/db/admin.ts src/routes/admin.ts test/unit/admin-api.test.ts features/admin-api.feature features/steps/admin-api.steps.js
-git commit -m "[TASK-619] Add createClaimBatch + POST /api/admin/claim-batches"
+git commit -m "[TASK-NNN] Add createClaimBatch + POST /api/admin/claim-batches"
 ```
 
 ---
@@ -330,7 +330,7 @@ adminRouter.post("/api/admin/claim-batches/:id/donations", postAdminAssignBatchD
 
 ```bash
 git add src/db/admin.ts src/routes/admin.ts test/unit/admin-api.test.ts
-git commit -m "[TASK-619] Add eligible-for-claim list + bulk assign-to-batch route"
+git commit -m "[TASK-NNN] Add eligible-for-claim list + bulk assign-to-batch route"
 ```
 
 ---
@@ -446,7 +446,7 @@ Wire the buttons: add `bindClick("assignBtn", assignSelected);` where the other 
 
 ```bash
 git add admin.html assets/js/admin/app.js assets/css/admin.css README.md
-git commit -m "[TASK-619] Redesign the Claims view: labelled pipeline, eligible picker, assign-to-batch"
+git commit -m "[TASK-NNN] Redesign the Claims view: labelled pipeline, eligible picker, assign-to-batch"
 ```
 
 ---
@@ -487,14 +487,14 @@ Expected: the new scenario passes (was impossible before — empty CSV); whole s
 
 ```bash
 git add features/admin-api.feature features/steps/admin-api.steps.js
-git commit -m "[TASK-619] Add end-to-end claims pipeline BDD (eligible -> batch -> non-empty export)"
+git commit -m "[TASK-NNN] Add end-to-end claims pipeline BDD (eligible -> batch -> non-empty export)"
 ```
 
 ---
 
 ### Task 6: PR to green merge
 
-- [ ] Rebase on `origin/main`, push, open PR (title prefixed with the assigned `[TASK-619]`).
+- [ ] Rebase on `origin/main`, push, open PR (title prefixed with the assigned `[TASK-NNN]`).
 - [ ] `gh pr checks --watch`; on green, `gh pr merge --squash --delete-branch`. Red ⇒ fix, push, re-watch.
 
 ---

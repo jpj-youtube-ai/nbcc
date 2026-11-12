@@ -100,7 +100,7 @@ Screen words come from the spec. Mark paid and Cancel each open an inline confir
 
 ### Task 6: BDD, README, pictures, ship
 
-**Files:** create `features/admin-invoices.feature`, `features/steps/admin-invoices.steps.js`; modify `README.md` (section "Invoices for donations (TASK-619)").
+**Files:** create `features/admin-invoices.feature`, `features/steps/admin-invoices.steps.js`; modify `README.md` (section "Invoices for donations (TASK-NNN)").
 
 Scenarios: permissions (401, view 200, view cannot send 403); send then open the page by its link (200, shows INV number) and a bad token 404; bank transfer: mark paid makes exactly one donation labelled invoice (Donations list with `source=invoice` shows it once) and a second mark paid is refused; card: a signed `checkout.session.completed` for the invoice records one donation, the same session again under a new event id adds nothing, the page then says Paid; a business invoice refuses Gift Aid on its page; cancel then pay shows the cancelled page.
 

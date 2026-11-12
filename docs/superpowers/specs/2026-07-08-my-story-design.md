@@ -1,7 +1,7 @@
 # My Story — public story-sharing page, storage & admin (feature spec)
 
 > **Board note:** this feature is larger than one clean PR, so it is written as an
-> **epic of 3 tasks** (A → B → C) plus one deferred task (D). `TASK-619` / `REQ-NNN`
+> **epic of 3 tasks** (A → B → C) plus one deferred task (D). `TASK-NNN` / `REQ-NNN`
 > numbers are assigned by the board at claim time (see CLAUDE.md "Task pickup"); the
 > letters below are just ordering. Each task ships as its own green PR against its
 > own `REQ-NNN`.

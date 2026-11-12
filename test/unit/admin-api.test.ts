@@ -484,7 +484,7 @@ describe("GET /api/admin/queues/gasds-pool", () => {
   });
 });
 
-// --- claims pipeline: create batch, eligible list, assign-to-batch (TASK-619) -------------------
+// --- claims pipeline: create batch, eligible list, assign-to-batch (TASK-NNN) -------------------
 describe("POST /api/admin/claim-batches (create)", () => {
   it("401s with no token", async () => {
     expect((await runCreateBatch({ token: "" })).statusCode).toBe(401);

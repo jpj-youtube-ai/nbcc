@@ -18,7 +18,7 @@
 - Identity for history = email, case-insensitive (`LOWER(email) = LOWER($1)`). Token targets the newest donor row.
 - Update `README.md` in the same task as any behaviour/route change (golden rule 7).
 - BDD donor emails MUST match the portal cleanup pattern `%portal.bdd@example.com`.
-- Branch will be `task-<NNN>-...`; PR title starts `[TASK-619]` (number set at PR time).
+- Branch will be `task-<NNN>-...`; PR title starts `[TASK-NNN]` (number set at PR time).
 
 ---
 

@@ -11,7 +11,7 @@
 **Spec:** `docs/superpowers/specs/2026-10-05-stories-read-tick-design.md`
 
 **House rules that bite here:**
-- Comments use the stand-in `TASK-619` until the PR is opened. Replace it then, in this branch's own lines only (`TASK-619` is also a generic placeholder in `CLAUDE.md`, the ship skill and older plans).
+- Comments use the stand-in `TASK-NNN` until the PR is opened. Replace it then, in this branch's own lines only (`TASK-NNN` is also a generic placeholder in `CLAUDE.md`, the ship skill and older plans).
 - The tick must not carry the attribute `data-story`: one delegated click listener on `.admin-content` opens a story for anything inside `[data-story]` (`app.js`, about line 7503).
 - Nothing scrolls sideways, inside a box or otherwise. `.admin-table` is `table-layout: fixed`, so a new column takes its share unless it is given a width.
 - Visible wording has no en or em dashes and no hyphenated words.
@@ -50,7 +50,7 @@ import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
 
-// TASK-619: the Read tick on Admin > Stories, in the admin's jsdom harness (admin.html's <body>, a
+// TASK-NNN: the Read tick on Admin > Stories, in the admin's jsdom harness (admin.html's <body>, a
 // fake fetch, app.js evaluated against it). "Read" is the status Reviewed, so a tick sends a status
 // to the PATCH the screen already had. Every story here is invented.
 
@@ -190,7 +190,7 @@ Expected: 4 failures. The first says `expected 'ID' to be 'Read'`; the others fa
 In `assets/js/admin/app.js`, replace the whole `storiesTable` function with:
 
 ```js
-  // TASK-619: "read" is the status that already says so. New is unread. Reviewed is read and can be
+  // TASK-NNN: "read" is the status that already says so. New is unread. Reviewed is read and can be
   // unticked. Used and Withdrawn say more than read, so their tick is locked: a stray click must
   // never undo them. The attribute is data-story-read, never data-story, which opens the story.
   function storyIsRead(status) {
@@ -326,7 +326,7 @@ Expected: four of the new tests fail (no PATCH is sent, and `#storiesListStatus`
 In `admin.html`, in the Stories view, between the closing `</div>` of `.admin-search-bar` and the `#storiesTable` line, add:
 
 ```html
-              <!-- TASK-619: what a Read tick could not save. Empty while all is well. -->
+              <!-- TASK-NNN: what a Read tick could not save. Empty while all is well. -->
               <p class="ty-status" id="storiesListStatus" role="status" aria-live="polite"></p>
 ```
 
@@ -335,7 +335,7 @@ In `admin.html`, in the Stories view, between the closing `</div>` of `.admin-se
 In `assets/js/admin/app.js`, straight after the `#storiesStatusFilter` wiring (the `forEach` that ends about line 2181) and before `scopeConsentBadges`, add:
 
 ```js
-  // TASK-619: one listener on the list's box, which stays while the table inside it is drawn again
+  // TASK-NNN: one listener on the list's box, which stays while the table inside it is drawn again
   // on every load. A tick saves at once and the row stays where it is, so the next story does not
   // move under the pointer and the tick can come straight back off.
   if (el("storiesTable")) {
@@ -472,7 +472,7 @@ Expected: the first four of the new tests fail on `null` (no `#storyReadBtn` or 
 In `assets/js/admin/app.js`, in `renderStory`, directly before the line `var actions = "";`, add:
 
 ```js
-    // TASK-619: where reading ends. Used and Withdrawn say more than read, so they get no button.
+    // TASK-NNN: where reading ends. Used and Withdrawn say more than read, so they get no button.
     // The admin's small button and its text link: Save changes, below, stays the one loud button.
     var readBar = "";
     if (canWrite && s.status === "new") {
@@ -499,7 +499,7 @@ to
 In `wireStoryActions`, directly before `bindClick("withdrawStoryBtn", function () {`, add:
 
 ```js
-    // TASK-619: the same status the list's tick sends. The story is drawn again with the other
+    // TASK-NNN: the same status the list's tick sends. The story is drawn again with the other
     // button, which takes the keyboard's place so it is not left on nothing.
     bindClick("storyReadBtn", function () {
       patchStory({ status: "reviewed" }, "", "Could not mark the story as read.").then(function () {
@@ -620,7 +620,7 @@ In `assets/js/admin/app.js`, in `renderStory`, the two buttons are `class="admin
 In `assets/css/admin.css`, directly after the line `.admin-check input{width:18px;height:18px;accent-color:var(--crimson)}`, add:
 
 ```css
-/* TASK-619: the Read tick on the Stories list, and Mark as read on an open story. The column is
+/* TASK-NNN: the Read tick on the Stories list, and Mark as read on an open story. The column is
    narrow and fixed (60px, in rem so it grows with someone's larger text, as its heading does), so
    the other seven keep their share of a fixed-layout table. The label is a 44px target: its
    negative margins take that back out of the row's height, and line the box up under the heading.
@@ -693,7 +693,7 @@ Add to the end of `features/admin-overview.feature`:
 
 ```gherkin
 
-  # TASK-619: the Read tick on Stories sends the status Reviewed. A story that is Reviewed is no
+  # TASK-NNN: the Read tick on Stories sends the status Reviewed. A story that is Reviewed is no
   # longer waiting to be read, so the Overview stops counting it.
   @admin-stories
   Scenario: a story marked as read is no longer waiting to be read
@@ -715,7 +715,7 @@ Add to the end of `features/steps/admin-overview.steps.js`:
 
 ```js
 
-// TASK-619: stories waiting to be read. Other scenarios may leave New stories of their own, so the
+// TASK-NNN: stories waiting to be read. Other scenarios may leave New stories of their own, so the
 // second reading is compared with the first, not with a number.
 const storiesWaiting = (world) => {
   const line = (world.ovBody.needs || []).find((n) => n.key === "storiesNew");
@@ -762,7 +762,7 @@ git commit -m "Stories read tick: a story marked as read leaves the Overview's c
 In `README.md`, directly before the paragraph that begins `**Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).**`, add:
 
 ```markdown
-**A Read tick on Stories (TASK-619).** The Stories list has a **Read** column, one tick box a story,
+**A Read tick on Stories (TASK-NNN).** The Stories list has a **Read** column, one tick box a story,
 and an open story has **Mark as read** under its words. "Read" is the status that already existed,
 **Reviewed**: a tick sends `{ "status": "reviewed" }` to `PATCH /api/admin/stories/:id`, and unticking
 sends `"new"`, so it counts for the whole team and nothing new is stored. Used and Withdrawn show as
@@ -823,7 +823,7 @@ This changes behaviour, so it gets a review before merge (superpowers:requesting
 
 - [ ] **Step 4: Ship**
 
-Claim the next task number at PR time (GitHub runs, PR titles and `git branch -a`), put it in place of `TASK-619` in this branch's own lines only, and follow `/ship`: push as `task-<n>-stories-read-tick`, open the PR titled `[TASK-<n>] A Read tick on Stories`, read CI through the app's PR status (no polling), squash-merge on green with no `--delete-branch`, find the deploy by the merge SHA, and check the live `app.js` and `admin.css` are byte for byte the repo's. The diff touches no `infra/` and no migration.
+Claim the next task number at PR time (GitHub runs, PR titles and `git branch -a`), put it in place of `TASK-NNN` in this branch's own lines only, and follow `/ship`: push as `task-<n>-stories-read-tick`, open the PR titled `[TASK-<n>] A Read tick on Stories`, read CI through the app's PR status (no polling), squash-merge on green with no `--delete-branch`, find the deploy by the merge SHA, and check the live `app.js` and `admin.css` are byte for byte the repo's. The diff touches no `infra/` and no migration.
 
 - [ ] **Step 5: Notes**
 

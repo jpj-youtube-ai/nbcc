@@ -4,6 +4,7 @@ import { productionConfigProblems } from "./config/schema";
 import { startSendWorker } from "./newsletter/send-worker";
 import { startElfWorker } from "./elf/worker";
 import { startPlaceLookups } from "./analytics/start";
+import { startNotifyWorker } from "./admin/notify-runner";
 
 // TASK-490: the same fail-fast as src/config, for what only the web server needs in production (the
 // contact form's spam check keys). Checked here, not in src/config, so the scheduled jobs that share
@@ -30,4 +31,9 @@ app.listen(config.PORT, () => {
   startElfWorker();
   // Site analytics: look visitors' towns up in the DB-IP file, when the image has it.
   startPlaceLookups();
+  // TASK-619: push new arrivals to the staff phones that have asked for them. Started HERE for the
+  // same reason as the two workers above. It does nothing at all until both VAPID keys are real,
+  // and every notification is claimed in admin_notified before it goes, so several ECS tasks
+  // ticking at once never buzz the same phone twice.
+  startNotifyWorker();
 });

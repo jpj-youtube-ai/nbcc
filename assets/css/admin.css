@@ -3654,3 +3654,14 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-invoices .inv-confirm p{margin:0;font-size:.9rem}
 #view-invoices .inv-card .ty-status{margin:0}
 #view-invoices .inv-card .ty-status:empty{display:none}
+
+/* ---- Notifications on this phone (TASK-619) ---- */
+/* Three rules, for the three things the shared classes do not cover: a numbered set of steps, a
+   list of area switches that wraps into columns on a wide screen, and two time inputs side by
+   side (.admin-field input is width:100%, which would stack them). */
+.np-steps{margin:0 0 14px;padding-left:22px;line-height:1.7;font-size:.92rem;max-width:62ch}
+.np-steps li{margin-bottom:4px}
+.np-areas{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:0 20px;margin-bottom:18px}
+.np-quiet{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.np-quiet label{margin-bottom:0;white-space:nowrap}
+.np-quiet input{width:auto;min-width:8.5rem}

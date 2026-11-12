@@ -72,6 +72,9 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(navViews).toEqual([
       "overview",
       "search",
+      // TASK-619: notifications on your own phone. Under Monitor rather than Admin: a personal
+      // setting, not an administrative power, and it carries no permission gate.
+      "notifications",
       "donations",
       // Invoices for donations: send an invoice that comes through into Donations once paid.
       "invoices",

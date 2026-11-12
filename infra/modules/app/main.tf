@@ -152,6 +152,29 @@ resource "aws_ssm_parameter" "turnstile_secret_key" {
   lifecycle { ignore_changes = [value] }
 }
 
+# The VAPID pair that signs push notifications to staff phones (TASK-619). Both created holding
+# REPLACE_ME; the real pair is generated once and pasted in out of band (the recipe is in
+# .env.example), and the apply never overwrites it. Until then pushIsConfigured() is false and the
+# sweep never starts, so nobody's phone buzzes and nothing else is affected.
+#
+# The public key is NOT secret — it is handed to every subscribing browser — so it is a plain
+# String. It still lives in SSM rather than as a literal in this file, because the two halves are
+# a matched pair: generated together, pasted together, and impossible to let drift apart if they
+# are never stored in two different places.
+resource "aws_ssm_parameter" "vapid_public_key" {
+  name  = "/${var.project}/${var.environment}/VAPID_PUBLIC_KEY"
+  type  = "String"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "vapid_private_key" {
+  name  = "/${var.project}/${var.environment}/VAPID_PRIVATE_KEY"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
 resource "aws_ssm_parameter" "stripe_price_bronze" {
   name  = "/${var.project}/${var.environment}/STRIPE_PRICE_BRONZE"
   type  = "String"

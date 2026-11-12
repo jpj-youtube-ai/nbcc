@@ -81,9 +81,11 @@ describe("knowing how many tables to expect", () => {
   // Detective School's Doors added the hiding places, the other names that count for each, and their
   // clues; 110 since the Santa Sleigh added its nights (with the bucket cash) and its settings; 116
   // since Elf Detective School's game added guesses, word tries, visits, photos, photo files and the
-  // practice door; 119 since the alerts plan added head elves' mobiles, the alerts sent and the claimed sends.
-  it("counts 119 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(119);
+  // practice door; 119 since the alerts plan added head elves' mobiles, the alerts sent and the claimed sends;
+  // 122 since TASK-619 added the phones to notify, each person's notification settings, and how far
+  // each has been told.
+  it("counts 122 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(122);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -210,7 +212,13 @@ describe("knowing how many tables to expect", () => {
     for (const t of ["elf_head_elves", "elf_alerts", "elf_sends"]) {
       expect(main).toContain(t);
     }
-    expect(main.length).toBe(116);
+    // TASK-619: which phones to notify, what each person wants, and how far each has been told.
+    // Losing admin_notified to a restore would re-notify every arrival since the backup, so it is
+    // worth having in the dump even though the other two matter more.
+    for (const t of ["admin_push_subscriptions", "admin_notify_prefs", "admin_notified"]) {
+      expect(main).toContain(t);
+    }
+    expect(main.length).toBe(119);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

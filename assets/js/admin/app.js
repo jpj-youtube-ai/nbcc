@@ -48,6 +48,10 @@
   // New pills); here they are only where in the one tab each lands.
   var GI_VIEW = "get-involved";
   var GI_SECTIONS = ["signups", "events", "tickets", "emails", "settings"];
+  // Menu links with no permission behind them, shown to everyone. Overview is the landing screen;
+  // Notifications (TASK-619) is about this person's own phone, and what they actually receive is
+  // filtered by their permissions when it is sent, not by whether they can open this screen.
+  var UNGATED_VIEWS = ["overview", "notifications"];
   var GI_OLD_VIEWS = { events: "events", fundraising: "signups" }; // old tab -> the section it opens
   var GI_AREA = { signups: "fundraising", events: "events" }; // section -> the New pill it is a visit to
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
@@ -94,14 +98,49 @@
     return rolePresetPermissions(u.role);
   }
 
+  // TASK-619: true when the admin is running as the app pinned to a phone's home screen rather
+  // than in a browser tab. iOS reports it through navigator.standalone; everything else through
+  // the display-mode media query, which matches the manifest's "standalone".
+  function isInstalledApp() {
+    try {
+      if (window.navigator && window.navigator.standalone === true) return true;
+      return !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    } catch (e) {
+      return false;
+    }
+  }
+  // A tab's token lives in sessionStorage and dies with the tab, as it always has. The pinned
+  // app's lives in localStorage, because iOS shuts a backgrounded web app whenever it likes and
+  // sessionStorage would take the 30-day session down with it — which is exactly the 2am
+  // notification landing on a password box that the long session exists to prevent.
+  function tokenStore() {
+    try {
+      return isInstalledApp() ? window.localStorage : sessionStorage;
+    } catch (e) {
+      return sessionStorage;
+    }
+  }
   function token() {
-    return sessionStorage.getItem(TOKEN_KEY);
+    try {
+      return tokenStore().getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    } catch (e) {
+      return null;
+    }
   }
   function setToken(t) {
-    sessionStorage.setItem(TOKEN_KEY, t);
+    try {
+      tokenStore().setItem(TOKEN_KEY, t);
+    } catch (e) {
+      /* a phone with storage blocked still works for this one session */
+    }
   }
   function clearToken() {
-    sessionStorage.removeItem(TOKEN_KEY);
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+      if (window.localStorage) window.localStorage.removeItem(TOKEN_KEY);
+    } catch (e) {
+      /* nothing to clear */
+    }
   }
   function el(id) {
     return doc.getElementById(id);
@@ -152,6 +191,33 @@
     if (email && email.focus) email.focus();
   }
 
+  // TASK-619: where a tapped notification wants to land. Captured at load, BEFORE any sign-in,
+  // because a 2am tap on a phone whose session has lapsed shows the password box first and the
+  // destination must survive that. The admin has no URL routing of its own, so this is all of it:
+  // read it once, strip it from the address bar so a refresh does not re-trigger it, and apply it
+  // when the app is actually on screen.
+  var pendingArea = null;
+  (function captureNotificationTarget() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var area = params.get("area");
+      if (!area) return;
+      pendingArea = area;
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (e) {
+      /* an address bar we cannot read is not a reason to fail to load */
+    }
+  })();
+
+  // The worker sends this when a notification is tapped while the admin is ALREADY open: there is
+  // no fresh page load to read a query string from, so it says where to go directly.
+  if (window.navigator && window.navigator.serviceWorker) {
+    window.navigator.serviceWorker.addEventListener("message", function (event) {
+      var area = event.data && event.data.nbccGoTo;
+      if (area) selectView(area);
+    });
+  }
+
   function showApp(claims) {
     el("loginView").hidden = true;
     el("appView").hidden = false;
@@ -163,6 +229,28 @@
     refreshWhatsNew();
     loadMyPermissions();
     refreshEnquiryNotice();
+    // A notification was tapped to get here. Done after loadMyPermissions so the nav it lands on
+    // has already been filtered to what this person may open.
+    if (pendingArea) {
+      var area = pendingArea;
+      pendingArea = null;
+      selectView(area);
+    }
+    registerPushWorker();
+  }
+
+  // TASK-619: the service worker that receives notifications. Registered only once somebody is
+  // signed in — there is nothing to notify an anonymous visitor about — and from /admin-sw.js at
+  // the root, because a worker served from /assets could never control /admin.
+  function registerPushWorker() {
+    try {
+      if (!window.navigator || !window.navigator.serviceWorker) return;
+      window.navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin" }).catch(function () {
+        /* an older browser, or a page not served over https: notifications simply stay off */
+      });
+    } catch (e) {
+      /* same */
+    }
   }
 
   // Admin Phase 2 (TASK-186): fetch this user's EFFECTIVE per-section permissions and use them to
@@ -216,7 +304,12 @@
 
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       var section = b.getAttribute("data-view");
-      if (section === "overview") return;
+      // Screens that belong to the person rather than to a permission section: everyone has them,
+      // and gating them on a section the server has never heard of would hide them from
+      // absolutely everybody — which is precisely how Monthly givers went unseen for weeks
+      // (TASK-447). admin-sections-in-sync.test.ts holds the same list and will not let the two
+      // drift apart.
+      if (UNGATED_VIEWS.indexOf(section) !== -1) return;
       // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
       // data-view - e.g. Business supporters gates on business-supporters:edit, matching its server
       // route. Or on VIEW of another section (data-view-gate), when its screen has no permission of
@@ -312,7 +405,7 @@
       err.hidden = true;
       var email = el("adminEmail").value.trim();
       var password = el("adminPassword").value;
-      var body = { email: email, password: password };
+      var body = { email: email, password: password, installed: isInstalledApp() };
       var dt = deviceToken();
       if (dt) body.deviceToken = dt;
       fetch("/api/admin/login", {
@@ -353,7 +446,12 @@
       fetch("/api/admin/login/2fa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: pendingTwoFactorEmail, code: code, remember: remember }),
+        body: JSON.stringify({
+          email: pendingTwoFactorEmail,
+          code: code,
+          remember: remember,
+          installed: isInstalledApp(),
+        }),
       })
         .then(function (res) {
           return res.ok
@@ -641,10 +739,146 @@
     else if (name === "invoices") loadInvoices();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
+    else if (name === "notifications") loadPushSettings();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
     b.addEventListener("click", function () {
       selectView(b.getAttribute("data-view"));
+    });
+  });
+
+  // ---- Notifications on this phone (TASK-619) ----
+  // Every area a notification can be about, with the wording the admin's own menu uses. Mirrors
+  // AREA_TITLES in src/admin/whats-new.ts; the server filters by permission at send time, so a
+  // switch here that somebody cannot see anyway is harmless, just pointless.
+  var PUSH_AREAS = [
+    ["donations", "Donations"], ["monthly", "Monthly givers"], ["fundraising", "Get involved"],
+    ["contact", "Contact form"], ["ball", "Festive Ball"], ["fulfilments", "Business supporters"],
+    ["stories", "Stories"], ["newsletter", "Newsletter"],
+  ];
+
+  function pushSupported() {
+    return !!(window.navigator && window.navigator.serviceWorker && window.PushManager && window.Notification);
+  }
+
+  // base64url to the Uint8Array pushManager.subscribe insists on.
+  function pushKeyBytes(base64url) {
+    var padded = (base64url + "===").slice(0, base64url.length + ((4 - (base64url.length % 4)) % 4));
+    var raw = window.atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function loadPushSettings() {
+    var unsupported = el("pushUnsupported");
+    var setup = el("pushSetup");
+    if (!pushSupported()) {
+      unsupported.textContent = "This browser cannot show notifications. On an iPhone, add the admin to your home screen and open it from there.";
+      unsupported.hidden = false;
+      setup.hidden = true;
+      el("pushEnable").disabled = true;
+    } else if (!isInstalledApp() && /iPhone|iPad/i.test(window.navigator.userAgent || "")) {
+      // An iPhone will not deliver a notification to a Safari tab, only to a home-screen app, so
+      // saying this BEFORE the button is the difference between a setting that works and one
+      // that silently never fires.
+      unsupported.textContent = "Add the admin to your home screen first, then open it from that icon. An iPhone only sends notifications to the app, never to a Safari tab.";
+      unsupported.hidden = false;
+      // Pressing it here would ask iOS for permission in a Safari tab, which it only grants once
+      // ever — spending the single prompt on a context that can never receive a notification.
+      el("pushEnable").disabled = true;
+    } else {
+      unsupported.hidden = true;
+      setup.hidden = false;
+      el("pushEnable").disabled = false;
+    }
+
+    authFetch("/api/admin/push/subscription").then(j).then(function (d) {
+      var count = (d && d.phones) || 0;
+      var box = el("pushPhoneCount");
+      box.hidden = count === 0;
+      box.textContent = count === 1 ? "One phone is set up." : count + " phones are set up.";
+    }).catch(function () {});
+
+    authFetch("/api/admin/push/prefs").then(j).then(function (prefs) {
+      el("pushBundle").checked = !!prefs.bundle;
+      el("pushQuietFrom").value = (prefs.quietFrom || "").slice(0, 5);
+      el("pushQuietTo").value = (prefs.quietTo || "").slice(0, 5);
+      var off = prefs.areasOff || [];
+      el("pushAreas").innerHTML = PUSH_AREAS.map(function (a) {
+        return '<label class="admin-check"><input type="checkbox" data-push-area="' + a[0] + '"' +
+          (off.indexOf(a[0]) === -1 ? " checked" : "") + " /> <span>" + H.escapeHtml(a[1]) + "</span></label>";
+      }).join("");
+    }).catch(function () {
+      el("pushAreas").innerHTML = '<p class="admin-empty">Could not load your settings.</p>';
+    });
+  }
+
+  bindClick("pushEnable", function () {
+    var status = el("pushEnableStatus");
+    status.className = "admin-action-status";
+    status.textContent = "Asking your phone…";
+    if (!pushSupported()) {
+      status.className = "admin-action-status is-error";
+      status.textContent = "This browser cannot show notifications.";
+      return;
+    }
+    authFetch("/api/admin/push/key").then(j).then(function (d) {
+      if (!d.configured) throw new Error("Notifications are not set up on the server yet.");
+      return window.Notification.requestPermission().then(function (permission) {
+        if (permission !== "granted") {
+          // iOS asks once and only once. Say what the way back is, because there is no second prompt.
+          throw new Error("Your phone said no. To be asked again, delete the icon from your home screen and add it back.");
+        }
+        return window.navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin" })
+          .then(function () { return window.navigator.serviceWorker.ready; })
+          .then(function (reg) {
+            return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(d.publicKey) });
+          });
+      });
+    }).then(function (sub) {
+      return authFetch("/api/admin/push/subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sub.toJSON ? sub.toJSON() : sub),
+      });
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not save this phone.");
+      status.className = "admin-action-status is-ok";
+      status.textContent = "This phone is on. You will get a notification the next time something arrives.";
+      loadPushSettings();
+    }).catch(function (e) {
+      status.className = "admin-action-status is-error";
+      status.textContent = e.message || "Could not turn notifications on.";
+    });
+  });
+
+  bindClick("pushPrefsSave", function () {
+    var status = el("pushPrefsStatus");
+    status.className = "admin-action-status";
+    status.textContent = "Saving…";
+    var off = [];
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-push-area]"), function (box) {
+      if (!box.checked) off.push(box.getAttribute("data-push-area"));
+    });
+    var from = el("pushQuietFrom").value;
+    var to = el("pushQuietTo").value;
+    authFetch("/api/admin/push/prefs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bundle: el("pushBundle").checked,
+        quietFrom: from ? from + ":00" : null,
+        quietTo: to ? to + ":00" : null,
+        areasOff: off,
+      }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not save.");
+      status.className = "admin-action-status is-ok";
+      status.textContent = "Saved.";
+    }).catch(function () {
+      status.className = "admin-action-status is-error";
+      status.textContent = "Could not save those settings.";
     });
   });
 

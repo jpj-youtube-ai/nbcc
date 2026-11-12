@@ -47,6 +47,87 @@ export function isArea(value: unknown): value is Area {
   return AREAS.some((a) => a.area === value);
 }
 
+// ---- What a phone notification says about an arrival (TASK-619) ----
+//
+// A New pill only needs to know THAT something arrived. A notification has to say what, in one
+// line read off a lock screen — and deliberately without naming anybody: Jaimie's phone sits on a
+// table at events and its lock screen is readable across the room, so the donor's name waits
+// until she taps through. `arrivalLine` is handed whatever the query selected and is the single
+// place that decides what leaves the building.
+
+export interface ArrivalItem {
+  at: Date;
+  area: Area;
+  /** The line a notification shows, already stripped of anything identifying. */
+  line: string;
+}
+
+/** What each area is called on a notification. The admin's own menu wording. */
+export const AREA_TITLES: Record<Area, string> = {
+  contact: "Contact form",
+  stories: "Stories",
+  donations: "Donations",
+  monthly: "Monthly givers",
+  fulfilments: "Business supporters",
+  ball: "Festive Ball",
+  newsletter: "Newsletter",
+  events: "Events",
+  analytics: "Analytics",
+  qr: "QR codes",
+  fundraising: "Get involved",
+  "red-bag": "Fill a Red Bag",
+  invoices: "Invoices",
+};
+
+/** Pennies as a person would say them: £25, £5.05, £1,500. */
+function amount(pence: number): string {
+  const pounds = pence / 100;
+  // Two decimals only when there are pennies. "£25.00 donation" is right on a receipt and fussy
+  // in a one-line alert. (src/ball/confirmation-email.ts money() always shows both, as a receipt
+  // should.)
+  return `£${pounds.toLocaleString("en-GB", {
+    minimumFractionDigits: pence % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+const CHANNEL_WORDS: Record<string, string> = { in_person: "card reader", online: "website" };
+
+/** What arrived, as far as a notification is allowed to say. Null for an area nothing arrives in. */
+export function arrivalLine(area: Area, fields: Record<string, unknown>): string | null {
+  const pence = typeof fields.amountPence === "number" ? fields.amountPence : null;
+
+  switch (area) {
+    case "donations": {
+      if (pence === null) return "A donation";
+      const where = CHANNEL_WORDS[String(fields.channel)];
+      return where ? `${amount(pence)} donation — ${where}` : `${amount(pence)} donation`;
+    }
+    case "monthly":
+      return pence === null ? "New monthly giver" : `New monthly giver — ${amount(pence)} a month`;
+    case "fundraising":
+      return "New Get involved sign-up";
+    case "contact":
+      return "New message on the contact form";
+    case "stories":
+      return "Someone sent in their story";
+    case "fulfilments":
+      return "A business signed up as a supporter";
+    case "ball":
+      return "A Festive Ball booking";
+    case "newsletter":
+      return "Someone joined the newsletter";
+    // These carry a pill when the SCREEN is new, but nothing arrives in them, so a notification
+    // has nothing to say. Listed rather than defaulted so a new area has to make this choice.
+    case "events":
+    case "analytics":
+    case "qr":
+    case "red-bag":
+    case "invoices":
+      return null;
+  }
+}
+
 // New parts of the admin. When you ship a new screen, or a change staff should notice, add a line
 // here: everyone whose account is older than it sees a New pill on that section until they open it.
 export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> = [

@@ -187,6 +187,33 @@
     if (email && email.focus) email.focus();
   }
 
+  // TASK-NNN: where a tapped notification wants to land. Captured at load, BEFORE any sign-in,
+  // because a 2am tap on a phone whose session has lapsed shows the password box first and the
+  // destination must survive that. The admin has no URL routing of its own, so this is all of it:
+  // read it once, strip it from the address bar so a refresh does not re-trigger it, and apply it
+  // when the app is actually on screen.
+  var pendingArea = null;
+  (function captureNotificationTarget() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var area = params.get("area");
+      if (!area) return;
+      pendingArea = area;
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (e) {
+      /* an address bar we cannot read is not a reason to fail to load */
+    }
+  })();
+
+  // The worker sends this when a notification is tapped while the admin is ALREADY open: there is
+  // no fresh page load to read a query string from, so it says where to go directly.
+  if (window.navigator && window.navigator.serviceWorker) {
+    window.navigator.serviceWorker.addEventListener("message", function (event) {
+      var area = event.data && event.data.nbccGoTo;
+      if (area) selectView(area);
+    });
+  }
+
   function showApp(claims) {
     el("loginView").hidden = true;
     el("appView").hidden = false;
@@ -198,6 +225,28 @@
     refreshWhatsNew();
     loadMyPermissions();
     refreshEnquiryNotice();
+    // A notification was tapped to get here. Done after loadMyPermissions so the nav it lands on
+    // has already been filtered to what this person may open.
+    if (pendingArea) {
+      var area = pendingArea;
+      pendingArea = null;
+      selectView(area);
+    }
+    registerPushWorker();
+  }
+
+  // TASK-NNN: the service worker that receives notifications. Registered only once somebody is
+  // signed in — there is nothing to notify an anonymous visitor about — and from /admin-sw.js at
+  // the root, because a worker served from /assets could never control /admin.
+  function registerPushWorker() {
+    try {
+      if (!window.navigator || !window.navigator.serviceWorker) return;
+      window.navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin" }).catch(function () {
+        /* an older browser, or a page not served over https: notifications simply stay off */
+      });
+    } catch (e) {
+      /* same */
+    }
   }
 
   // Admin Phase 2 (TASK-186): fetch this user's EFFECTIVE per-section permissions and use them to

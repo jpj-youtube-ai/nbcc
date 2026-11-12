@@ -22,3 +22,9 @@ Feature: The admin installs on a phone as its own app
     Then the site response status should be 200
     And the site response should contain "/assets/admin-icons/admin.webmanifest"
     And the site response should contain "apple-mobile-web-app-title"
+
+  Scenario: the service worker is served from the root, so it can control the admin
+    When I request the site path "/admin-sw.js"
+    Then the site response status should be 200
+    And the site response content type should contain "javascript"
+    And the site response should contain "notificationclick"

@@ -10,16 +10,15 @@ import { pushIsConfigured, vapidSubject } from "../config/schema";
 import { loadEffectivePermissions } from "../routes/admin-authz";
 import {
   allSubscriptions,
-  claimNotified,
+  claimWindow,
   deleteSubscription,
-  getNotified,
   getPrefs,
   recordSendFailure,
   recordSendOk,
 } from "../db/admin-push";
 import { arrivalDetails } from "../db/whats-new";
 import { dueNotifications, quietNow, type Outgoing, type PendingArea } from "./notify";
-import { encryptPayload, subscriptionIsDead, vapidAuthHeader } from "./web-push";
+import { assertVapidPair, encryptPayload, subscriptionIsDead, vapidAuthHeader } from "./web-push";
 import { reachableAreas } from "./whats-new";
 import type { StoredSubscription } from "./push";
 
@@ -30,7 +29,7 @@ function failed(what: string, err: unknown): void {
   console.error(`admin notify: ${what} failed:`, err instanceof Error ? err.message : err);
 }
 
-/** Post one encrypted notification to one phone. Resolves to false when the subscription is gone. */
+/** Post one encrypted notification to one phone. Resolves true only when it was delivered. */
 async function send(subscription: StoredSubscription, outgoing: Outgoing): Promise<boolean> {
   const endpoint = new URL(subscription.endpoint);
   const body = encryptPayload({
@@ -70,49 +69,46 @@ async function send(subscription: StoredSubscription, outgoing: Outgoing): Promi
   }
   await recordSendFailure(subscription.id);
   failed(`send to ${endpoint.origin}`, new Error(`${res.status} ${res.statusText}`));
-  return true;
+  return false;
 }
 
-/** Everything new for one person, by area, and how far to move their cursor. */
-async function pendingFor(userId: number, now: Date): Promise<{ areas: PendingArea[]; upTo: Map<string, Date> }> {
+/**
+ * Everything new for one person, by area, with the window already claimed.
+ *
+ * The claim happens BEFORE the read, which is the whole of the concurrency story. Reading first
+ * and claiming the last item's time afterwards let two overlapping sweeps both succeed — the
+ * later one simply claimed a higher timestamp — and send the same arrivals twice.
+ */
+async function pendingFor(userId: number, now: Date): Promise<PendingArea[]> {
   const perms = await loadEffectivePermissions(userId);
   // null also covers a disabled account, so somebody who has left stops being buzzed even before
   // their row is removed.
-  if (!perms) return { areas: [], upTo: new Map() };
+  if (!perms) return [];
 
-  const notified = await getNotified(userId);
   const areas: PendingArea[] = [];
-  const upTo = new Map<string, Date>();
-
   for (const { area } of reachableAreas(perms)) {
-    const since = notified.get(area);
-    if (!since) {
-      // Never notified about this area before. Start the clock NOW and send nothing: the
-      // alternative is somebody turning notifications on and being buzzed about every donation
-      // the charity has ever taken.
-      upTo.set(area, now);
-      continue;
-    }
     try {
-      const items = await arrivalDetails(area, since);
-      if (items.length === 0) continue;
-      areas.push({ area, items });
-      upTo.set(area, items[items.length - 1].at);
+      const { claimed, from } = await claimWindow(userId, area, now);
+      // Another sweep has this window, or this is the first time we have looked at this area for
+      // this person and the clock starts now.
+      if (!claimed || !from) continue;
+      const { items, total } = await arrivalDetails(area, from, now);
+      if (total > 0) areas.push({ area, items, total });
     } catch (err) {
       // One area's database being unreachable must not stop the others.
       failed(`reading ${area}`, err);
     }
   }
-  return { areas, upTo };
+  return areas;
 }
 
 /**
- * One pass over every subscribed phone. Returns how many notifications went out.
+ * One pass over every subscribed phone. Returns how many notifications were delivered.
  *
- * The cursor is claimed BEFORE anything is sent, and that ordering is deliberate. Claim-then-send
- * can lose a buzz if the send fails; send-then-claim can buzz twice if two tasks overlap during a
- * deploy. A missed buzz costs nothing permanent — the New pill still shows the arrival on screen
- * — while a duplicate is exactly what makes somebody switch the whole thing off.
+ * A window is claimed before its arrivals are read, so a deploy that briefly runs two tasks
+ * cannot buzz the same phone twice. The cost of that ordering is that a send failing after the
+ * claim loses the buzz — which is the right way round, because the New pill still shows the
+ * arrival on screen, while a duplicate is what makes somebody switch the whole thing off.
  */
 export async function sweep(now = new Date()): Promise<number> {
   if (!pushIsConfigured(config)) return 0;
@@ -127,21 +123,12 @@ export async function sweep(now = new Date()): Promise<number> {
   for (const [userId, phones] of byUser) {
     try {
       const prefs = await getPrefs(userId);
-      const { areas, upTo } = await pendingFor(userId, now);
+      const areas = await pendingFor(userId, now);
+      // Dropped, not held: the New pill still shows it, and a single task that restarts on every
+      // deploy cannot be trusted to flush anything held in memory.
+      if (quietNow(prefs, now)) continue;
 
-      // Claim every area we looked at, including the ones with nothing in them, so a first-ever
-      // sweep sets the baseline and a quiet area's cursor keeps up with the clock.
-      const claimed: PendingArea[] = [];
-      for (const area of areas) {
-        const at = upTo.get(area.area);
-        if (at && (await claimNotified(userId, area.area, at))) claimed.push(area);
-      }
-      for (const [area, at] of upTo) {
-        if (!areas.some((a) => a.area === area)) await claimNotified(userId, area as never, at);
-      }
-
-      if (quietNow(prefs, now)) continue; // dropped, not held — the pill still shows it
-      for (const outgoing of dueNotifications({ areas: claimed, prefs })) {
+      for (const outgoing of dueNotifications({ areas, prefs })) {
         for (const phone of phones) {
           try {
             if (await send(phone, outgoing)) sent += 1;
@@ -170,6 +157,20 @@ let running = false;
 export function startNotifyWorker(intervalMs = 60_000): NodeJS.Timeout | null {
   if (!pushIsConfigured(config)) {
     console.log("admin notify: no VAPID keys set, phone notifications are off");
+    return null;
+  }
+  // Checked ONCE, here, rather than only per send. The pair is pasted into two separate SSM
+  // parameters by hand, so a mismatch is a mistake somebody will make — and because the sweep
+  // claims a window before it sends, a mismatch discovered per-send would advance the cursor past
+  // every arrival while failing to deliver any of them. Those buzzes would never come back, even
+  // after the keys were corrected. Refusing to start leaves the cursor untouched.
+  try {
+    assertVapidPair(config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY);
+  } catch (err) {
+    console.error(
+      "admin notify: the VAPID keys are not a pair, so phone notifications are off:",
+      err instanceof Error ? err.message : err,
+    );
     return null;
   }
   timer = setInterval(() => {

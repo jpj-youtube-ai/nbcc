@@ -123,11 +123,12 @@ describe("admin section list stays in sync", () => {
         gates: attr(tag, "data-view-gate-any")?.split(" ") ?? [attr(tag, "data-edit-gate") ?? attr(tag, "data-view-gate") ?? attr(tag, "data-view")],
       }))
       .flatMap(({ view, gates }) => gates.map((gate) => ({ view, gate })))
-      // Screens that belong to the person rather than to a permission section. app.js skips these
-      // in applyNavFiltering for the same reason, and the assertion below keeps the two lists
-      // from drifting — a link quietly added here would otherwise escape the check entirely.
-      .filter(({ view }) => !UNGATED_VIEWS.includes(view ?? ""))
       .filter(({ gate }) => !(SECTIONS as readonly string[]).includes(gate ?? ""))
+      // Screens that belong to the person rather than to a permission section. app.js skips these
+      // in applyNavFiltering for the same reason, and the assertion above keeps the two lists from
+      // drifting. Filtered AFTER the sections check, not before, so a view that IS a real section
+      // (overview) is still checked exactly as it always was.
+      .filter(({ view }) => !UNGATED_VIEWS.includes(view ?? ""))
       .map(({ view, gate }) => `${view} is gated on "${gate}"`);
     expect(gatedOnNothing).toEqual([]);
     const any = links.filter((tag) => attr(tag, "data-view-gate-any") !== undefined);

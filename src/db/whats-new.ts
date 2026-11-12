@@ -55,7 +55,7 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag" | "
   // Ball: one cancelled since has no row to carry a pill, so it does not light the section either.
   ball: {
     db: "main",
-    sql: `SELECT max(at) AS at FROM (
+    sql: `SELECT at, count(*) OVER () AS total FROM (
             SELECT paid_at AS at FROM ball_bookings WHERE status = 'paid' AND paid_at > $1
             UNION ALL
             SELECT created_at FROM ball_bookings
@@ -84,71 +84,107 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag" | "
 const DETAILS: Record<keyof typeof LATEST, { db: "main" | "contact" | "stories"; sql: string }> = {
   contact: {
     db: "contact",
-    sql: "SELECT created_at AS at FROM contact_enquiries WHERE created_at > $1 ORDER BY created_at LIMIT $2",
+    sql: `SELECT created_at AS at, count(*) OVER () AS total FROM contact_enquiries
+            WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
   },
   stories: {
     db: "stories",
-    sql: "SELECT created_at AS at FROM stories WHERE created_at > $1 ORDER BY created_at LIMIT $2",
+    sql: `SELECT created_at AS at, count(*) OVER () AS total FROM stories
+            WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
   },
   donations: {
     db: "main",
-    sql: `SELECT created_at AS at, amount_pence AS "amountPence", payment_channel AS channel
-            FROM donations WHERE payment_status = 'paid' AND created_at > $1
-           ORDER BY created_at LIMIT $2`,
+    sql: `SELECT created_at AS at, amount_pence AS "amountPence", payment_channel AS channel,
+                 count(*) OVER () AS total
+            FROM donations
+           WHERE payment_status = 'paid' AND created_at > $1::timestamptz AND created_at <= $2
+           ORDER BY created_at LIMIT $3`,
   },
   monthly: {
     db: "main",
-    sql: `SELECT first_paid_at AS at, amount_pence AS "amountPence" FROM (
-            SELECT min(d.created_at) AS first_paid_at,
-                   min(d.amount_pence) AS amount_pence
+    // DISTINCT ON, not GROUP BY with min(): the amount wanted is the one on the FIRST gift, and
+    // min(amount_pence) would report the smallest gift that donor has ever made instead.
+    sql: `SELECT at, "amountPence", count(*) OVER () AS total FROM (
+            SELECT DISTINCT ON (d.donor_id) d.created_at AS at, d.amount_pence AS "amountPence"
               FROM donations d JOIN donors dn ON dn.id = d.donor_id
              WHERE d.mode = 'monthly' AND d.payment_status = 'paid' AND dn.donor_type = 'individual'
-             GROUP BY d.donor_id
-          ) firsts WHERE first_paid_at > $1 ORDER BY first_paid_at LIMIT $2`,
+             ORDER BY d.donor_id, d.created_at
+          ) firsts WHERE at > $1::timestamptz AND at <= $2 ORDER BY at LIMIT $3`,
   },
   fulfilments: {
     db: "main",
-    sql: "SELECT created_at AS at FROM business_supporter_fulfilment WHERE created_at > $1 ORDER BY created_at LIMIT $2",
+    sql: `SELECT created_at AS at, count(*) OVER () AS total FROM business_supporter_fulfilment
+            WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
   },
   ball: {
     db: "main",
-    sql: `SELECT at FROM (
-            SELECT paid_at AS at FROM ball_bookings WHERE status = 'paid' AND paid_at > $1
+    sql: `SELECT at, count(*) OVER () AS total FROM (
+            SELECT paid_at AS at FROM ball_bookings
+             WHERE status = 'paid' AND paid_at > $1::timestamptz AND paid_at <= $2
+               -- The ONE place a notification deliberately differs from its pill. A member of
+               -- staff ticking a bank transfer as received sets paid_at AND marked_paid_by, so
+               -- without this that click buzzes every phone in the charity — and the booking
+               -- would buzz twice, once when it was made and again when the money was marked in.
+               -- Jaimie, 12 Nov: "nothing a staff member does should buzz." A card payment sets
+               -- paid_at with no marked_paid_by, so the public paying still counts.
+               AND marked_paid_by IS NULL
             UNION ALL
             SELECT created_at FROM ball_bookings
-             WHERE payment_method = 'transfer' AND status = 'pending' AND created_at > $1
-          ) arrivals ORDER BY at LIMIT $2`,
+             WHERE payment_method = 'transfer' AND status = 'pending'
+               AND created_at > $1::timestamptz AND created_at <= $2
+          ) arrivals ORDER BY at LIMIT $3`,
   },
   newsletter: {
     db: "main",
-    sql: `SELECT consented_at AS at FROM list_subscribers
-           WHERE consent_source IN ('footer', 'fundraise') AND unsubscribed_at IS NULL AND consented_at > $1
-           ORDER BY consented_at LIMIT $2`,
+    sql: `SELECT consented_at AS at, count(*) OVER () AS total FROM list_subscribers
+           WHERE consent_source IN ('footer', 'fundraise') AND unsubscribed_at IS NULL
+             AND consented_at > $1::timestamptz AND consented_at <= $2
+           ORDER BY consented_at LIMIT $3`,
   },
   fundraising: {
     db: "main",
-    sql: "SELECT created_at AS at FROM fundraisers WHERE created_at > $1 ORDER BY created_at LIMIT $2",
+    sql: `SELECT created_at AS at, count(*) OVER () AS total FROM fundraisers
+            WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
   },
 };
 
+export type { ArrivalItem };
+
 /**
- * Everything that arrived in a section after `since`, as lines ready to send.
+ * Everything that arrived in a section in the window `(since, until]`, as lines ready to send.
+ *
+ * `since` is a STRING, deliberately, and must be the exact text the cursor was stored as.
+ * Postgres keeps timestamps to the microsecond; node-postgres hands JavaScript a Date, which
+ * holds only milliseconds, and it truncates rather than rounds. A cursor written back from one of
+ * those Dates lands a fraction BEFORE the row it came from, so that row satisfies
+ * `created_at > cursor` for ever and is sent again on every later sweep. Carrying the
+ * full-precision text is what keeps the window exact.
+ *
+ * `until` closes the window, so the caller can claim it before reading rather than after.
  *
  * `limit` bounds a burst: a CSV import or a webhook replay can put hundreds of rows in at once,
  * and there is no point reading them all when the caller collapses anything over twenty into a
  * single "N new things" anyway.
  */
-export type { ArrivalItem };
-
-export async function arrivalDetails(area: Area, since: Date, limit = 50): Promise<ArrivalItem[]> {
+export async function arrivalDetails(
+  area: Area,
+  since: string,
+  until: Date,
+  limit = 21,
+): Promise<{ items: ArrivalItem[]; total: number }> {
   const q = (DETAILS as Partial<Record<Area, { db: "main" | "contact" | "stories"; sql: string }>>)[area];
-  if (!q) return [];
+  if (!q) return { items: [], total: 0 };
   const db = q.db === "contact" ? contactPool : q.db === "stories" ? storiesPool : pool;
-  const res = await db.query<{ at: Date } & Record<string, unknown>>(q.sql, [since, limit]);
-  return res.rows.flatMap((row) => {
+  const res = await db.query<{ at: Date; total: string } & Record<string, unknown>>(q.sql, [since, until, limit]);
+  const items = res.rows.flatMap((row) => {
     const line = arrivalLine(area, row);
     return line ? [{ at: row.at, area, line }] : [];
   });
+  // count(*) OVER () is the size of the WHOLE window, not of the page we read. The caller claimed
+  // this window before reading it, so anything past the limit will never be offered again — and
+  // since everything over the burst cap collapses into one "N new things" anyway, the exact count
+  // is all that is needed beyond the first few rows.
+  return { items, total: res.rows.length > 0 ? Number(res.rows[0].total) : 0 };
 }
 
 /** The latest arrival in a section after `since`, or null when nothing has arrived since. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BURST_CAP, dueNotifications, quietNow } from "../../src/admin/notify";
+import { BURST_CAP, dueNotifications, quietNow, type PendingArea } from "../../src/admin/notify";
 import type { NotifyPrefs } from "../../src/admin/push";
 import type { ArrivalItem } from "../../src/admin/whats-new";
 
@@ -11,6 +11,9 @@ import type { ArrivalItem } from "../../src/admin/whats-new";
 // firing two hundred notifications is not what "every time" meant.
 
 const OFF: NotifyPrefs = { bundle: false, quietFrom: null, quietTo: null, areasOff: [] };
+/** An area with everything that arrived in it; `total` defaults to what was read. */
+const pending = (area: PendingArea["area"], items: ArrivalItem[], total = items.length): PendingArea => ({ area, items, total });
+
 const at = (n: number): ArrivalItem => ({
   at: new Date(Date.UTC(2026, 10, 12, 12, 0, n)),
   area: "donations",
@@ -19,27 +22,27 @@ const at = (n: number): ArrivalItem => ({
 
 describe("one buzz per arrival, as asked for", () => {
   it("sends one notification each", () => {
-    const out = dueNotifications({ areas: [{ area: "donations", items: [at(1), at(2), at(3)] }], prefs: OFF });
+    const out = dueNotifications({ areas: [pending("donations", [at(1), at(2), at(3)])], prefs: OFF });
     expect(out).toHaveLength(3);
     expect(out.map((o) => o.body)).toEqual(["£1 donation — website", "£2 donation — website", "£3 donation — website"]);
   });
 
   it("says which part of the admin it is about, so the title is not just NBCC every time", () => {
-    const out = dueNotifications({ areas: [{ area: "donations", items: [at(1)] }], prefs: OFF });
+    const out = dueNotifications({ areas: [pending("donations", [at(1)])], prefs: OFF });
     expect(out[0].title).toBe("Donations");
     expect(out[0].area).toBe("donations");
   });
 
   it("sends nothing when nothing has arrived", () => {
     expect(dueNotifications({ areas: [], prefs: OFF })).toEqual([]);
-    expect(dueNotifications({ areas: [{ area: "donations", items: [] }], prefs: OFF })).toEqual([]);
+    expect(dueNotifications({ areas: [pending("donations", [])], prefs: OFF })).toEqual([]);
   });
 
   it("covers several areas in one sweep", () => {
     const out = dueNotifications({
       areas: [
-        { area: "donations", items: [at(1)] },
-        { area: "contact", items: [{ at: new Date(), area: "contact", line: "New message on the contact form" }] },
+        pending("donations", [at(1)]),
+        pending("contact", [{ at: new Date(), area: "contact", line: "New message on the contact form" }]),
       ],
       prefs: OFF,
     });
@@ -54,7 +57,7 @@ describe("the burst cap", () => {
   // one exception on 12 Nov.
   it("collapses a burst into a single notification saying how many", () => {
     const items = Array.from({ length: 47 }, (_, i) => at(i));
-    const out = dueNotifications({ areas: [{ area: "donations", items }], prefs: OFF });
+    const out = dueNotifications({ areas: [pending("donations", items)], prefs: OFF });
     expect(out).toHaveLength(1);
     expect(out[0].body).toContain("47 new things");
   });
@@ -63,8 +66,8 @@ describe("the burst cap", () => {
     const half = Array.from({ length: 11 }, (_, i) => at(i));
     const out = dueNotifications({
       areas: [
-        { area: "donations", items: half },
-        { area: "fundraising", items: half.map((x) => ({ ...x, area: "fundraising" as const, line: "New Get involved sign-up" })) },
+        pending("donations", half),
+        pending("fundraising", half.map((x) => ({ ...x, area: "fundraising" as const, line: "New Get involved sign-up" }))),
       ],
       prefs: OFF,
     });
@@ -72,41 +75,51 @@ describe("the burst cap", () => {
     expect(out[0].body).toContain("22 new things");
   });
 
+  // The window is claimed before it is read, so anything past the read limit is never offered
+  // again. The count comes from the database, not from how many rows were fetched, or a 200-row
+  // import would be announced as "21 new things" and the other 179 would vanish.
+  it("counts what is really there, not how many rows were read", () => {
+    const read = Array.from({ length: 21 }, (_, i) => at(i));
+    const out = dueNotifications({ areas: [pending("donations", read, 200)], prefs: OFF });
+    expect(out).toHaveLength(1);
+    expect(out[0].body).toContain("200 new things");
+  });
+
   it("leaves a normal busy spell completely alone", () => {
     const items = Array.from({ length: BURST_CAP }, (_, i) => at(i));
-    expect(dueNotifications({ areas: [{ area: "donations", items }], prefs: OFF })).toHaveLength(BURST_CAP);
+    expect(dueNotifications({ areas: [pending("donations", items)], prefs: OFF })).toHaveLength(BURST_CAP);
   });
 
   // A burst spans areas, so it cannot claim to be about one of them.
   it("opens the admin generally rather than pretending to be one section", () => {
     const items = Array.from({ length: 30 }, (_, i) => at(i));
-    expect(dueNotifications({ areas: [{ area: "donations", items }], prefs: OFF })[0].area).toBeNull();
+    expect(dueNotifications({ areas: [pending("donations", items)], prefs: OFF })[0].area).toBeNull();
   });
 });
 
 describe("the switches, all off by default", () => {
   it("bundles into one when bundling is on", () => {
-    const out = dueNotifications({ areas: [{ area: "donations", items: [at(1), at(2)] }], prefs: { ...OFF, bundle: true } });
+    const out = dueNotifications({ areas: [pending("donations", [at(1), at(2)])], prefs: { ...OFF, bundle: true } });
     expect(out).toHaveLength(1);
     expect(out[0].body).toContain("2 new things");
   });
 
   it("says the single thing properly even when bundling is on", () => {
-    const out = dueNotifications({ areas: [{ area: "donations", items: [at(1)] }], prefs: { ...OFF, bundle: true } });
+    const out = dueNotifications({ areas: [pending("donations", [at(1)])], prefs: { ...OFF, bundle: true } });
     expect(out).toHaveLength(1);
     expect(out[0].body).toBe("£1 donation — website");
   });
 
   it("sends nothing for an area somebody has switched off", () => {
-    const out = dueNotifications({ areas: [{ area: "donations", items: [at(1)] }], prefs: { ...OFF, areasOff: ["donations"] } });
+    const out = dueNotifications({ areas: [pending("donations", [at(1)])], prefs: { ...OFF, areasOff: ["donations"] } });
     expect(out).toEqual([]);
   });
 
   it("switching one area off leaves the others alone", () => {
     const out = dueNotifications({
       areas: [
-        { area: "donations", items: [at(1)] },
-        { area: "contact", items: [{ at: new Date(), area: "contact", line: "New message on the contact form" }] },
+        pending("donations", [at(1)]),
+        pending("contact", [{ at: new Date(), area: "contact", line: "New message on the contact form" }]),
       ],
       prefs: { ...OFF, areasOff: ["donations"] },
     });
@@ -128,6 +141,18 @@ describe("quiet hours", () => {
     expect(quietNow(quiet, new Date("2026-11-12T06:59:00Z"))).toBe(true);
     expect(quietNow(quiet, new Date("2026-11-12T07:01:00Z"))).toBe(false);
     expect(quietNow(quiet, new Date("2026-11-12T12:00:00Z"))).toBe(false);
+  });
+
+  // The times come from an <input type="time">, so they are UK wall clock. Read as UTC they were
+  // an hour out for half the year: a 23:30 donation in July buzzed, and a 07:30 one did not.
+  it("follows the UK clock through British Summer Time", () => {
+    const july = (hhmm: string) => new Date(`2026-07-15T${hhmm}:00+01:00`); // BST
+    expect(quietNow(quiet, july("23:30"))).toBe(true);
+    expect(quietNow(quiet, july("02:00"))).toBe(true);
+    expect(quietNow(quiet, july("07:30"))).toBe(false);
+    const january = (hhmm: string) => new Date(`2026-01-15T${hhmm}:00Z`); // GMT
+    expect(quietNow(quiet, january("23:30"))).toBe(true);
+    expect(quietNow(quiet, january("07:30"))).toBe(false);
   });
 
   it("also works for a daytime quiet spell that does not span midnight", () => {

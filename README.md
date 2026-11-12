@@ -6911,9 +6911,14 @@ asks **once and only once**: somebody who taps Don't Allow has to delete the ico
 to be asked again, which is why the screen warns about that above the button rather than below it.
 Each person and each phone is separate.
 
-**What buzzes.** Everything that would raise a New pill: donations, monthly givers, Get involved
+**What buzzes.** Everything that would raise a New pill, with one deliberate exception noted
+below: donations, monthly givers, Get involved
 sign-ups, contact messages, Festive Ball bookings, business supporters, stories and newsletter
-sign-ups. Nothing a staff member does in the admin ever buzzes anyone. Notifications carry the
+sign-ups. Nothing a staff member does in the admin ever buzzes anyone — which costs one
+divergence from the pills: a Festive Ball bank transfer that staff tick as received sets `paid_at`
+like any payment, so the notification query alone also requires `marked_paid_by IS NULL`. The pill
+still appears; only the interruption is suppressed. It is the single place where the phone and the
+screen differ, and it is in `DETAILS` in `src/db/whats-new.ts` with the reason beside it. Notifications carry the
 amount and the source but **never a name** — a phone on a table at an event shows its lock screen
 to the room — so "£25 donation — card reader", not who gave it.
 
@@ -6937,9 +6942,14 @@ sweep never starts, and nothing else notices. There is no third value for the RF
 blocked on the owner's machine), so `src/admin/web-push.ts` implements RFC 8291, RFC 8188 and
 RFC 8292 on `node:crypto`, pinned in its tests to the RFCs' own published intermediate values.
 `src/admin/notify-runner.ts` sweeps every 60 seconds from `src/index.ts` — never from
-`createApp()`, so no test run sends a real notification — and claims each (person, area) cursor in
-`admin_notified` with a single atomic statement before sending, so overlapping tasks during a
-deploy cannot buzz the same phone twice.
+`createApp()`, so no test run sends a real notification. It **claims the window before it reads
+it**: one statement moves each (person, area) cursor in `admin_notified` to now and hands back the
+previous value, and the arrivals are then read from the window between the two. Claiming
+afterwards — the obvious way round — does not work, because two sweeps overlapping during a deploy
+both read from the same old cursor and the later one claims a higher timestamp, so both succeed
+and both send. The cursor is carried as text, not as a Date: Postgres keeps microseconds,
+JavaScript Dates hold milliseconds and truncate, and a cursor rounded down lands before the row it
+came from, which re-sends that row on every later sweep for ever.
 
 **Tests:** `test/unit/web-push-crypto.test.ts` (the RFC vectors and every guard),
 `admin-notify.test.ts` (the burst cap, the switches, quiet hours), `admin-push-model.test.ts`,

@@ -9,20 +9,35 @@ import { pool } from "./pool";
 import { prefsFromRow, subscriptionRow, type BrowserSubscription, type NotifyPrefs, type PrefsRow, type StoredSubscription } from "../admin/push";
 import type { Area } from "../admin/whats-new";
 
-/** Remember a phone. Re-subscribing the same phone replaces the row rather than adding a second. */
+/**
+ * Remember a phone. Re-subscribing the same phone refreshes its keys rather than adding a second
+ * row, but only for the person it already belongs to: the ON CONFLICT deliberately does NOT move
+ * user_id, or anyone signed in who learned an endpoint could point somebody else's phone at their
+ * own notifications.
+ */
 export async function saveSubscription(userId: number, sub: BrowserSubscription): Promise<void> {
   const row = subscriptionRow(userId, sub);
   await pool.query(
     `INSERT INTO admin_push_subscriptions (user_id, endpoint, p256dh, auth)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (endpoint) DO UPDATE
-        SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, failures = 0`,
+        SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, failures = 0
+      WHERE admin_push_subscriptions.user_id = EXCLUDED.user_id`,
     [row.userId, row.endpoint, row.p256dh, row.auth],
   );
 }
 
-export async function deleteSubscription(endpoint: string): Promise<void> {
-  await pool.query("DELETE FROM admin_push_subscriptions WHERE endpoint = $1", [endpoint]);
+/**
+ * Forget a phone. `userId` is optional ONLY for the sweep, which deletes an endpoint the push
+ * service has told us is gone and does not care whose it was. Every route passes it, so one
+ * signed-in person cannot silence another's phone even if they learn the endpoint.
+ */
+export async function deleteSubscription(endpoint: string, userId?: number): Promise<void> {
+  if (userId === undefined) {
+    await pool.query("DELETE FROM admin_push_subscriptions WHERE endpoint = $1", [endpoint]);
+    return;
+  }
+  await pool.query("DELETE FROM admin_push_subscriptions WHERE endpoint = $1 AND user_id = $2", [endpoint, userId]);
 }
 
 const SELECT_SUBSCRIPTION = `SELECT id, user_id AS "userId", endpoint, p256dh, auth FROM admin_push_subscriptions`;
@@ -76,20 +91,41 @@ export async function getNotified(userId: number): Promise<Map<string, Date>> {
 }
 
 /**
- * Claim the right to notify this person about this area up to `upTo`.
+ * Claim the window up to `upTo` for this person and area, and say where it starts.
  *
- * The whole concurrency story in one statement. Production runs a single task today, but a deploy
- * overlaps two and the sweep is on a timer in both, so without this a donation would buzz twice.
- * The WHERE on the UPDATE half is what makes it a claim rather than a write: whoever gets there
- * first moves the cursor, everyone else gets no row back and sends nothing.
+ * Claim BEFORE reading the arrivals, not after, and the whole race disappears. The previous
+ * version read the cursor, read the items, then claimed the time of the last item — so two sweeps
+ * overlapping during a deploy both read from the same old cursor, both claimed successfully
+ * (because the later one's timestamp was higher still), and both sent the overlapping items. The
+ * atomic statement only ever blocked a sweep that had computed exactly the same end point, which
+ * is the one case that does not happen in practice.
+ *
+ * Returns the PREVIOUS cursor as text, at full microsecond precision, because a JavaScript Date
+ * cannot hold what Postgres stores: rounding it would re-send the row it came from for ever.
+ *
+ * - `claimed: false` — another sweep has already taken this window. Send nothing.
+ * - `from: null` — never notified about this area. The window is claimed so the clock starts
+ *   now, and nothing is sent, which is what stops somebody turning notifications on and being
+ *   buzzed about every donation the charity has ever taken.
  */
-export async function claimNotified(userId: number, area: Area, upTo: Date): Promise<boolean> {
-  const res = await pool.query(
-    `INSERT INTO admin_notified (user_id, area, notified_at) VALUES ($1, $2, $3)
-     ON CONFLICT (user_id, area) DO UPDATE SET notified_at = EXCLUDED.notified_at
-      WHERE admin_notified.notified_at < EXCLUDED.notified_at
-     RETURNING notified_at`,
+export async function claimWindow(
+  userId: number,
+  area: Area,
+  upTo: Date,
+): Promise<{ claimed: boolean; from: string | null }> {
+  const res = await pool.query<{ from_at: string | null; claimed: boolean }>(
+    `WITH prev AS (
+       SELECT notified_at FROM admin_notified WHERE user_id = $1 AND area = $2
+     ), claim AS (
+       INSERT INTO admin_notified (user_id, area, notified_at) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, area) DO UPDATE SET notified_at = EXCLUDED.notified_at
+        WHERE admin_notified.notified_at < EXCLUDED.notified_at
+       RETURNING 1
+     )
+     SELECT (SELECT notified_at::text FROM prev) AS from_at,
+            EXISTS (SELECT 1 FROM claim) AS claimed`,
     [userId, area, upTo],
   );
-  return (res.rowCount ?? 0) > 0;
+  const row = res.rows[0];
+  return { claimed: !!row?.claimed, from: row?.from_at ?? null };
 }

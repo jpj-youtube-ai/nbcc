@@ -30,7 +30,10 @@ export interface Outgoing {
 /** Everything that has arrived for one person since they were last told, by area. */
 export interface PendingArea {
   area: Area;
+  /** Up to BURST_CAP + 1 of them: past that only the count matters. */
   items: ArrivalItem[];
+  /** How many are really in the window, which can exceed items.length during a bulk import. */
+  total: number;
 }
 
 const summary = (count: number): Outgoing => ({
@@ -49,14 +52,14 @@ const summary = (count: number): Outgoing => ({
  * change takes effect at once.
  */
 export function dueNotifications(input: { areas: PendingArea[]; prefs: NotifyPrefs }): Outgoing[] {
-  const wanted = input.areas.filter((a) => !input.prefs.areasOff.includes(a.area) && a.items.length > 0);
-  const total = wanted.reduce((n, a) => n + a.items.length, 0);
+  const wanted = input.areas.filter((a) => !input.prefs.areasOff.includes(a.area) && a.total > 0);
+  const total = wanted.reduce((n, a) => n + a.total, 0);
   if (total === 0) return [];
 
   // One line is one line, whatever the switches say: "1 new things" would be worse than useless.
   if (total === 1) {
-    const only = wanted.find((a) => a.items.length > 0)!;
-    return [one(only.area, only.items[0])];
+    const only = wanted.find((a) => a.items.length > 0);
+    if (only) return [one(only.area, only.items[0])];
   }
 
   if (total > BURST_CAP || input.prefs.bundle) return [summary(total)];
@@ -74,6 +77,16 @@ function one(area: Area, item: ArrivalItem): Outgoing {
     tag: `nbcc-${area}-${item.at.getTime()}`,
   };
 }
+
+// The same question the Ball chase asks (src/ball/chase.ts): what time is it where the person
+// is? Subtracting a fixed offset is wrong for half the year, and these times are typed into an
+// <input type="time"> as UK wall clock.
+const LONDON_CLOCK = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
 
 /** "HH:MM:SS" as minutes since midnight, or null when it is not a time. */
 function minutes(hhmmss: string | null): number | null {
@@ -99,6 +112,9 @@ export function quietNow(prefs: NotifyPrefs, at: Date): boolean {
   const to = minutes(prefs.quietTo);
   if (from === null || to === null) return false;
 
-  const now = at.getUTCHours() * 60 + at.getUTCMinutes();
+  // UK wall clock, not UTC: quiet hours set to 23:00-07:00 were an hour out all summer, letting
+  // a 23:30 donation buzz and silencing a 07:30 one.
+  const [h, m] = LONDON_CLOCK.format(at).split(":").map(Number);
+  const now = h * 60 + m;
   return from <= to ? now >= from && now < to : now >= from || now < to;
 }

@@ -19,8 +19,6 @@ import { isArea } from "../admin/whats-new";
 // their OWN phone and setting their OWN preferences, and what they actually receive is filtered
 // by their permissions at send time, read fresh on every sweep.
 
-const UNAUTHORISED = { error: "Invalid or expired admin session" };
-
 function failed(res: Response, what: string, err: unknown): Response {
   console.error(`admin push: ${what} failed:`, err instanceof Error ? err.message : err);
   return res.status(500).json({ error: "Admin is temporarily unavailable" });
@@ -34,8 +32,10 @@ const subscriptionSchema = z.object({
 const prefsSchema = z.object({
   bundle: z.boolean(),
   // "HH:MM" from an <input type="time">, or null for no quiet hours.
-  quietFrom: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullable(),
-  quietTo: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullable(),
+  // A real time, not merely four digits: "99:99" passed the looser pattern, Postgres then
+  // rejected it, and the person was told "Admin is temporarily unavailable" for their own typo.
+  quietFrom: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).nullable(),
+  quietTo: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/).nullable(),
   areasOff: z.array(z.string()).max(50),
 });
 
@@ -69,7 +69,7 @@ adminPushRouter.get("/api/admin/push/subscription", async (req: Request, res: Re
 
 adminPushRouter.post("/api/admin/push/subscription", async (req: Request, res: Response) => {
   const claims = await authorizeAny(req, res);
-  if (!claims) return res.status(401).json(UNAUTHORISED);
+  if (!claims) return;
   const parsed = subscriptionSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid subscription", details: parsed.error.flatten() });
@@ -89,13 +89,13 @@ adminPushRouter.post("/api/admin/push/subscription", async (req: Request, res: R
 
 adminPushRouter.delete("/api/admin/push/subscription", async (req: Request, res: Response) => {
   const claims = await authorizeAny(req, res);
-  if (!claims) return res.status(401).json(UNAUTHORISED);
+  if (!claims) return;
   const endpoint = typeof req.body?.endpoint === "string" ? req.body.endpoint : "";
   if (!endpoint) return res.status(400).json({ error: "Which phone?" });
   try {
-    // Deleted by endpoint, which only the phone that owns it knows, so one person cannot silence
-    // another's phone by guessing an id.
-    await deleteSubscription(endpoint);
+    // Scoped to the signed-in person as well as the endpoint: knowing somebody else's endpoint
+    // must not be enough to silence their phone.
+    await deleteSubscription(endpoint, claims.sub);
     return res.status(204).end();
   } catch (err) {
     return failed(res, "removing a subscription", err);
@@ -114,7 +114,7 @@ adminPushRouter.get("/api/admin/push/prefs", async (req: Request, res: Response)
 
 adminPushRouter.put("/api/admin/push/prefs", async (req: Request, res: Response) => {
   const claims = await authorizeAny(req, res);
-  if (!claims) return res.status(401).json(UNAUTHORISED);
+  if (!claims) return;
   const parsed = prefsSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid settings", details: parsed.error.flatten() });

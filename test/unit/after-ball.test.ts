@@ -374,7 +374,9 @@ describe.each([
 });
 
 describe("the Ball's own pages do not know the moment exists", () => {
-  // Ball pages are served by src/routes/ball.ts, which draws its own menu (decorateBallPage).
+  // Ball pages are served by src/routes/ball.ts, which draws its own menu (decorateBallPage). The guest
+  // details and the thank you wear the site's banner since TASK-615 and go out dressed as every page of
+  // the site does (dressPage), by the real clock, so the clock this file moves cannot move them either.
   const PAGES = ["/ball", "/ball/terms", "/ball/donate", "/ball/thank-you", "/ball/guests/an-invented-token"];
 
   const answer = async (path: string) => {
@@ -422,6 +424,19 @@ describe("the Ball's own pages do not know the moment exists", () => {
       expect(source, file).not.toContain("after-ball");
       expect(source, file).not.toContain("afterBall");
     }
+  });
+});
+
+// TASK-615: the guest details and the thank you are pages of the site: the site's own banner and
+// footer, with what every page gains as it goes out (here, Get involved while the events switch is on).
+describe("the Festive Ball's guest details and thank you", () => {
+  it.each(["/ball/thank-you", "/ball/guests/an-invented-token"])("%s wears the site's banner and gains its menu's items", async (path) => {
+    state.eventsOn = true;
+    const on = await body(path);
+    expect(on).toContain('<a class="nav-cta" href="/donate">Donate</a>');
+    expect(navList(on)).toContain('<li><a href="/get-involved">Get involved</a></li>');
+    state.eventsOn = false;
+    expect(navList(await body(path))).not.toContain('href="/get-involved"');
   });
 });
 

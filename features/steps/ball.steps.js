@@ -881,10 +881,13 @@ Then("the guest page should work without JavaScript", function () {
   assert.match(this.guestBody, /method="post"/);
   // TASK-409 added one small INLINE script, which reveals the "clear this guest" button. The
   // rule is not "no script tag" but "nothing the form needs can fail to arrive", so assert that:
-  // no external script to fetch, a plain submit, and the one JS-only control shipped hidden so
-  // a reader without JavaScript never sees a button that does nothing.
-  assert.ok(
-    !/<script[^>]*\ssrc=/.test(this.guestBody),
+  // no external script the form needs (the only one is the site's own main.js, deferred, which opens
+  // the site's menu on a phone now the page wears the site's banner, TASK-615), a plain submit, and
+  // the one JS-only control shipped hidden so a reader without JavaScript never sees a button that
+  // does nothing.
+  assert.deepStrictEqual(
+    this.guestBody.match(/<script[^>]*\ssrc=[^>]*>/g),
+    ['<script defer src="/assets/js/main.js">'],
     "the guest form must not depend on a script it has to fetch",
   );
   assert.ok(

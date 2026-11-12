@@ -236,7 +236,7 @@ Also:
 
 ## Questions only Jaimie can answer (one at a time, most important first)
 
-1. **Christmas Eve timings.** What time will door 24's place close, and what time should grand prize entries close? Entries must close at least an hour after the place closes, so every family can finish door 24, and early enough to judge and ring the winner that evening.
+1. **Christmas Eve timings. ANSWERED (Jaimie, 12 November):** entries close at **5pm on Christmas Eve**. That is the default in Head Elf HQ > Settings, which a head elf can change. Door 24's place must therefore close by 4pm, and Head Elf HQ warns while door 24's closing time is later than an hour before the entries close.
 2. **Brothers and sisters.** If one child visits a hiding place and their brother or sister doesn't, should that door count as done for both? The candy cane stamp would stay with the child who went. My suggestion is yes: the family found it together, and the grand prize is per detective.
 3. **Age.** The rules say the grand prize is judged "taking age into account", but also "We never ask for a real surname, a school or an age." Should each entry ask the detective's age, only for judging and deleted in January (the rules would then say so)? Or is it judged without ages?
 4. **Winners.** Is there one winner, or one in each age group, and any runners up? Is anyone told on the site, such as a line on the calendar on Christmas Day?

@@ -214,8 +214,15 @@
   if (window.navigator && window.navigator.serviceWorker) {
     window.navigator.serviceWorker.addEventListener("message", function (event) {
       var area = event.data && event.data.nbccGoTo;
-      if (area) selectView(area);
+      if (area) goToNotificationArea(area);
     });
+  }
+
+  // Where a tapped notification lands. An Elf Detective School one is about a photo to check, which
+  // lives on the Finds tab of Head Elf HQ, so it opens there rather than wherever the last visit left off.
+  function goToNotificationArea(area) {
+    selectView(area);
+    if (area === "elf" && window.AdminElfHq && window.AdminElfHq.show) window.AdminElfHq.show("finds");
   }
 
   function showApp(claims) {
@@ -234,7 +241,7 @@
     if (pendingArea) {
       var area = pendingArea;
       pendingArea = null;
-      selectView(area);
+      goToNotificationArea(area);
     }
     registerPushWorker();
   }
@@ -754,7 +761,7 @@
   var PUSH_AREAS = [
     ["donations", "Donations"], ["monthly", "Monthly givers"], ["fundraising", "Get involved"],
     ["contact", "Contact form"], ["ball", "Festive Ball"], ["fulfilments", "Business supporters"],
-    ["stories", "Stories"], ["newsletter", "Newsletter"],
+    ["stories", "Stories"], ["newsletter", "Newsletter"], ["elf", "Elf Detective School"],
   ];
 
   function pushSupported() {

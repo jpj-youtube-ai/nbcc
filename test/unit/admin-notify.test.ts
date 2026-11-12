@@ -166,3 +166,19 @@ describe("quiet hours", () => {
     expect(quietNow({ ...OFF, quietFrom: null, quietTo: "07:00:00" }, new Date("2026-11-12T03:00:00Z"))).toBe(false);
   });
 });
+
+describe("Elf Detective School photos", () => {
+  const photo = (): ArrivalItem => ({ at: new Date(Date.UTC(2026, 11, 3, 16, 0, 0)), area: "elf", line: "A photo is waiting to be checked" });
+
+  it("buzzes once, titled Elf Detective School, opening Head Elf HQ", () => {
+    const out = dueNotifications({ areas: [pending("elf", [photo()])], prefs: OFF });
+    expect(out).toHaveLength(1);
+    expect(out[0].title).toBe("Elf Detective School");
+    expect(out[0].body).toBe("A photo is waiting to be checked");
+    expect(out[0].area).toBe("elf");
+  });
+
+  it("sends nothing to a person who switched Elf Detective School off", () => {
+    expect(dueNotifications({ areas: [pending("elf", [photo()])], prefs: { ...OFF, areasOff: ["elf"] } })).toEqual([]);
+  });
+});

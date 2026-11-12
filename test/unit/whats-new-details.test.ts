@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AREAS, arrivalLine, type Area } from "../../src/admin/whats-new";
+import { AREAS, AREA_TITLES, arrivalLine, type Area } from "../../src/admin/whats-new";
 
 // What a notification actually says (TASK-619).
 //
@@ -39,6 +39,7 @@ describe("a line about a person doing something", () => {
     ["fulfilments", "A business signed up as a supporter"],
     ["ball", "A Festive Ball booking"],
     ["newsletter", "Someone joined the newsletter"],
+    ["elf", "A photo is waiting to be checked"],
   ] as const)("%s reads: %s", (area, expected) => {
     expect(arrivalLine(area, {})).toBe(expected);
   });
@@ -64,5 +65,17 @@ describe("areas that are a screen rather than an arrival", () => {
   // ever arrives in them, so there is nothing a notification could say.
   it.each(["events", "analytics", "qr", "red-bag", "invoices"] as const)("%s has no line", (area) => {
     expect(arrivalLine(area, {})).toBeNull();
+  });
+});
+
+describe("an Elf Detective School photo", () => {
+  it("is titled by the game's full name", () => {
+    expect(AREA_TITLES.elf).toBe("Elf Detective School");
+  });
+
+  it("says a photo is waiting, whatever the query selected, and never a name or a place", () => {
+    const line = arrivalLine("elf", { grownUpName: "Alex Example", detective: "Sam", placeName: "Example Library", door: 4 });
+    expect(line).toBe("A photo is waiting to be checked");
+    expect(arrivalLine("elf", {})).toBe("A photo is waiting to be checked");
   });
 });

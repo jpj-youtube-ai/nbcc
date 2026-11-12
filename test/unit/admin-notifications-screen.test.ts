@@ -76,7 +76,7 @@ describe("the button", () => {
 
 describe("choosing what buzzes", () => {
   it("offers every area something can arrive in", () => {
-    for (const area of ["donations", "monthly", "fundraising", "contact", "ball", "fulfilments", "stories", "newsletter"]) {
+    for (const area of ["donations", "monthly", "fundraising", "contact", "ball", "fulfilments", "stories", "newsletter", "elf"]) {
       expect(app, area).toContain(`["${area}", "${AREA_TITLES[area as keyof typeof AREA_TITLES]}"]`);
     }
   });

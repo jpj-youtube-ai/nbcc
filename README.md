@@ -6914,7 +6914,11 @@ Each person and each phone is separate.
 **What buzzes.** Everything that would raise a New pill, with one deliberate exception noted
 below: donations, monthly givers, Get involved
 sign-ups, contact messages, Festive Ball bookings, business supporters, stories and newsletter
-sign-ups. Nothing a staff member does in the admin ever buzzes anyone — which costs one
+sign-ups, and Elf Detective School's photos waiting to be checked (the `elf` area, for whoever can
+open Head Elf HQ: "A photo is waiting to be checked", never a family, a child, a detective or a place;
+tapping it opens Head Elf HQ at Finds; it has its own switch under Monitor > Notifications and a New
+mark beside Elf Detective School in the menu, cleared by opening Head Elf HQ; photos from the practice
+door count too). Nothing a staff member does in the admin ever buzzes anyone — which costs one
 divergence from the pills: a Festive Ball bank transfer that staff tick as received sets `paid_at`
 like any payment, so the notification query alone also requires `marked_paid_by IS NULL`. The pill
 still appears; only the interruption is suppressed. It is the single place where the phone and the
@@ -12340,6 +12344,9 @@ only, never the number). The rules (`photoAlertDue`):
 
 - one at a time: when photos start waiting, one email to every head elf with alerts on and one text to
   each of them with a mobile, and no more until every photo waiting at that alert has been checked;
+  head elves with the NBCC Admin app also get the app's own notification, on top of the text and the
+  email (see **What buzzes** under the admin phone app): it is separate, free, follows each person's own
+  Notifications settings, and changes nothing about the text or the email;
 - never sooner than 30 minutes after the last alert, so a quick head elf who clears each photo as it
   comes is not texted for every one (C13);
 - nothing between 9pm and 8am, London time; at 8am, one alert if any photo is waiting;

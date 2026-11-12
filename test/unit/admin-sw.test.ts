@@ -61,6 +61,17 @@ describe("tapping a notification", () => {
   });
 });
 
+describe("an Elf Detective School tap", () => {
+  // The photos to check are the Finds tab of Head Elf HQ, so the tap opens it there rather than
+  // wherever the last visit left off.
+  it("opens Head Elf HQ at Finds, from a cold start and from an open admin", () => {
+    expect(app).toContain("function goToNotificationArea(area)");
+    expect(app).toMatch(/area === "elf"[\s\S]{0,200}AdminElfHq\.show\("finds"\)/);
+    expect(app).toMatch(/nbccGoTo;\s*if \(area\) goToNotificationArea\(area\);/);
+    expect(app).toMatch(/pendingArea = null;\s*goToNotificationArea\(area\);/);
+  });
+});
+
 describe("landing on the right section", () => {
   // The admin has no URL routing at all, so this is the entirety of it.
   it("reads the area out of the address", () => {

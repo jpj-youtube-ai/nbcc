@@ -17,7 +17,8 @@ export type Area =
   | "qr"
   | "fundraising"
   | "red-bag"
-  | "invoices";
+  | "invoices"
+  | "elf";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
 // never sits on a section the person cannot open. Every one except events and analytics also has
@@ -41,6 +42,8 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "red-bag", section: "red-bag", level: "view" },
   // Invoices for donations: Admin > Giving > Invoices. New as a screen only: staff make the invoices.
   { area: "invoices", section: "donations", level: "view" },
+  // Elf Detective School: Head Elf HQ. A photo a family sends, waiting to be checked, is an arrival.
+  { area: "elf", section: "elf", level: "view" },
 ];
 
 export function isArea(value: unknown): value is Area {
@@ -77,6 +80,7 @@ export const AREA_TITLES: Record<Area, string> = {
   fundraising: "Get involved",
   "red-bag": "Fill a Red Bag",
   invoices: "Invoices",
+  elf: "Elf Detective School",
 };
 
 /** Pennies as a person would say them: £25, £5.05, £1,500. */
@@ -117,6 +121,9 @@ export function arrivalLine(area: Area, fields: Record<string, unknown>): string
       return "A Festive Ball booking";
     case "newsletter":
       return "Someone joined the newsletter";
+    // Whatever the query selected, never a family, a child, a detective or a place.
+    case "elf":
+      return "A photo is waiting to be checked";
     // These carry a pill when the SCREEN is new, but nothing arrives in them, so a notification
     // has nothing to say. Listed rather than defaulted so a new area has to make this choice.
     case "events":

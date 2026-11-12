@@ -253,9 +253,11 @@ interface GuessRow {
   text: string;
   norm: string;
   saved_at: Date;
+  /** True for a go. A row read without it is a guess on the night. */
+  late?: boolean;
 }
 
-const savedGuess = (r: GuessRow): SavedGuess => ({ text: r.text, norm: r.norm, at: r.saved_at });
+const savedGuess = (r: GuessRow): SavedGuess => ({ text: r.text, norm: r.norm, at: r.saved_at, late: r.late === true });
 
 /** Saves a family's guess for a door, replacing its earlier one. */
 export async function saveGuess(year: number, door: number, familyId: number, guess: { text: string; norm: string }, at: Date): Promise<void> {

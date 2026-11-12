@@ -1214,6 +1214,10 @@ export function wordsForGuessRefusal(reason: GuessRefusal, elf: string, door?: n
       return "That is a bit long. Up to 80 letters is plenty.";
     case "place-already-open":
       return `That elf was already found behind door ${door ?? ""}. Try again!`;
+    case "locked-in":
+      return "Your guess is locked in, and the hiding place is shown now.";
+    case "have-a-go":
+      return "The hiding place is shown now, so this is your one go at this door.";
   }
 }
 
@@ -1245,7 +1249,7 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
     if (limited) return await hqSaying(429, ELF_TOO_MANY);
     const state = doorState(run.facts, now);
     const openPlaces = runs.runs.flatMap((r) => (r.door !== 0 && isOpen(doorState(r.facts, now)) ? [{ door: r.door, names: r.names }] : []));
-    const decision = decideGuess({ doorState: state, openPlaces }, body.text);
+    const decision = decideGuess({ doorState: state, openPlaces, hasGuess: false, mayHaveAGo: false }, body.text);
     if (!decision.ok) {
       // A door's elf is named only once the door can be guessed: until then its name stays a surprise.
       const message = wordsForGuessRefusal(decision.reason, canGuess(state) ? run.elfName : "the elf", decision.door);

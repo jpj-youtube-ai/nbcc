@@ -432,14 +432,14 @@ describe("guesses", () => {
   it("maps a family's guesses by door", async () => {
     query.mockResolvedValueOnce({ rows: [{ door: 7, text: "The Cone", norm: "the cone", saved_at: FIVE_31 }] });
     const m = await familyGuesses(2026, 3);
-    expect(m.get(7)).toEqual({ text: "The Cone", norm: "the cone", at: FIVE_31 });
+    expect(m.get(7)).toEqual({ text: "The Cone", norm: "the cone", at: FIVE_31, late: false });
   });
 
   it("leaves removed families out of a door's guesses", async () => {
     query.mockResolvedValueOnce({ rows: [{ family_id: 3, text: "The Cone", norm: "the cone", saved_at: FIVE_31 }] });
     const list = await doorGuesses(2026, 7);
     expect(String(query.mock.calls[0][0])).toContain("removed_at IS NULL");
-    expect(list).toEqual([{ familyId: 3, guess: { text: "The Cone", norm: "the cone", at: FIVE_31 } }]);
+    expect(list).toEqual([{ familyId: 3, guess: { text: "The Cone", norm: "the cone", at: FIVE_31, late: false } }]);
   });
 });
 

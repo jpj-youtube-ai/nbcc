@@ -25,10 +25,12 @@ import {
   cluePicture,
   detectiveDoorsDone,
   doorCounts,
+  doorPhotos,
   doorScrapbook,
   familyDoorsDone,
   familyGuesses,
   familyHasWon,
+  familyKnowledge,
   familyPhoto,
   familyVisits,
   finderParts,
@@ -48,9 +50,9 @@ import {
   type FamilyRuns,
 } from "../db/elf-game";
 import { DOOR_COUNT, isDoor, type Door } from "../elf/calendar";
-import { placesPublic } from "../elf/catch-up";
+import { doorsKnown, doorsToCrack, knowsPlace, placesPublic } from "../elf/catch-up";
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
-import { canGuess, cluesOut, doorState, isOpen, shownAt } from "../elf/doors";
+import { canGuess, cluesOut, doorState, isOpen, shownAt, type DoorState } from "../elf/doors";
 import { badgeWords } from "../elf/emails";
 import { decideGuess, type GuessRefusal, type SavedGuess } from "../elf/guess";
 import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
@@ -64,7 +66,18 @@ import { progressOf, promotionsBetween, type DoorsDone, type Rank } from "../elf
 import { makePublicCalendar } from "../elf/public-calendar";
 import type { Scrapbook } from "../elf/scrapbook";
 import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeState } from "../elf/wardrobe";
-import { calendarViewFor, hqViewFor, lookFromForm, marksOf, posterViewFor, todayRunOf, wardrobeViewFor, type DetectiveRow, type FamilyRow } from "../elf/views";
+import {
+  calendarViewFor,
+  familyDoorView,
+  hqViewFor,
+  lookFromForm,
+  marksOf,
+  posterViewFor,
+  todayRunOf,
+  wardrobeViewFor,
+  type DetectiveRow,
+  type FamilyRow,
+} from "../elf/views";
 import { realElfDeps, sendProudMoments, type WordMoment } from "../elf/worker";
 import { elfPng, elfPngKey } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
@@ -699,11 +712,20 @@ elfRouter.post("/api/elf/look", express.urlencoded({ extended: false, limit: "16
 //   GET /api/elf/calendar    the small feed the calendar's script polls: { now, found, status, doors: [{ door, v }] }
 //   GET /api/elf/door/:n     one door's tile and detail, drawn by the same functions as the page
 //   GET /api/elf/me          the signed in family's marks on the calendar and its own photos, or 401:
-//                            { doors: [{ door, cracked, visited, snow }], photos: [{ door, token, status }] }
+//                            { doors: [{ door, cracked, visited, snow }], photos: [{ door, token, status }] },
+//                            and while December's doors are on, known: [door] (the doors whose place the
+//                            family can see, in door order) and goes: [door] (the doors it may still
+//                            crack, newest first)
+//   GET /api/elf/me/door/:n  the family's own door, { tile, detail }, with its place and its photos: only
+//                            while December's doors are on, for a door open on the calendar whose place
+//                            the family can see (or any open door from Christmas Day until 1 January);
+//                            404 otherwise, and 401 signed out
 //
 // The calendar is the same for every visitor, so it is built at most once every 15 seconds and shared
 // (src/elf/public-calendar.ts), and cached briefly; nothing on it is private, and the practice door is
-// never on it.
+// never on it. Until Christmas Day it names no place and shows no photo. A family's own places and
+// photos never pass through it: they come from the family's own door, drawn over the shared one for that
+// family alone, and never kept by a browser or a shared cache.
 
 const PUBLIC_SHORT_CACHE = "public, max-age=15";
 
@@ -804,8 +826,12 @@ export async function getMe(req: Request, res: Response): Promise<Response | voi
     const family = s ? await familyWithDetectives(s.familyId) : null;
     if (!family) return res.status(401).json({ error: "Not signed in" });
     const runs = await familyRuns(res, now);
-    // This year's doors only: the practice door never counts towards anything.
-    const doorsDone = await familyDoorsDone(settings.year, family.id, runs.runs, now);
+    // This year's doors only: the practice door never counts towards anything. What the family has done
+    // door by door is read only while December's doors are on: with them off this answer is wave 1's.
+    const [doorsDone, knowledge] = await Promise.all([
+      familyDoorsDone(settings.year, family.id, runs.runs, now),
+      settings.doorsOn ? familyKnowledge(settings.year, family.id) : null,
+    ]);
     const { doors } = marksOf(runs.runs, family, doorsDone, [], now);
     // The family's own photo at each door it has visited, so it can take one down from the calendar. An
     // approved photo reads as waiting while its door's place is still hidden.
@@ -816,9 +842,53 @@ export async function getMe(req: Request, res: Response): Promise<Response | voi
       const photo = found[i];
       return photo ? [{ door: m.door, token: photo.token, status: photo.status }] : [];
     });
-    return res.json({ doors, photos });
+    if (!knowledge) return res.json({ doors, photos });
+    // The doors whose place the family can see, which the calendar's script draws from the family's own
+    // door (getMyDoor), and the doors it may still have a go at, newest first.
+    const known = doorsKnown({ runs: runs.runs, knowledge, now });
+    const goes = doorsToCrack({ runs: runs.runs, knowledge, now }).map((r) => r.door);
+    return res.json({ doors, photos, known, goes });
   } catch (err) {
     return gameFailed(res, "marks", err, true);
+  }
+}
+
+/** The one rule (src/elf/catch-up.ts) at one door: can the family see its place? Never while the door is
+ *  not open, whatever the family has done there: a detective who typed the tag word while the place was
+ *  still hidden sees it once the door opens, as everyone who can does. */
+async function knowsDoorPlace(year: number, familyId: number, door: number, state: DoorState): Promise<boolean> {
+  if (!isOpen(state)) return false;
+  const known = await familyKnowledge(year, familyId);
+  return knowsPlace({ state, guessed: known.guesses.has(door), typed: known.typed.has(door) });
+}
+
+/** A family's own door (Plan 2c-1): the door the calendar everyone shares draws, with its place and its
+ *  photos laid on, for a family that can see the place, or for anyone from Christmas Day until 1 January.
+ *  The calendar's script draws each door in /api/elf/me's `known` from here. A door that is not open on
+ *  the shared calendar, or whose place the family cannot see, is not found, and nothing more is read for
+ *  it. It is this family's alone, so no browser or shared cache ever keeps it. */
+export async function getMyDoor(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    const s = await signedInFamily(req);
+    if (!s) return res.status(401).json({ error: "Not signed in" });
+    // A real door, while December's doors are on: never the practice door, which is on no calendar.
+    const n = doorNumberOf(req.params.n);
+    if (!isDoor(n) || !settings.doorsOn) return notFound(res, true);
+    // The door as the shared calendar draws it, so the family's door opens when everyone's does.
+    const view = await publicCalendar.get(now);
+    const shared = view.doors.find((d) => d.door === n);
+    if (!shared || !isOpen(shared.state)) return notFound(res, true);
+    if (!placesPublic(settings.year, now) && !(await knowsDoorPlace(settings.year, s.familyId, n, shared.state))) return notFound(res, true);
+    const run = await loadDoorRun(settings.year, n, now);
+    if (run.placeName === null) return notFound(res, true);
+    const mine = familyDoorView(shared, { place: { name: run.placeName, town: run.placeTown ?? "" }, photos: await doorPhotos(settings.year, n) });
+    const ctx = { now: view.now, joinUrl: view.joinUrl, hqUrl: view.hqUrl };
+    return res.json({ tile: doorTile(mine, view.now), detail: doorDetail(mine, ctx) });
+  } catch (err) {
+    return gameFailed(res, "own door", err, true);
   }
 }
 
@@ -836,6 +906,7 @@ elfRouter.get("/elf/rules", schoolOn, async (req, res) => {
 elfRouter.get("/api/elf/calendar", schoolOn, getCalendarFeed);
 elfRouter.get("/api/elf/door/:n", schoolOn, getDoorFeed);
 elfRouter.get("/api/elf/me", schoolOn, getMe);
+elfRouter.get("/api/elf/me/door/:n", schoolOn, doorsOn, getMyDoor);
 
 // --- the doors in December: the poster page, the word, the guess, the family's photo, the pictures ------
 //
@@ -852,7 +923,9 @@ elfRouter.get("/api/elf/me", schoolOn, getMe);
 //                                          202 { status: "waiting", token }
 //   DELETE /api/elf/p/:code/photo          the family takes its photo down, from the poster page
 //   DELETE /api/elf/door/:n/photo          the same, from the door on the calendar
-//   GET    /elf/door/:n/photo/:token.jpg   an approved photo, only while its door is open
+//   GET    /elf/door/:n/photo/:token.jpg   an approved photo, only while its door is open, and only to a
+//                                          signed in family that can see its place (to anyone from
+//                                          Christmas Day until 1 January); never cached
 //   GET    /elf/door/:n/elf/:visitId.png   a visiting detective's elf, only once the visit counts
 //   GET    /elf/hq/clue/:door/:n.jpg       a clue's picture, signed in, only once the clue is out
 //
@@ -1363,20 +1436,28 @@ export function deletePhotoByDoor(req: Request, res: Response): Promise<Response
 }
 
 export async function getDoorPhoto(req: Request, res: Response): Promise<Response | void> {
-  // Never kept until there is a photo to serve, so no cache holds a "not yet" from before the reveal.
-  res.setHeader("Cache-Control", "no-store");
+  // Only ever for whoever asked, and never kept by a browser or a shared cache: not a photo, which can
+  // show the inside of the place and can be taken down at any moment, and not a "not yet" from before.
+  res.setHeader("Cache-Control", "private, no-store");
   const n = doorNumberOf(req.params.n);
   const token = String(req.params.token);
   if (!CODE_SHAPE.test(token) || !gameDoor(res, n)) return notFound(res);
   const now = new Date();
   try {
     const run = await oneGameRun(res, n, now);
+    if (!run) return notFound(res);
+    const state = doorState(run.facts, now);
     // Only while its door is open: a photo sent while the place was still hidden never gives it away.
-    if (!run || !isOpen(doorState(run.facts, now))) return notFound(res);
+    if (!isOpen(state)) return notFound(res);
+    // And only to someone who may see the place: anyone from Christmas Day until 1 January (never at the
+    // practice door), otherwise a signed in family that can see it (the one rule).
+    if (!placesPublic(run.year, now)) {
+      const s = await signedInFamily(req);
+      if (!s || !(await knowsDoorPlace(run.year, s.familyId, run.door, state))) return notFound(res);
+    }
     const photo = await approvedPhoto(run.year, run.door, token);
     if (!photo) return notFound(res);
-    // Kept briefly, so a photo taken down stops being served within minutes.
-    return sendPicture(res, photo, pictureCache(res, run.door, "public, max-age=300"));
+    return sendPicture(res, photo, "private, no-store");
   } catch (err) {
     return gameFailed(res, "door photo", err, false);
   }

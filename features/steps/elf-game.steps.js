@@ -643,6 +643,29 @@ Then("door {int} on the calendar says {string}", async function (door, words) {
   assert.ok(doorSaid(this).includes(words), `door ${door} does not say "${words}": ${sentence(this)}`);
 });
 
+// The calendar everyone shares names no open door's place before Christmas Day, nor from 1 January (Plan
+// 2c-1). Read signed out, from the door feed.
+Then("door {int} on the calendar does not say {string}", async function (door, words) {
+  await asFamily(this, null, "GET", `/api/elf/door/${door}`);
+  assert.equal(this.gameStatus, 200, sentence(this));
+  assert.ok(!doorSaid(this).includes(words), `door ${door} on the calendar says "${words}": ${sentence(this)}`);
+});
+
+// /api/elf/me with December's doors on: `known` holds the doors whose place the family can see, and `goes`
+// the doors it may still have a go at: none, once Christmas Day has come.
+Then("the family can see door {int}'s place, and has no doors left to crack", function (door) {
+  assert.equal(this.gameStatus, 200, sentence(this));
+  const known = (this.gameBody && this.gameBody.known) || [];
+  assert.ok(known.includes(door), `door ${door} is not in known: ${sentence(this)}`);
+  assert.deepEqual(this.gameBody.goes, [], sentence(this));
+});
+
+// The family's own door (/api/elf/me/door/:n): its tile and detail, drawn as the door feed draws a door.
+Then("the family's own door says {string}", function (words) {
+  assert.equal(this.gameStatus, 200, sentence(this));
+  assert.ok(doorSaid(this).includes(words), `the family's own door does not say "${words}": ${sentence(this)}`);
+});
+
 Then("door {int}'s scrapbook shows {string} first, then {string}", async function (door, first, then) {
   await asFamily(this, null, "GET", `/api/elf/door/${door}`);
   const detail = String((this.gameBody && this.gameBody.detail) || "");

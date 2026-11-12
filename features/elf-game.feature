@@ -140,7 +140,10 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
   # door 7 can run, so it is never snowed in first. A December that is over is past its 31 January, so the
   # worker clears a photo sent to door 7 away: the tick hook runs it at midday on 1 February, which is past
   # that day whenever this runs. The photo check, the two families rule and a family's take down are played
-  # on the practice door above. The hooks put the year back and take last year's rows away.
+  # on the practice door above. The hooks put the year back and take last year's rows away. Last year's
+  # Christmas Day and 1 January have always passed too, so door 7's place is off the calendar everyone
+  # shares and having a go has closed, whenever this runs: the family that guessed sees the place only on
+  # its own door.
   Scenario: A real door played after its evening, with its scrapbook, a photo cleared away, and an unready door snowed in
     Given the school's year is last year, whose December is over
     And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" has opened the doors list
@@ -187,6 +190,12 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     And door 7 on the calendar says "Detective R. Tinselfoot won the prize cut into this door: A pretend sledge."
     And door 7 on the calendar says "1 family cracked this case"
     And door 7 on the calendar says "2 have been there since"
+    And door 7 on the calendar does not say "The Example Bakehouse"
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me"
+    Then the family can see door 7's place, and has no doors left to crack
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me/door/7"
+    Then the game answers 200
+    And the family's own door says "The Example Bakehouse"
     And door 2 on the calendar says "got snowed in"
     And door 2 was snowed in automatically
     When the family "first.game.elf.bdd@example.com" opens "/api/elf/me"

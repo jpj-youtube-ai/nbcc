@@ -22,6 +22,24 @@ export interface NumberLine {
   /** The admin screen that has the full story, and its name as the menu shows it. */
   view: string;
   button: string;
+  /**
+   * The headline's figure, and the words after it, so a tile can draw the figure large
+   * (2026-11-12 redesign). `headline` is kept whole beside them for anything that reads it.
+   */
+  figure: string;
+  rest: string;
+}
+
+/** A line as each builder makes it, before its figure is split off. */
+type NumberLineBase = Omit<NumberLine, "figure" | "rest">;
+
+/**
+ * A headline's figure and the words after it. Every headline here is built figure first
+ * ("£4,210 this month so far", "212 of 300 seats sold"), so the first space divides them.
+ */
+export function splitHeadline(headline: string): { figure: string; rest: string } {
+  const at = headline.indexOf(" ");
+  return at < 0 ? { figure: headline, rest: "" } : { figure: headline.slice(0, at), rest: headline.slice(at + 1) };
 }
 
 /** Whole pounds: at a glance £4,210 reads faster than £4,210.49. */
@@ -53,7 +71,7 @@ const MONEY_PARTS = [
   ["fundraising", "fundraising pages", "fundraising", "Fundraising"],
 ] as const;
 
-function moneyLine(m: NonNullable<NumberCounts["money"]>): NumberLine {
+function moneyLine(m: NonNullable<NumberCounts["money"]>): NumberLineBase {
   const parts = MONEY_PARTS.filter(([k]) => m[k]).map(([k, name, view, button]) => ({ name, view, button, ...(m[k] as NowAndBefore) }));
   // The headline is the sum of the rounded parts, so the parts people add up come to it.
   const now = parts.reduce((t, p) => t + wholePounds(p.now), 0) * 100;
@@ -69,7 +87,7 @@ function moneyLine(m: NonNullable<NumberCounts["money"]>): NumberLine {
   };
 }
 
-function monthlyLine(m: NonNullable<NumberCounts["monthly"]>): NumberLine {
+function monthlyLine(m: NonNullable<NumberCounts["monthly"]>): NumberLineBase {
   const moved =
     m.joined || m.stopped ? `${n(m.joined)} joined and ${n(m.stopped)} stopped this month.` : "Nobody joined or stopped this month.";
   return {
@@ -82,7 +100,7 @@ function monthlyLine(m: NonNullable<NumberCounts["monthly"]>): NumberLine {
   };
 }
 
-function ballLine(b: NonNullable<NumberCounts["ball"]>): NumberLine {
+function ballLine(b: NonNullable<NumberCounts["ball"]>): NumberLineBase {
   const bits = [`${pounds(b.takenPence)} taken.`];
   if (b.transferSeats > 0) {
     bits.push(b.transferSeats === 1 ? "1 seat held for a bank transfer." : `${n(b.transferSeats)} seats held for bank transfers.`);
@@ -100,7 +118,7 @@ function ballLine(b: NonNullable<NumberCounts["ball"]>): NumberLine {
   };
 }
 
-function websiteLine(w: NonNullable<NumberCounts["website"]>): NumberLine {
+function websiteLine(w: NonNullable<NumberCounts["website"]>): NumberLineBase {
   const bits = [`${n(w.visitorsBefore)} in the 7 days before.`, `${people(w.onNow)} on the site now.`];
   const channel = w.topChannel ? CHANNEL_WORDS[w.topChannel] : undefined;
   if (channel) bits.push(channel);
@@ -116,7 +134,7 @@ function websiteLine(w: NonNullable<NumberCounts["website"]>): NumberLine {
 
 // Fill a Red Bag this month, with the Donate page beside it: the same figures and words as the top
 // of the Donations screen (src/admin/gift-sources.ts).
-function redBagLine(r: NonNullable<NumberCounts["redBag"]>): NumberLine {
+function redBagLine(r: NonNullable<NumberCounts["redBag"]>): NumberLineBase {
   return {
     key: "redBag",
     title: "Fill a Red Bag",
@@ -129,14 +147,14 @@ function redBagLine(r: NonNullable<NumberCounts["redBag"]>): NumberLine {
 
 /** One line each, in the order money, Fill a Red Bag, monthly givers, the Festive Ball, the website. */
 export function numbersLines(c: NumberCounts): NumberLine[] {
-  const out: NumberLine[] = [];
+  const out: NumberLineBase[] = [];
   if (c.money && MONEY_PARTS.some(([k]) => c.money?.[k])) out.push(moneyLine(c.money));
   if (c.redBag) out.push(redBagLine(c.redBag));
   if (c.monthly) out.push(monthlyLine(c.monthly));
   // Once the night has passed, the line has done its job.
   if (c.ball && c.ball.daysToGo >= 0) out.push(ballLine(c.ball));
   if (c.website) out.push(websiteLine(c.website));
-  return out;
+  return out.map((line) => ({ ...line, ...splitHeadline(line.headline) }));
 }
 
 /** A stretch of UK days from `from` (a YYYY-MM-DD UK day) up to the moment `until`. */

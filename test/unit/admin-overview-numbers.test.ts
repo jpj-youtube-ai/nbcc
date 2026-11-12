@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { giversFrom, monthSoFar, numbersLines } from "../../src/admin/overview-numbers";
+import { giversFrom, monthSoFar, numbersLines, splitHeadline } from "../../src/admin/overview-numbers";
 
 // The Overview's numbers (stage 2). These are the pure rules: which days count as "this month so
 // far" and which as "the same days last month". Invented moments only.
@@ -157,5 +157,28 @@ describe("the words for each number", () => {
       expect(all, l.key).not.toMatch(/[A-Za-z]-[A-Za-z]/);
       expect(all, l.key).not.toMatch(/[–—]/);
     }
+  });
+});
+
+// The figure apart from the rest of the headline, so a scoreboard tile can show it large
+// (2026-11-12 redesign). Every headline is built figure first, so the first space divides them.
+describe("the figure, apart from the rest of its headline", () => {
+  it.each([
+    ["£4,210 this month so far", "£4,210", "this month so far"],
+    ["212 of 300 seats sold", "212", "of 300 seats sold"],
+    ["2,904 visitors in the last 7 days", "2,904", "visitors in the last 7 days"],
+    ["£0", "£0", ""],
+  ])("splits %s", (headline, figure, rest) => {
+    expect(splitHeadline(headline)).toEqual({ figure, rest });
+  });
+
+  it("is on every line, and puts the headline back together", () => {
+    const lines = numbersLines({
+      money: { donations: { now: 5_000, before: 2_000 } },
+      monthly: { giving: 84, monthlyPence: 126_000, joined: 3, stopped: 1 },
+      ball: { seatsSold: 212, totalSeats: 300, takenPence: 1_840_000, transferSeats: 16, daysToGo: 36 },
+    });
+    expect(lines.length).toBeGreaterThan(2);
+    for (const n of lines) expect(`${n.figure} ${n.rest}`.trim(), n.key).toBe(n.headline);
   });
 });

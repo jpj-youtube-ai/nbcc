@@ -64,3 +64,28 @@ describe("which items show, and in what order", () => {
     for (const n of NEEDS) expect(views, n.key).toContain(n.view);
   });
 });
+
+// The figure apart from its words, so the Overview can draw the count large at the front of a card,
+// the way Donations leads with the amount (2026-11-12 redesign). The sentence is kept as it was.
+describe("each line's count and words, apart", () => {
+  it("gives the count and the words apart, as well as the sentence", () => {
+    const [line] = needsLines({ contactWaiting: { count: 3 } });
+    expect(line.count).toBe(3);
+    expect(line.words).toBe("contact messages are waiting for a reply");
+    expect(line.text).toBe(`3 ${line.words}`);
+  });
+
+  it("keeps the money with the words, not with the count", () => {
+    const [line] = needsLines({ giftAidReady: { count: 12, pence: 48_050 } });
+    expect(line.count).toBe(12);
+    expect(line.words).toContain("£480.50");
+    expect(line.text).toBe(`12 ${line.words}`);
+  });
+
+  it("does it for every kind of line", () => {
+    for (const need of NEEDS) {
+      const [line] = needsLines({ [need.key]: { count: 2 } } as NeedCounts);
+      expect(line.text, need.key).toBe(`${line.count} ${line.words}`);
+    }
+  });
+});

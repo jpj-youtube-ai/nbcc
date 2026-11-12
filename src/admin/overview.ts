@@ -80,6 +80,12 @@ export interface NeedLine {
   key: NeedKey;
   level: 1 | 2 | 3;
   text: string;
+  /**
+   * The count and the words after it, apart, so the Overview can draw the count large at the front
+   * of a card (2026-11-12 redesign). `text` is always `${count} ${words}`, and is kept whole.
+   */
+  count: number;
+  words: string;
   view: string;
   button: string;
 }
@@ -97,7 +103,15 @@ export function needsLines(counts: NeedCounts): NeedLine[] {
       if (!c || !(c.count > 0)) continue;
       const words = c.count === 1 ? need.one : need.many;
       const extra = c.pence && c.pence > 0 ? ` (${money(c.pence)} of giving)` : "";
-      lines.push({ key: need.key, level, text: `${c.count} ${words}${extra}`, view: need.view, button: need.button });
+      lines.push({
+        key: need.key,
+        level,
+        text: `${c.count} ${words}${extra}`,
+        count: c.count,
+        words: `${words}${extra}`,
+        view: need.view,
+        button: need.button,
+      });
     }
   }
   return lines;

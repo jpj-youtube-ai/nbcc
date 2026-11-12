@@ -1,8 +1,10 @@
 // TASK-613: the Elf Detective School item in the main menu, added to every page of the main site while
 // Elf Detective School is switched on, from 10am on Friday 13 November 2026 (src/elf/links-at.ts; the
 // pages ask both in src/routes/site.ts). Before then, and switched off, pages go out exactly as they
-// would without it. Elf Detective School's own pages keep their own header (src/elf/pages/shell.ts), and
-// Ball pages keep their old menu (src/ball/page-decor.ts).
+// would without it. Since TASK-615 every page built in code wears the site's banner and goes out the
+// same way (src/site/chrome.ts), so Elf Detective School's own pages, the Santa Sleigh's and the
+// Festive Ball's guest details and thank you gain it too. The Festive Ball's own pages (the Ball, its
+// terms and its Can't make it page) are decorated by src/ball/page-decor.ts instead, without it.
 //
 // It goes straight after Get involved, so the menu reads Home, About, Get involved, Elf Detective
 // School, Donate... With no Get involved (the events switch off) it goes straight after About, where

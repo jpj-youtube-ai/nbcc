@@ -148,7 +148,7 @@ the files: "Festive Ball" while the ball is published (TASK-326), and "Get invol
 until TASK-494) after About, while the events switch is on (TASK-453). What's on is not in the menu:
 Get involved shows the same cards, and adds "See everything that's on" when there are more than its
 six. Get involved goes out with a few lines of style (`MENU_FIT`, `src/events/menu-fit.ts`, not a part
-of `addEventsNavLink`, because Ball pages call that one and keep their old menu until after the Ball)
+of `addEventsNavLink`, because the Festive Ball's own pages call that one and keep their menu as it is)
 that tighten the menu between the burger and 1040px, where it would otherwise wrap and, with the
 Ball's item up, push Donate off the screen. They
 are not in `styles.css` because donate.html has 147 bytes of its page weight left. A third item,
@@ -159,9 +159,11 @@ while Elf Detective School is switched on, from 10am on Friday 13 November 2026 
 label wraps above the burger, and from 681px to 760px the menu tightens a little more. Measured in a
 browser: one line at every width from 681px up, Donate in view, no sideways scroll, and the burger's
 list one item to a line at 360px and 390px. The Festive Ball's own pages (`ball.html` and its terms and
-donate pages, decorated by `src/ball/page-decor.ts`) keep their old menu. Every page built in code,
-Elf Detective School's included, wears the site's own menu and gains these items as it goes out (see
-"Every page wears the site's own banner, menu bar and footer" below).
+donate pages) wear the home page's banner but are decorated by `src/ball/page-decor.ts` instead: the
+Ball's item, Get involved on the Ball page, and no Elf Detective School item or tighter menu. Every page
+built in code, Elf Detective School's and the Festive Ball's guest details and thank you included,
+wears the site's own menu and gains these items as it goes out (see "Every page wears the site's own
+banner, menu bar and footer" below).
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -215,16 +217,28 @@ the master too.
 Every public page gets its banner (the logo, the menu bar and the Donate button) and its footer from
 one place. The files at the root share the home page's; a page built in code takes both from
 `src/site/chrome.ts` (`siteHeader()`, `siteFooter()`), which reads them from `index.html`, and its route
-sends it through `dressPage()`, which adds what every page gains as it goes out (the menu's items that
-are switched on and the footer's links, `decorateSitePage` in `src/routes/site.ts`). Elf Detective
-School's pages, the Festive Ball's guest details and thank you and the Santa Sleigh's pages are built
-that way. `test/unit/site-chrome-everywhere.test.ts` enforces it: it draws every kind of page built in
-code and holds its banner and footer to the home page's, holds every file at the root to the home
-page's banner, and fails if any file under `src/` writes the banner's or the footer's markup itself, or
-writes a whole page without the shared module. To make a new page pass, load `styles.css` and `main.js`
-(the menu's burger needs it), put `siteHeader()` before its `<main>` and `siteFooter()` after it, send it
-with `dressPage()`, and add it to that test's list of pages. A whole page that is not a page of the site
-(an email, a sheet to print, a staff screen) goes in the test's `NOT_SITE_PAGES`, with its reason.
+sends it through `dressPage()` (`sendSitePage()` dresses and sends it), which adds what every page
+gains as it goes out (the menu's items that are switched on and the footer's links, `decorateSitePage`
+in `src/routes/site.ts`). Built that way: Elf Detective School's pages, the Festive Ball's guest details
+and thank you, the Santa Sleigh's pages, and the short pages a link or a form answers with: a thank-you
+letter's link that cannot show the letter (`src/thank-you/letter-notice.ts`), a Platinum certificate's
+link with nothing to show (`src/business/certificate-not-found.ts`), the unsubscribe link and the email
+choices page (`src/newsletter/email-pages.ts`; what they say, their forms and what they write are as they
+were), and Share your story's answers without JavaScript (`src/stories/answer-pages.ts`). Those short
+pages share `src/site/notice-page.ts`. The Festive Ball's terms and Can't make it pages carry the home
+page's banner too, with Donate where they had Tickets. A route that waits for its page answers a plain,
+uncached 500 if the page cannot be drawn (`pageFailed`), never a promise left to reject; a home page
+that cannot be read leaves the banner and footer out, said once in the log and tried again after a
+minute. `test/unit/site-chrome-everywhere.test.ts` enforces it: it draws every kind of page built in
+code and holds its banner and footer to the home page's, with none of the items a page only gains as it
+goes out; holds every file at the root to the home page's banner; and fails if any file under `src/`
+writes the banner's or the footer's markup itself, or writes more whole pages (`<body` tags) than it
+calls `siteHeader()` and `siteFooter()`, so importing the module is not enough. To make a new page pass,
+load `styles.css` and `main.js` (the menu's burger needs it), put `siteHeader()` before its `<main>` and
+`siteFooter()` after it, send it with `sendSitePage()` or `dressPage()`, and add it to that test's list
+of pages. A file that writes whole pages that are not pages of the site (an email, a sheet to print, a
+staff screen) goes in the test's `NOT_SITE_PAGES`, with how many it writes and why; the count is
+checked, so a new page in such a file is caught.
 
 ### Pages served below the top level use absolute asset addresses (TASK-564)
 
@@ -674,10 +688,12 @@ The stacked layout starts at 1090px wide. Beside the words the note sits close t
 from 1091px to 1240px the note is narrower, and the note and elf run out into the gutter only as far as
 `.wrap`'s real gutter allows. Measured every 3px from 320px to 1700px, the note never meets the sum.
 
-**What stays:** `/ball`, its terms, its donate page, guest links and thank you pages all keep working, and
-draw their own menu (`decorateBallPage`), so they keep the Festive Ball item. No file in `src/ball` knows
-about the moment, and the admin's Ball switch is read as it always was and never written. `/ball` stays on
-`/sitemap` and in `/sitemap.xml`, which follow the gate alone.
+**What stays:** `/ball`, its terms, its donate page, guest links and thank you pages all keep working.
+`/ball`, its terms and its donate page draw their own menu (`decorateBallPage`), so they keep the Festive
+Ball item. The guest links and thank you pages wear the site's menu as every page built in code does
+(TASK-615, `dressPage`), so the item comes down there at the moment, with the rest of the site. No file
+in `src/ball` knows about the moment, and the admin's Ball switch is read as it always was and never
+written. `/ball` stays on `/sitemap` and in `/sitemap.xml`, which follow the gate alone.
 
 **Checking it before the night:** `?at=after-ball` on `/`, `/whats-on`, `/get-involved`,
 `/get-involved/drop-off-points` or `/fill` shows that one view as it will be after the moment. Only that
@@ -2547,7 +2563,9 @@ The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed 
 `ADMIN_SESSION_SECRET`). **The `GET` asks and the `POST` acts** — they are not the same handler:
 
 - `GET` verifies the signature and renders a confirmation page with a single `Yes, unsubscribe me`
-  button that `POST`s back to the same URL. It does **no database work at all**, deliberately.
+  button that `POST`s back to the same URL. It does **no database work about the person**,
+  deliberately: since TASK-615 the ask and the answer are pages of the site, with its banner, menu and
+  footer (`src/newsletter/email-pages.ts`), so the only reads are the menu's, which every page makes.
 - `POST` performs the write — a donor token flips `email_consent` to `false` (`unsubscribeDonor`,
   idempotent) and tombstones every list membership for that address; a subscriber token leaves one
   audience only. This is also the RFC 8058 one-click path, so Gmail's and Yahoo's own unsubscribe
@@ -2603,7 +2621,8 @@ body of the wide fixed-width letter, and the print layout clamps the sheet to ex
 (`height:297mm; overflow:hidden`) so a rounded sub-pixel can't push a blank second page — previously
 phones had to scale to ~78% to avoid the overflow. The token is a stateless HMAC of the sent-letter id
 (`src/thank-you/letter-token.ts`, signed with `ADMIN_SESSION_SECRET`) so letters can't be enumerated;
-a bad token → 400, a missing row → 404. The admin sent-history also exposes each letter's print URL
+a bad token → 400, a missing row → 404, each a short page of the site with its banner and footer
+(TASK-615, `src/thank-you/letter-notice.ts`). The admin sent-history also exposes each letter's print URL
 ("View letter"). Covered by `test/unit/thank-you-letter-token.test.ts`,
 `test/unit/thank-you-letter-page.test.ts`, the extended `thank-you-letter` text/print-button tests,
 and `@thankyou @db` print-page scenarios. **Ops (historical):** at the time this shipped, the relay

@@ -1,10 +1,14 @@
 // The main menu between the burger (680px) and about 1040px. Get involved is one more item than the
 // menu was drawn for, and with the Festive Ball's item up as well Donate went off the edge of the
 // screen. This tightens the menu at those widths. It goes out with the Get involved item, and not in
-// styles.css, for two reasons: donate.html has 147 bytes of its page weight budget left, and Ball
-// pages keep their old menu exactly as it is. It can move to styles.css in the weight review.
+// styles.css, for two reasons: donate.html has 147 bytes of its page weight budget left, and the
+// Festive Ball's own pages keep their menu exactly as it is. It can move to styles.css in the weight
+// review.
 //
-// It runs only from src/routes/site.ts, where the other pages are decorated, never on a Ball page.
+// It runs only from src/routes/site.ts (decorateSitePage), which every page of the site goes out
+// through: the files at the root and, since TASK-615, every page built in code (src/site/chrome.ts),
+// the Festive Ball's guest details and thank you among them. Never on the Festive Ball's own pages
+// (the Ball, its terms and its Can't make it page), which src/ball/page-decor.ts decorates instead.
 // What's on is not in the menu (Jaimie, 31 October 2026): Get involved shows the same cards, and links
 // to What's on when there are more than it holds. The anchor is the nav LIST: see src/events/nav-link.ts.
 

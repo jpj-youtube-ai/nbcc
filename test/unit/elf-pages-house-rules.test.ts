@@ -24,6 +24,13 @@ import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, visitWin, wa
 // root of the repository. These screens are drawn by functions instead, so those tests never see
 // them, and the same rules are checked here: over every screen, in every state it can be in.
 // Every shop, family and detective is invented (see elf-fixtures.ts).
+//
+// The screens are checked as their functions draw them, before they are dressed (TASK-615). As a
+// page goes out, src/routes/site.ts adds what every page of the site gains: the menu's items that are
+// switched on, the footer's links, and the menu's fit that goes with them, the MENU_FIT and
+// ELF_MENU_FIT style blocks (src/events/menu-fit.ts, src/elf/menu-fit.ts). So the page as served also
+// carries those two <style> blocks. They are the site menu's, not the screen's, and the rule below
+// against styles in the page is about the screen's own.
 
 const ROOT = resolve(__dirname, "../..");
 const place = { name: "The Toy Shop", town: "Troon" };
@@ -154,7 +161,8 @@ function unlabelled(doc: Document): string[] {
   return out;
 }
 
-/** Anything that would run from the page itself rather than from a script file. */
+/** Anything that would run from the page itself rather than from a script file, or style it from
+ *  the page itself. As drawn: the menu's fit (MENU_FIT, ELF_MENU_FIT) is added as the page goes out. */
 function runsInPage(doc: Document): string[] {
   const out: string[] = [];
   for (const script of doc.querySelectorAll("script")) {

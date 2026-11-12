@@ -10,8 +10,8 @@ import { MENU_FIT } from "../events/menu-fit";
 // burger's list is one item to a line, unchanged. Nothing here can scroll inside a box.
 //
 // Like MENU_FIT, it goes out with the item, not in styles.css: donate.html's page weight budget, and
-// Ball pages keep their old menu. It comes after MENU_FIT, so its narrow band wins, and it brings
-// MENU_FIT along when the menu has no Get involved to bring it.
+// the Festive Ball's own pages keep their menu as it is. It comes after MENU_FIT, so its narrow band
+// wins, and it brings MENU_FIT along when the menu has no Get involved to bring it.
 
 export const ELF_MENU_FIT =
   "<style>@media(min-width:681px){.nav-links a{white-space:nowrap}}" +

@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- The admin dashboard is a private, token-authed staff tool: keep it out of search. -->
     <meta name="robots" content="noindex, nofollow" />
+    <!-- Pinned to a phone's home screen, the admin is its own app on maroon, named apart from the
+         public site's icon. display:standalone in the manifest is load-bearing: iOS only delivers
+         push notifications to a home-screen web app, never to a bookmark. -->
+    <link rel="manifest" href="/assets/admin-icons/admin.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/admin-icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="NBCC Admin" />
+    <meta name="theme-color" content="#800000" />
     <title>Admin | Night Before Christmas Campaign</title>
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <link rel="stylesheet" href="/assets/css/admin.css" />

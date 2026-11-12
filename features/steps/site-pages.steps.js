@@ -22,6 +22,7 @@ When("I request the site path {string}", async function (path) {
   this.siteStatus = res.status;
   this.siteLocation = res.headers.get("location");
   this.siteRobots = res.headers.get("x-robots-tag");
+  this.siteContentType = res.headers.get("content-type");
   this.siteBody = await res.text();
 });
 

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { addDropOffNavLink, dropOffNavShown, DROPOFF_NAV_ITEM, DROPOFF_MENU_FIT, addDropOffMenuFit } from "../../src/site/dropoff-nav";
 import { addEventsNavLink } from "../../src/events/nav-link";
 import { addElfNavLink } from "../../src/elf/nav-link";
-import { decorateBallPage } from "../../src/ball/page-decor";
+import { MENU_FIT } from "../../src/events/menu-fit";
 
 // Jaimie, 12 November 2026: "Drop-off points" in the main menu, straight after Get involved, until the
 // collection ends (taken off after Sunday 20 December 2026). Every page gains it as it goes out.
@@ -67,17 +67,6 @@ describe("when it shows", () => {
   });
 });
 
-describe("the Festive Ball's own pages", () => {
-  it("carry it when the route says the collection is on, and not when it is over", () => {
-    const ball = readFileSync(resolve(ROOT, "ball.html"), "utf8");
-    const on = decorateBallPage(ball, { ballItem: true, eventsOn: true, fundraisingOn: false, dropOffOn: true });
-    expect(menu(on)).toContain(DROPOFF_NAV_ITEM);
-    expect(on).toContain(DROPOFF_MENU_FIT);
-    const off = decorateBallPage(ball, { ballItem: true, eventsOn: true, fundraisingOn: false, dropOffOn: false });
-    expect(off).not.toContain(DROPOFF_NAV_ITEM);
-  });
-});
-
 describe("the menu's fit with one more item", () => {
   it("goes in the head once, only on a page whose menu has the item", () => {
     const page = addDropOffNavLink(addEventsNavLink(contact));
@@ -86,6 +75,12 @@ describe("the menu's fit with one more item", () => {
     expect(fitted.indexOf(DROPOFF_MENU_FIT)).toBeLessThan(fitted.indexOf("</head>"));
     expect(addDropOffMenuFit(fitted)).toBe(fitted);
     expect(addDropOffMenuFit(contact)).toBe(contact);
+  });
+
+  it("brings the menu's tablet fit along on a page that has not got it", () => {
+    const page = addDropOffMenuFit(addDropOffNavLink(contact));
+    expect(page.split(MENU_FIT).length - 1).toBe(1);
+    expect(page.indexOf(MENU_FIT)).toBeLessThan(page.indexOf(DROPOFF_MENU_FIT));
   });
 
   it("never lets the menu scroll inside a box", () => {

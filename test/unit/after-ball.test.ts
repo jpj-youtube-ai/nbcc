@@ -458,6 +458,14 @@ describe("Drop-off points in the menu", () => {
     }
   });
 
+  it("is on the site map page, and marked as the page you are on at the drop-off points page", async () => {
+    state.now = LAST_DAY;
+    expect(navList(await body("/sitemap"))).toContain(item);
+    expect(navList(await body("/get-involved/drop-off-points"))).toContain(
+      '<a href="/get-involved/drop-off-points" class="active" aria-current="page">Drop-off points</a>',
+    );
+  });
+
   it("comes straight after Get involved", async () => {
     state.now = LAST_DAY;
     const list = navList(await body("/about-us"));

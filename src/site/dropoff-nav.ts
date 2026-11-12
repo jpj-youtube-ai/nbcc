@@ -1,8 +1,9 @@
 // "Drop-off points" in the main menu (Jaimie, 12 November 2026), to /get-involved/drop-off-points,
 // while the Red Bag collection is on: shown now, and taken off after Sunday 20 December 2026 (the
 // drop-off points take gifts until Thursday 17 December). Every page of the main site gains it as it
-// goes out (src/routes/site.ts), those built in code too (src/site/chrome.ts), and the Festive Ball's
-// own pages (src/ball/page-decor.ts). After the date, pages go out exactly as they would without it.
+// goes out (src/routes/site.ts), and those built in code too (src/site/chrome.ts). Not the Festive
+// Ball's own pages (Jaimie: the Ball is over). After the date, pages go out exactly as they would
+// without it.
 // For next year, change DROPOFF_NAV_LAST_DAY.
 //
 // It goes straight after Get involved, so the menu reads Home, About, Get involved, Drop-off points,
@@ -12,6 +13,8 @@
 // matching link in a file can be the footer's (src/events/nav-link.ts says how that was found out).
 //
 // Pure: the time is always handed in.
+
+import { MENU_FIT } from "../events/menu-fit";
 
 export const DROPOFF_PATH = "/get-involved/drop-off-points";
 export const DROPOFF_NAV_ITEM = `<li><a href="${DROPOFF_PATH}">Drop-off points</a></li>`;
@@ -85,5 +88,13 @@ export function addDropOffMenuFit(html: string): string {
   if (listEnd === -1 || !html.slice(listStart, listEnd).includes(`href="${DROPOFF_PATH}"`)) return html;
   const headEnd = html.indexOf("</head>");
   if (headEnd === -1) return html;
-  return `${html.slice(0, headEnd)}${DROPOFF_MENU_FIT}${html.slice(headEnd)}`;
+  // It was measured on top of the tablet fit (MENU_FIT), so it brings that along where the page has not
+  // got it (a page whose menu has no Get involved).
+  const styles = html.includes(MENU_FIT) ? DROPOFF_MENU_FIT : `${MENU_FIT}${DROPOFF_MENU_FIT}`;
+  return `${html.slice(0, headEnd)}${styles}${html.slice(headEnd)}`;
+}
+
+/** On the drop-off points page itself, the item is marked as the page you are on. */
+export function markDropOffHere(html: string): string {
+  return html.replace(DROPOFF_NAV_ITEM, `<li><a href="${DROPOFF_PATH}" class="active" aria-current="page">Drop-off points</a></li>`);
 }

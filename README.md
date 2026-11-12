@@ -218,8 +218,8 @@ Jaimie, 12 November 2026: **Drop-off points** in the main menu, to `/get-involve
 straight after Get involved (Home, About, Get involved, Drop-off points, Elf Detective School,
 Donate, Contact, Supporters), while the Red Bag collection is on. It is added to every page as it
 goes out, like Get involved and Elf Detective School: the site's own files (`src/routes/site.ts`),
-pages drawn in code (`decorateSitePage`, `src/site/chrome.ts`) and the Festive Ball's own pages
-(`decorateBallPage`, `dropOffOn`). It shows through Sunday 20 December 2026, UK time, and from Monday
+and pages drawn in code (`decorateSitePage`, `src/site/chrome.ts`); not the Festive Ball's own pages,
+which keep their menu (the Ball is over). It shows through Sunday 20 December 2026, UK time, and from Monday
 21 December pages go out without it (`dropOffNavShown`, `src/site/dropoff-nav.ts`). For next year,
 change `DROPOFF_NAV_LAST_DAY` there.
 

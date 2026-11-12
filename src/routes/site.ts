@@ -497,6 +497,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         /<div class="sitemap-tree">[\s\S]*?<\/div>/,
         `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen, eventsOn, fundraisingOn, elfOn)}</div>`,
       );
+      // Drop-off points in the menu while the collection is on, as on every other page.
+      if (dropOffNavShown(clock())) html = await addDropOffItems(html);
       // The footer's "Fundraise for us", as on every other page (TASK-545: this page now has it).
       if (fundraisingOn) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
       if (isAfterBall()) html = addFillFooterLink(html);

@@ -33,8 +33,10 @@ describe("Detective HQ", () => {
     expect(doc.querySelector('script[src="/assets/js/elf-hq.js"]')).not.toBeNull();
   });
 
-  it("links back to the calendar", () => {
-    expect(page().querySelector('.nav-cta[href="/elf"]')).not.toBeNull();
+  it("links back to the calendar, from the strip under the site's banner", () => {
+    const go = page().querySelector('nav.elf-bar a.elf-bar__go[href="/elf"]');
+    expect(go).not.toBeNull();
+    expect(words(go)).toBe("The calendar");
   });
 });
 

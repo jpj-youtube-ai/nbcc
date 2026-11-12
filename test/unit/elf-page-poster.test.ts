@@ -26,8 +26,9 @@ describe("the page", () => {
     expect(words(doc.querySelector("h1"))).toBe("The Toy Shop");
     expect(doc.title).toBe("The Toy Shop | Night Before Christmas Campaign");
     expect(doc.querySelector('meta[name="robots"]')!.getAttribute("content")).toBe("noindex, nofollow");
-    expect([...doc.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"))).toEqual(["/assets/js/elf-poster.js"]);
-    expect(doc.querySelector('.nav-cta[href="/elf"]')).not.toBeNull();
+    // The site's own script first, for the site's menu on a phone (TASK-615).
+    expect([...doc.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"))).toEqual(["/assets/js/main.js", "/assets/js/elf-poster.js"]);
+    expect(doc.querySelector('nav.elf-bar a.elf-bar__go[href="/elf"]')).not.toBeNull();
   });
 
   it("names each part of the page once", () => {

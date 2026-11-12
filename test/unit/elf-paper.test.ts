@@ -101,12 +101,31 @@ describe("the stylesheet", () => {
 });
 
 // The final review (5 November 2026): in the private preview the strip sat under the bar, and the
-// torn bands dropped below it, leaving a gap.
+// torn bands dropped below it, leaving a gap. TASK-615: it sits straight under the site's banner, above
+// Elf Detective School's own strip, which moves down after it, so the torn bands stay joined to that.
 describe("the private preview's strip", () => {
-  it("sits under the bar, with the torn bands and the page's top moved down after it", () => {
+  it("sits under the banner, with Elf Detective School's strip moved down after it", () => {
     expect(CSS).toMatch(/\.elf-preview-strip \{[^}]*margin:\s*var\(--nav-h\) 0 0/);
-    expect(CSS).toMatch(/\.elf-preview-strip \+ \.site-main \.elf-bands \{[^}]*top:\s*0/);
-    expect(CSS).toMatch(/\.elf-preview-strip \+ \.site-main \.page-top \{[^}]*padding-top:\s*calc\(40px/);
+    expect(CSS).toMatch(/\.elf-preview-strip \+ \.elf-bar \{[^}]*margin-top:\s*0/);
+  });
+});
+
+// TASK-615: the site's banner, then Elf Detective School's strip of holly paper, then the page, whose
+// torn bands run on from the strip.
+describe("the strip under the site's banner", () => {
+  const page = doc(elfPage({ title: "A page", description: "A page.", cta: { href: "/elf/hq", label: "Detective HQ" }, main: "<section><h1>A page</h1></section>" }));
+
+  it("comes straight after the banner and before the page, with the torn bands at the top of the page", () => {
+    const strip = page.querySelector("nav.elf-bar")!;
+    expect(strip.previousElementSibling!.matches("header.nav")).toBe(true);
+    expect(strip.nextElementSibling!.matches("main.site-main")).toBe(true);
+    expect(page.querySelector("main.site-main")!.firstElementChild!.matches(".elf-bands")).toBe(true);
+  });
+
+  it("is laid under the fixed banner, in holly, and the torn bands start where it ends", () => {
+    expect(CSS).toMatch(/\.elf-bar \{[^}]*margin-top:\s*var\(--nav-h\)[^}]*background-color:\s*var\(--holly\)/);
+    expect(CSS).toMatch(/\.elf-bands \{[^}]*top:\s*0;/);
+    expect(CSS).toMatch(/\.elf-page \.page-top \{\s*padding-top:\s*calc\(40px \+/);
   });
 });
 

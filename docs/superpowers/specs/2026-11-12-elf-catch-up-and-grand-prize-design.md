@@ -1,7 +1,7 @@
 # Elf Detective School: catching up on missed doors, Christmas Eve and the grand prize
 
 **Date:** 12 November 2026
-**Status:** draft for Jaimie's approval.
+**Status:** ready for Jaimie's approval: every question answered (12 November).
 - Part 1 was agreed in chat on 11 November.
 - Part 2 is Jaimie's notes of 11 November with my playback; the points marked "my call" are mine.
 - Some of part 2 is already live (see "Already done").
@@ -88,7 +88,7 @@ Everyone else, including anyone not signed in, sees who found the elf, and never
 - A family with no guess sees **Have a go** instead.
 - Anyone not signed in sees who found the elf, or that nobody has yet, and never the place.
 
-**Having a go.** This is open from the door's shown moment, for as long as December's doors are on.
+**Having a go.** This is open from the door's shown moment until the places go public on Christmas Day (see part 2's question 6).
 - The door shows its elf's name and number, who found it, and **clue 1**, in words or as its picture, just as it came out on the night.
 - **Show me the next clue** reveals clue 2, then clue 3. A family can see all three before it guesses.
 - There is one guess box, with the night's rules: up to 80 characters, and the same matching against the place's names. It says "You get one guess at this door."
@@ -110,7 +110,7 @@ Everyone else, including anyone not signed in, sees who found the elf, and never
 
 **Photos.**
 - A door's photos (the scrapbook's second row) show only to a family that can see that door's place.
-- During December they never show to anyone who is not signed in.
+- Until Christmas Day they never show to anyone who is not signed in. From Christmas Day until 1 January, they show to everyone (part 2's question 6).
 - The two families rule, one photo per family per door, and the photo check all stay.
 - The picture files are only ever sent to such a family, marked private and never stored by a browser or a shared cache. Today they are cached for five minutes in public.
 
@@ -140,11 +140,11 @@ Everyone else, including anyone not signed in, sees who found the elf, and never
 ### My calls in part 1 (for Jaimie to check while reading)
 
 - One guess when having a go, and it is final. On the night a guess can still be changed until the shown moment, as now.
-- Having a go stays open for as long as December's doors are on, not only until Christmas Eve. Only doors done before the grand prize closes count for the grand prize.
+- Having a go stays open until the places go public on Christmas Day (Jaimie's answer 6). Only doors done before the grand prize closes, at 5pm on Christmas Eve, count for the grand prize.
 - A right guess when having a go counts the same as one on the night, including in the "N families cracked this case" count.
 - Having a go is offered in two places: on the calendar's open door, and in Detective HQ's new list.
 - A family that has visited a door is not offered a go.
-- Places stay off the public calendar for the whole of December.
+- Places stay off the public calendar until Christmas Day, then show for everyone until 1 January (Jaimie's answer 6).
 
 ## Part 2: Christmas Eve and the grand prize
 
@@ -250,7 +250,11 @@ Also:
    - The rules' sentence about judging "taking age into account" stays as it is (my call), because age is still weighed on the call.
 4. **Winners. ANSWERED (Jaimie, 12 November): just one winner.** Head Elf HQ's Grand prize part lets a head elf mark one entry as the winner, and marking another moves the mark. The site announces nothing (my call, as nothing was asked for). NBCC rings the winner's grown up.
 5. **The closing time with the clues. ANSWERED (Jaimie, 12 November): yes,** families see it with the clues (see "The closing time" above).
-6. **After Christmas.** Should the places, and the photos, appear on the calendar for everyone as a thank you to the businesses? If so, from Christmas Day or from 1 January? And should December's doors, and having a go, stay on into January, or switch off after Christmas?
+6. **After Christmas. ANSWERED (Jaimie, 12 November): yes, show them until 1 January.**
+   - From Christmas Day (midnight, London), every door shows its hiding place and its approved photos to everyone, as a thank you to the businesses. The two families rule still applies to the photos.
+   - Having a go closes then, because the answers are out.
+   - From 1 January (midnight, London) the places and photos come off the calendar again by themselves. Head elves can switch December's doors off whenever they like after that.
+   - The January clear out still deletes the photos and children's details at the end of January.
 
 ## For the builder: where the place shows today
 

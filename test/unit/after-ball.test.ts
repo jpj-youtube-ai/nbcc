@@ -104,6 +104,9 @@ import { addBallNavLink } from "../../src/ball/nav-link";
 import { addEventsNavLink } from "../../src/events/nav-link";
 import { addMenuFit } from "../../src/events/menu-fit";
 import { addFundraiseFooterLink } from "../../src/fundraising/footer-link";
+import { addDropOffMenuFit, addDropOffNavLink } from "../../src/site/dropoff-nav";
+// Drop-off points is in the menu by date until after 20 December 2026, so these days have it.
+const withDropOff = (html: string) => addDropOffMenuFit(addDropOffNavLink(html));
 
 const ROOT = resolve(__dirname, "../..");
 const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
@@ -250,15 +253,15 @@ describe("before the moment", () => {
   it("a plain page is exactly the file and its menu items, with the Ball's item", async () => {
     const file = read("about.html");
     const html = await body("/about-us");
-    expect(html).toBe(addFundraiseFooterLink(addMenuFit(addEventsNavLink(addBallNavLink(file)))));
+    expect(html).toBe(addFundraiseFooterLink(withDropOff(addMenuFit(addEventsNavLink(addBallNavLink(file))))));
     expect(navList(html)).toContain('href="/ball"');
   });
 
-  it("a plain page with every switch off is the file, byte for byte", async () => {
+  it("a plain page with every switch off is the file, byte for byte, with only Drop-off points added", async () => {
     state.gateOpen = false;
     state.eventsOn = false;
     state.fundraisingOn = false;
-    expect(await body("/about-us")).toBe(read("about.html"));
+    expect(await body("/about-us")).toBe(withDropOff(read("about.html")));
   });
 
   it("the Festive Ball card is on What's on and Get involved", async () => {
@@ -441,6 +444,34 @@ describe("the Ball's own pages do not know the moment exists", () => {
 
 // TASK-615: the guest details and the thank you are pages of the site: the site's own banner and
 // footer, with what every page gains as it goes out (here, Get involved while the events switch is on).
+// Jaimie, 12 November 2026: Drop-off points in the menu of every page until after Sunday 20 December.
+describe("Drop-off points in the menu", () => {
+  const LAST_DAY = new Date("2026-12-20T22:00:00Z");
+  const DAY_AFTER = new Date("2026-12-21T09:00:00Z");
+  const item = 'href="/get-involved/drop-off-points">Drop-off points</a>';
+
+  // The Ball's own page reads the real clock, so it is held in dropoff-nav-link.test.ts instead.
+  it("is on the home page, a plain page and a page drawn in code, up to the last day", async () => {
+    state.now = LAST_DAY;
+    for (const path of ["/", "/about-us", "/get-involved", "/get-involved/volunteer"]) {
+      expect(navList(await body(path)), path).toContain(item);
+    }
+  });
+
+  it("comes straight after Get involved", async () => {
+    state.now = LAST_DAY;
+    const list = navList(await body("/about-us"));
+    expect(list.indexOf(item)).toBeGreaterThan(list.indexOf('href="/get-involved"'));
+  });
+
+  it("is gone from the day after, on every page", async () => {
+    state.now = DAY_AFTER;
+    for (const path of ["/", "/about-us", "/get-involved", "/get-involved/volunteer"]) {
+      expect(navList(await body(path)), path).not.toContain(item);
+    }
+  });
+});
+
 describe("the Festive Ball's guest details and thank you", () => {
   it.each(["/ball/thank-you", "/ball/guests/an-invented-token"])("%s wears the site's banner and gains its menu's items", async (path) => {
     state.eventsOn = true;

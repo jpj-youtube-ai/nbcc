@@ -14,6 +14,7 @@ import { retireReplacedCheckout } from "../ball/replace-checkout";
 import { cancelReplacedCheckout, getTransferSettings, pendingCardSession } from "../db/ball-transfer";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { decorateBallPage } from "../ball/page-decor";
+import { dropOffNavShown } from "../site/dropoff-nav";
 import { eventsPageIsOn } from "../db/events";
 import { fundraisingIsOn } from "../db/fundraisers";
 import { buildBallCalendar } from "../ball/calendar";
@@ -291,7 +292,7 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   // insertions are independent (one goes after About, the other at the end), so order is free.
   // TASK-494: and the footer's "Fundraise for us" to the sign up while fundraising is on.
   const page = renderBallPage(template, { settings, gateOpen, salesClosed });
-  res.type("html").send(decorateBallPage(page, { ballItem: true, eventsOn, fundraisingOn }));
+  res.type("html").send(decorateBallPage(page, { ballItem: true, eventsOn, fundraisingOn, dropOffOn: dropOffNavShown(new Date()) }));
 }
 
 // TASK-337: the add-to-calendar file.
@@ -395,7 +396,7 @@ ballRouter.get("/ball/terms", async (req, res, next) => {
       res.sendFile(file);
       return;
     }
-    res.type("html").send(decorateBallPage(readFileSync(file, "utf8"), { ballItem: false, eventsOn: false, fundraisingOn: true }));
+    res.type("html").send(decorateBallPage(readFileSync(file, "utf8"), { ballItem: false, eventsOn: false, fundraisingOn: true, dropOffOn: dropOffNavShown(new Date()) }));
   } catch (err) {
     next(err);
   }
@@ -425,7 +426,7 @@ ballRouter.get("/ball/donate", async (req, res, next) => {
     // While fundraising is on, the footer's "Fundraise for us" goes to the sign up, as on every page.
     res
       .type("html")
-      .send((await fundraisingIsOn()) ? decorateBallPage(page, { ballItem: false, eventsOn: false, fundraisingOn: true }) : page);
+      .send((await fundraisingIsOn()) ? decorateBallPage(page, { ballItem: false, eventsOn: false, fundraisingOn: true, dropOffOn: dropOffNavShown(new Date()) }) : page);
   } catch (err) {
     next(err);
   }

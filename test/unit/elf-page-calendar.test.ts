@@ -258,7 +258,11 @@ describe("the grand prize on the front page", () => {
   it("says how to enter and who judges it, straight under the welcome", () => {
     const doc = page(view(AFTERNOON));
     expect(words(prize(doc))).toMatch(LINE);
-    expect(prize(doc)!.previousElementSibling!.classList.contains("lede")).toBe(true);
+    // The film (TASK-616) sits between the opening words and the prize: the lede is the last of the
+    // opening words, and the prize is the first of the words after the film.
+    expect(doc.querySelector(".elf-top__intro")!.lastElementChild!.classList.contains("lede")).toBe(true);
+    expect(prize(doc)!.parentElement!.firstElementChild).toBe(prize(doc));
+    expect(prize(doc)!.parentElement!.previousElementSibling!.querySelector("video")).not.toBeNull();
     expect(prize(doc)!.closest(".elf-top__words")).not.toBeNull();
   });
 

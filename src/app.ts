@@ -36,6 +36,7 @@ import { adminBallChaseRouter } from "./routes/admin-ball-chase";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
 import { adminWhatsNewRouter } from "./routes/admin-whats-new";
+import { adminPushRouter } from "./routes/admin-push";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { sesWebhookRouter } from "./routes/ses-webhook";
 import { pulseRouter } from "./routes/pulse";
@@ -209,6 +210,7 @@ export function createApp() {
   app.use(adminStoriesImportRouter);
   // The New pills in the admin, per person (TASK-478).
   app.use(adminWhatsNewRouter);
+  app.use(adminPushRouter);
   // QR codes for every page of the site, in the admin (TASK-492).
   app.use(adminQrRouter);
   // TASK-588: named QR codes, each counting its own scans, and their short links, /q/c<id>.

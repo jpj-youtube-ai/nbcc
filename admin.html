@@ -188,6 +188,10 @@
                   <!-- TASK-492: QR codes for every page. Anyone who can view Site pages. -->
                   <li><button class="admin-nav-link" type="button" data-view="qr" data-view-gate="site">QR codes</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
+                  <!-- TASK-NNN: notifications on this phone. No permission of its own: everyone
+                       can turn their own phone on, and what they actually receive is filtered by
+                       their permissions at send time. -->
+                  <li><button class="admin-nav-link" type="button" data-view="notifications">Notifications</button></li>
                 </ul>
               </li>
             </ul>
@@ -477,6 +481,52 @@
               <p class="fx-call-count" id="fulfilmentCallCount" role="status" aria-live="polite" hidden></p>
               <div class="admin-table-wrap" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <p class="admin-action-status" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
+            </section>
+
+            <!-- TASK-NNN: phone notifications, per person and per phone. The warning sits ABOVE the
+                 button deliberately: iOS asks for permission once and only once, and somebody who
+                 taps Don't Allow has to delete the icon and add it again to be asked afresh. A
+                 caption underneath would be read after the damage. -->
+            <section class="admin-view" id="view-notifications" aria-labelledby="notifications-heading" hidden>
+              <h2 id="notifications-heading">Notifications on this phone</h2>
+              <p class="admin-view-intro">Get a notification when something new arrives &mdash; a donation, a Get involved sign up, a message, a ticket. It is the same &ldquo;new&rdquo; the New pills use, so your phone and this screen always agree, and you only ever hear about the parts of the admin you can open.</p>
+
+              <p class="admin-action-status is-error" id="pushUnsupported" role="status" hidden></p>
+
+              <div id="pushSetup">
+                <h3 class="admin-subhead">Turning it on</h3>
+                <ol class="np-steps" id="pushSteps">
+                  <li>Open this page on your phone, press Share, then <strong>Add to Home Screen</strong>.</li>
+                  <li>Open the admin from that new icon, not from Safari.</li>
+                  <li>Press the button below and choose <strong>Allow</strong>.</li>
+                </ol>
+                <p class="admin-note" id="pushOnceWarning"><strong>Your phone only asks once.</strong> If you choose Don&rsquo;t Allow, the only way to be asked again is to delete the icon from your home screen and add it back.</p>
+                <div class="admin-claim-actions">
+                  <button class="admin-btn" type="button" id="pushEnable">Turn on notifications for this phone</button>
+                  <span class="admin-action-status" id="pushEnableStatus" role="status" aria-live="polite"></span>
+                </div>
+                <p class="admin-note" id="pushPhoneCount" role="status" aria-live="polite" hidden></p>
+              </div>
+
+              <h3 class="admin-subhead">What buzzes</h3>
+              <p class="admin-note">Everything is on. Switch off anything you would rather catch up with on screen.</p>
+              <div class="np-areas" id="pushAreas"><p class="admin-loading">Loading&hellip;</p></div>
+
+              <h3 class="admin-subhead">If it gets too much</h3>
+              <p class="admin-note">Both of these are off, so you get a buzz every single time. Turn one on if a busy day is too noisy &mdash; anything held back still shows as a New pill here.</p>
+              <div class="admin-field">
+                <label class="admin-check"><input id="pushBundle" name="pushBundle" type="checkbox" /> <span>Group them: one notification a minute instead of one each</span></label>
+              </div>
+              <div class="admin-field np-quiet">
+                <label for="pushQuietFrom">Stay quiet from</label>
+                <input id="pushQuietFrom" name="pushQuietFrom" type="time" />
+                <label for="pushQuietTo">until</label>
+                <input id="pushQuietTo" name="pushQuietTo" type="time" />
+              </div>
+              <div class="admin-claim-actions">
+                <button class="admin-btn" type="button" id="pushPrefsSave">Save these settings</button>
+                <span class="admin-action-status" id="pushPrefsStatus" role="status" aria-live="polite"></span>
+              </div>
             </section>
 
             <!-- Stories: My Story submissions from the separate stories database (Task C). -->

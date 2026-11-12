@@ -730,10 +730,140 @@
     else if (name === "invoices") loadInvoices();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
+    else if (name === "notifications") loadPushSettings();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
     b.addEventListener("click", function () {
       selectView(b.getAttribute("data-view"));
+    });
+  });
+
+  // ---- Notifications on this phone (TASK-NNN) ----
+  // Every area a notification can be about, with the wording the admin's own menu uses. Mirrors
+  // AREA_TITLES in src/admin/whats-new.ts; the server filters by permission at send time, so a
+  // switch here that somebody cannot see anyway is harmless, just pointless.
+  var PUSH_AREAS = [
+    ["donations", "Donations"], ["monthly", "Monthly givers"], ["fundraising", "Get involved"],
+    ["contact", "Contact form"], ["ball", "Festive Ball"], ["fulfilments", "Business supporters"],
+    ["stories", "Stories"], ["newsletter", "Newsletter"],
+  ];
+
+  function pushSupported() {
+    return !!(window.navigator && window.navigator.serviceWorker && window.PushManager && window.Notification);
+  }
+
+  // base64url to the Uint8Array pushManager.subscribe insists on.
+  function pushKeyBytes(base64url) {
+    var padded = (base64url + "===").slice(0, base64url.length + ((4 - (base64url.length % 4)) % 4));
+    var raw = window.atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function loadPushSettings() {
+    var unsupported = el("pushUnsupported");
+    var setup = el("pushSetup");
+    if (!pushSupported()) {
+      unsupported.textContent = "This browser cannot show notifications. On an iPhone, add the admin to your home screen and open it from there.";
+      unsupported.hidden = false;
+      setup.hidden = true;
+    } else if (!isInstalledApp() && /iPhone|iPad/i.test(window.navigator.userAgent || "")) {
+      // An iPhone will not deliver a notification to a Safari tab, only to a home-screen app, so
+      // saying this BEFORE the button is the difference between a setting that works and one
+      // that silently never fires.
+      unsupported.textContent = "Add the admin to your home screen first, then open it from that icon. An iPhone only sends notifications to the app, never to a Safari tab.";
+      unsupported.hidden = false;
+    } else {
+      unsupported.hidden = true;
+    }
+
+    authFetch("/api/admin/push/subscription").then(j).then(function (d) {
+      var count = (d && d.phones) || 0;
+      var box = el("pushPhoneCount");
+      box.hidden = count === 0;
+      box.textContent = count === 1 ? "One phone is set up." : count + " phones are set up.";
+    }).catch(function () {});
+
+    authFetch("/api/admin/push/prefs").then(j).then(function (prefs) {
+      el("pushBundle").checked = !!prefs.bundle;
+      el("pushQuietFrom").value = (prefs.quietFrom || "").slice(0, 5);
+      el("pushQuietTo").value = (prefs.quietTo || "").slice(0, 5);
+      var off = prefs.areasOff || [];
+      el("pushAreas").innerHTML = PUSH_AREAS.map(function (a) {
+        return '<label class="admin-check"><input type="checkbox" data-push-area="' + a[0] + '"' +
+          (off.indexOf(a[0]) === -1 ? " checked" : "") + " /> <span>" + H.escapeHtml(a[1]) + "</span></label>";
+      }).join("");
+    }).catch(function () {
+      el("pushAreas").innerHTML = '<p class="admin-empty">Could not load your settings.</p>';
+    });
+  }
+
+  bindClick("pushEnable", function () {
+    var status = el("pushEnableStatus");
+    status.className = "admin-action-status";
+    status.textContent = "Asking your phone…";
+    if (!pushSupported()) {
+      status.className = "admin-action-status is-error";
+      status.textContent = "This browser cannot show notifications.";
+      return;
+    }
+    authFetch("/api/admin/push/key").then(j).then(function (d) {
+      if (!d.configured) throw new Error("Notifications are not set up on the server yet.");
+      return window.Notification.requestPermission().then(function (permission) {
+        if (permission !== "granted") {
+          // iOS asks once and only once. Say what the way back is, because there is no second prompt.
+          throw new Error("Your phone said no. To be asked again, delete the icon from your home screen and add it back.");
+        }
+        return window.navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin" })
+          .then(function () { return window.navigator.serviceWorker.ready; })
+          .then(function (reg) {
+            return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(d.publicKey) });
+          });
+      });
+    }).then(function (sub) {
+      return authFetch("/api/admin/push/subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sub.toJSON ? sub.toJSON() : sub),
+      });
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not save this phone.");
+      status.className = "admin-action-status is-ok";
+      status.textContent = "This phone is on. You will get a notification the next time something arrives.";
+      loadPushSettings();
+    }).catch(function (e) {
+      status.className = "admin-action-status is-error";
+      status.textContent = e.message || "Could not turn notifications on.";
+    });
+  });
+
+  bindClick("pushPrefsSave", function () {
+    var status = el("pushPrefsStatus");
+    status.className = "admin-action-status";
+    status.textContent = "Saving…";
+    var off = [];
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-push-area]"), function (box) {
+      if (!box.checked) off.push(box.getAttribute("data-push-area"));
+    });
+    var from = el("pushQuietFrom").value;
+    var to = el("pushQuietTo").value;
+    authFetch("/api/admin/push/prefs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bundle: el("pushBundle").checked,
+        quietFrom: from ? from + ":00" : null,
+        quietTo: to ? to + ":00" : null,
+        areasOff: off,
+      }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not save.");
+      status.className = "admin-action-status is-ok";
+      status.textContent = "Saved.";
+    }).catch(function () {
+      status.className = "admin-action-status is-error";
+      status.textContent = "Could not save those settings.";
     });
   });
 

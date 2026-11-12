@@ -94,14 +94,49 @@
     return rolePresetPermissions(u.role);
   }
 
+  // TASK-NNN: true when the admin is running as the app pinned to a phone's home screen rather
+  // than in a browser tab. iOS reports it through navigator.standalone; everything else through
+  // the display-mode media query, which matches the manifest's "standalone".
+  function isInstalledApp() {
+    try {
+      if (window.navigator && window.navigator.standalone === true) return true;
+      return !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    } catch (e) {
+      return false;
+    }
+  }
+  // A tab's token lives in sessionStorage and dies with the tab, as it always has. The pinned
+  // app's lives in localStorage, because iOS shuts a backgrounded web app whenever it likes and
+  // sessionStorage would take the 30-day session down with it — which is exactly the 2am
+  // notification landing on a password box that the long session exists to prevent.
+  function tokenStore() {
+    try {
+      return isInstalledApp() ? window.localStorage : sessionStorage;
+    } catch (e) {
+      return sessionStorage;
+    }
+  }
   function token() {
-    return sessionStorage.getItem(TOKEN_KEY);
+    try {
+      return tokenStore().getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    } catch (e) {
+      return null;
+    }
   }
   function setToken(t) {
-    sessionStorage.setItem(TOKEN_KEY, t);
+    try {
+      tokenStore().setItem(TOKEN_KEY, t);
+    } catch (e) {
+      /* a phone with storage blocked still works for this one session */
+    }
   }
   function clearToken() {
-    sessionStorage.removeItem(TOKEN_KEY);
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+      if (window.localStorage) window.localStorage.removeItem(TOKEN_KEY);
+    } catch (e) {
+      /* nothing to clear */
+    }
   }
   function el(id) {
     return doc.getElementById(id);
@@ -312,7 +347,7 @@
       err.hidden = true;
       var email = el("adminEmail").value.trim();
       var password = el("adminPassword").value;
-      var body = { email: email, password: password };
+      var body = { email: email, password: password, installed: isInstalledApp() };
       var dt = deviceToken();
       if (dt) body.deviceToken = dt;
       fetch("/api/admin/login", {
@@ -353,7 +388,12 @@
       fetch("/api/admin/login/2fa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: pendingTwoFactorEmail, code: code, remember: remember }),
+        body: JSON.stringify({
+          email: pendingTwoFactorEmail,
+          code: code,
+          remember: remember,
+          installed: isInstalledApp(),
+        }),
       })
         .then(function (res) {
           return res.ok

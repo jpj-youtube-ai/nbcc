@@ -28,6 +28,10 @@ const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 const BEFORE: ReadonlyArray<readonly [string, string, string]> = [
   ["overview", "", "Overview"],
   ["search", "", "Search"],
+  // TASK-NNN: notifications on your own phone. No gate, like Overview: there is no permission
+  // behind it, and what you receive is filtered when it is sent. In Monitor rather than Admin,
+  // so an ungated link does not stop the Admin group collapsing for somebody without admin rights.
+  ["notifications", "", "Notifications"],
   ["donations", "", "Donations"],
   // Invoices for donations: a screen added since the banner, gated on Donations like Monthly givers.
   ["invoices", "view:donations", "Invoices"],
@@ -56,7 +60,7 @@ const BEFORE: ReadonlyArray<readonly [string, string, string]> = [
   ["team", "", "Team"],
 ];
 const GROUPS: ReadonlyArray<readonly [string, string, string, readonly string[]]> = [
-  ["monitor", "Monitor", "adminNavMonitor", ["overview", "search"]],
+  ["monitor", "Monitor", "adminNavMonitor", ["overview", "search", "notifications"]],
   ["giving", "Giving", "adminNavGiving", ["donations", "invoices", "red-bag", "sleigh", "claims", "gasds", "subscriptions", "fulfilments", "monthly"]],
   ["content", "Content", "adminNavContent", ["stories", "ticker", "get-involved", "ball", "elf", "contact", "newsletter", "thank-you", "outreach"]],
   ["governance", "Governance", "adminNavGovernance", ["audit", "email-audit"]],

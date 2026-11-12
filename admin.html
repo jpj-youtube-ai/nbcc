@@ -128,6 +128,11 @@
                 <ul class="admin-nav-panel" id="adminNavMonitor">
                   <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
+                  <!-- TASK-NNN: notifications on your own phone. In Monitor, not Admin: it is a
+                       personal setting rather than an administrative power, and an ungated link
+                       in the Admin group would stop that group ever collapsing for somebody with
+                       no admin permissions, leaving them an "Admin" menu holding only this. -->
+                  <li><button class="admin-nav-link" type="button" data-view="notifications">Notifications</button></li>
                 </ul>
               </li>
               <li class="admin-nav-group" data-nav-group="giving">
@@ -188,10 +193,6 @@
                   <!-- TASK-492: QR codes for every page. Anyone who can view Site pages. -->
                   <li><button class="admin-nav-link" type="button" data-view="qr" data-view-gate="site">QR codes</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
-                  <!-- TASK-NNN: notifications on this phone. No permission of its own: everyone
-                       can turn their own phone on, and what they actually receive is filtered by
-                       their permissions at send time. -->
-                  <li><button class="admin-nav-link" type="button" data-view="notifications">Notifications</button></li>
                 </ul>
               </li>
             </ul>

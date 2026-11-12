@@ -1,0 +1,131 @@
+/* NBCC admin: the Overview, the Contact form, and the menu and bottom bar on a phone.
+ * Design: docs/superpowers/specs/2026-11-12-overview-contact-phone-menu-design.md. Jaimie saw them
+ * mocked up beside today's screens and said "look great go for it!".
+ *
+ * The Donations gift log's look (assets/css/admin-donations.css), borrowed by value and not by
+ * class, as that file borrowed it from Head Elf HQ: NBCC's own colours and fonts, chunky pieces with
+ * a deep maroon ink edge and a hard shadow that presses in when pressed, roomy, plain words, cards
+ * rather than tables.
+ *
+ * House rules, as the gift log's: every class starts .ov- (the Overview), .ct- (the Contact form)
+ * or .pm- (the phone menu and bar); no !important; nothing scrolls inside a box; no side stripes or
+ * gradient text; motion only for someone happy with it, moving only transform and opacity. Loaded
+ * after admin.css, so it wins on order alone. A phone is below 860px, as everywhere in the admin. */
+
+.admin-body {
+  --ov-ink: #3A0B0B;
+  --ov-maroon: #800000;
+  --ov-crimson: #C02238;
+  --ov-holly: #1A531A;
+  --ov-holly-soft: #E3EEDC;
+  --ov-gold-soft: #F6E7BF;
+  --ov-gold-ink: #7E5A12;
+  --ov-cream: #F8F5EE;
+  --ov-card: #FFFDFA;
+  --ov-hover: #FFF3DD;
+  --ov-blush: #FBE3E6;
+  --ov-text: #2E2422;
+  --ov-soft: #6B5F5B;
+  --ov-on-dark: #FFF8EF;
+  --ov-rule: rgba(58, 11, 11, 0.22);
+  --ov-line: 2.5px solid var(--ov-ink);
+  --ov-thin: 2px solid var(--ov-ink);
+  --ov-pop: 3px 4px 0 var(--ov-ink);
+  --ov-pop-lg: 5px 6px 0 var(--ov-ink);
+  --ov-pressed: 1px 1px 0 var(--ov-ink);
+  --ov-head: "Playfair Display", Georgia, serif;
+}
+
+/* ---- the Overview ---- */
+#view-overview .ov-root { display: grid; gap: 26px; color: var(--ov-text); }
+#view-overview .ov-root :focus-visible { outline: 3px solid var(--ov-gold-ink); outline-offset: 3px; }
+#view-overview .ov-title { display: grid; gap: 4px; }
+/* The admin gives every .admin-view h2 its own size; named through the view so this wins. */
+#view-overview .ov-title h2 { margin: 0; font-family: var(--ov-head); font-weight: 800; font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.4rem); line-height: 1.05; color: var(--ov-maroon); }
+#view-overview .ov-lede { margin: 0; color: var(--ov-soft); font-size: 0.95rem; }
+#view-overview .ov-summary { color: var(--ov-ink); font-weight: 600; }
+#view-overview .ov-summary:empty { display: none; }
+#view-overview .ov-cols, #view-overview .ov-side { display: grid; gap: 26px; align-items: start; min-width: 0; }
+#view-overview .ov-section { display: grid; gap: 12px; min-width: 0; }
+#view-overview .ov-section[hidden] { display: none; }
+#view-overview .ov-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+#view-overview .ov-h3 { margin: 0; font-family: var(--ov-head); font-weight: 800; font-size: 1.3rem; line-height: 1.15; color: var(--ov-maroon); }
+@media (min-width: 1000px) {
+  #view-overview .ov-cols { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 36px; }
+}
+
+/* A heading inside a list, like the gift log's day headings: words, then a dashed rule to the edge. */
+#view-overview .ov-group, #view-overview .ov-day-label { display: flex; align-items: center; gap: 8px; margin: 6px 0 -2px; font-family: inherit; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ov-soft); }
+#view-overview .ov-group::after, #view-overview .ov-day-label::after { content: ""; flex: 1; border-top: 2px dashed var(--ov-rule); }
+#view-overview .ov-pill { display: inline-flex; align-items: center; padding: 2px 9px; border: 2px solid currentColor; border-radius: 999px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.4; }
+#view-overview .ov-group[data-level="1"] .ov-pill { color: var(--ov-crimson); background: var(--ov-blush); }
+#view-overview .ov-group[data-level="2"] .ov-pill { color: var(--ov-gold-ink); background: var(--ov-gold-soft); }
+#view-overview .ov-group[data-level="3"] .ov-pill { color: var(--ov-holly); background: var(--ov-holly-soft); }
+#view-overview .ov-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+#view-overview .ov-needs { display: grid; gap: 10px; }
+
+/* A card that IS the button. It presses in, as the gift log's tiles do, and a chevron says it opens. */
+#view-overview .ov-card { position: relative; display: grid; width: 100%; min-width: 0; min-height: 48px; margin: 0; padding: 11px 40px 11px 14px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-text); font: inherit; text-align: left; cursor: pointer; }
+#view-overview .ov-card:hover { background: var(--ov-hover); }
+#view-overview .ov-card::after { content: ""; position: absolute; top: 50%; right: 15px; width: 9px; height: 9px; border-top: 3px solid var(--ov-ink); border-right: 3px solid var(--ov-ink); transform: translateY(-50%) rotate(45deg); }
+
+/* Needs you: the count large at the front, as Donations leads with the amount. */
+#view-overview .ov-need { grid-template-columns: 2.9rem minmax(0, 1fr); align-items: center; column-gap: 10px; }
+#view-overview .ov-need--sentence { grid-template-columns: minmax(0, 1fr); }
+#view-overview .ov-need__count { font-family: var(--ov-head); font-weight: 800; font-size: 1.75rem; line-height: 1; color: var(--ov-ink); text-align: center; font-variant-numeric: lining-nums tabular-nums; }
+#view-overview .ov-need--urgent .ov-need__count { color: var(--ov-crimson); }
+#view-overview .ov-need__body { display: grid; gap: 2px; min-width: 0; }
+#view-overview .ov-need__words { font-size: 0.95rem; line-height: 1.28; overflow-wrap: anywhere; text-wrap: pretty; }
+#view-overview .ov-need__where { font-size: 0.82rem; color: var(--ov-soft); }
+#view-overview .ov-clear, #view-overview .ov-failed { margin: 0; padding: 14px 16px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-card); }
+#view-overview .ov-clear { color: var(--ov-holly); font-weight: 600; }
+#view-overview .ov-failed { color: var(--ov-crimson); }
+
+/* How we are doing: the gift log's scoreboard, a tile each, the figure large. */
+#view-overview .ov-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; margin: 0; padding: 0; list-style: none; }
+@media (min-width: 760px) { #view-overview .ov-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 1000px) { #view-overview .ov-side .ov-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#view-overview .ov-tile { display: grid; align-content: start; gap: 6px; width: 100%; min-width: 0; height: 100%; padding: 14px 14px 12px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-text); font: inherit; text-align: left; cursor: pointer; }
+#view-overview .ov-tile:hover { background: var(--ov-hover); }
+#view-overview .ov-tile__name { font-family: var(--ov-head); font-weight: 700; font-size: 0.98rem; line-height: 1.2; color: var(--ov-maroon); overflow-wrap: anywhere; }
+#view-overview .ov-tile__figure { font-family: var(--ov-head); font-weight: 800; font-size: 1.85rem; line-height: 1; color: var(--ov-ink); font-variant-numeric: lining-nums tabular-nums; overflow-wrap: anywhere; }
+#view-overview .ov-tile__rest { font-size: 0.86rem; line-height: 1.35; }
+#view-overview .ov-tile__detail { font-size: 0.8rem; line-height: 1.35; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-overview .ov-tile__rest:empty, #view-overview .ov-tile__detail:empty { display: none; }
+
+/* Coming up and the recent gifts: slim cards in a ledger. */
+#view-overview .ov-day { display: grid; gap: 10px; }
+#view-overview .ov-days { display: grid; gap: 12px; }
+#view-overview .ov-event { grid-template-columns: 4.6rem minmax(0, 1fr); align-items: center; column-gap: 12px; }
+#view-overview .ov-event-when { font-family: var(--ov-head); font-weight: 800; font-size: 1rem; color: var(--ov-ink); font-variant-numeric: tabular-nums; }
+#view-overview .ov-event-when:empty { display: none; }
+#view-overview .ov-event--allday { grid-template-columns: minmax(0, 1fr); }
+#view-overview .ov-event-text { font-size: 0.95rem; line-height: 1.3; overflow-wrap: anywhere; }
+#view-overview .ov-gift { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; }
+#view-overview .ov-gift__amount { min-width: 3.4ch; font-family: var(--ov-head); font-weight: 800; font-size: 1.35rem; color: var(--ov-ink); font-variant-numeric: tabular-nums; }
+#view-overview .ov-gift__who { display: grid; min-width: 0; }
+#view-overview .ov-gift__name { font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+#view-overview .ov-gift__time { font-size: 0.82rem; color: var(--ov-soft); }
+#view-overview .ov-gift__marks { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+#view-overview .ov-gift__marks:empty { display: none; }
+#view-overview .ov-mark { display: inline-flex; padding: 1px 7px; border: 2px solid currentColor; border-radius: 999px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.4; white-space: nowrap; }
+#view-overview .ov-mark--aid { color: var(--ov-holly); background: var(--ov-holly-soft); }
+#view-overview .ov-mark--monthly { color: var(--ov-gold-ink); background: var(--ov-gold-soft); }
+#view-overview .ov-mark--from { color: var(--ov-maroon); background: var(--ov-card); }
+#view-overview .ov-mark--pay { color: var(--ov-crimson); background: var(--ov-blush); }
+#view-overview .ov-see-all { flex: none; min-height: 44px; padding: 0 14px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+#view-overview .ov-empty { margin: 0; color: var(--ov-soft); }
+
+/* A gift that opens nothing (an Elf Detective School payment for someone who may not open Head Elf
+   HQ) is drawn still: no chevron and no pointer, so nothing looks tappable that is not. */
+#view-overview .ov-card--still { padding-right: 14px; cursor: default; }
+#view-overview .ov-card--still::after { display: none; }
+#view-overview .ov-card--still:hover { background: var(--ov-card); }
+
+/* Pressed in. Kept apart so the cards, tiles and the See all button share one feel. */
+#view-overview .ov-card:active, #view-overview .ov-tile:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+#view-overview .ov-need:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+#view-overview .ov-see-all:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+@media (prefers-reduced-motion: no-preference) {
+  #view-overview .ov-card, #view-overview .ov-tile, #view-overview .ov-see-all { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1); }
+}

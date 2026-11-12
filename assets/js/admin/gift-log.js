@@ -601,7 +601,19 @@
         });
     }
 
-    return { drawLog: drawLog, drawScores: drawScores, clearScores: clearScores, drawChips: drawChips, activeFilters: activeFilters };
+    // The day, time and money wording too, so the Overview and the Contact form say "Today",
+    // "2:34pm" and "£25" exactly as Donations does, from one place rather than a second copy.
+    return {
+      drawLog: drawLog,
+      drawScores: drawScores,
+      clearScores: clearScores,
+      drawChips: drawChips,
+      activeFilters: activeFilters,
+      dayKey: dayKey,
+      dayLabel: dayLabel,
+      timeLabel: timeLabel,
+      money: money,
+    };
   }
 
   var api = {

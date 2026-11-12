@@ -1331,49 +1331,71 @@
   function ovButtonWords(item) {
     return GI_OLD_VIEWS[item.view] ? "Get involved" : item.button;
   }
+  // The Overview in the Donations look (2026-11-12). Each line is a card that is its own button: the
+  // count large at the front, as Donations leads with the amount, the words beside it, and the screen
+  // it opens beneath. Grouped by how soon it matters, under the gift log's kind of heading.
+  var NEED_GROUPS = { 1: "Urgent", 2: "Waiting on you", 3: "Coming due" };
+  function needCard(n) {
+    var esc = H.escapeHtml;
+    var level = Number(n.level);
+    // An older server, mid-deploy, sends the sentence without its count: it still reads, whole.
+    var split = typeof n.count === "number" && isFinite(n.count) && typeof n.words === "string";
+    return (
+      "<li>" +
+      '<button type="button" class="ov-card ov-need' + (level === 1 ? " ov-need--urgent" : "") + (split ? "" : " ov-need--sentence") +
+      '" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' +
+      (split ? '<span class="ov-need__count">' + String(Number(n.count)) + "</span>" : "") +
+      '<span class="ov-need__body">' +
+      '<span class="ov-need__words">' + esc(split ? n.words : n.text) + "</span>" +
+      '<span class="ov-need__where">' + esc(ovButtonWords(n)) + "</span>" +
+      "</span></button></li>"
+    );
+  }
   function needsHtml(d) {
     var esc = H.escapeHtml;
     var needs = d.needs || [];
     var failed = d.failed || [];
-    var list = needs.length
-      ? '<ul class="ov-needs">' +
-        needs
-          .map(function (n) {
-            return (
-              '<li class="ov-need" data-level="' + Number(n.level) + '">' +
-              '<span class="ov-dot" aria-hidden="true"></span>' +
-              '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
-              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' + esc(ovButtonWords(n)) + "</button>" +
-              "</li>"
-            );
-          })
-          .join("") +
-        "</ul>"
-      : "";
+    var groups = [1, 2, 3]
+      .map(function (level) {
+        var mine = needs.filter(function (n) { return Number(n.level) === level; });
+        if (!mine.length) return "";
+        return (
+          '<p class="ov-group" data-level="' + level + '"><span class="ov-pill">' + NEED_GROUPS[level] + "</span></p>" +
+          '<ul class="ov-list">' + mine.map(needCard).join("") + "</ul>"
+        );
+      })
+      .join("");
     // Never "nothing needs you" when part of it could not be checked: that would be a guess.
     var quiet = !needs.length && !failed.length ? '<p class="ov-clear">Nothing needs you right now.</p>' : "";
     var gaps = failed.length
       ? '<p class="ov-failed">Could not check: ' + esc(failed.join(", ")) + ". Open Overview again in a moment.</p>"
       : "";
-    return list + quiet + gaps;
+    return '<div class="ov-needs">' + groups + quiet + gaps + "</div>";
   }
-  // TASK-509: how we are doing, one line each, worded by src/admin/overview-numbers.ts. The card
-  // stays hidden for someone who may see none of them.
+  // "9 things need you." above the cards; nothing on a quiet day, or when it could not load.
+  function ovSummaryWords(needs) {
+    var n = (needs || []).length;
+    return n === 0 ? "" : n === 1 ? "1 thing needs you." : n + " things need you.";
+  }
+  // TASK-509: how we are doing, now the gift log's scoreboard, a tile each with the figure large. The
+  // server sends the figure apart from the rest of its headline; an older one sends the headline only.
   function numbersHtml(numbers) {
     var esc = H.escapeHtml;
     return (
-      '<ul class="ov-numbers">' +
+      '<ul class="ov-tiles">' +
       numbers
         .map(function (n) {
+          var split = typeof n.figure === "string";
           return (
-            '<li class="ov-number">' +
-            '<span class="ov-number-title">' + esc(n.title) + "</span>" +
-            '<span class="ov-number-body">' +
-            '<span class="ov-number-headline">' + esc(n.headline) + "</span>" +
-            '<span class="ov-number-detail">' + esc(n.detail) + "</span>" +
-            "</span>" +
-            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(ovButtonWords(n)) + "</button>" +
-            "</li>"
+            '<li><button type="button" class="ov-tile" data-ov-view="' + esc(n.view) + '">' +
+            '<span class="ov-tile__name">' + esc(n.title) + "</span>" +
+            '<span class="ov-tile__figure">' + esc(split ? n.figure : n.headline) + "</span>" +
+            '<span class="ov-tile__rest">' + esc(split ? n.rest : "") + "</span>" +
+            '<span class="ov-tile__detail">' + esc(n.detail) + "</span>" +
+            // The old rows had a button naming the screen; the tile is the button now, so a screen
+            // reader still hears where it goes.
+            '<span class="sr-only">, opens ' + esc(ovButtonWords(n)) + "</span>" +
+            "</button></li>"
           );
         })
         .join("") +
@@ -1385,36 +1407,96 @@
     el("overviewNumbers").innerHTML = list.length ? numbersHtml(list) : "";
     el("ovNumbersCard").hidden = !list.length;
   }
-  // TASK-510: Coming up, the next 14 days by day, from src/admin/overview-coming-up.ts. Hidden when
-  // nothing this person may see is coming.
+  // TASK-510: Coming up, the next 14 days by day, as slim cards under the day's heading.
   function comingHtml(days) {
     var esc = H.escapeHtml;
-    return days
-      .map(function (d) {
-        return (
-          '<section class="ov-day">' +
-          '<h4 class="ov-day-label">' + esc(d.label) + "</h4>" +
-          '<ul class="ov-events">' +
-          (d.items || [])
-            .map(function (i) {
-              return (
-                '<li class="ov-event">' +
-                '<span class="ov-event-when">' + esc(i.when) + "</span>" +
-                '<span class="ov-event-text">' + esc(i.text) + "</span>" +
-                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(ovButtonWords(i)) + "</button>" +
-                "</li>"
-              );
-            })
-            .join("") +
-          "</ul></section>"
-        );
-      })
-      .join("");
+    return (
+      '<div class="ov-days">' +
+      days
+        .map(function (d) {
+          return (
+            '<section class="ov-day">' +
+            '<h4 class="ov-day-label">' + esc(d.label) + "</h4>" +
+            '<ul class="ov-list">' +
+            (d.items || [])
+              .map(function (i) {
+                return (
+                  '<li><button type="button" class="ov-card ov-event' + (i.when ? "" : " ov-event--allday") +
+                  '" data-ov-view="' + esc(i.view) + '">' +
+                  '<span class="ov-event-when">' + esc(i.when) + "</span>" +
+                  '<span class="ov-event-text">' + esc(i.text) + "</span>" +
+                  '<span class="sr-only">, opens ' + esc(ovButtonWords(i)) + "</span>" +
+                  "</button></li>"
+                );
+              })
+              .join("") +
+            "</ul></section>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
   }
   function showComing(days) {
     var list = days || [];
     el("overviewComing").innerHTML = list.length ? comingHtml(list) : "";
     el("ovComingCard").hidden = !list.length;
+  }
+  // The Overview's own recent gifts: compact cards, as the gift log draws a gift, never the table.
+  // Search still shares donationsTable() and keeps it. The same marks the table showed, worded the
+  // gift log's way, and never a New pill: these five are a glance, not a list to work through.
+  var OV_SOURCE_WORDS = {
+    red_bag: "Red Bag",
+    ball: "Festive Ball",
+    ball_bags: "Red bags at the Ball",
+    santa_sleigh: "Santa Sleigh",
+    invoice: "Invoice",
+  };
+  function ovWhen(iso) {
+    var GL = window.AdminGiftLog;
+    if (!GL || !GL.dayLabel) return H.fmtDate(iso);
+    var day = GL.dayLabel(iso);
+    var time = GL.timeLabel(iso);
+    if (day === "Today") return time;
+    return day === "Yesterday" ? "Yesterday, " + time : day;
+  }
+  function ovGiftsHtml(rows) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    if (!rows.length) return '<p class="ov-empty">No donations yet.</p>';
+    return (
+      '<ul class="ov-list">' +
+      rows
+        .map(function (d) {
+          var elfRow = d.kind === "elf";
+          var marks = [];
+          if (d.gift_aid) marks.push(["aid", "Gift Aid"]);
+          if (d.mode === "monthly") marks.push(["monthly", "Monthly"]);
+          var from = elfRow ? "Elf Detective School" : OV_SOURCE_WORDS[d.source];
+          if (from) marks.push(["from", from]);
+          var pay = H.paymentLabel(d);
+          if (pay.state !== "paid") marks.push(["pay", pay.label]);
+          // A gift opens its donor, as the row's View did; an elf payment opens Head Elf HQ, and only
+          // for someone who may open it. One that opens nothing is drawn still, not as a button.
+          var opener = elfRow
+            ? canView("elf") ? ' data-elf-family="' + Number(d.elf_family_id) + '"' : ""
+            : ' data-donor="' + Number(d.donor_id) + '"';
+          var amount = GL && GL.money ? GL.money(d.amount_pence) : H.formatPence(d.amount_pence);
+          var name = d.donor_name || (elfRow ? d.elf_reference : "") || "";
+          var inner =
+            '<span class="ov-gift__amount">' + esc(amount) + "</span>" +
+            '<span class="ov-gift__who"><span class="ov-gift__name">' + esc(name) + "</span>" +
+            '<span class="ov-gift__time">' + esc(ovWhen(d.created_at)) + "</span></span>" +
+            '<span class="ov-gift__marks">' +
+            marks.map(function (m) { return '<span class="ov-mark ov-mark--' + m[0] + '">' + esc(m[1]) + "</span>"; }).join("") +
+            "</span>";
+          return opener
+            ? '<li><button type="button" class="ov-card ov-gift"' + opener + ">" + inner + "</button></li>"
+            : '<li><div class="ov-card ov-card--still ov-gift">' + inner + "</div></li>";
+        })
+        .join("") +
+      "</ul>"
+    );
   }
   function overviewTime(iso) {
     var t = new Date(iso);
@@ -1433,14 +1515,14 @@
         if (btn.getAttribute("data-ov-view") === "ball") ballAsk(BALL_NEED_SECTIONS[btn.getAttribute("data-ov-key")]);
         selectView(btn.getAttribute("data-ov-view"));
       };
-      el("overviewNeeds").addEventListener("click", openView);
-      el("overviewNumbers").addEventListener("click", openView);
-      el("overviewComing").addEventListener("click", openView);
+      // One delegate for the whole view: the cards, the tiles, Coming up and "See them all".
+      el("view-overview").addEventListener("click", openView);
     }
     authFetch("/api/admin/overview")
       .then(okJson)
       .then(function (d) {
         el("overviewNeeds").innerHTML = needsHtml(d);
+        el("overviewSummary").textContent = ovSummaryWords(d.needs);
         showNumbers(d.numbers);
         showComing(d.comingUp);
         el("overviewUpdated").textContent = overviewTime(d.updatedAt);
@@ -1448,6 +1530,7 @@
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
         el("overviewNeeds").innerHTML = unavailableHtml("The overview could not load. Open it again in a moment.");
+        el("overviewSummary").textContent = "";
         // Never last visit's numbers under a message that says nothing could load.
         showNumbers([]);
         showComing([]);
@@ -1456,7 +1539,7 @@
     authFetch("/api/admin/donations?limit=5")
       .then(okJson)
       .then(function (d) {
-        el("overviewRecent").innerHTML = donationsTable(d.results || []);
+        el("overviewRecent").innerHTML = ovGiftsHtml(d.results || []);
       })
       .catch(function (err) {
         el("overviewRecent").innerHTML = unavailableHtml(

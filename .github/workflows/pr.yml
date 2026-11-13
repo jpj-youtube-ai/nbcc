@@ -140,3 +140,15 @@ jobs:
       # sends fails in production, and only there.
       - name: sharp must load, or no photo an organiser sends can be made
         run: docker run --rm nbcc-image-check node -e "require('sharp')"
+      # Elf Detective School's share card is a picture drawn on the server, and its words can only be in the fonts
+      # the image has. With none, every graduate's card goes out with no words on it, and nothing but the image can
+      # show it: no unit test can see the server's fonts.
+      - name: the share card's font must be DejaVu, or every share card goes out with no words
+        run: |
+          set -euo pipefail
+          font=$(docker run --rm nbcc-image-check fc-match sans-serif || true)
+          echo "$font"
+          if ! echo "$font" | grep -q "DejaVu"; then
+            echo "::error::fc-match sans-serif found '$font', not DejaVu. The share card is drawn on the server and can only use the fonts the image has: fontconfig and fonts-dejavu-core in the Dockerfile's first apt-get install are what fix this."
+            exit 1
+          fi

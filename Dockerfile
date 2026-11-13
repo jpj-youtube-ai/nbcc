@@ -49,9 +49,15 @@ ENV MALLOC_ARENA_MAX=2
 # that the charity can open a backup with 7-Zip and a password, on any Windows machine, without a
 # developer and without this codebase. A backup only its authors can read is a weak backup.
 #
+# Elf Detective School's share card (Plan 2c-2) is a picture drawn on the server, by sharp from an
+# SVG, and a picture drawn on the server can only use the fonts the server has: node:20-slim has
+# none, so without these every card would go out with no words on it. fontconfig is how sharp finds
+# a font, and fonts-dejavu-core gives it DejaVu Sans and Serif for the card's words. pr.yml's image
+# check asks fontconfig inside the built image for a sans serif font, and fails unless it is DejaVu.
+#
 # Placed before the npm install so it stays a cached layer that code changes do not invalidate.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl gnupg p7zip-full \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg p7zip-full fontconfig fonts-dejavu-core \
  && install -d /usr/share/postgresql-common/pgdg \
  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
       -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \

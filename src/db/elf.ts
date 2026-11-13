@@ -429,14 +429,16 @@ export async function familyByEmailsToken(token: string): Promise<{ id: number; 
 }
 
 /** A family stops the emails that are not essential, or starts them again, and the audit log says so in the same
- *  transaction: elf.emails.stopped or elf.emails.started, by the family, with nothing of it but its id. Stopping
- *  them again keeps when they were first stopped. */
+ *  transaction: elf.emails.stopped or elf.emails.started, by the family, with nothing of it but its id. The row
+ *  changes only when the switch does, so a press that changes nothing (a second stop, which keeps when they were
+ *  first stopped, or a start while they are on) writes no audit line. */
 export async function setEmailsStopped(familyId: number, stopped: boolean): Promise<void> {
   await inTransaction(async (client) => {
-    await client.query("UPDATE elf_families SET emails_stopped_at = CASE WHEN $2::boolean THEN COALESCE(emails_stopped_at, now()) ELSE NULL END WHERE id = $1", [
-      familyId,
-      stopped,
-    ]);
+    const changed = await client.query(
+      "UPDATE elf_families SET emails_stopped_at = CASE WHEN $2::boolean THEN now() ELSE NULL END WHERE id = $1 AND (emails_stopped_at IS NOT NULL) <> $2::boolean",
+      [familyId, stopped],
+    );
+    if (changed.rowCount !== 1) return;
     await insertAudit(client, {
       actor: "family",
       action: stopped ? "elf.emails.stopped" : "elf.emails.started",

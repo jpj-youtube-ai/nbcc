@@ -128,18 +128,44 @@ describe("a family found by the token in its link to stop the emails", () => {
 
 describe("stopping the emails, and starting them again", () => {
   const writes = () => clientQuery.mock.calls.map((c) => [String(c[0]).replace(/\s+/g, " "), c[1]]);
+  const audits = () => writes().filter(([s]) => String(s).startsWith("INSERT INTO audit_log")).map(([, params]) => params);
   const audit = () => writes().find(([s]) => String(s).startsWith("INSERT INTO audit_log"));
   beforeEach(() => clientQuery.mockResolvedValue({ rows: [], rowCount: 1 }));
 
-  it("stops them in one transaction, keeping when they were first stopped, and says so in the audit log with the family's id alone", async () => {
+  // Fix round 1 (the review's Minor 2): the row changes only when the switch does, so a press that changes nothing
+  // writes no audit line.
+  it("stops them in one transaction, only while they are on, and says so in the audit log with the family's id alone", async () => {
     await setEmailsStopped(3, true);
     const all = writes();
     expect(all[0][0]).toBe("BEGIN");
-    expect(all[1][0]).toBe("UPDATE elf_families SET emails_stopped_at = CASE WHEN $2::boolean THEN COALESCE(emails_stopped_at, now()) ELSE NULL END WHERE id = $1");
+    expect(all[1][0]).toBe("UPDATE elf_families SET emails_stopped_at = CASE WHEN $2::boolean THEN now() ELSE NULL END WHERE id = $1 AND (emails_stopped_at IS NOT NULL) <> $2::boolean");
     expect(all[1][1]).toEqual([3, true]);
     expect(audit()![1]).toEqual(["family", "elf.emails.stopped", "elf_family", 3, { familyId: 3 }]);
     expect(all.at(-1)![0]).toBe("COMMIT");
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes no second audit line for a second stop, nor for a start while they are on", async () => {
+    // elf_families as the UPDATE's WHERE keeps it: the row changes only when it is not already as asked.
+    let stoppedNow = false;
+    clientQuery.mockImplementation(async (s: string, params: unknown[] = []) => {
+      if (!String(s).startsWith("UPDATE elf_families")) return { rows: [], rowCount: 1 };
+      if (stoppedNow === params[1]) return { rows: [], rowCount: 0 };
+      stoppedNow = params[1] === true;
+      return { rows: [], rowCount: 1 };
+    });
+    await setEmailsStopped(3, true);
+    await setEmailsStopped(3, true);
+    expect(audits()).toEqual([["family", "elf.emails.stopped", "elf_family", 3, { familyId: 3 }]]);
+    await setEmailsStopped(3, false);
+    await setEmailsStopped(3, false);
+    expect(audits()).toEqual([
+      ["family", "elf.emails.stopped", "elf_family", 3, { familyId: 3 }],
+      ["family", "elf.emails.started", "elf_family", 3, { familyId: 3 }],
+    ]);
+    // Each press is still its own transaction, committed, with nothing left open.
+    expect(writes().filter(([s]) => s === "COMMIT")).toHaveLength(4);
+    expect(release).toHaveBeenCalledTimes(4);
   });
 
   it("starts them again: emails_stopped_at back to none, audited as started", async () => {

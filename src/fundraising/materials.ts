@@ -333,6 +333,9 @@ export function shell(o: {
   tail?: string;
   /** Print tip, when the paper is not A4. */
   tip?: string;
+  /** The on screen note on asking us for anything else (ASK_US), written for fundraisers' materials. Left out, it
+   *  is shown; false leaves it out, as on an Elf Detective School graduate's certificate, a family's own print. */
+  askUs?: boolean;
 }): string {
   const print = o.print !== false;
   const pageRule = !print ? "" : typeof o.paper === "string" ? `@page{size:${o.paper};margin:0}` : o.paper.rules;
@@ -356,7 +359,7 @@ ${o.css}</style>
         }</span>`
       : ""
   }</div>
-${ASK_US_HTML}
+${o.askUs === false ? "" : ASK_US_HTML}
 ${o.body}
 ${print ? FIT_SCRIPT : ""}${o.tail ?? ""}
 </body>

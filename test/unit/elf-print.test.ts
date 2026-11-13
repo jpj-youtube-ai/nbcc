@@ -26,6 +26,10 @@ describe("the poster for a hiding place", () => {
   const html = renderElfPoster(PLACE);
   const doc = parse(html);
 
+  it("still says, on screen, how to ask us for anything else, as every other print does", () => {
+    expect(doc.querySelector('aside.ask-us')).not.toBeNull();
+  });
+
   it("is one A4 page that names the place and tells detectives to scan", () => {
     expect(doc.querySelectorAll(".page").length).toBe(1);
     expect(html).toContain("@page{size:A4 portrait;margin:0}");
@@ -226,6 +230,14 @@ describe("the graduate's certificate", () => {
   it("spells the workshop the one way, and carries the charity's statement", () => {
     expect(text).toContain("Elves' Workshop");
     expect(text).toContain(MATERIALS_STATEMENT);
+  });
+
+  // The print shell's note asks fundraisers to ring for a banner or another size: not words for a family's own
+  // certificate (Plan 2c-2, Task 6's review).
+  it("leaves out the fundraisers' note about asking us for other sizes", () => {
+    expect(html).not.toContain('class="ask-us"');
+    expect(parse(html).querySelector(".ask-us")).toBeNull();
+    expect(html).toContain("Print or save as PDF");
   });
 });
 

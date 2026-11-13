@@ -362,7 +362,8 @@ export function renderElfCertificate(c: CertificatePrint): string {
 </div>
 ${statement}
 </div>`;
-  return shell({ title: `Elf Detective School certificate for ${name}`, paper: "A4 landscape", fontCss: assets.fontCss, css, toolbar: `<span>Certificate for ${name}</span>`, body });
+  // A family's own print: none of the fundraisers' note on asking us for other sizes.
+  return shell({ title: `Elf Detective School certificate for ${name}`, paper: "A4 landscape", fontCss: assets.fontCss, css, toolbar: `<span>Certificate for ${name}</span>`, body, askUs: false });
 }
 
 /** A PNG picture as a data address, and nothing else: no link, no markup. */

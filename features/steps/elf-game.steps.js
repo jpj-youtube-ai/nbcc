@@ -406,6 +406,20 @@ When("{string} with password {string} runs the elf worker at midday on 1 Februar
   await tickAt(email, password, new Date(Date.UTC(new Date().getFullYear(), 1, 1, 12, 0)));
 });
 
+// A minute after a door's first clue, in Elf Detective School's own year (features/elf-grand-prize.feature): worked
+// out from the year and the door's own evening as Head Elf HQ's doors answer gives it, the times the worker itself
+// reads, never from a time written in a feature. A door's first clue is 10am on a weekend and 5:30pm on a school
+// day unless a head elf types another, so the same door falls at different times in different years. December has
+// no clock change, so London is UTC then. The tick route answers once the whole tick has run.
+When("{string} with password {string} runs the elf worker a minute after door {int}'s first clue", async function (email, password, door) {
+  const sheet = await asHeadElf(email, password, "GET", `/api/admin/elf/doors/${door}`);
+  const evening = sheet.door && sheet.door.evening;
+  const clue1 = evening ? String(evening.clue1) : "";
+  assert.match(clue1, /^\d{1,2}:\d{2}$/, `door ${door}'s first clue as Head Elf HQ gives it: ${JSON.stringify(evening)}`);
+  const [hours, minutes] = clue1.split(":").map(Number);
+  await tickAt(email, password, new Date(Date.UTC(await schoolYear(), 11, door, hours, minutes + 1)));
+});
+
 // The alert's record is written just after its emails and texts, by whichever tick sent it: so the last
 // alert is read until it is there.
 Then("{string} with password {string} sees the last photo alert, with no text that failed", async function (email, password) {

@@ -118,3 +118,24 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     When the family "emails.prize.elf.bdd@example.com" presses the button in Detective HQ's Your emails
     Then the game answers 303
     And the family "emails.prize.elf.bdd@example.com" gets the emails again, and the audit log says so
+
+  # Who gets each door's clue email is worked out by one query, run here against Postgres: the clue email goes, built
+  # and logged, to a family that never stopped the emails, and not to one that did. Played in last year's December,
+  # whose doors are over. The elf worker is run once, a minute after door 7's first clue, worked out from Elf
+  # Detective School's year and door 7's own evening, never written here. The worker ticking on the real clock never
+  # sends last year's door 7 clue, whose six hours ended long ago, and its claim stops a second send, so this holds
+  # whenever it runs. Only the clue emails are counted: the sweep on the real clock may send a promotion at any moment.
+  Scenario: Door 7's clue email goes to a family, and not to a family that has stopped the emails
+    Given the school's year is last year, whose December is over
+    And "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" has opened the doors list
+    And door 7 is ready to run at "The Example Bakehouse" in "Snowford", with the prize "A pretend sledge"
+    And December's doors are switched on
+    And "clue.prize.elf.bdd@example.com" has already enrolled "Ruby Tinselfoot" and paid
+    And "quiet.prize.elf.bdd@example.com" has already enrolled "Leo Frostwhistle" and paid
+    When someone opens the link to stop the emails in an email to "quiet.prize.elf.bdd@example.com"
+    And someone presses the button on that page
+    Then the game answers 200
+    And the family "quiet.prize.elf.bdd@example.com" has stopped the emails, and the audit log says so
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" runs the elf worker a minute after door 7's first clue
+    Then once the request has finished, 1 "elfClue" email went to "clue.prize.elf.bdd@example.com"
+    And once the request has finished, 0 "elfClue" emails went to "quiet.prize.elf.bdd@example.com"

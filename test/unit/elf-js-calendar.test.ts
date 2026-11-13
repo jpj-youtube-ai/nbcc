@@ -1314,7 +1314,7 @@ describe("a family's own places", () => {
   it("keep the calendar's Have a go line on a door the family may still have a go at, with no line of its own", async () => {
     const view = calendarView(AFTERNOON);
     view.doors[4] = { ...view.doors[4], place: null, goUrl: "/elf/hq/door/5" };
-    places.set(4, { name: "Shop number 4", town: "Ayr" });
+    places.set(4, { name: "Shop number 4", town: "Exampleton" });
     me = meOn({ known: [4], goes: [5] });
     const calendar = load(view);
     await calendar.ready;

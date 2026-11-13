@@ -52,6 +52,7 @@ import {
   type DoorRun,
   type FamilyRuns,
 } from "../db/elf-game";
+import type { MadePicture } from "../db/fundraiser-pictures";
 import { DOOR_COUNT, isDoor, type Door } from "../elf/calendar";
 import { decideGo, doorsKnown, doorsToCrack, knowsPlace, mayHaveAGo, placesPublic, type FamilyKnowledge, type GoRefusal } from "../elf/catch-up";
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
@@ -1591,6 +1592,27 @@ const PHOTO_READ = PICTURE_READ_WORDS;
 const PHOTO_BUSY = { error: PICTURE_BUSY_WORDS };
 const PHOTO_TOO_MANY_TRIES = { error: "You have tried to send a lot of photos today. Please try again tomorrow." };
 
+/** A picture sent as JSON { mime, dataBase64 }, checked and made again as the fundraisers' pictures are: a JPEG,
+ *  PNG or WebP whose bytes really are that, made again here so nothing from the camera is kept (not where, not
+ *  when, not the phone) and what is stored is always a fresh JPEG. A door's photo and a graduate's grand prize
+ *  picture both take it. The made picture, or null once the refusal has been answered, with the photo route's
+ *  statuses and words. */
+async function madePicture(res: Response, body: Record<string, unknown>): Promise<MadePicture | null> {
+  const bytes = decodeBase64(typeof body.dataBase64 === "string" ? body.dataBase64 : "");
+  const check = checkPictureUpload(typeof body.mime === "string" ? body.mime : "", bytes);
+  if (!check.ok) {
+    const size = check.reason === "size";
+    res.status(size ? 413 : 400).json({ error: LOOK_AGAIN, fields: { photo: size ? PHOTO_SIZE : PHOTO_TYPE } });
+    return null;
+  }
+  const made = await processPicture("main", bytes);
+  if (made.ok) return { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height };
+  if (made.reason === "busy") res.status(503).json(PHOTO_BUSY);
+  else if (made.reason === "size") res.status(413).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_SIZE } });
+  else res.status(400).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_READ } });
+  return null;
+}
+
 export async function postPhoto(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
@@ -1607,26 +1629,10 @@ export async function postPhoto(req: Request, res: Response): Promise<Response |
     if (!visits.some((v) => v.door === run.door)) return res.status(403).json(NOT_VISITED);
     if (body.consent !== true) return res.status(400).json(NO_CONSENT);
     if (!allowedOnce(req, s.familyId, limits.photoFamily, limits.photoAddress)) return res.status(429).json(PHOTO_TOO_MANY_TRIES);
-    const bytes = decodeBase64(typeof body.dataBase64 === "string" ? body.dataBase64 : "");
-    const check = checkPictureUpload(typeof body.mime === "string" ? body.mime : "", bytes);
-    // A JPEG, PNG or WebP whose bytes really are that, as the fundraisers' pictures take: it is made
-    // again below, so what is stored is always a fresh JPEG.
-    if (!check.ok) {
-      const size = !check.ok && check.reason === "size";
-      return res.status(size ? 413 : 400).json({ error: LOOK_AGAIN, fields: { photo: size ? PHOTO_SIZE : PHOTO_TYPE } });
-    }
     // Made again here, so nothing from the camera is kept: not where, not when, not the phone.
-    const made = await processPicture("main", bytes);
-    if (!made.ok && made.reason === "busy") return res.status(503).json(PHOTO_BUSY);
-    if (!made.ok && made.reason === "size") return res.status(413).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_SIZE } });
-    if (!made.ok) return res.status(400).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_READ } });
-    const sent = await sendElfPhoto({
-      year: run.year,
-      door: run.door,
-      familyId: s.familyId,
-      picture: { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height },
-      at: now,
-    });
+    const picture = await madePicture(res, body);
+    if (!picture) return;
+    const sent = await sendElfPhoto({ year: run.year, door: run.door, familyId: s.familyId, picture, at: now });
     if (sent === "limit") return res.status(429).json(PHOTO_LIMIT);
     return res.status(202).json({ status: "waiting", token: sent.token });
   } catch (err) {

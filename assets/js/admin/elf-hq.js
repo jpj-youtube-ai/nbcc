@@ -180,7 +180,7 @@
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
       if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
       if (id === "finds") loadFinds();
-      if (id === "settings" && data) { loadPractice(); loadAlerts(); }
+      if (id === "settings" && data) { loadPractice(); loadAlerts(); loadGrandPrize(); }
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -1086,8 +1086,9 @@
       return doorsSheet.querySelector('[data-part="' + key + '"] .hq-status');
     }
 
+    /** A field: its label, its box, and the words under it (one hint, or a list of them). */
     function doorField(key, label, input, hint, wide) {
-      return el("div", { class: "hq-field" + (wide ? " is-wide" : "") }, [el("label", { for: "hqDoor-" + key, text: label }), input, hint || null]);
+      return el("div", { class: "hq-field" + (wide ? " is-wide" : "") }, [el("label", { for: "hqDoor-" + key, text: label }), input].concat(hint || []));
     }
     /** A box for one line, a time, or (kind "area") words that can run long. */
     function doorInput(key, value, max, kind, readonly) {
@@ -1130,6 +1131,14 @@
       var d = doors.sheet;
       h.className = "hq-hint " + (d.closesTooSoon ? "is-error" : "is-ok");
       h.textContent = d.closesTooSoon ? "It closes less than an hour after the last clue." : "Open past " + hourAfter(d.evening.clue3) + ", an hour after the last clue.";
+      // Door 24 against the grand prize entries: the server's warning (DoorSheet.grandPrize), or nothing. It is
+      // drawn again from every sheet a save answers, as a new time of the evening can change it too.
+      var w = doorsSheet.querySelector("[data-prize]");
+      if (w) {
+        w.className = d.grandPrize ? "hq-hint is-error" : "hq-hint";
+        w.textContent = d.grandPrize || "";
+        w.hidden = !d.grandPrize;
+      }
     }
 
     /** The names that also count, as chips, each with its remove button (for someone who may edit). */
@@ -1594,7 +1603,7 @@
         });
         row.appendChild(b);
       });
-      var tickRow = function (path, id, words, at, by) {
+      var tickRow = function (path, id, words, at, by, name) {
         var box = el("input", { type: "checkbox", id: id, name: id, disabled: !doors.canEdit });
         box.checked = !!at;
         box.addEventListener("change", function () {
@@ -1610,17 +1619,19 @@
               say(said, e.message, false);
             });
         });
-        var who = at ? "Ticked by " + (by || "staff") + " on " + dayWords(at) : "";
-        return el("div", { class: "hq-dtick" }, [el("label", { class: "hq-tickbox", for: id }, [box, el("span", { text: words })]), who ? el("span", { class: "hq-hint", text: who }) : null]);
+        // The head elf by name, as the server gives it (their full name, the email when it is blank); an answer
+        // with no name yet still says who by the email.
+        var line = at ? "Ticked by " + (name || who(by) || "staff") + " on " + dayWords(at) : "";
+        return el("div", { class: "hq-dtick" }, [el("label", { class: "hq-tickbox", for: id }, [box, el("span", { text: words })]), line ? el("span", { class: "hq-hint", text: line }) : null]);
       };
       return el("section", { class: "hq-dpart", "data-part": "prints" }, [
         el("header", {}, [el("h3", { class: "hq-h3", text: "Print and drop off" })]),
         row,
         el("p", { class: "hq-words hq-soft", "data-prints-place": "", text: printsWords(d) }),
         el("div", { class: "hq-handover" }, [
-          tickRow("dropped-off", "hqDoor-droppedOff", "Elf, poster, prize and staff card dropped off", d.droppedOffAt, d.droppedOffBy),
+          tickRow("dropped-off", "hqDoor-droppedOff", "Elf, poster, prize and staff card dropped off", d.droppedOffAt, d.droppedOffBy, d.droppedOffName),
           el("p", { class: "hq-words hq-soft", text: "Ticking it keeps who did it and when." }),
-          tickRow("thanked", "hqDoor-thanked", "Thank you sent", d.thankedAt, d.thankedBy),
+          tickRow("thanked", "hqDoor-thanked", "Thank you sent", d.thankedAt, d.thankedBy, d.thankedName),
         ]),
         said,
       ]);
@@ -1987,6 +1998,13 @@
       }
       var closes = doorInput("closesAt", clock5(d.closesAt), null, "time");
       var closeHint = el("span", { "data-close": "" });
+      // Door 24's place closes at 4pm when no time is typed (src/elf/calendar.ts), an hour before the grand prize
+      // entries; under its time, the warning while its place closes too late for them (filled by updateCloseHint).
+      var closeHints = [
+        closeHint,
+        d.door === 24 ? el("span", { class: "hq-hint", text: "4pm unless you type an earlier time." }) : null,
+        el("span", { class: "hq-hint", "data-prize": "", hidden: true }),
+      ];
       return makePart(
         "place",
         "The place",
@@ -2005,7 +2023,7 @@
             doorField("contactName", "Who to talk to", placeIn.contactName),
             doorField("contactPhone", "Phone", placeIn.contactPhone),
             doorField("contactEmail", "Email", placeIn.contactEmail, el("span", { class: "hq-hint", text: "The reminder on its day goes here." })),
-            doorField("closesAt", "Open on its day until", closes, closeHint),
+            doorField("closesAt", "Open on its day until", closes, closeHints),
             doorField("elfSpot", "Where the elf sits", placeIn.elfSpot, null, true),
             doorField("agreedBy", "Agreed by", placeIn.agreedBy),
           ]),
@@ -2362,7 +2380,9 @@
       grid.appendChild(preview);
       part.appendChild(grid);
       if (!admin) part.appendChild(el("p", { class: "hq-words hq-soft", text: "Only an admin can change these." }));
-      // Its own panel after the admin only ones: anyone who may edit can start a practice evening.
+      // Their own panels after the admin only ones: anyone who may edit can change the grand prize's
+      // settings and start a practice evening.
+      part.appendChild(grandPrizePanel());
       part.appendChild(practicePanel());
       part.appendChild(alertsPanel());
     }
@@ -3154,6 +3174,136 @@
       return box;
     }
 
+    // ---- Settings: The grand prize, when its entries close on Christmas Eve, and the graduates' video ----
+    // Read afresh each time Settings opens (src/routes/admin-elf-prize.ts). Anyone who may edit Head Elf HQ
+    // changes them, the time and the link each with its own Save, as the server changes only what is sent;
+    // the rest see them as words. The server refuses a time too soon after door 24's place closes, in its
+    // own words, and warns while door 24's place closes later than an hour before the entries do.
+    var grandPrize = { loaded: false, answer: null, error: null, asking: false, seq: 0 };
+    var PRIZE_PATH = "/api/admin/elf/grand-prize/settings";
+    var PRIZE_WORDS = {
+      time: "Grand prize entries close on Christmas Eve at",
+      timeHint: "5pm unless you change it. It must be at least an hour after door 24's hiding place closes.",
+      video: "The graduates' video",
+      videoHint: "A link to the video every graduate can watch, starting https://. Leave it empty for none.",
+      noVideo: "not set yet",
+    };
+
+    /** An answer from the grand prize routes, or null for anything that is not one. */
+    function prizeAnswerOf(d) {
+      return d && typeof d.time === "string" ? d : null;
+    }
+
+    function loadGrandPrize() {
+      if (grandPrize.asking) return;
+      grandPrize.asking = true;
+      var mine = ++grandPrize.seq;
+      ask("GET", PRIZE_PATH)
+        .then(function (d) {
+          grandPrize.asking = false;
+          if (mine !== grandPrize.seq) return;
+          grandPrize.answer = prizeAnswerOf(d);
+          grandPrize.error = null;
+          grandPrize.loaded = true;
+          redrawGrandPrize();
+        })
+        .catch(function (e) {
+          grandPrize.asking = false;
+          if (mine !== grandPrize.seq) return;
+          grandPrize.error = e.message;
+          grandPrize.loaded = true;
+          redrawGrandPrize();
+        });
+    }
+
+    function redrawGrandPrize() {
+      var old = parts.settings.querySelector(".hq-prize-settings");
+      if (old && old.parentNode) old.parentNode.replaceChild(grandPrizePanel(), old);
+    }
+
+    /** Words in the status line under the time ("time") or under the link ("video"), as drawn now. */
+    function grandPrizeSay(which, words, ok) {
+      var now = parts.settings.querySelector(".hq-prize-settings__" + which + " > .hq-status");
+      if (now) say(now, words, ok);
+    }
+
+    /** Saves the time or the link, then draws the answer (and door 24's warning as it now is) and says so.
+     *  A refusal keeps what was typed and says the server's sentence as an error. */
+    function saveGrandPrize(sent, which, button) {
+      button.disabled = true;
+      grandPrize.seq++;
+      ask("PUT", PRIZE_PATH, sent)
+        .then(function (d) {
+          grandPrize.answer = prizeAnswerOf(d) || grandPrize.answer;
+          grandPrize.error = null;
+          redrawGrandPrize();
+          grandPrizeSay(which, "Saved.", true);
+        })
+        .catch(function (e) {
+          button.disabled = false;
+          grandPrizeSay(which, e.message, false);
+        });
+    }
+
+    function grandPrizePanel() {
+      var box = el("section", { class: "hq-panel hq-prize-settings", "aria-label": "The grand prize" });
+      box.appendChild(el("h2", { class: "hq-h2", text: "The grand prize" }));
+      if (!grandPrize.loaded) {
+        box.appendChild(el("p", { class: "hq-loading", text: WORDS.loading }));
+        return box;
+      }
+      var p = grandPrize.answer;
+      if (grandPrize.error || !p) {
+        var failed = el("p", { class: "hq-status", role: "status" });
+        say(failed, grandPrize.error || WORDS.didNotWork, false);
+        box.appendChild(failed);
+        return box;
+      }
+      if (!p.canEdit) {
+        box.appendChild(el("p", { class: "hq-words", text: PRIZE_WORDS.time + " " + clockWords(p.time) + "." }));
+        if (p.warning) box.appendChild(el("p", { class: "hq-status is-error", text: p.warning }));
+        box.appendChild(el("p", { class: "hq-words", text: PRIZE_WORDS.video + ": " + (p.videoUrl || PRIZE_WORDS.noVideo) }));
+        return box;
+      }
+      var time = el("input", { id: "hqPrizeTime", name: "time", type: "time", autocomplete: "off", "aria-describedby": "hqPrizeTimeHint" + (p.warning ? " hqPrizeTimeWarning" : "") });
+      time.value = p.time;
+      var saveTime = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save the time" });
+      saveTime.addEventListener("click", function () {
+        saveGrandPrize({ time: time.value }, "time", saveTime);
+      });
+      box.appendChild(
+        el("div", { class: "hq-prize-settings__time" }, [
+          el("div", { class: "hq-field" }, [
+            el("label", { for: "hqPrizeTime", text: PRIZE_WORDS.time }),
+            time,
+            el("small", { class: "hq-hint", id: "hqPrizeTimeHint", text: PRIZE_WORDS.timeHint }),
+            p.warning ? el("small", { class: "hq-hint is-error", id: "hqPrizeTimeWarning", text: p.warning }) : null,
+          ]),
+          el("div", { class: "hq-actions" }, [saveTime]),
+          el("p", { class: "hq-status", role: "status" }),
+        ]),
+      );
+      // No maxlength: a link cut short by the box would save a broken link. The server says when it is too long.
+      var video = el("input", { id: "hqPrizeVideo", name: "videoUrl", type: "url", autocomplete: "off", spellcheck: "false", "aria-describedby": "hqPrizeVideoHint" });
+      video.value = p.videoUrl || "";
+      var saveLink = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save the link" });
+      saveLink.addEventListener("click", function () {
+        saveGrandPrize({ videoUrl: video.value.trim() }, "video", saveLink);
+      });
+      box.appendChild(
+        el("div", { class: "hq-prize-settings__video" }, [
+          el("div", { class: "hq-field" }, [
+            el("label", { for: "hqPrizeVideo", text: PRIZE_WORDS.video }),
+            video,
+            el("small", { class: "hq-hint", id: "hqPrizeVideoHint", text: PRIZE_WORDS.videoHint }),
+          ]),
+          el("div", { class: "hq-actions" }, [saveLink]),
+          el("p", { class: "hq-status", role: "status" }),
+        ]),
+      );
+      return box;
+    }
+
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
     function draw() {
       if (!data) return;
@@ -3176,7 +3326,7 @@
           data = d;
           say(status, "", null);
           draw();
-          if (!parts.settings.hidden) { loadPractice(); loadAlerts(); }
+          if (!parts.settings.hidden) { loadPractice(); loadAlerts(); loadGrandPrize(); }
           if (!parts.finds.hidden) loadFinds();
           // A sheet already open was drawn before anyone knew whether this person may change it.
           if (fam.sheet) drawSheet();

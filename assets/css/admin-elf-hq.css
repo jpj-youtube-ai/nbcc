@@ -413,6 +413,16 @@
 .hq-practice .hq-tagword { justify-self: start; max-width: 100%; }
 .hq-practice .hq-tagword b { overflow-wrap: anywhere; }
 
+/* ---- Settings: The grand prize, when its entries close on Christmas Eve and the graduates' video. The
+   time and the link each sit over their own Save and status line, in one column at every width; a long
+   link or warning wraps rather than runs past the panel. ---- */
+.hq-prize-settings { display: grid; gap: var(--hq-space-lg); align-content: start; }
+.hq-root .hq-prize-settings .hq-h2 { margin: 0; }
+.hq-prize-settings__time, .hq-prize-settings__video { display: grid; gap: var(--hq-space-sm); justify-items: start; min-width: 0; }
+.hq-prize-settings .hq-field { width: 100%; max-width: 480px; min-width: 0; }
+.hq-prize-settings__time .hq-field input { max-width: 200px; }
+.hq-prize-settings p, .hq-prize-settings small { overflow-wrap: anywhere; }
+
 /* ---- Settings: Alerts, the head elves and what an alert looks like. One column on a phone; the text
    and the email sit beside the list when the panel is wide. Long emails wrap. ---- */
 .hq-alerts { display: grid; gap: var(--hq-space-lg); align-content: start; }

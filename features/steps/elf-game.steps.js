@@ -699,6 +699,70 @@ Then("the family's marks say door {int} is cracked and visited, and door {int} i
   );
 });
 
+// ---- having a go (Plan 2c-1) --------------------------------------------------------------------------------
+//
+// A family that missed a door's evening has a go at it on the door's own page in Detective HQ: the clues one
+// at a time, then one guess, kept to one by the database. Played on the practice door, whose times are
+// absolute, so no step compares the real clock with a date written here.
+
+// The practice evening put three hours back: its clues out, its reveal two and a half hours ago and its
+// closing (an hour after the reveal) an hour and a half ago, with nobody found. So its place has been shown
+// with its elf still hiding, and a family that missed it may have a go.
+When("the practice door's place is shown with its elf still hiding", async function () {
+  const r = await pool.query(
+    `UPDATE elf_practice SET clue1_at = now() - interval '3 hours', clue2_at = now() - interval '170 minutes',
+       clue3_at = now() - interval '160 minutes', reveal_at = now() - interval '150 minutes' WHERE id = 1`,
+  );
+  assert.equal(r.rowCount, 1, "no practice evening is running");
+});
+
+When("the family {string} has a go at the practice door with {string}", async function (email, text) {
+  await asFamily(this, familyOf(this, email), "POST", "/elf/hq/door/0/go", { text });
+});
+
+/** A go at the practice door, as the go page's form posts it with a script: JSON to the door's own address.
+ *  The answer is handed back rather than kept as the world's one answer, so two sent together each keep
+ *  their own. */
+async function goAtPractice(family, text) {
+  const res = await fetch(`${BASE_URL}/elf/hq/door/0/go`, {
+    method: "POST",
+    headers: { Cookie: cookiesOf(family), "Content-Type": "application/json" },
+    redirect: "manual",
+    body: JSON.stringify({ text }),
+  });
+  const said = await res.text();
+  let body = null;
+  try {
+    body = JSON.parse(said);
+  } catch {
+    body = null;
+  }
+  return { status: res.status, body, said: said.slice(0, 400) };
+}
+
+// Two tabs press Lock in my guess at the same moment. Promise.all keeps the order the posts were sent in,
+// not the order they finished in, so the answers are compared sorted.
+When("the family {string} has a go at the practice door with {string} from two tabs at once", async function (email, text) {
+  const family = familyOf(this, email);
+  this.gameGoes = await Promise.all([goAtPractice(family, text), goAtPractice(family, text)]);
+});
+
+Then("one go was taken and the other refused, and the go says {string}", function (words) {
+  const goes = [...(this.gameGoes || [])].sort((a, b) => a.status - b.status);
+  const told = JSON.stringify(goes);
+  assert.deepEqual(
+    goes.map((g) => g.status),
+    [200, 409],
+    told,
+  );
+  assert.equal(goes[1].body && goes[1].body.reason, "already", told);
+  assert.ok(String(goes[0].body && goes[0].body.message).includes(words), told);
+});
+
+Then("the go says {string}", function (words) {
+  assert.ok(String(this.gameBody && this.gameBody.message).includes(words), `the go does not say "${words}": ${sentence(this)}`);
+});
+
 Then("nothing of the practice door is left", async function () {
   for (const table of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos"]) {
     const r = await pool.query(`SELECT count(*)::int AS n FROM ${table} WHERE year = 0`);

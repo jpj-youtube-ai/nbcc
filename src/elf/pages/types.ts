@@ -150,11 +150,13 @@ export interface TodayView {
    *  there. */
   goneHome: boolean;
   /** May the place be shown later than the reveal time? Only while the elf is still hunted and the place closes
-   *  after the reveal: the run's own closing, the one typed in Doors or the 8pm a door falls back to (shownAt in
+   *  after the reveal: the run's own closing, the one typed in Doors or the time a door falls back to with none
+   *  typed, 4pm on Christmas Eve and 8pm on every other door (closingInstant in src/elf/calendar.ts; shownAt in
    *  src/elf/doors.ts). Never worked out from closesAt above, which is gone once a typed closing has passed. */
   mayShowLater: boolean;
   /** While the elf is still hunted, the latest its place is shown: when it would be with the elf never found, at
-   *  the reveal or at the place's closing (typed in Doors, or the 8pm a door falls back to), whichever is later.
+   *  the reveal or at the place's closing (typed in Doors, or the time a door falls back to with none typed: 4pm
+   *  on Christmas Eve, 8pm otherwise), whichever is later.
    *  Only when that falls on the door's own day: a closing typed at or before clue 1 counts as the next day's, so
    *  it is null then, as it is otherwise. Once the reveal time has passed, Detective HQ says it as the latest a
    *  family finds out. */

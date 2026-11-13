@@ -12773,7 +12773,7 @@ doors, off: with them off every family page and email is byte for byte what it w
 route answers 404, even through the preview link (the grand prize is never the practice door's). The one
 exception is the page a stop link opens, which answers while Elf Detective School is on, so a family can
 always stop the emails it has had. Every new or changed word is in part 11 of the words file
-(`docs/superpowers/specs/2026-11-10-elf-wave-2-words.md`), each with a tick box, with questions L to S for
+(`docs/superpowers/specs/2026-11-10-elf-wave-2-words.md`), each with a tick box, with questions L to U for
 Jaimie. Its migration is `migrations/1791200000490_elf-grand-prize.js` (see **Data** below). The pure rules
 are in `src/elf/grand-prize.ts`, the store in `src/db/elf-grand-prize.ts`, Head Elf HQ's routes in
 `src/routes/admin-elf-prize.ts`.

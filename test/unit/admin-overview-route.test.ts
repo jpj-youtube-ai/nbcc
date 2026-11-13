@@ -173,7 +173,7 @@ describe("GET /api/admin/overview", () => {
     expect(text("transfersWaiting")).toBe("2 bank transfers are still waiting for their money");
     expect(text("monthlyFailing")).toBe("1 monthly gift is failing to take");
     expect(text("thankYouLetters")).toBe("1 generous donor has not had a thank you letter yet");
-    expect(text("giftAidReady")).toBe("2 donations are ready to claim Gift Aid on (£30.50 of giving)");
+    expect(text("giftAidReady")).toBe("2 donations are ready for a Gift Aid claim, £30.50 given in all");
     expect(new Date(answer.updatedAt).getTime()).toBeGreaterThan(0);
   });
 

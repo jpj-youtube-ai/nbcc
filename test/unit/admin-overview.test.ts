@@ -12,9 +12,17 @@ describe("the words for each waiting item", () => {
     expect(needsLines({ transfersOverdue: { count: 2 } })[0].text).toBe("2 bank transfers are overdue");
   });
 
+  // Jaimie, 13 Nov 2026: the old "ready to claim Gift Aid on (£480.50 of giving)" read oddly.
   it("gives the money where there is some to collect", () => {
     expect(needsLines({ giftAidReady: { count: 12, pence: 48_050 } })[0].text).toBe(
-      "12 donations are ready to claim Gift Aid on (£480.50 of giving)",
+      "12 donations are ready for a Gift Aid claim, £480.50 given in all",
+    );
+    expect(needsLines({ giftAidReady: { count: 1, pence: 2_500 } })[0].text).toBe(
+      "1 donation is ready for a Gift Aid claim, £25.00 given",
+    );
+    // The card draws the count large, then these words.
+    expect(needsLines({ giftAidReady: { count: 12, pence: 48_050 } })[0].words).toBe(
+      "donations are ready for a Gift Aid claim, £480.50 given in all",
     );
   });
 

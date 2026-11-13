@@ -6974,7 +6974,8 @@ numbers, one line each, and **Coming up** the next 14 days. The design is in
   1. **Money or overdue** (crimson):
      - bank transfers overdue;
      - monthly gifts failing to take;
-     - Gift Aid ready to claim, with the amount;
+     - Gift Aid ready to claim, with the amount given ("12 donations are ready for a Gift Aid claim,
+       £480.50 given in all", reworded 13 Nov 2026 from "ready to claim Gift Aid on (£x of giving)");
      - emails that failed or bounced in 2 weeks;
      - fundraisers with buckets or tins due back.
   2. **Waiting on a reply** (gold):

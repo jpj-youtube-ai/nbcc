@@ -63,12 +63,12 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" marks the entry from "first.prize.elf.bdd@example.com" as the winner
     Then the head elf's answer is 409, saying "The entries are still open, so the winner can be marked once they close."
     # Settings > The grand prize. Door 24's place closes at 4pm, so 4:30pm is refused. A time saved goes on Christmas
-    # Eve of the school's year, last year's here, which is over: from that save the entries have closed.
+    # Eve of Elf Detective School's year, last year's here, which is over: from that save the entries have closed.
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the grand prize closing time "16:30"
     Then the head elf's answer is 409, saying "Door 24's hiding place closes at 4pm, so grand prize entries can close at 5pm at the earliest."
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the grand prize closing time "17:00"
     Then the head elf's answer is 200
-    And the grand prize entries are saved to close at "17:00" on Christmas Eve of the school's year
+    And the grand prize entries are saved to close at "17:00" on Christmas Eve of Elf Detective School's year
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the graduates' video "https://example.org/graduates"
     Then the head elf's answer is 200
     And the graduates' video is "https://example.org/graduates"

@@ -991,9 +991,9 @@ When("{string} with password {string} saves the grand prize closing time {string
   await headElfAsks(this, email, password, "PUT", "/api/admin/elf/grand-prize/settings", { time });
 });
 
-// The moment is worked out by the database from the school's own year (last year here) and the time typed, so no
-// step compares the real clock with a date written in the feature.
-Then("the grand prize entries are saved to close at {string} on Christmas Eve of the school's year", async function (clock) {
+// The moment is worked out by the database from Elf Detective School's own year (last year here) and the time
+// typed, so no step compares the real clock with a date written in the feature.
+Then("the grand prize entries are saved to close at {string} on Christmas Eve of Elf Detective School's year", async function (clock) {
   const [hour, minute] = clock.split(":").map(Number);
   const r = await pool.query(
     `SELECT grand_prize_closes_at, year,

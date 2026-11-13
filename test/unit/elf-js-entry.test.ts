@@ -1,0 +1,274 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { renderEntryPage } from "../../src/elf/pages/entry";
+import type { EntryView } from "../../src/elf/pages/types";
+import { entryView } from "./elf-fixtures";
+import { tinyJpeg } from "./fixtures/tiny-jpeg";
+
+// NBCC Elf Detective School, Christmas Eve and the grand prize (Plan 2c-2, Task 3): the script on the page where
+// a family sends in a graduate's picture. It makes the picture smaller in the browser, sends it, and shows the
+// server's answer. It runs here against the real page with a pretend server. Every family is invented.
+
+const ROOT = resolve(__dirname, "../..");
+const require = createRequire(import.meta.url);
+const { initEntry } = require(resolve(ROOT, "assets/js/elf-entry.js"));
+
+interface Call {
+  url: string;
+  json: Record<string, unknown> | null;
+  type: string | null;
+  method: string | null;
+  credentials: string | null;
+}
+type Answer = { status: number; body: unknown } | "offline";
+
+const THANKS = "Thank you! Detective Ruby Tinselfoot's picture is in. You can change it until 5pm on Christmas Eve.";
+const MOBILE_WORDS = "Please type a UK mobile number, like 07700 900 123.";
+
+let calls: Call[] = [];
+let answer: Answer = { status: 201, body: { ok: true, message: THANKS } };
+/** While set, every request waits for it to be called before it answers. */
+let gate: Promise<void> | null = null;
+
+const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
+const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+const status = () => $(".elf-entry .elf-form-status");
+const button = () => $<HTMLButtonElement>('form.elf-entry button[type="submit"]');
+const settle = async () => {
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+};
+
+function load(view: EntryView = entryView(), opts: Record<string, unknown> = {}): void {
+  document.documentElement.innerHTML = new DOMParser().parseFromString(renderEntryPage(view), "text/html").documentElement.innerHTML;
+  calls = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    const body = init?.body;
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    calls.push({ url, json: typeof body === "string" ? JSON.parse(body) : null, type: headers["Content-Type"] ?? null, method: init?.method ?? null, credentials: init?.credentials ?? null });
+    if (gate) await gate;
+    if (answer === "offline") throw new Error("offline");
+    const a = answer;
+    return { ok: a.status >= 200 && a.status < 300, status: a.status, json: () => Promise.resolve(a.body) };
+  });
+  initEntry(document, window, opts);
+}
+
+async function pick(file: File): Promise<void> {
+  const input = $<HTMLInputElement>('form.elf-entry input[type="file"]');
+  Object.defineProperty(input, "files", { configurable: true, value: [file] });
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  await settle();
+}
+
+async function send(): Promise<Event> {
+  const event = new Event("submit", { bubbles: true, cancelable: true });
+  $("form.elf-entry").dispatchEvent(event);
+  await settle();
+  return event;
+}
+
+async function jpegFile(): Promise<File> {
+  return new File([new Uint8Array(await tinyJpeg())], "drawing.jpg", { type: "image/jpeg" });
+}
+
+afterEach(() => {
+  answer = { status: 201, body: { ok: true, message: THANKS } };
+  gate = null;
+});
+
+describe("sending in a picture", () => {
+  it("posts the picked picture as base64 with its mime to the form's address, without leaving the page", async () => {
+    load();
+    await pick(await jpegFile());
+    const event = await send();
+    expect(event.defaultPrevented).toBe(true);
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toBe("/api/elf/entry/11");
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].type).toBe("application/json");
+    expect(calls[0].credentials).toBe("same-origin");
+    expect(calls[0].json).toEqual({ mime: "image/jpeg", dataBase64: (await tinyJpeg()).toString("base64") });
+  });
+
+  it("sends the mobile number too when the page asks for one", async () => {
+    load(entryView({ askMobile: true }));
+    $<HTMLInputElement>('form.elf-entry input[name="mobile"]').value = "07700 900 123";
+    await pick(await jpegFile());
+    await send();
+    expect(calls[0].json).toEqual({ mime: "image/jpeg", dataBase64: (await tinyJpeg()).toString("base64"), mobile: "07700 900 123" });
+  });
+
+  it("shows the thank you from a new entry in the status line", async () => {
+    load();
+    await pick(await jpegFile());
+    await send();
+    expect(words(status())).toBe(THANKS);
+    expect(status().classList.contains("is-error")).toBe(false);
+    expect(button().disabled).toBe(false);
+  });
+
+  it("shows the thank you for a picture sent in place of the one before", async () => {
+    answer = { status: 200, body: { ok: true, message: THANKS } };
+    load(entryView({ sent: { at: new Date("2026-12-24T10:45:00.000Z"), pictureUrl: "/elf/hq/entry/11/picture.jpg" } }));
+    await pick(await jpegFile());
+    await send();
+    expect(words(status())).toBe(THANKS);
+    expect(status().classList.contains("is-error")).toBe(false);
+  });
+
+  it("shows a refusal's error, marked as an error", async () => {
+    answer = { status: 400, body: { error: MOBILE_WORDS, fields: { mobile: MOBILE_WORDS } } };
+    load(entryView({ askMobile: true }));
+    await pick(await jpegFile());
+    await send();
+    expect(words(status())).toBe(MOBILE_WORDS);
+    expect(status().classList.contains("is-error")).toBe(true);
+    expect(button().disabled).toBe(false);
+  });
+
+  it("takes the error mark off again once a picture goes in", async () => {
+    answer = { status: 409, body: { error: "Something to fix." } };
+    load();
+    await pick(await jpegFile());
+    await send();
+    expect(status().classList.contains("is-error")).toBe(true);
+    answer = { status: 201, body: { ok: true, message: THANKS } };
+    await send();
+    expect(words(status())).toBe(THANKS);
+    expect(status().classList.contains("is-error")).toBe(false);
+  });
+
+  it("shows the sentence for the picture when the server names one", async () => {
+    answer = { status: 413, body: { error: "Your picture needs another look", fields: { photo: "That picture is too big. Try a smaller one." } } };
+    load();
+    await pick(await jpegFile());
+    await send();
+    expect(words(status())).toBe("That picture is too big. Try a smaller one.");
+    expect(status().classList.contains("is-error")).toBe(true);
+  });
+
+  it("keeps its button disabled while sending, and sends nothing more until the answer is back", async () => {
+    let open: () => void = () => undefined;
+    gate = new Promise((r) => (open = r));
+    load();
+    await pick(await jpegFile());
+    await send();
+    expect(button().disabled).toBe(true);
+    await send();
+    expect(calls.length).toBe(1);
+    open();
+    await settle();
+    expect(button().disabled).toBe(false);
+    expect(words(status())).toBe(THANKS);
+  });
+
+  it("asks for a picture before it sends anything", async () => {
+    load();
+    await send();
+    expect(calls).toEqual([]);
+    expect(words(status())).toBe("Choose a picture first.");
+    expect(status().classList.contains("is-error")).toBe(true);
+  });
+
+  it("says it could not reach NBCC when there is no signal, and lets the family try again", async () => {
+    answer = "offline";
+    load();
+    await pick(await jpegFile());
+    await send();
+    expect(words(status())).toBe("We could not reach NBCC. Check your signal and try again.");
+    expect(status().classList.contains("is-error")).toBe(true);
+    expect(button().disabled).toBe(false);
+  });
+
+  it("does nothing on a page with no form, once the entries have closed", async () => {
+    expect(() => load(entryView({ open: false }))).not.toThrow();
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("making the picture smaller in the browser", () => {
+  const BIG = () => new File([new Uint8Array([1, 2, 3])], "big.jpg", { type: "image/jpeg" });
+  const read = () => Promise.resolve({ src: "blob:x", width: 4000, height: 3000, img: {} });
+
+  it("sends the picture the browser made smaller when it can make one", async () => {
+    const made: unknown[] = [];
+    load(entryView(), {
+      read,
+      make: (pic: unknown) => {
+        made.push(pic);
+        return Promise.resolve({ mime: "image/jpeg", base64: "c21hbGw=" });
+      },
+    });
+    await pick(BIG());
+    await send();
+    expect(made.length).toBe(1);
+    expect(calls[0].json).toEqual({ mime: "image/jpeg", dataBase64: "c21hbGw=" });
+  });
+
+  it("tries a lower quality once when the redrawn picture is over 2 MB", async () => {
+    const qualities: unknown[] = [];
+    const big = "A".repeat(3 * 1024 * 1024);
+    load(entryView(), {
+      read,
+      make: (_pic: unknown, quality?: number) => {
+        qualities.push(quality);
+        return Promise.resolve({ mime: "image/jpeg", base64: quality ? "c21hbGw=" : big });
+      },
+    });
+    await pick(BIG());
+    await send();
+    expect(qualities).toEqual([undefined, 0.7]);
+    expect(calls[0].json).toEqual({ mime: "image/jpeg", dataBase64: "c21hbGw=" });
+  });
+
+  it("says the picture is too big when even the lower quality is over 2 MB, and sends nothing", async () => {
+    const big = "A".repeat(3 * 1024 * 1024);
+    load(entryView(), { read, make: () => Promise.resolve({ mime: "image/jpeg", base64: big }) });
+    await pick(BIG());
+    await send();
+    expect(calls).toEqual([]);
+    expect(words(status())).toBe("That picture is too big. Try a smaller one.");
+    expect(status().classList.contains("is-error")).toBe(true);
+    expect(button().disabled).toBe(false);
+  });
+
+  it("gives the button back, saying something went wrong, when reading the picture fails outright", async () => {
+    load(entryView(), { read: () => Promise.reject(new Error("the phone ran out of memory")) });
+    await pick(BIG());
+    await send();
+    expect(calls).toEqual([]);
+    expect(words(status())).toBe("Something went wrong. Refresh the page and try again.");
+    expect(status().classList.contains("is-error")).toBe(true);
+    expect(button().disabled).toBe(false);
+  });
+
+  it("refuses a file that is not a picture it can use when the browser cannot draw it, and sends nothing", async () => {
+    load();
+    await pick(new File([new Uint8Array([60, 115, 118, 103])], "drawing.svg", { type: "image/svg+xml" }));
+    await send();
+    expect(calls).toEqual([]);
+    expect(words(status())).toBe("That picture is not one we can use. Try a JPG, PNG or WebP photo.");
+  });
+
+  // Ruling F14: the four picture helpers are copied from the photo sheet's script, as it copied them from the
+  // fundraisers' (assets/js/elf-poster.js), with a line saying so, and they keep its limits exactly.
+  it("copies its picture helpers from the photo sheet's script word for word, with its limits", () => {
+    const entry = readFileSync(resolve(ROOT, "assets/js/elf-entry.js"), "utf8").replace(/\r\n/g, "\n");
+    const poster = readFileSync(resolve(ROOT, "assets/js/elf-poster.js"), "utf8").replace(/\r\n/g, "\n");
+    expect(entry).toContain("Copied from assets/js/elf-poster.js (browserRead, browserMake, base64Bytes and rawBase64), keeping its limits.");
+    const fn = (source: string, name: string) => {
+      const start = source.indexOf(`  function ${name}(`);
+      expect(start, name).toBeGreaterThan(-1);
+      return source.slice(start, source.indexOf("\n  }\n", start) + 4);
+    };
+    for (const name of ["browserRead", "browserMake", "base64Bytes", "rawBase64"]) expect(fn(entry, name), name).toBe(fn(poster, name));
+    for (const limit of ["var MAX_BYTES = 2 * 1024 * 1024;", "var MAX_PX = 1600;", "var QUALITY = 0.86;", "var LOWER_QUALITY = 0.7;", 'var TYPES = ["image/jpeg", "image/png", "image/webp"];']) {
+      expect(poster, limit).toContain(limit);
+      expect(entry, limit).toContain(limit);
+    }
+  });
+});

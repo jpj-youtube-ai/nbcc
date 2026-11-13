@@ -31,8 +31,9 @@ function clueHtml(clue: string): string {
   return escapeHtml(clue).replace(/\r?\n/g, "<br />\n");
 }
 
-/** One clue that is out, on a taped note of its own: its number, its time, its words and its picture. */
-function clueNote(c: TodayView["clues"][number]): string {
+/** One clue that is out, on a taped note of its own: its number, its time, its words and its picture. The
+ *  go page (src/elf/pages/go.ts) draws its clues with it too. */
+export function clueNote(c: TodayView["clues"][number]): string {
   const at = real(c.at) ? clockWords(c.at) : "";
   const picture = sitePath(c.pictureUrl);
   return (

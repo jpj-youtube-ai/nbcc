@@ -513,11 +513,12 @@
 .elf-hq-case { padding-bottom: clamp(8px, 2vw, 20px); }
 
 /* Today's case, on a note taped to the page: it is what the family came for. While its elf is being
-   hunted, a holly sheet shows under it. */
+   hunted, a holly sheet shows under it, and under a door's go page while the family has its go. */
 .elf-case.elf-note { max-width: 760px; margin: 12px auto 0; padding: clamp(30px, 4vw, 40px) clamp(20px, 4vw, 36px) clamp(22px, 3vw, 32px); color: var(--slate); }
 .elf-case.elf-note::before { background: var(--elf-grain-light) 0 0 / 384px, var(--card); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-card-c); mask: var(--elf-tear-card-c); }
 .elf-case--hunting::after,
-.elf-case--found-hidden::after { content: ""; position: absolute; inset: 9px -9px -10px 8px; z-index: -2; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(1.2deg); }
+.elf-case--found-hidden::after,
+.elf-go--go::after { content: ""; position: absolute; inset: 9px -9px -10px 8px; z-index: -2; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(1.2deg); }
 .elf-case h2 { font-size: clamp(1.6rem, 1.3rem + 1.4vw, 2.3rem); color: var(--maroon); margin-bottom: 12px; text-wrap: balance; }
 .elf-case p { margin: 0 0 10px; }
 .elf-case__door { font-family: var(--elf-hand); font-weight: 700; font-size: 1.7rem; line-height: 1; color: var(--crimson); }
@@ -632,6 +633,28 @@
 .elf-marks__sum { margin: 16px 0 20px; color: var(--slate-soft); }
 @media (min-width: 640px) { .elf-marks { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 @media (min-width: 981px) { .elf-marks { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+
+/* =================================================================
+   HAVING A GO: a missed door's own page in Detective HQ (Plan 2c-1)
+   ================================================================= */
+
+/* The top, centred as Detective HQ's is: Detective HQ's label over the door's title strip, the Practice
+   chip on the practice door, and the door's elf. */
+.elf-go-top .wrap { text-align: center; }
+.elf-go-top .elf-practice { justify-content: center; margin: 10px 0 0; }
+.elf-go-top .elf-go__elf { max-width: 52ch; margin-inline: auto; }
+
+/* The case, on a note taped to the page as today's case is in Detective HQ (the note is an .elf-case too,
+   so its words, clues and guess look the same). Who found the elf heads it. */
+.elf-go-case { padding-bottom: clamp(8px, 2vw, 20px); }
+.elf-go .elf-go__found { color: var(--slate-soft); font-weight: 600; }
+.elf-go__found .elf-icon { color: var(--gold-ink); vertical-align: -2px; }
+/* Show me the next clue: a button on a line of its own under the clues, before the one guess. */
+.elf-go .elf-go__next { margin: 0 0 clamp(18px, 3vw, 24px); }
+.elf-go .elf-go__one { margin: 12px 0 0; color: var(--maroon); font-weight: 600; }
+/* How it went, on today's case's slip of paper, a size up: it is what the family came back for. */
+.elf-go .elf-go__verdict { font-size: clamp(1.08rem, 1rem + 0.5vw, 1.25rem); font-weight: 600; overflow-wrap: break-word; }
+.elf-go__back { max-width: 760px; margin: clamp(18px, 3vw, 26px) auto 0; text-align: center; }
 
 /* =================================================================
    THE WARDROBE: dressing an elf, in paper (mockup 6, approved by Jaimie on 4 November 2026)

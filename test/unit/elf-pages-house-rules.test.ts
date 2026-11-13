@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { waveOneRuns } from "../../src/db/elf-game";
 import { calendarViewFor } from "../../src/elf/views";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
+import { renderGoPage } from "../../src/elf/pages/go";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage } from "../../src/elf/pages/join";
 import { renderRulesPage } from "../../src/elf/pages/rules";
@@ -17,7 +18,7 @@ import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { CalendarView } from "../../src/elf/pages/types";
-import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
+import { AFTERNOON, at, calendarView, claimWin, goDoneView, goOutcome, goView, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the house rules every elf screen must keep.
 //
@@ -67,6 +68,8 @@ const today = hqView().today!;
 const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
 const everyoneStamped = posterView({ open: true, claimable: false, detectives: posterView().detectives.map((d) => ({ ...d, hasStamp: true })) });
 const twoClues = [today.clues[0], { n: 2 as const, at: at("2026-12-07T18:00:00.000Z"), words: "Practice clue 2: it has a lid.", pictureUrl: "/elf/hq/clue/7/2.jpg", pictureAlt: "A pretend drawing of a lid" }];
+/** Plan 2c-1, Task 6: door 7's go page with two clues showing, one with its picture. */
+const goingTwo = goView({ clues: twoClues, nextUrl: "/elf/hq/door/7?clues=3" });
 
 /** Every screen in every state, as [what it is, the page]. */
 const PAGES: [string, string][] = [
@@ -119,6 +122,13 @@ const PAGES: [string, string][] = [
   ["poster, the elves gone home", renderPosterPage(posterView({ open: true, claimable: false, goneHome: true }))],
   ["poster, your photo waiting", renderPosterPage(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "waiting" } }))],
   ["poster, your photo declined", renderPosterPage(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "declined" } }))],
+  ["go page, having a go", renderGoPage(goView())],
+  ["go page, two clues showing", renderGoPage(goingTwo)],
+  ["go page, a go refused", renderGoPage(goView({ guessError: "Type where you think Twinkle is hiding." }))],
+  ["go page, the practice door with its elf still hiding", renderGoPage(goView({ door: 0, practice: true, found: null, stillHiding: true, nextUrl: "/elf/hq/door/0?clues=2", formUrl: "/elf/hq/door/0/go", closesAt: null }))],
+  ["go page, cracked", renderGoPage(goDoneView())],
+  ["go page, its elf gone home", renderGoPage(goDoneView({ verdict: "wrong", goneHome: true }, { found: null }))],
+  ["go page, closed", renderGoPage(goView({ stage: "closed", clues: [], nextUrl: null, closesAt: null, outcome: goOutcome({ verdict: "none" }) }))],
 ];
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
@@ -304,7 +314,7 @@ describe.each(PAGES)("%s", (_name, html) => {
 
 const POISON = `<img src=x onerror="alert(1)"><script>alert(2)</script>"'&`;
 // Fields that choose between fixed answers. They are looked up or switched on, never written out.
-const CHOICES = new Set(["state", "status", "skin", "hair", "hairStyle", "form", "reason", "fresh"]);
+const CHOICES = new Set(["state", "status", "skin", "hair", "hairStyle", "form", "reason", "fresh", "stage", "verdict"]);
 
 /** The same view with every word swapped for markup, and every address pointed off the site. */
 function poisoned<T>(value: T, key = ""): T {
@@ -330,6 +340,9 @@ describe("data that tries to break out of the page", () => {
     ["poster, your photo", renderPosterPage(poisoned(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "approved" } })))],
     ["poster, a claim that won", renderPosterPage(poisoned(posterView({ open: true, claimable: false })), { form: "word", ok: true, outcome: "won", win: poisoned(claimWin()) })],
     ["poster, a visit that counted", renderPosterPage(poisoned(everyoneStamped), { form: "word", ok: true, outcome: "visited", visit: poisoned(visitWin()) })],
+    ["go page, having a go", renderGoPage(poisoned(goView({ clues: twoClues, guessError: "Refused" })))],
+    ["go page, how it went", renderGoPage(poisoned(goDoneView({ visited: true })))],
+    ["go page, closed", renderGoPage(poisoned(goView({ stage: "closed", clues: [], nextUrl: null, outcome: goOutcome({ verdict: "none" }) })))],
   ];
 
   it.each(hostile)("%s: is shown as words, never run", (_name, html) => {

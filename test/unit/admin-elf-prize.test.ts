@@ -306,6 +306,52 @@ describe("the graduates' video", () => {
   });
 });
 
+// Task 4's review, Minor 2: planner's call 6 marks a winner only once the entries have closed, so a picture
+// never changes under the judge. A later time saved after the close would open them again.
+describe("once the entries have closed", () => {
+  const CLOSED = "The entries have closed, so their closing time cannot change.";
+
+  it("refuses a new closing time from the moment they close, and saves nothing", async () => {
+    for (const at of ["2026-12-24T17:00:00Z", "2026-12-24T18:30:00Z", "2026-12-27T09:00:00Z"]) {
+      vi.setSystemTime(new Date(at));
+      settingsDb.setElfSettings.mockClear();
+      const res = await put({ time: "17:30" });
+      expect(res.statusCode, at).toBe(409);
+      expect(res.headers["Cache-Control"]).toBe("no-store");
+      expect(body(res)).toEqual({ error: CLOSED });
+      expect(settingsDb.setElfSettings).not.toHaveBeenCalled();
+    }
+  });
+
+  it("still takes a new time a second before they close", async () => {
+    vi.setSystemTime(new Date("2026-12-24T16:59:59Z"));
+    const res = await put({ time: "17:30" });
+    expect(res.statusCode).toBe(200);
+    expect(settingsDb.setElfSettings).toHaveBeenCalledWith({ grandPrizeClosesAt: new Date("2026-12-24T17:30:00.000Z") }, ACTOR);
+  });
+
+  it("goes by the closing a head elf saved", async () => {
+    settingsDb.getElfSettings.mockResolvedValue({ ...ON, grandPrizeClosesAt: new Date("2026-12-24T17:30:00.000Z") });
+    vi.setSystemTime(new Date("2026-12-24T17:15:00Z"));
+    expect((await put({ time: "18:00" })).statusCode).toBe(200);
+    vi.setSystemTime(new Date("2026-12-24T17:30:00Z"));
+    const res = await put({ time: "18:00" });
+    expect(res.statusCode).toBe(409);
+    expect(body(res)).toEqual({ error: CLOSED });
+  });
+
+  it("still saves the video link alone, but nothing when a time comes with it", async () => {
+    vi.setSystemTime(new Date("2026-12-24T18:30:00Z"));
+    const res = await put({ videoUrl: "https://example.org/graduates" });
+    expect(res.statusCode).toBe(200);
+    expect(settingsDb.setElfSettings).toHaveBeenCalledWith({ graduateVideoUrl: "https://example.org/graduates" }, ACTOR);
+    settingsDb.setElfSettings.mockClear();
+    const both = await put({ time: "18:00", videoUrl: "https://example.org/graduates" });
+    expect(both.statusCode).toBe(409);
+    expect(settingsDb.setElfSettings).not.toHaveBeenCalled();
+  });
+});
+
 describe("the router", () => {
   it("mounts the read and the change", () => {
     const paths = (routes.adminElfPrizeRouter as unknown as { stack: { route?: { path: string; methods: Record<string, boolean> } }[] }).stack

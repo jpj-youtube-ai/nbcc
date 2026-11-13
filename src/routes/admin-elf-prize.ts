@@ -18,7 +18,8 @@ import { londonMinute } from "../tickets/model";
 //   PUT  /api/admin/elf/grand-prize/settings   change the time, the link, or both (elf: edit)
 //
 // The entries close at 5pm on Christmas Eve unless a head elf saves another time, never earlier than an
-// hour after door 24's place can be shown (closingRefusal, src/elf/grand-prize.ts). A change saves only
+// hour after door 24's place can be shown (closingRefusal, src/elf/grand-prize.ts), and the time is fixed
+// once the entries have closed; the link can still change. A change saves only
 // what was sent (ruling F6), through setElfSettings, which writes the audit row: a time and a link, never
 // a child's name, a picture or a mobile. The screen is Settings > The grand prize in
 // assets/js/admin/elf-hq.js. Unit tested in test/unit/admin-elf-prize.test.ts.
@@ -28,6 +29,9 @@ export const adminElfPrizeRouter = Router();
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 const BAD_REQUEST = "That did not look right. Reload the page and try again.";
 const TIME_WORDS = "Type a time like 17:00.";
+/** Once the entries have closed their closing time is fixed, as a door's times are once its evening has
+ *  started: a winner is marked only after the close, so a picture never changes under the judge. */
+const CLOSED_WORDS = "The entries have closed, so their closing time cannot change.";
 const VIDEO_WORDS = "The video link must start with https:// and be no longer than 300 letters.";
 /** The longest video link elf_settings keeps (its CHECK, migrations/1791200000490_elf-grand-prize.js). */
 const VIDEO_MAX = 300;
@@ -105,6 +109,7 @@ export async function putAdminElfPrizeSettings(req: Request, res: Response): Pro
     // Only what was sent changes (ruling F6): saving the link leaves the closing time as it is.
     const patch: Partial<Pick<ElfSettings, "grandPrizeClosesAt" | "graduateVideoUrl">> = {};
     if (parsed.data.time !== undefined) {
+      if (grandPrizeClosesAt(settings).getTime() <= now.getTime()) return res.status(409).json({ error: CLOSED_WORDS });
       const closesAt = doorInstant(doorSeason(settings.year), CHRISTMAS_EVE, parsed.data.time);
       if (!closesAt) return res.status(400).json({ error: TIME_WORDS });
       const refusal = closingRefusal({ closesAt, door24 });

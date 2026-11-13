@@ -271,6 +271,36 @@ describe("today's case for a family that may still have a go", () => {
   });
 });
 
+// Task 9, from Task 7's review: once a head elf presses gone home the elf can no longer be found, and the poster
+// refuses a visit, so today's case never promises the prize or a visit then, nor says the elf is still out there.
+describe("today's case once the elf has gone home", () => {
+  const where = { place: "Corner Bakehouse", by: null, at: null, cracked: false };
+
+  it("says where a door shown with nobody found was hiding, with no prize and no visit, under a heading of its own", () => {
+    const card = page(today({ ...OPEN, state: "revealed", goneHome: true, outcome: where }, { now: SEVEN_05 })).querySelector(".elf-case")!;
+    expect(words(card.querySelector("h2"))).toBe("Bauble has gone home");
+    expect(words(card)).toContain("Bauble was hiding at Corner Bakehouse.");
+    for (const gone of ["still out there", "still waiting", "still wins the prize", "Visit the hiding place"]) expect(words(card), gone).not.toContain(gone);
+  });
+
+  it("offers a family that may still have a go its go, under the same heading", () => {
+    const card = page(today({ ...MAY_GO.today!, state: "revealed", goneHome: true }, { now: SEVEN_05 })).querySelector(".elf-case")!;
+    expect(words(card.querySelector("h2"))).toBe("Bauble has gone home");
+    expect(card.querySelector('a[href="/elf/hq/door/7"]')).not.toBeNull();
+  });
+
+  it("still says who found a found elf, with no visit, under Case closed", () => {
+    const outcome = { place: "Corner Bakehouse", by: "Detective R. Tinselfoot", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
+    const card = page(today({ ...OPEN, state: "found", goneHome: true, outcome }, { now: SEVEN_05 })).querySelector(".elf-case")!;
+    expect(words(card.querySelector("h2"))).toBe("Case closed");
+    expect(words(card)).toContain("Bauble was hiding at Corner Bakehouse.");
+    expect(words(card)).toContain("Found first by Detective R. Tinselfoot at 5:47pm");
+    expect(words(card)).not.toContain("Visit the hiding place");
+    // Until the elf goes home, the visit is still there to make.
+    expect(words(page(today({ ...OPEN, state: "found", outcome }, { now: SEVEN_05 })).querySelector(".elf-case"))).toContain("Visit the hiding place");
+  });
+});
+
 describe("when the hiding place closes", () => {
   it("says so under the clue ladder while the hunt is on", () => {
     const doc = page(today({ closesAt: EIGHT }));

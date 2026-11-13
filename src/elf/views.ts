@@ -148,6 +148,7 @@ function todayOf(
     outcome,
     goUrl: mayHaveAGo({ year: run.year, state, guessed, typed, now: o.now }) ? `/elf/hq/door/${run.door}` : null,
     closesAt: closingShown(run, o.now),
+    goneHome: run.facts.goneHome,
   };
 }
 

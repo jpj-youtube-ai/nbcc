@@ -650,6 +650,14 @@ describe("Detective HQ catching up", () => {
     expect(today).toMatchObject({ goUrl: "/elf/hq/door/7", closesAt: null, outcome: null });
   });
 
+  // Task 9, from Task 7's review: the case knows when the elf has gone home, so it never promises the prize or a
+  // visit then.
+  it("says whether today's elf has gone home", () => {
+    expect(hq7().today!.goneHome).toBe(false);
+    const gone = hq7({ guesses: [[7, saved("the bakehouse", at("2026-12-07T18:40:00Z"))]], seven: { ...DOOR7_CLOSING, goneHomeAt: at("2026-12-07T19:02:00Z") } }).today!;
+    expect(gone).toMatchObject({ goneHome: true, outcome: { place: "Corner Bakehouse", cracked: true } });
+  });
+
   it("offers the practice door's go, once its place is shown, to a family that has not guessed it", () => {
     const practice: DoorRun = { ...run(7, SEVEN_05, DOOR7_CLOSING), year: 0, door: 0, closesAt: null };
     const view = hq({ now: SEVEN_05, runs: { runs: catchUpDoors(SEVEN_05), practice } });

@@ -144,6 +144,10 @@ export interface TodayView {
   /** On the door's own day, when its hiding place closes, until then (closingShown in
    *  src/elf/catch-up.ts); null otherwise. */
   closesAt: Date | null;
+  /** Has the door's elf gone home? Then it can no longer be found and its place no longer visited, so the case
+   *  says where the elf was hiding, with no prize to win and no visit to make, and never that it is still out
+   *  there. */
+  goneHome: boolean;
 }
 
 /** A door's page in Detective HQ for having a go (Plan 2c-1): a family that missed a door's evening

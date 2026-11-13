@@ -107,14 +107,16 @@ function guessForm(today: TodayView, guessUrl: string): string {
 }
 
 /** How a door that has opened turned out for a family that can see its place, and on the door's own day when
- *  the place closes. */
+ *  the place closes. Once the elf has gone home it can no longer be found, nor its place visited (the poster
+ *  refuses the word), so the case says only where it was hiding: no prize still to win, and no visit. */
 function outcomeHtml(today: TodayView): string {
   const outcome = today.outcome;
   if (!outcome) return "";
   const elf = escapeHtml(today.elfName);
   const place = escapeHtml(outcome.place);
+  const goneHome = today.goneHome === true;
   const where =
-    today.state === "revealed"
+    today.state === "revealed" && !goneHome
       ? // Decision 1: the finder wins the prize, and the elf stays at its place.
         line(`Nobody found ${elf} in time. ${elf} is still waiting at ${place}, and the first detective to type the word on its tag still wins the prize.`)
       : line(`${elf} was hiding at ${place}.`) +
@@ -130,7 +132,8 @@ function outcomeHtml(today: TodayView): string {
       ? line(`Your guess was ${guess}. Not this time, but there is a new clue tomorrow.`, "elf-case__verdict")
       : line("You did not lock in a guess for this one. There is a new clue tomorrow.", "elf-case__verdict");
   const closes = real(today.closesAt) ? line(`${place} closes at ${clockWords(today.closesAt)} today.`, "elf-case__hint") : "";
-  return where + verdict + line("Visit the hiding place and scan its poster to collect your candy cane.", "elf-case__hint") + closes;
+  const visit = goneHome ? "" : line("Visit the hiding place and scan its poster to collect your candy cane.", "elf-case__hint");
+  return where + verdict + visit + closes;
 }
 
 /** A family that cannot see the place yet, once it is shown, and may still crack the case: its one go (Plan
@@ -193,10 +196,12 @@ function caseCard(view: HqView): string {
     return head + `<h2 id="elf-case-heading">Snow day</h2>` + line(`${escapeHtml(today.elfName)} got snowed in. This door counts as done for everyone.`) + refused;
   }
   // The place is shown: how it turned out for a family that can see it, or its one go for a family that may
-  // still crack the case.
+  // still crack the case. An elf shown with nobody found is still out there only until it goes home.
+  const heading =
+    today.state === "found" ? "Case closed" : today.goneHome === true ? `${escapeHtml(today.elfName)} has gone home` : `${escapeHtml(today.elfName)} is still out there`;
   return (
     head +
-    `<h2 id="elf-case-heading">${today.state === "found" ? "Case closed" : `${escapeHtml(today.elfName)} is still out there`}</h2>` +
+    `<h2 id="elf-case-heading">${heading}</h2>` +
     refused +
     (today.outcome ? outcomeHtml(today) : goCard(today))
   );

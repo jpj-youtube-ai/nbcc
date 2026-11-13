@@ -113,6 +113,7 @@ const PAGES: [string, string][] = [
   ["HQ, have a go at today's door", renderHqPage(mayGo)],
   ["HQ, doors you can still crack", renderHqPage(toCrack)],
   ["HQ, found and cracked, with the place's closing time", renderHqPage(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome, closesAt: at("2026-12-07T20:00:00.000Z") } }))],
+  ["HQ, an elf that has gone home", renderHqPage(hqView({ today: { ...today, state: "revealed", canGuess: false, clues: [], nextClueAt: null, revealAt: null, goneHome: true, outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],

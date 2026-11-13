@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { ELF_DEFAULTS, type ElfSettings } from "../elf/settings";
+import { EMAILS_TOKEN } from "../elf/emails";
 import type { JoinBody } from "../elf/join";
 import type { FamilyRow } from "../elf/views";
 import type { DoorsDone } from "../elf/progress";
@@ -377,9 +378,13 @@ export async function orderForWelcome(
 
 // --- Detective HQ and the wardrobe -------------------------------------------------------------------
 
-/** A signed in family and its active detectives, oldest first. */
+/** A signed in family and its active detectives, oldest first, with whether it has stopped the emails that are not
+ *  essential and its own token for the link that stops them (Plan 2c-2). */
 export async function familyWithDetectives(familyId: number): Promise<FamilyRow | null> {
-  const f = await pool.query<{ id: number; grown_up_name: string; email: string }>("SELECT id, grown_up_name, email FROM elf_families WHERE id = $1 AND active", [familyId]);
+  const f = await pool.query<{ id: number; grown_up_name: string; email: string; emails_stopped: boolean; emails_token: string }>(
+    "SELECT id, grown_up_name, email, emails_stopped_at IS NOT NULL AS emails_stopped, emails_token FROM elf_families WHERE id = $1 AND active",
+    [familyId],
+  );
   if (!f.rows[0]) return null;
   const d = await pool.query<{ id: number; first_name: string; surname: string; name_approved: boolean; badge_number: number | null; look: unknown; fresh: string[]; favourites: unknown }>(
     `SELECT id, first_name, surname, name_approved, badge_number, look, fresh, favourites FROM elf_detectives
@@ -390,6 +395,8 @@ export async function familyWithDetectives(familyId: number): Promise<FamilyRow 
     id: f.rows[0].id,
     grownUpName: f.rows[0].grown_up_name,
     email: f.rows[0].email,
+    emailsStopped: f.rows[0].emails_stopped === true,
+    emailsToken: f.rows[0].emails_token,
     detectives: d.rows.map((r) => ({
       id: r.id,
       firstName: r.first_name,
@@ -401,6 +408,43 @@ export async function familyWithDetectives(familyId: number): Promise<FamilyRow 
       favourites: r.favourites ?? [],
     })),
   };
+}
+
+// --- the emails a family can stop (Plan 2c-2, Task 7) ---------------------------------------------------------
+// The clue emails and the proud emails a detective's promotion or graduation sends can be stopped by the family:
+// from the link that ends each of them, whose page asks first (GET /elf/emails/:token), or from Detective HQ. The
+// won email, sign in codes and the welcome, which is the family's receipt, always go.
+
+/** The family whose link to stop or start the emails carries this token (elf_families.emails_token): active and
+ *  not removed, with whether it has stopped them. Anything but 32 lower case hex letters, as the database makes
+ *  them, is no token, so nothing is read for it. Null when no such family. */
+export async function familyByEmailsToken(token: string): Promise<{ id: number; stopped: boolean } | null> {
+  if (typeof token !== "string" || !EMAILS_TOKEN.test(token)) return null;
+  const r = await pool.query<{ id: number; stopped: boolean }>(
+    "SELECT id, emails_stopped_at IS NOT NULL AS stopped FROM elf_families WHERE emails_token = $1 AND active AND removed_at IS NULL",
+    [token],
+  );
+  const row = r.rows[0];
+  return row ? { id: Number(row.id), stopped: row.stopped === true } : null;
+}
+
+/** A family stops the emails that are not essential, or starts them again, and the audit log says so in the same
+ *  transaction: elf.emails.stopped or elf.emails.started, by the family, with nothing of it but its id. Stopping
+ *  them again keeps when they were first stopped. */
+export async function setEmailsStopped(familyId: number, stopped: boolean): Promise<void> {
+  await inTransaction(async (client) => {
+    await client.query("UPDATE elf_families SET emails_stopped_at = CASE WHEN $2::boolean THEN COALESCE(emails_stopped_at, now()) ELSE NULL END WHERE id = $1", [
+      familyId,
+      stopped,
+    ]);
+    await insertAudit(client, {
+      actor: "family",
+      action: stopped ? "elf.emails.stopped" : "elf.emails.started",
+      entity: "elf_family",
+      entityId: familyId,
+      data: { familyId },
+    });
+  });
 }
 
 /**

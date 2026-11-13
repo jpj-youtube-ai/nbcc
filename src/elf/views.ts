@@ -41,6 +41,12 @@ export interface FamilyRow {
   grownUpName: string;
   email: string;
   detectives: DetectiveRow[];
+  /** Has the family stopped the emails that are not essential (Plan 2c-2)? Read by familyWithDetectives, and left
+   *  out only where a family is built by hand, as in tests: missing reads as not stopped. */
+  emailsStopped?: boolean;
+  /** The family's own token for the link in its emails that stops them (elf_families.emails_token), read by
+   *  familyWithDetectives as emailsStopped is. Never on a page: a page posts to the signed in switch instead. */
+  emailsToken?: string;
 }
 
 /** When school starts: door 1's first clue, at 5:30pm London time. */

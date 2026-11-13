@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // NBCC Elf Detective School, Plan 2c-2, Task 6: a graduate's share card is a picture drawn on the server (sharp, from
@@ -9,7 +9,9 @@ import { resolve } from "node:path";
 //  - the runtime stage's first apt-get install brings fontconfig (how sharp finds a font) and fonts-dejavu-core
 //    (DejaVu Sans and Serif, for the card's words), with a comment saying why;
 //  - pr.yml's image check asks fontconfig inside the built image for a sans serif font, and fails unless it is
-//    DejaVu (ruling F12: no unit test can see the server's fonts, and there is no Docker on a laptop here).
+//    DejaVu (ruling F12: no unit test can see the server's fonts, and there is no Docker on a laptop here);
+//  - and then, in those fonts, it draws share cards with src/scripts/check-share-card.ts, fails unless every name
+//    ends clear of the card's red frame, and keeps the cards it drew as the run's "share-cards" (Task 6's review).
 
 const repoRoot = resolve(__dirname, "../..");
 const dockerfile = readFileSync(resolve(repoRoot, "Dockerfile"), "utf8");
@@ -87,5 +89,43 @@ describe("pr.yml: the image check proves the share card's fonts are in the image
     expect(fonts).toMatch(/grep -q "?DejaVu"?/);
     expect(fonts).toMatch(/::error::[^\n]*share card/);
     expect(fonts).toMatch(/exit 1/);
+  });
+});
+
+describe("pr.yml: the image check draws share cards in the image's fonts, and keeps them", () => {
+  const steps = jobSteps("image");
+  const fonts = steps.findIndex((s) => /fc-match/.test(s));
+  const check = steps.findIndex((s) => /check-share-card/.test(s));
+  const upload = steps.findIndex((s) => /actions\/upload-artifact/.test(s));
+
+  it("runs the share card check inside the built image, after the font check, with a folder for the cards", () => {
+    expect(check, "the image job has a step that runs check-share-card").toBeGreaterThan(fonts);
+    expect(fonts).toBeGreaterThan(0);
+    expect(steps[check]).toMatch(/docker run --rm -v "\$PWD\/share-cards:\/cards" nbcc-image-check node dist\/scripts\/check-share-card\.js \/cards/);
+    // The container runs as node, so the folder on the runner must let it write there.
+    expect(steps[check]).toMatch(/mkdir -p share-cards/);
+    expect(steps[check]).toMatch(/chmod 777 share-cards/);
+  });
+
+  it("fails, naming the fix, unless every name ends clear of the frame", () => {
+    expect(steps[check]).toMatch(/set -euo pipefail/);
+    expect(steps[check]).toMatch(/::error::[^\n]*fit in src\/elf\/print\.ts/);
+    expect(steps[check]).toMatch(/exit 1/);
+  });
+
+  it("keeps the cards drawn in the image as the run's share-cards, a failed check's included", () => {
+    expect(upload, "the image job uploads the cards").toBeGreaterThan(check);
+    const step = steps[upload];
+    // The version style the workflow's other actions use.
+    expect(step).toMatch(/uses: actions\/upload-artifact@v4\b/);
+    expect(prYml).toMatch(/uses: actions\/checkout@v4\b/);
+    expect(step).toMatch(/if: always\(\)/);
+    expect(step).toMatch(/name: share-cards\b/);
+    expect(step).toMatch(/path: share-cards\/?\s/);
+  });
+
+  it("runs a script the image carries: built from src/scripts into dist, which the runtime stage copies", () => {
+    expect(existsSync(resolve(repoRoot, "src/scripts/check-share-card.ts"))).toBe(true);
+    expect(stage("runtime").some((l) => /^COPY\s+--from=build\s+\/app\/dist\s+\.\/dist\s*$/.test(l))).toBe(true);
   });
 });

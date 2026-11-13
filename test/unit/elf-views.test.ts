@@ -848,6 +848,12 @@ describe("Detective HQ's grand prize", () => {
     expect(prize(at("2026-12-24T11:00:00.000Z"), { doorsDone: new Map() })).toEqual({ closesAt: FIVE_PM, open: true, detectives: [] });
   });
 
+  // Tests are never type checked (tsconfig.json includes src only), so a caller from before Plan 2c-2 that passes no
+  // entries must read as a family with none, not break Detective HQ on Christmas Eve.
+  it("reads a caller that passes no entries as a family whose pictures are not in", () => {
+    expect(prize(at("2026-12-24T11:00:00.000Z"), { entries: undefined })?.detectives).toEqual([{ name: "Detective Ruby Tinselfoot", url: "/elf/hq/entry/100", sent: false }]);
+  });
+
   it("closes at the time a head elf set in Settings", () => {
     const settings = { ...SETTINGS, doorsOn: true, grandPrizeClosesAt: at("2026-12-24T18:30:00.000Z") };
     expect(prize(at("2026-12-24T18:00:00.000Z"), { settings })).toMatchObject({ closesAt: at("2026-12-24T18:30:00.000Z"), open: true });

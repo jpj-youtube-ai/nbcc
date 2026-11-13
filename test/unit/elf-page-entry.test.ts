@@ -134,6 +134,15 @@ describe("what comes from data", () => {
     expect(doc.documentElement.outerHTML).not.toContain("elsewhere");
   });
 
+  it("still says a picture is in, and offers a new one, when the picture's address is not one to draw", () => {
+    const v = entryView({ sent: { ...SENT, pictureUrl: "https://elsewhere.example/p.jpg" } });
+    const doc = page(v);
+    expect(doc.querySelector("img.elf-entry__pic")).toBeNull();
+    expect(words(doc.querySelector(".elf-entry__in"))).toBe("Detective Ruby Tinselfoot's picture is in. You can change it until 5pm on Christmas Eve.");
+    expect(words(doc.querySelector('form.elf-entry button[type="submit"]'))).toBe("Send a new picture");
+    expect(said(v)).not.toContain("Entries close at");
+  });
+
   it("says no time when the closing is not a real time, rather than a sentence with a gap in it", () => {
     const text = said(entryView({ closesAt: new Date(Number.NaN), sent: SENT }));
     expect(text).not.toMatch(/close at\s+on|until\s+on|closed at\s+on/);

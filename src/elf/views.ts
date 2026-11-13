@@ -206,7 +206,8 @@ function grandPrizeOf(
   return {
     closesAt,
     open: o.now.getTime() < closesAt.getTime(),
-    detectives: detectives.flatMap((d) => (d.view.graduate ? [{ name: d.view.name, url: `/elf/hq/entry/${d.id}`, sent: o.entries.has(d.id) }] : [])),
+    // A caller from before Plan 2c-2 passes no entries: that reads as none.
+    detectives: detectives.flatMap((d) => (d.view.graduate ? [{ name: d.view.name, url: `/elf/hq/entry/${d.id}`, sent: o.entries?.has(d.id) === true }] : [])),
   };
 }
 

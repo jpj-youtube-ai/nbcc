@@ -51,15 +51,16 @@ export function renderEntryPage(view: EntryView): string {
   const post = sitePath(view.postUrl);
   const hq = sitePath(view.hqUrl) ?? "/elf/hq";
   const open = view.open === true;
+  const sent = view.sent !== null && typeof view.sent === "object";
   const picture = pictureHtml(view, name);
   // Once a picture is in, the page says so under it: until when it can be changed while the entries are open.
-  const isIn = picture
+  const isIn = sent
     ? line(`${name}'s picture is in.${open && time ? ` You can change it until ${time} on Christmas Eve.` : ""}`, "elf-entry__in")
     : "";
-  const when = open ? (picture || !time ? "" : line(`Entries close at ${time} on Christmas Eve.`, "elf-entry__closes")) : time ? line(`Grand prize entries closed at ${time} on Christmas Eve.`, "elf-entry__closes") : "";
+  const when = open ? (sent || !time ? "" : line(`Entries close at ${time} on Christmas Eve.`, "elf-entry__closes")) : time ? line(`Grand prize entries closed at ${time} on Christmas Eve.`, "elf-entry__closes") : "";
   const form = open && post ? formHtml(view, post) : "";
   const promise =
-    form || picture
+    form || sent
       ? line(
           "We make the picture again, so nothing from the camera is kept: not where, not when, not the phone. Only the head elves see it, and it is deleted at the end of January.",
           "elf-entry__promise",

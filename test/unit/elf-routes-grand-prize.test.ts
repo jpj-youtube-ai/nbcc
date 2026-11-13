@@ -470,6 +470,8 @@ describe("with December's doors off", () => {
 
   it("lets no browser through with the preview link either: its pass opens the practice door only", async () => {
     practice.getPractice.mockResolvedValue(practiceRow());
+    // Every door reported done, so the switch alone keeps each route shut.
+    everyDoorDone();
     for (const [method, path, ask] of asks(PRACTICE_PASS)) {
       const r = await call(method, path, method === "POST" ? { ...ask, json: await entryBody() } : ask);
       expect(r.status, `${method} ${path}`).toBe(404);

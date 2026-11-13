@@ -841,7 +841,7 @@ describe("an open door on the calendar everyone shares, before Christmas Day", (
   it("says who found the elf and what they won, as it does today", () => {
     const said = words(dom(doorDetail(FOUND7, atTime(SEVEN_05))));
     expect(said).toContain("Found by Detective R. Tinselfoot at 5:47pm");
-    expect(said).toContain("Detective R. Tinselfoot won the prize cut into this door: A pretend sledge.");
+    expect(said).toContain("Detective R. Tinselfoot won this door's prize: A pretend sledge.");
   });
 
   it("says under the title of a revealed door that the elf is still hiding, and the prize still to be won", () => {

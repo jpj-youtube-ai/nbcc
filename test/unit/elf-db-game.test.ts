@@ -428,6 +428,7 @@ describe("guesses", () => {
   const selected = (sql: string) => sql.slice(0, sql.indexOf(" FROM elf_guesses"));
 
   it("upserts a guess", async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     await saveGuess(2026, 7, 3, { text: "The Cone", norm: "the cone" }, FIVE_31);
     const [sql, params] = query.mock.calls[0];
     expect(String(sql)).toContain("INSERT INTO elf_guesses");
@@ -436,11 +437,23 @@ describe("guesses", () => {
   });
 
   it("never lets the night's save overwrite a go", async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     await saveGuess(2026, 7, 3, { text: "The Cone", norm: "the cone" }, FIVE_31);
     const sql = String(query.mock.calls[0][0]);
     expect(sql).toContain("WHERE NOT elf_guesses.late");
     // The condition is the update's own, so a family's first guess is still saved.
     expect(sql.indexOf("WHERE NOT elf_guesses.late")).toBeGreaterThan(sql.indexOf("DO UPDATE SET"));
+  });
+
+  // Carried from Plan 2c-1's Task 2: a go kept in place of the night's save changes no row, and the guess
+  // route must never tell the family its guess was saved then.
+  it("says whether the guess was saved: a row inserted or changed, and not when a go was kept", async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    expect(await saveGuess(2026, 7, 3, { text: "The Cone", norm: "the cone" }, FIVE_31)).toBe(true);
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    expect(await saveGuess(2026, 7, 3, { text: "The Cone", norm: "the cone" }, FIVE_31)).toBe(false);
+    query.mockResolvedValueOnce({ rows: [], rowCount: null });
+    expect(await saveGuess(2026, 7, 3, { text: "The Cone", norm: "the cone" }, FIVE_31)).toBe(false);
   });
 
   it("maps a family's guesses by door", async () => {

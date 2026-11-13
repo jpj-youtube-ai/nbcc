@@ -261,14 +261,16 @@ interface GuessRow {
 const savedGuess = (r: GuessRow): SavedGuess => ({ text: r.text, norm: r.norm, at: r.saved_at, late: r.late === true });
 
 /** Saves a family's guess on the night for a door, replacing its earlier one. A go is never replaced:
- *  the update runs only on a guess from the night. */
-export async function saveGuess(year: number, door: number, familyId: number, guess: { text: string; norm: string }, at: Date): Promise<void> {
-  await pool.query(
+ *  the update runs only on a guess from the night. Answers whether the guess was saved: false when the
+ *  family's go was kept, so no row changed. */
+export async function saveGuess(year: number, door: number, familyId: number, guess: { text: string; norm: string }, at: Date): Promise<boolean> {
+  const r = await pool.query(
     `INSERT INTO elf_guesses (year, door, family_id, text, norm, saved_at) VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (year, door, family_id) DO UPDATE SET text = EXCLUDED.text, norm = EXCLUDED.norm, saved_at = EXCLUDED.saved_at
        WHERE NOT elf_guesses.late`,
     [year, door, familyId, guess.text, guess.norm, at],
   );
+  return (r.rowCount ?? 0) > 0;
 }
 
 /** Saves a family's go at a door: one insert, which never overwrites anything. "already" when no row

@@ -893,9 +893,10 @@ describe("a family's own places", () => {
     const calendar = load(beforeSeven());
     await calendar.ready;
     expect(door(3).querySelectorAll(".elf-door__marks .elf-mark").length).toBe(0);
-    // One of the family's detectives has been to door 3 since the page was loaded.
+    // One of the family's detectives has been to door 3 since the page was loaded, so the family can see its place.
     server = sharedSeven(at("2026-12-07T19:00:05.000Z"));
-    me = meOn({ known: [7], doors: [{ door: 3, cracked: false, visited: true }] });
+    places.set(3, { name: "Holly Hall", town: "Snowford" });
+    me = meOn({ known: [3, 7], doors: [{ door: 3, cracked: false, visited: true }] });
     await calendar.poll();
     expect(door(3).querySelectorAll(".elf-door__marks .elf-mark").length).toBe(1);
     expect(words(detail(3).querySelector(".elf-detail__mine"))).toBe("Your family has been there. Candy cane collected.");
@@ -998,6 +999,44 @@ describe("a family's own places", () => {
     calls = [];
     await calendar.poll();
     expect(calls).toEqual(["/api/elf/calendar"]);
+  });
+
+  // The whole-branch review, Minor 4: given up on after the minute, tonight's door is drawn as everyone sees it while
+  // the family's lists are still from before it opened, so it is in neither. The family cannot know its place: the door
+  // keeps the calendar's own Have a go line, and never says "Not done yet. Visit any day in December for your candy cane."
+  it("leave the calendar's Have a go showing on tonight's door drawn as everyone sees it after the minute, with lists from before it opened", async () => {
+    me = meOn({ goes: [5] });
+    const calendar = load(withGoAtFive(beforeSeven()));
+    await calendar.ready;
+    server = withGoAtFive(sharedSeven(at("2026-12-07T19:00:05.000Z")));
+    me = { status: 500, body: {} };
+    await calendar.poll();
+    clock += 30_000;
+    await calendar.poll();
+    clock += 31_000;
+    await calendar.poll();
+    expect(door(7).getAttribute("data-kind")).toBe("found");
+    const go = detail(7).querySelector<HTMLElement>(".elf-book__go")!;
+    expect(go.hidden).toBe(false);
+    expect(words(go)).toBe("Where was Bauble hiding? Crack the case in Detective HQ to find out. Have a go");
+    const mine = detail(7).querySelector<HTMLElement>(".elf-detail__mine")!;
+    expect(mine.hidden).toBe(true);
+    expect(words(mine)).toBe("");
+    expect(words(detail(7))).not.toContain("Not done yet");
+    // Door 5, in the family's goes, keeps its Have a go too.
+    expect(detail(5).querySelector<HTMLElement>(".elf-book__go")!.hidden).toBe(false);
+  });
+
+  // The same rule's edge: from Christmas Day every place is on the calendar everyone shares, so a door the family has
+  // not done still says what is left to do there, as it always has.
+  it("still say what is left to do on a door the family has not done from Christmas Day, when every place is on the calendar", async () => {
+    me = meOn({ known: [7] });
+    const calendar = load(calendarView(at("2026-12-25T10:00:00.000Z")));
+    await calendar.ready;
+    const mine3 = detail(3).querySelector<HTMLElement>(".elf-detail__mine")!;
+    expect(words(mine3)).toBe("Not done yet. Visit any day in December for your candy cane.");
+    expect(mine3.hidden).toBe(false);
+    expect(detail(3).querySelector<HTMLElement>(".elf-detail__hint")!.hidden).toBe(true);
   });
 
   // From the review of Task 8, Minor 3: a poll begun as the page loads draws nothing until the family's answer is in,
@@ -1275,7 +1314,8 @@ describe("a family's own places", () => {
   it("keep the calendar's Have a go line on a door the family may still have a go at, with no line of its own", async () => {
     const view = calendarView(AFTERNOON);
     view.doors[4] = { ...view.doors[4], place: null, goUrl: "/elf/hq/door/5" };
-    me = meOn({ goes: [5] });
+    places.set(4, { name: "Shop number 4", town: "Ayr" });
+    me = meOn({ known: [4], goes: [5] });
     const calendar = load(view);
     await calendar.ready;
     const mine5 = detail(5).querySelector<HTMLElement>(".elf-detail__mine")!;
@@ -1284,7 +1324,8 @@ describe("a family's own places", () => {
     expect(words(mine5)).toBe("");
     expect(go5.hidden).toBe(false);
     expect(go5.querySelector('a[href="/elf/hq/door/5"]')).not.toBeNull();
-    // A door the family may not have a go at still says what is left to do there.
+    // A door the family can see still says what is left to do there.
+    expect(words(detail(4).querySelector(".elf-detail__mine"))).toBe("Not done yet. Visit any day in December for your candy cane.");
     expect(detail(4).querySelector<HTMLElement>(".elf-detail__mine")!.hidden).toBe(false);
   });
 

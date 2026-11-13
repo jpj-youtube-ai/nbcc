@@ -12608,9 +12608,13 @@ the board carries `data-me-door`, `data-me-doors`, `data-places-from` and `data-
 routes: one door from `GET /api/elf/me/door/:n`, two or more from `GET /api/elf/me/doors` in one request,
 never one request a door. A door drawn that way keeps the shared fingerprint in `data-v`, so polls still
 compare with the shared calendar, and its later redraws come from the family's route too. A door in `goes`
-keeps the shared Have a go line and hides the family's own line. A known door's route can answer 404 for up
-to 15 seconds after the door opens (the shared cache): that is "not yet", asked again on the next poll and
-given up after a minute (`GIVE_UP_MS`), when the door is drawn as everyone sees it. When a door the family
+keeps the shared Have a go line and hides the family's own line, and so does an open door in neither list
+while the family's own doors are drawn (tonight's, drawn as everyone sees it after the family's answer could
+not be read for a minute as it opened), so it never says "Not done yet." to a family that cannot know the
+place; from Christmas Day until 1 January, with every place shown, such a door keeps the family's own line.
+A known door's route can answer 404 for up to 15 seconds after the door opens (the shared cache): that is
+"not yet", asked again on the next poll and given up after a minute (`GIVE_UP_MS`), when the door is drawn
+as everyone sees it. When a door the family
 cannot see turns open (tonight's), the script reads `/api/elf/me` once more before drawing it, retrying a
 failed read the same way; it reads it once more when the page is shown again after being hidden; while
 the doors are on a poll waits at most 10 seconds from the page's start for the family's answer; and a

@@ -259,8 +259,10 @@
       if (mine && (kind === "found" || kind === "revealed")) {
         var hint = detail.querySelector(".elf-detail__hint");
         // A door the family may still have a go at keeps the calendar's Have a go line, which is its hint: the
-        // family cannot know the place, so a line of its own would only invite a visit there.
-        if (goes.indexOf(Number(n)) !== -1) {
+        // family cannot know the place, so a line of its own would only invite a visit there. So does an open door in
+        // neither of the family's lists while its own doors are drawn (tonight's, drawn as everyone sees it when the
+        // family's answer could not be read as it opened): the family cannot know that place either.
+        if (goes.indexOf(Number(n)) !== -1 || (mineOn() && !isKnown(n))) {
           mine.textContent = "";
           mine.hidden = true;
           if (hint) hint.hidden = false;

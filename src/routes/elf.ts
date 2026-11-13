@@ -60,7 +60,7 @@ import { decideGo, doorsKnown, doorsToCrack, knowsPlace, mayHaveAGo, placesPubli
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
 import { canGuess, cluesOut, doorState, isOpen, shownAt, type DoorState } from "../elf/doors";
 import { badgeWords } from "../elf/emails";
-import { entriesOpenAt, grandPrizeClosesAt, prizeSectionShows } from "../elf/grand-prize";
+import { entriesOpenAt, entryOpen, grandPrizeClosesAt, prizeSectionShows } from "../elf/grand-prize";
 import { decideGuess, type GuessRefusal } from "../elf/guess";
 import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
 import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
@@ -1869,7 +1869,8 @@ export async function postEntry(req: Request, res: Response): Promise<Response |
     if (!own.graduate) return res.status(403).json({ error: `${name} has not done all 24 doors yet.` });
     const closesAt = grandPrizeClosesAt(settings);
     if (now.getTime() < entriesOpenAt(settings.year).getTime()) return notFound(res, true);
-    if (now.getTime() >= closesAt.getTime()) return res.status(409).json({ error: entriesClosedWords(closesAt) });
+    // The one rule for the window (entryOpen), which fails closed: a closing that is not a real time refuses.
+    if (!entryOpen({ graduate: own.graduate, year: settings.year, closesAt, now })) return res.status(409).json({ error: entriesClosedWords(closesAt) });
     // A family with no mobile gives one, with the join form's words and check; one sent by a family that has a
     // mobile already is ignored, so the store is given none.
     const askMobile = !(await familyHasMobile(family.id));

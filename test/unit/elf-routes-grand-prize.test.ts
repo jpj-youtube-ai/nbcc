@@ -262,6 +262,17 @@ describe("sending in a picture", () => {
     nothingDone();
   });
 
+  // Fix round 1 (the review's Minor 1): the window is entryOpen's, which fails closed. With a year that is not one,
+  // the closing is not a real time either, and a picture is refused rather than taken.
+  it("refuses a picture, with nothing made or stored, when the closing is not a real time", async () => {
+    db.getElfSettings.mockResolvedValue({ ...ON, year: Number.NaN });
+    everyDoorDone();
+    const r = await send();
+    expect(r.status).toBe(409);
+    expect(String(r.data.error)).toMatch(/^Grand prize entries closed at/);
+    nothingDone();
+  });
+
   it("refuses a detective who has not done all 24 doors, by name, with nothing made or stored", async () => {
     doors.listElfDoors.mockResolvedValue(snowedIn(EVERY_DOOR.slice(0, 23)));
     const r = await send();

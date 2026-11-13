@@ -7173,6 +7173,10 @@ Tests: `admin-overview-screen`, `admin-contact-screen`, `admin-phone-menu` and `
 (`test/unit/`), with `admin-overview`, `admin-overview-numbers`, `admin-app`, `admin-red-bag`,
 `admin-get-involved-tab` and `admin-screen-styles` updated for the new markup and stylesheet.
 
+CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 4 GB of heap
+(`NODE_OPTIONS=--max-old-space-size=4096`). With these screen tests added, three workers ran out at
+Node's default of about 2 GB and the run failed with 872 of 875 files passed.
+
 ## Invoices for donations (Admin > Giving > Invoices)
 
 Some givers, often businesses, schools, churches and clubs and sometimes people, will only pay a gift

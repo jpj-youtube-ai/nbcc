@@ -3227,21 +3227,49 @@
       if (now) say(now, words, ok);
     }
 
-    /** Saves the time or the link, then draws the answer (and door 24's warning as it now is) and says so.
-     *  A refusal keeps what was typed and says the server's sentence as an error. */
-    function saveGrandPrize(sent, which, button) {
-      button.disabled = true;
+    /** Takes a save's answer into the panel where it stands: the saved box ("time" or "video") shows what is
+     *  now kept, the other box keeps what was typed and not saved, and door 24's warning is the answer's.
+     *  False when the panel is not drawn for changing them. */
+    function takeGrandPrize(which) {
+      var p = grandPrize.answer;
+      var box = doc.getElementById(which === "time" ? "hqPrizeTime" : "hqPrizeVideo");
+      var warning = doc.getElementById("hqPrizeTimeWarning");
+      if (!p || !box || !warning) return false;
+      box.value = which === "time" ? p.time : p.videoUrl || "";
+      warning.className = p.warning ? "hq-hint is-error" : "hq-hint";
+      warning.textContent = p.warning || "";
+      warning.hidden = !p.warning;
+      return true;
+    }
+
+    /** Saves the time or the link alone, then takes the answer in place (takeGrandPrize), so nothing typed in
+     *  the other box is lost (ruling F6, one step earlier) and "Saved." goes in a status line already on the
+     *  page, where a screen reader hears it. A refusal keeps what was typed and says the server's sentence as
+     *  an error. Either way the button pressed (`buttonId`) is ready again and has the focus back, unless the
+     *  head elf has moved on to something else meanwhile. */
+    function saveGrandPrize(sent, which, buttonId) {
+      var pressed = doc.getElementById(buttonId);
+      if (pressed) pressed.disabled = true;
       grandPrize.seq++;
       ask("PUT", PRIZE_PATH, sent)
         .then(function (d) {
-          grandPrize.answer = prizeAnswerOf(d) || grandPrize.answer;
-          grandPrize.error = null;
-          redrawGrandPrize();
+          var p = prizeAnswerOf(d);
+          if (p) {
+            grandPrize.answer = p;
+            grandPrize.error = null;
+            if (!takeGrandPrize(which)) redrawGrandPrize();
+          }
           grandPrizeSay(which, "Saved.", true);
         })
         .catch(function (e) {
-          button.disabled = false;
           grandPrizeSay(which, e.message, false);
+        })
+        .then(function () {
+          var again = doc.getElementById(buttonId);
+          if (!again) return;
+          again.disabled = false;
+          var at = doc.activeElement;
+          if (!at || at === doc.body || at === again) again.focus();
         });
     }
 
@@ -3265,11 +3293,11 @@
         box.appendChild(el("p", { class: "hq-words", text: PRIZE_WORDS.video + ": " + (p.videoUrl || PRIZE_WORDS.noVideo) }));
         return box;
       }
-      var time = el("input", { id: "hqPrizeTime", name: "time", type: "time", autocomplete: "off", "aria-describedby": "hqPrizeTimeHint" + (p.warning ? " hqPrizeTimeWarning" : "") });
+      var time = el("input", { id: "hqPrizeTime", name: "time", type: "time", autocomplete: "off", "aria-describedby": "hqPrizeTimeHint hqPrizeTimeWarning" });
       time.value = p.time;
-      var saveTime = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save the time" });
+      var saveTime = el("button", { class: "hq-btn hq-btn--go", type: "button", id: "hqPrizeSaveTime", text: "Save the time" });
       saveTime.addEventListener("click", function () {
-        saveGrandPrize({ time: time.value }, "time", saveTime);
+        saveGrandPrize({ time: time.value }, "time", "hqPrizeSaveTime");
       });
       box.appendChild(
         el("div", { class: "hq-prize-settings__time" }, [
@@ -3277,7 +3305,8 @@
             el("label", { for: "hqPrizeTime", text: PRIZE_WORDS.time }),
             time,
             el("small", { class: "hq-hint", id: "hqPrizeTimeHint", text: PRIZE_WORDS.timeHint }),
-            p.warning ? el("small", { class: "hq-hint is-error", id: "hqPrizeTimeWarning", text: p.warning }) : null,
+            // Door 24's warning: always here, empty and hidden when there is none, so a save can show or clear it.
+            el("small", { class: p.warning ? "hq-hint is-error" : "hq-hint", id: "hqPrizeTimeWarning", text: p.warning || "", hidden: !p.warning }),
           ]),
           el("div", { class: "hq-actions" }, [saveTime]),
           el("p", { class: "hq-status", role: "status" }),
@@ -3286,9 +3315,9 @@
       // No maxlength: a link cut short by the box would save a broken link. The server says when it is too long.
       var video = el("input", { id: "hqPrizeVideo", name: "videoUrl", type: "url", autocomplete: "off", spellcheck: "false", "aria-describedby": "hqPrizeVideoHint" });
       video.value = p.videoUrl || "";
-      var saveLink = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save the link" });
+      var saveLink = el("button", { class: "hq-btn hq-btn--go", type: "button", id: "hqPrizeSaveLink", text: "Save the link" });
       saveLink.addEventListener("click", function () {
-        saveGrandPrize({ videoUrl: video.value.trim() }, "video", saveLink);
+        saveGrandPrize({ videoUrl: video.value.trim() }, "video", "hqPrizeSaveLink");
       });
       box.appendChild(
         el("div", { class: "hq-prize-settings__video" }, [

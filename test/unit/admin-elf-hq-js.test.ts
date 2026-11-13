@@ -1195,6 +1195,15 @@ describe("The grand prize in Settings", () => {
     await flush();
     return env;
   }
+  /** A browser takes the focus off a button while it is disabled (the focus fixup rule), and jsdom does not
+   *  (its blur() ignores a disabled button), so this puts the focus nowhere by hand: on a box that then goes. */
+  function dropFocus() {
+    const spare = document.createElement("input");
+    document.body.appendChild(spare);
+    spare.focus();
+    spare.remove();
+    expect(document.activeElement).toBe(document.body);
+  }
   /** The pretend server refuses every PUT with this answer; everything else is answered as before. */
   function refusePuts(status: number, error: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1262,6 +1271,71 @@ describe("The grand prize in Settings", () => {
     expect(said("video").textContent).toBe("Saved.");
     expect(said("video").classList.contains("is-ok")).toBe(true);
     expect(videoBox().value).toBe("https://example.org/graduates");
+  });
+
+  // A save changes only its own setting (ruling F6), so it must never undo what is typed in the other box.
+  it("keeps a time typed but not saved when the link is saved, keeps focus on Save the link, and saves that time next", async () => {
+    const { calls } = await openSettings({ [`PUT ${PATH}`]: { ...PRIZE, videoUrl: "https://example.org/graduates" } });
+    timeBox().value = "17:30";
+    videoBox().value = "https://example.org/graduates";
+    const saveLink = inPart(prizeNow(), "Save the link")!;
+    const line = said("video");
+    saveLink.focus();
+    saveLink.click();
+    dropFocus();
+    await flush();
+    // "Saved." lands in the status line that was already on the page, so a screen reader hears it.
+    expect(said("video")).toBe(line);
+    expect(said("video").textContent).toBe("Saved.");
+    expect(timeBox().value).toBe("17:30");
+    expect(videoBox().value).toBe("https://example.org/graduates");
+    expect(document.activeElement).toBe(inPart(prizeNow(), "Save the link"));
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PUT").map((c) => c.body)).toEqual([{ videoUrl: "https://example.org/graduates" }, { time: "17:30" }]);
+  });
+
+  it("keeps a link typed but not saved when the time is saved", async () => {
+    await openSettings({ [`PUT ${PATH}`]: { ...PRIZE, closesAt: "2026-12-24T17:30:00.000Z", time: "17:30", isDefault: false } });
+    timeBox().value = "17:30";
+    videoBox().value = "https://example.org/graduates";
+    const saveTime = inPart(prizeNow(), "Save the time")!;
+    saveTime.focus();
+    saveTime.click();
+    dropFocus();
+    await flush();
+    expect(said("time").textContent).toBe("Saved.");
+    expect(videoBox().value).toBe("https://example.org/graduates");
+    expect(document.activeElement).toBe(inPart(prizeNow(), "Save the time"));
+  });
+
+  it("gives the focus back to the button after a refusal too, but never takes it from where the head elf has gone", async () => {
+    await openSettings({});
+    refusePuts(409, REFUSAL);
+    const saveTime = inPart(prizeNow(), "Save the time")!;
+    saveTime.focus();
+    saveTime.click();
+    dropFocus();
+    await flush();
+    expect(document.activeElement).toBe(saveTime);
+    saveTime.click();
+    videoBox().focus(); // typing the link while the time is on its way
+    await flush();
+    expect(document.activeElement).toBe(videoBox());
+  });
+
+  it("shows door 24's warning as the answer to a save has it, gone or new", async () => {
+    const LATER = { ...PRIZE, closesAt: "2026-12-24T17:30:00.000Z", time: "17:30", isDefault: false };
+    await openSettings({ [`GET ${PATH}`]: { ...PRIZE, warning: WARNING }, [`PUT ${PATH}`]: { ...LATER, warning: null } });
+    timeBox().value = "17:30";
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect(prizeNow().querySelector(".is-error")).toBeNull();
+    expect(prizeNow().textContent).not.toContain(WARNING);
+    await openSettings({ [`PUT ${PATH}`]: { ...LATER, warning: WARNING } });
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect([...prizeNow().querySelectorAll<HTMLElement>(".is-error")].map((n) => n.textContent)).toEqual([WARNING]);
   });
 
   it("shows a refused link's sentence as an error, under the link", async () => {

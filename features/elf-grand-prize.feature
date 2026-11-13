@@ -70,13 +70,16 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     Then there are 2 entries, the first from "first.prize.elf.bdd@example.com"
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" marks the entry from "first.prize.elf.bdd@example.com" as the winner
     Then the head elf's answer is 409, saying "The entries are still open, so the winner can be marked once they close."
-    # Settings > The grand prize. Door 24's place closes at 4pm, so 4:30pm is refused. A time saved goes on Christmas
-    # Eve of Elf Detective School's year, last year's here, which is over: from that save the entries have closed.
+    # Settings > The grand prize. Door 24's place closes at 4pm, so 4:30pm is refused. A time typed goes on Christmas
+    # Eve of Elf Detective School's year, last year's here, which is over, so every time typed has already passed:
+    # 5pm is refused for that, and the closing stays the moment a step set by SQL an hour from now. (So no scenario can
+    # save a closing time; test/unit/elf-db-settings.test.ts reads the write, and the graduates' video below proves
+    # the same UPDATE against Postgres.)
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the grand prize closing time "16:30"
     Then the head elf's answer is 409, saying "Door 24's hiding place closes at 4pm, so grand prize entries can close at 5pm at the earliest."
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the grand prize closing time "17:00"
-    Then the head elf's answer is 200
-    And the grand prize entries are saved to close at "17:00" on Christmas Eve of Elf Detective School's year
+    Then the head elf's answer is 409, saying "That time has already passed, so the entries would close straight away. Please choose a later time."
+    And the grand prize entries still close at the moment a step set an hour from now
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the graduates' video "https://example.org/graduates"
     Then the head elf's answer is 200
     And the graduates' video is "https://example.org/graduates"

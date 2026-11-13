@@ -356,6 +356,56 @@ describe("once the entries have closed", () => {
   });
 });
 
+// The final review, issue 4: before the close a head elf may save any time from the earliest door 24 allows, but a
+// time that has already passed would close the entries at once, and the rule above would then fix it for good: a slip
+// on Christmas Eve that could never be put right. So a time not after now is refused, checked last, and nothing is
+// saved. 4:45pm and the like on Christmas Eve 2026 in London are on GMT, so UTC.
+describe("a closing time that has already passed", () => {
+  const GONE = "That time has already passed, so the entries would close straight away. Please choose a later time.";
+  const CLOSED = "The entries have closed, so their closing time cannot change.";
+  /** A head elf saved 6:30pm earlier, so the entries are still open at 5:45pm. */
+  const SAVED_LATER = { ...ON, grandPrizeClosesAt: new Date("2026-12-24T18:30:00.000Z") };
+
+  it("refuses a time already gone today, or this very minute, and saves nothing", async () => {
+    settingsDb.getElfSettings.mockResolvedValue(SAVED_LATER);
+    vi.setSystemTime(new Date("2026-12-24T17:45:00Z"));
+    for (const time of ["17:00", "17:30", "17:45"]) {
+      const res = await put({ time });
+      expect(res.statusCode, time).toBe(409);
+      expect(res.headers["Cache-Control"], time).toBe("no-store");
+      expect(body(res), time).toEqual({ error: GONE });
+    }
+    expect(settingsDb.setElfSettings).not.toHaveBeenCalled();
+  });
+
+  it("saves a time still to come, even a minute away", async () => {
+    settingsDb.getElfSettings.mockResolvedValue(SAVED_LATER);
+    vi.setSystemTime(new Date("2026-12-24T17:45:00Z"));
+    const res = await put({ time: "17:46" });
+    expect(res.statusCode).toBe(200);
+    expect(settingsDb.setElfSettings).toHaveBeenCalledWith({ grandPrizeClosesAt: new Date("2026-12-24T17:46:00.000Z") }, ACTOR);
+  });
+
+  it("is checked last: the closed rule and door 24's rule come first", async () => {
+    // Closed at the default 5pm: the closed words, though the time typed has gone too.
+    vi.setSystemTime(new Date("2026-12-24T17:30:00Z"));
+    expect(body(await put({ time: "17:15" }))).toEqual({ error: CLOSED });
+    // Open until 6:30pm: 4:30pm is too soon after door 24's 4pm before it is in the past.
+    settingsDb.getElfSettings.mockResolvedValue(SAVED_LATER);
+    vi.setSystemTime(new Date("2026-12-24T16:45:00Z"));
+    expect(body(await put({ time: "16:30" }))).toEqual({ error: FOUR_PM_REFUSAL });
+    expect(settingsDb.setElfSettings).not.toHaveBeenCalled();
+  });
+
+  it("still saves the video link alone at such a moment", async () => {
+    settingsDb.getElfSettings.mockResolvedValue(SAVED_LATER);
+    vi.setSystemTime(new Date("2026-12-24T17:45:00Z"));
+    const res = await put({ videoUrl: "https://example.org/graduates" });
+    expect(res.statusCode).toBe(200);
+    expect(settingsDb.setElfSettings).toHaveBeenCalledWith({ graduateVideoUrl: "https://example.org/graduates" }, ACTOR);
+  });
+});
+
 // ---- the Grand prize part: every picture sent in, and the one winner (Task 5) ----
 
 /** Two entries as the store lists them, oldest first: Ruby's family has a mobile, Leo's has none. */

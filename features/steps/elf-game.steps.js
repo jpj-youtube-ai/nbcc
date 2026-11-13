@@ -823,9 +823,12 @@ async function keepPrizeClosing(world) {
   world.prizeClosesBefore = { at: r.rows[0] ? r.rows[0].grand_prize_closes_at : null };
 }
 
+// The moment set is kept in the world as the database writes it, to the microsecond, so a later step can say it has
+// not changed without reading a clock.
 Given("the grand prize entries close an hour from now", async function () {
   await keepPrizeClosing(this);
-  await pool.query("UPDATE elf_settings SET grand_prize_closes_at = now() + interval '1 hour' WHERE id = 1");
+  const r = await pool.query("UPDATE elf_settings SET grand_prize_closes_at = now() + interval '1 hour' WHERE id = 1 RETURNING grand_prize_closes_at::text AS at");
+  this.prizeClosesSet = r.rows[0].at;
 });
 
 Given("the grand prize entries closed a minute ago", async function () {
@@ -1063,17 +1066,12 @@ When("{string} with password {string} saves the grand prize closing time {string
   await headElfAsks(this, email, password, "PUT", "/api/admin/elf/grand-prize/settings", { time });
 });
 
-// The moment is worked out by the database from Elf Detective School's own year (last year here) and the time
-// typed, so no step compares the real clock with a date written in the feature.
-Then("the grand prize entries are saved to close at {string} on Christmas Eve of Elf Detective School's year", async function (clock) {
-  const [hour, minute] = clock.split(":").map(Number);
-  const r = await pool.query(
-    `SELECT grand_prize_closes_at, year,
-            grand_prize_closes_at = make_timestamptz(year, 12, 24, $1::int, $2::int, 0, 'Europe/London') AS saved
-       FROM elf_settings WHERE id = 1`,
-    [hour, minute],
-  );
-  assert.equal(r.rows[0].saved, true, `saved ${JSON.stringify(r.rows[0].grand_prize_closes_at)} for the year ${r.rows[0].year}`);
+// A refused time changes nothing: the closing is still the moment "the grand prize entries close an hour from now"
+// set, compared by the database itself, so no step compares the real clock with a date written in the feature.
+Then("the grand prize entries still close at the moment a step set an hour from now", async function () {
+  assert.ok(this.prizeClosesSet, "no step set the closing an hour from now");
+  const r = await pool.query("SELECT grand_prize_closes_at, grand_prize_closes_at = $1::timestamptz AS same FROM elf_settings WHERE id = 1", [this.prizeClosesSet]);
+  assert.equal(r.rows[0].same, true, `the closing is now ${JSON.stringify(r.rows[0].grand_prize_closes_at)}, not ${this.prizeClosesSet}`);
 });
 
 When("{string} with password {string} saves the graduates' video {string}", async function (email, password, videoUrl) {

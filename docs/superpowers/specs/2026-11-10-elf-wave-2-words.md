@@ -1151,6 +1151,7 @@ is saved, and the other way round.
 - [ ] After either Save: Saved.
 - [ ] Refused, a time too soon after door 24's place closes (for example *4:30pm* while door 24 closes at 4pm): Door 24's hiding place closes at *4pm*, so grand prize entries can close at *5pm* at the earliest.
 - [ ] Refused, any time saved once the entries have closed, even the same one: The entries have closed, so their closing time cannot change. (See question O.)
+- [ ] Refused, a time that has already passed while the entries are still open (for example *5:30pm* typed at *5:45pm* on Christmas Eve, after a later closing was saved), which would close them at once and for good: That time has already passed, so the entries would close straight away. Please choose a later time.
 - [ ] Refused, a link that is not https, that goes nowhere, or that is longer than 300 letters: The video link must start with https:// and be no longer than 300 letters.
 - [ ] Refused, with no time in the box: Type a time like 17:00.
 - [ ] For a head elf who may only look: Grand prize entries close on Christmas Eve at *5:30pm*. and The graduates' video: *https://example.org/graduates* (or, with none: The graduates' video: not set yet)

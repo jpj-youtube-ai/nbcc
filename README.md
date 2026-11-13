@@ -1724,15 +1724,17 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /elf/welcome` | **implemented, switched off** | Where Stripe returns a family; signs the paying browser in only when its payment opened the account |
 | `GET /elf/sign-in`, `POST /api/elf/sign-in/request`, `POST /api/elf/sign-in`, `POST /api/elf/sign-out` | **implemented, switched off** | Signing in to Detective HQ with an emailed 6 digit code (cookie `nbcc_elf_session`, 30 days) |
 | `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.png`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture (a PNG of the elf on its stage, stacked from the paper pictures; 503 with `Retry-After` when the picture maker is busy), and saving a look and up to three favourite looks, each made safe against the doors the detective has done (`{ ok, look, favourites }`) |
-| `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks |
+| `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks. The feed and the door's HTML are the calendar everyone shares: an open door there names no place and shows no photo until Christmas Day (Plan 2c-1). While December's doors are on, `/api/elf/me` also carries `known` (the open doors whose place the family can see) and `goes` (the doors it may still have a go at, newest first); with them off it is exactly `{ doors, photos }`. See **Catching up on missed doors** |
+| `GET /api/elf/me/door/:n`, `GET /api/elf/me/doors` | **implemented, switched off** | A signed in family's own drawing of an open door whose place it can see, with the place and the door's photos laid on: one door (`{ tile, detail }`, for a door that changed), or every such door at once (`{ doors: [{ door, tile, detail }] }`, the door rows read once and every door's photos in one query), which the calendar's script draws as the page loads. From Christmas Day until 1 January every open door. Always `Cache-Control: private, no-store`; signed out 401; the one door's route answers 404 for a shut door or one whose place the family cannot see, with nothing more read, and the batch leaves such doors out. Behind December's doors switch: 404 while that is off, the practice browser included. See **Catching up on missed doors** |
+| `GET /elf/hq/door/:n`, `POST /elf/hq/door/:n/go` | **implemented, switched off** | Having a go at a missed door: its own page in Detective HQ (clue 1, then `?clues=2` and `?clues=3` as plain links, then one guess on a plain form; once the family can see the place, how it went) and the one guess (JSON `{ text }` or the plain form: 200 `{ cracked, message }`, or `{ reason, message }` with 400 for empty or too long, 409 for closed, already or been there, 404 for a door with nothing to crack; the plain form goes back to the door's page, draws it again with the words, or goes to Detective HQ when there is nothing to crack). One go a family a door, kept by the database. `private, no-store`; it counts against the 60 guesses a family in 15 minutes (429). Behind December's doors switch; the practice door through the preview link. See **Catching up on missed doors** |
 | `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings` | **implemented** | Head Elf HQ (Admin > Content > Elf Detective School): the switch and the prices (section `elf`: view to read, admin only to change) |
 | `GET /api/admin/elf/hq` | **implemented** | Head Elf HQ's front screen: the settings, who may switch, the numbers, what needs a head elf, the newest detectives and the days to the first clue, and how many photos are waiting (the Finds tile's count) (section `elf`: view) |
 | `GET /api/admin/elf/families`, `GET /api/admin/elf/families/:id` | **implemented** | Head Elf HQ's families: searched (`q`, a name, email or badge), filtered (`all`, `check`, `week`, `removed`) and paged 50 at a time, and one family's sheet with its detectives and payments (section `elf`: view) |
 | `PATCH /api/admin/elf/families/:id`, `POST /api/admin/elf/families/:id/sign-in-code` \| `remove` \| `restore`, `PATCH /api/admin/elf/detectives/:id` | **implemented** | Head Elf HQ's changes, each written to the audit log: a grown up's name or email, a sign in code sent for them, a family taken out or put back, a detective's name ticked, unticked or changed (section `elf`: edit) |
 | `GET /elf/preview/:code`, `POST /api/admin/elf/preview`, `DELETE /api/admin/elf/preview` | **implemented** | The private preview link: an admin makes it (any earlier one stops working; only its sha256 is kept), and a browser that opens it sees every `/elf` page while Elf Detective School is switched off, each marked Private preview, `noindex` and never cached publicly. Payments in the preview are real |
 | `GET /elf/p/:code`, `POST /elf/p/:code/word`, `POST /api/elf/word` | **implemented, switched off** | A door's poster page (the code on the poster) and the word on the elf's tag: one typed word is both the claim and the stamp. Behind December's doors switch as well as Elf Detective School's own: 404 while that is off. Limited to 30 words a family and 300 an address in 15 minutes, and six wrong words a door for a family. See **Doors in December** |
-| `POST /api/elf/guess` | **implemented, switched off** | A typed guess at where a door's place is (JSON for the script, a drawn page for the plain form); a guess naming a place already open is refused kindly with that door's number. Limited to 60 guesses a family in 15 minutes |
-| `POST /api/elf/p/:code/photo`, `DELETE /api/elf/p/:code/photo`, `DELETE /api/elf/door/:n/photo`, `GET /elf/door/:n/photo/:token.jpg` | **implemented, switched off** | A family's photo: sent only after a visit at that door (5 a family a day; none once its elf has gone home, 409), taken down by the family (its bytes deleted), and served by its random token only once approved and while the door is open. The 4 MB body parser is reached only by the photo post (a take down's DELETE gets the usual small one) |
+| `POST /api/elf/guess` | **implemented, switched off** | A typed guess at where a door's place is (JSON for the script, a drawn page for the plain form); a guess naming the place of an open door the family can already see is refused kindly with that door's number (any other is an ordinary guess). Once the place is shown a guess is never saved as the family's go: a family with its guess gets 409 `locked-in` with `goUrl: "/elf/hq"`, one that may have its go 409 `have-a-go` with `goUrl` its go page (the plain form goes 303 there), and a guess that would replace a go is 409 `already`. Limited to 60 guesses a family in 15 minutes |
+| `POST /api/elf/p/:code/photo`, `DELETE /api/elf/p/:code/photo`, `DELETE /api/elf/door/:n/photo`, `GET /elf/door/:n/photo/:token.jpg` | **implemented, switched off** | A family's photo: sent only after a visit at that door (5 a family a day; none once its elf has gone home, 409), taken down by the family (its bytes deleted), and served by its random token only once approved and while the door is open, and then only to a signed in family that can see the door's place, or to anyone from Christmas Day until 1 January; always `Cache-Control: private, no-store` (Plan 2c-1: it was cached in public for five minutes). The 4 MB body parser is reached only by the photo post (a take down's DELETE gets the usual small one) |
 | `GET /elf/door/:n/elf/:visitId.png`, `GET /elf/hq/clue/:door/:n.jpg` | **implemented, switched off** | A family's elf standing on a door (one read a request; drawn from the look stored with the visit and kept drawn, the most recent 200), and a clue's picture (signed in families only, once that clue is out) |
 | `GET /api/admin/elf/practice`, `POST /api/admin/elf/practice`, `DELETE /api/admin/elf/practice` | **implemented** | The practice door (door 0): read, start (needs a preview link) and clear, from Head Elf HQ Settings; starting and clearing are audited (section `elf`: edit) |
 | `POST /api/admin/elf/families/:id/word-tries/clear` | **implemented** | A head elf clears a family's wrong words (section `elf`: edit; audited) |
@@ -12142,14 +12144,18 @@ columns; `elf_clues.words` only loses its NOT NULL). Code: rules in `src/elf/` (
 `src/routes/admin-elf.ts` and `src/routes/admin-elf-doors.ts`.
 
 **How a door's evening runs.** Clues 1, 2 and 3 come out at their own times. When the place is
-revealed it is shown; a guess saved before that moment is cracked (one second before cracks, one
-second after does not), and a guess naming a place already open is refused kindly with that door's
-number. A door is shut, hunting, found with its place hidden, shown, snowed in or gone home. No
+revealed it is shown, since Plan 2c-1 only to a family that has had its guess at the door or been there
+(see **Catching up on missed doors**); a guess on the night saved before that moment is cracked (one
+second before cracks, one second after does not; a go, made once the place is shown, cracks only at or
+after it), and a guess naming the place of an open door the family can already see is refused kindly
+with that door's number. A door is shut, hunting, found with its place hidden, shown, snowed in or gone home. No
 family route carries a place, a clue word, a clue picture or a photo for a door that is shut,
 hunting, found with its place hidden or snowed in. Found and hidden are separate: the first right
-word sets `found_at`, but the place stays hidden until its time. Detective HQ says the staff reveal
-time until it passes, then that the place is shown as soon as the elf is found; it never says the
-place's closing time (when an unfound elf's place is shown), which would tell how late a place is open.
+word sets `found_at`, but the place stays hidden until its time. Detective HQ says when the family
+finds out whether it cracked the case: at the staff reveal time, or later if the elf is still hiding
+then, and once that has passed, as soon as the elf is found or at the closing time at the latest. On a
+door's own day it also says when the place closes, once a closing time is typed in Doors (Plan 2c-1,
+Jaimie's answer 5; it used to keep that back, as it tells how late a place is open).
 
 **The word is both the claim and the stamp.** `decideWord` takes the family's typed word. The first
 family in wins the door under the row lock (`elf_doors.found_at` is set once, so two families in the
@@ -12187,7 +12193,9 @@ moves its clock only for a newer time (a copy the browser kept repeats an older 
 fails (the picture maker is busy, 503) is asked for again twice, after 2 and 5 seconds; Detective HQ
 fetches itself again between 1 and 6 seconds after a clue comes out, a different while on each page.
 
-**The scrapbook.** Two rows, elves and photos. The photo row is in a stable shuffled order (sorted by
+**The scrapbook.** Two rows, elves and photos. Since Plan 2c-1 the photo row, and its count, are on a
+family's own door once it can see the place, and on everyone's from Christmas Day until 1 January; before
+then the calendar everyone shares shows and counts the elves only. The photo row is in a stable shuffled order (sorted by
 each photo's random token), not approval order, so nobody can match a face to a finder named above
 it. A door tile's mini collage shows elves only. A child is named only through `detectiveName`, and a
 name never sits beside a photo. Removed families are out of every scrapbook, count and finder line.
@@ -12197,7 +12205,9 @@ visit: it says only what the family collected there, and nothing when that is no
 **Photos.** Sent only after a visit at that door; 5 a family a day; a try limit applies before any
 picture is opened (20 a family and 60 an address a day). The types `checkPictureUpload` accepts are
 stored as `processPicture` makes them. A photo is served by a random token (never a serial id) only
-once approved and while the door is open; until the place is shown it reads as waiting to its family.
+once approved and while the door is open, and only to a signed in family that can see the door's place,
+or to anyone from Christmas Day until 1 January, always `private, no-store` (Plan 2c-1); until the place
+is shown it reads as waiting to its family.
 A head elf approves it in Finds first, and a door's photos show only once two families have one
 approved there (see **Photos, alerts, emails, the worker and Finds**). The bytes live in `elf_photo_files`,
 which the nightly backup leaves out (`src/backup/plan.ts` records it as 0 rows so the restore check
@@ -12297,13 +12307,16 @@ examples (the pretend place is Pine Cone Café, Snowford):
 
 - **The first clue is out**, to each grown up with detectives enrolled, at a door's first clue: the clue's
   words, or the words describing its picture (a clue picture is never in an email or linked from one),
-  the times of clues 2 and 3 and of the place being shown, and a fact for grown ups;
+  the times of clues 2 and 3, when the family finds out whether it cracked the case and, with a closing
+  time typed in Doors, when the place closes (since Plan 2c-1 it never says when the place is shown), that
+  a missed hunt can still be cracked in Detective HQ, and a fact for grown ups;
 - **Today is your Elf Detective School day**, to the place's contact at 9am on its day: "Tonight" only for a
   clue after midday, the staff card's three steps in short, its closing time, and NBCC's phone for places
   when Settings has one;
 - **Elf HQ: the 8am email**, to head elves with alerts on, each day from 30 November to 25 December:
-  today's door and whether it is ready, yesterday's finder by their public name, the photos waiting, and
-  the day's two posts ready to copy (C14), which never name a place before it is shown;
+  today's door and whether it is ready (a snow day is warned of only for a door that cannot open as it
+  stands), yesterday's finder by their public name, the photos waiting, and the day's two posts ready to
+  copy (C14), which never name a place (Plan 2c-1);
 - **A door's elf has been found**, the find alert, to head elves with alerts on: the finders' full names;
 - **A photo is waiting to be checked**, the photo alert;
 - **Your test alert**;
@@ -12377,6 +12390,157 @@ are done no text reaches a phone and every alert goes by email only:
 check and the alerts on the practice door: the head elf's mobile, a tick at midday, one alert email and
 one text, no second alert a minute later, the two families rule, and the family's take down; and the
 clear out on last year's real door, with a tick on 1 February.
+
+### Catching up on missed doors (Plan 2c-1)
+
+Spec `docs/superpowers/specs/2026-11-12-elf-catch-up-and-grand-prize-design.md` (part 1, with Jaimie's
+answers 2, 5 and 6; approved 12 November 2026); plan `docs/superpowers/plans/2026-11-12-elf-catch-up.md`.
+A family that missed a door's evening, or joined late, can crack that door later from home, with the same
+three clues and one guess, so every family can reach all 24 doors. Everything here ships behind December's
+doors, off: with them off every page and every answer a family gets is byte for byte what it was, and the
+practice door plays all of it through the preview link. Every new or changed word is in part 10 of the
+words file (`docs/superpowers/specs/2026-11-10-elf-wave-2-words.md`), each with a tick box, with its
+questions for Jaimie. Its migration is `migrations/1791200000480_elf-catch-up.js` (additive:
+`elf_guesses.late`, `boolean NOT NULL DEFAULT false`, so every guess already saved reads as a guess on the
+night; it sorts after main's `1791200000470_admin-push.js`). The pure rules are in `src/elf/catch-up.ts`.
+
+**The one rule** (`knowsPlace`). A family can see a door's place once the door is open (found or
+revealed) and the family has a guess at it, from the night or from having a go, or once one of its
+detectives has typed the door's tag word (the find, or a visit). It is asked only of an open door
+(`doorsKnown` waits for that). Nobody else learns a place in December from the calendar or its feed, the
+door feed, a fingerprint (`doorVersion`), a screen reader label, a page title, a refusal, an email, a post,
+a log or a shared cache, and every answer that is a family's own is `Cache-Control: private, no-store`.
+The poster page and the gold and visit cards still name the place, because the family is standing there,
+and Head Elf HQ still shows every place.
+
+**The calendar everyone shares** (still built at most once every 15 seconds and kept in public for 15)
+carries no place and no photo for an open door until Christmas Day. Its scrapbook's title says "Bauble was
+found!" or "Nobody found Bauble in time" where the place was, the news at the top never names a place, the
+photo row is left out and the count is the elves only. An open door carries `DoorView.goUrl`
+(`/elf/hq/door/:n`) until Christmas Day, the same for every visitor, and its last line asks "Where was
+Bauble hiding? Crack the case in Detective HQ to find out." with **Have a go** (a signed out visitor is
+sent to sign in). `doorVersion` hashes `goUrl` only on an open door that has one, so every other door, and
+the whole calendar with the doors off, keeps the fingerprint it had. `familyDoorView` draws a family's own
+door: the shared door with its place and photos laid on, and no go.
+
+**A family's own doors, laid over it by the script** (`assets/js/elf-calendar.js`). While December's doors
+are on, `/api/elf/me` adds `known` (`doorsKnown`) and `goes` (`doorsToCrack`'s doors, newest first), and
+the board carries `data-me-door`, `data-me-doors`, `data-places-from` and `data-places-until` (from
+`christmasDay` and `newYearsDay`). As the page loads the script draws the known doors from the family's own
+routes: one door from `GET /api/elf/me/door/:n`, two or more from `GET /api/elf/me/doors` in one request,
+never one request a door. A door drawn that way keeps the shared fingerprint in `data-v`, so polls still
+compare with the shared calendar, and its later redraws come from the family's route too. A door in `goes`
+keeps the shared Have a go line and hides the family's own line. A known door's route can answer 404 for up
+to 15 seconds after the door opens (the shared cache): that is "not yet", asked again on the next poll and
+given up after a minute (`GIVE_UP_MS`), when the door is drawn as everyone sees it. When a door the family
+cannot see turns open (tonight's), the script reads `/api/elf/me` once more before drawing it, retrying a
+failed read the same way; it reads it once more when the page is shown again after being hidden; while
+the doors are on a poll waits at most 10 seconds from the page's start for the family's answer; and a
+drawing from the shared calendar never lands on a door the family can see, however late its answer comes.
+From Christmas Day until 1 January it fetches none of the family's doors.
+
+**Having a go** (`/elf/hq/door/:n`, `src/elf/pages/go.ts`; `getGo`, `postGo`, `goViewFor`). It is open at
+an open door the family has neither guessed nor been to (`mayHaveAGo`), from the door's shown moment until
+Christmas Day, and offered in three places: today's case in Detective HQ ("You did not lock in a guess in
+time, but you can still crack this case, with one guess."), Detective HQ's new **Doors you can still
+crack** (`HqView.toCrack`, from `doorsToCrack`: newest first, never the door today's case offers, empty
+with the doors off), and the shared calendar's open door. Every Have a go link in Detective HQ names its
+door to a screen reader. The page shows the door's elf and who found it, clue 1 and **Show me the next
+clue** as a plain link (`?clues=2`, `?clues=3`; nothing is remembered between visits), then one plain form
+("You get one guess at this door."), so it needs no script; once the family can see the place it says how
+it went (`goOutcomeWords`: "You cracked it! Bauble was hiding at Corner Bakehouse, Snowford.", or "Not
+this time. ..."). `decideGo` refuses, in order: not open, closed (Christmas Day), already guessed, been
+there, empty, too long. The go is one insert that never overwrites anything (`saveLateGuess`: `INSERT ...
+VALUES (..., true) ON CONFLICT (year, door, family_id) DO NOTHING RETURNING family_id`), so two tabs or two
+phones pressing **Lock in my guess** at once save exactly one go between them, and the other is told it
+has had its go (409 `already`). The night's save never overwrites a go (`saveGuess`'s `DO UPDATE ... WHERE
+NOT elf_guesses.late`), and it now answers whether it saved, so a family whose go was kept is told "You
+have already had your go at this door." and never that its guess was saved. The page and its post answer
+`private, no-store`, and a go counts against the family's guess limit.
+
+**The night's guess once the place is shown** (`postGuess`) is never saved as the go: a family with its
+guess gets 409 `locked-in` (`goUrl: "/elf/hq"`), one that may have its go 409 `have-a-go` (`goUrl` its go
+page), and the HQ script (`assets/js/elf-hq.js`) shows the words while it goes there, only ever to an
+address on this site (`opts.go`, a wrapper round `location.assign`); the plain form goes 303. A shut door,
+a snow day, or a family that has been to today's place without guessing, hears "There is nothing to guess
+at this door just now." (it was "Too late: the hiding place is shown now. Have a look at the calendar.").
+`openPlaces` holds only the open doors whose place the family can see, so "That elf was already found
+behind door 3. Try again!" never gives a place away: anyone else's guess naming door 3's place is an
+ordinary guess.
+
+**A right go counts everywhere a night crack does, but Finds.** `cracked` takes a night guess saved
+strictly before `openedAt` and a go saved at or after it, and `crackedBy` ignores a guess saved after
+`now`. So a right go counts towards ranks, costumes and presents, the certificate and the proud emails,
+graduating and the grand prize, and the calendar's "N families cracked this case"; Finds' Tonight and
+before (`doorCounts(..., false)`) leaves gos out.
+
+**A visit is done for every detective in the family** (Jaimie's answer 2). `DoorsDone.family` holds the
+open doors any detective in the family has visited (the find or a visit), counting by now, and
+`doneDoorsOf` counts them towards every detective's doors done, rank and costumes. The candy cane stamp,
+the gold seal and the elf on the door stay with the detective who went (`visited`). A sibling's promotion
+earned that way, or by a go, is emailed by the worker's ten minute sweep.
+
+**From Christmas Day until 1 January** (Jaimie's answer 6). From midnight London as 25 December of
+`elf_settings.year` begins until midnight as 1 January begins (`placesPublic`, `christmasDay`,
+`newYearsDay`), the shared calendar carries every place and every approved photo for everyone (the two
+families rule still applies), the photo bytes go to anyone (still `private, no-store`), and having a go is
+closed (`goesOpen`): the go page says "Having a go closed on Christmas Day." and shows where the elf was.
+From 1 January it goes back to the December rule by itself: everyone else sees no place or photo, and a
+family still sees the ones it could see before. The practice door (year 0) has no Christmas: its go never
+closes and its place is never public.
+
+**The closing time with the clues** (Jaimie's answer 5; `closingShown`). Only for a door with a closing
+time typed in Doors (the 8pm a door falls back to is not the place's real time), only on the door's own
+day, from clue 1, until it has passed, and never once the elf has gone home. Detective HQ says "The hiding
+place closes at 8:30pm today." under the clue ladder, the go page says it too, and once the family can see
+the place "Corner Bakehouse closes at 8:30pm today." It replaces the old rule that a family is never told
+how late a place is open.
+
+**When a family finds out.** The clue email, the calendar and Detective HQ's clue ladder share one sentence
+(`findOutWords` and `findOutWhenFoundWords` in `src/elf/words.ts`): "You find out whether you cracked it
+at 7pm, or later if the elf is still hiding then.", the short form once the elf is found or when the place
+closes by then (`TodayView.mayShowLater`), and, past the reveal with the elf still hiding, "You find out
+whether you cracked it as soon as the elf is found, or at 8:30pm at the latest." (`TodayView.shownBy`).
+Today's case shows how it ended only to a family that can see the place; once an
+unfound elf has gone home it says only where it was hiding, under "Bauble has gone home", with no prize or
+visit. A calendar door whose elf has gone home reads out "Door 7. Nobody found Bauble in time, and it has
+gone home."
+
+**The emails' new words.** The clue email no longer says when the place is shown: after the clue times it
+says "The hiding place closes at 8:30pm today." (with a closing time typed: `closesAt`, from
+`closingShown`), then when the family finds out (the long form whenever no closing time is typed), then "If
+you miss tonight's hunt, you can still crack this case later in Detective HQ, with one guess." ("today's"
+for a morning clue). Yesterday's post in the 8am email never names a place: who found the elf ("A
+detective" when no finder can be named), or that nobody has yet and the prize is still to be won (nobody
+did, once the elf has gone home), then "Missed it? You can still crack the case in Detective HQ, with one
+guess." until Christmas Day only. The 8am email warns that today's door "becomes a snow day" only for a
+door that cannot open as it stands (`canRun`: no place, no usable tag word or no first clue, the rule
+`markAutomaticSnowDays` snows in by), and says "Nobody found door 7's elf in time." of a door shown
+unfound. All emails gains a third 8am sample (a door with things still to do), and the clue samples show a
+closing time. The won email, the proud emails, the texts and the find alert are unchanged. The rules page,
+with December's doors on, adds "Missed a door on the night? You can still crack its case later in
+Detective HQ, with one guess." and says "Missed a door, or joined late? You can still crack its case later
+in Detective HQ, with one guess." in place of "Joined late? Visit the places from before you joined to do
+their doors.".
+
+**Tests.** `test/unit/elf-catch-up.test.ts` (the one rule, having a go, the Christmas window and the
+closing time), `elf-catch-up-migration`, `elf-routes-catch-up` (the own door routes, the go page's routes,
+and the photo route either side of Christmas Day and 1 January; its fixtures are shared with
+`elf-routes-game` in `test/unit/elf-routes-fixtures.ts`), `elf-page-go`, `elf-js-calendar` and `elf-js-hq`
+(jsdom), with `elf-guess`, `elf-db-game`, `elf-progress`, `elf-wardrobe`, `elf-views`, `elf-page-door`,
+`elf-page-calendar`, `elf-page-hq`, `elf-page-wardrobe`, `elf-page-rules`, `elf-routes-game`,
+`elf-emails`, `elf-posts`, `elf-worker`, `elf-words` and `admin-elf-finds`; the go page is in the house
+rules and site chrome tests. The BDD (`features/elf-game.feature`, CI only) plays having a go on the
+practice door ("A practice evening: having a go once the place is shown, one guess only": one clue, then
+three; Have a go in Detective HQ, and a guess sent there answered `have-a-go`; two tabs locking in at once
+giving one 200 and one 409 `already`; how it went; a wrong go; and `locked-in`), and in last year's
+December checks that door 7's place is off the calendar everyone shares while the family that guessed sees
+it on its own door (`/api/elf/me`, `/api/elf/me/door/7`, `/api/elf/me/doors`), and that a guess it sends
+again is `locked-in`. No BDD date bombs: the `@elf-school` hooks set the game's year to next year, so every
+real door and every Christmas is still to come; the scenario played in last year's December has a
+Christmas Day and a 1 January that have always passed; the practice door's times are absolute; and no step
+compares the real clock with a date written in a feature (where an answer depends on the moment, the
+moment is the app's own, `christmasDay` and `newYearsDay`).
 
 ### The dress-up elf
 
@@ -12498,7 +12662,8 @@ gift tags on a gold string and work as tabs. The costumes are on card sheets by 
 number on a rosette and a chip from `doorChip` (From the start, Done, A present or Two presents,
 Today, Missed, or the door's day, from `WardrobeView.now` and `doorDays`); a locked costume is faint
 with the painted padlock and says on its note why ("Opens with door 7", "Crack today's door to open
-it", "Visit the place to catch up"); one that has just arrived is a wrapped present that opens when it
+it", "Visit the place to catch up", or, while December's doors are on, "Crack it in Detective HQ to catch
+up" for a missed door the family can still crack: Plan 2c-1); one that has just arrived is a wrapped present that opens when it
 is picked and is sent to the server in `tried`. The elf talks back, it snows when the stage is tapped,
 and bursts and snow are only for a visitor happy with motion; on a phone a round bubble brings the
 stage back. Before anything is tapped the page asks for under 1 MB of pictures: the stage, the open

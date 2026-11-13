@@ -7,6 +7,11 @@ game and the family screens, merged switched off) and Plan 2b (the photo check, 
 worker and Finds), and the prints as Plan 1 (the Doors page) changed them. Every sentence is taken from
 the code as it is on 11 November 2026, so what you tick is what goes live.
 
+Part 10 adds catching up on missed doors (Plan 2c-1): a family that missed a door's evening can crack it
+later from home, so a door's place is shown only to a family that has had its guess at that door or been
+there. Its sentences are taken from the code as it is on 13 November 2026. Where part 10 replaces a
+sentence in parts 1 to 9, that sentence is struck through, has no box, and says where its new words are.
+
 How to read it:
 
 - Tick a box when you are happy with the sentence as it is. If you would like it changed, write the new
@@ -23,7 +28,10 @@ How to read it:
   Detective Ruby Tinselfoot.
 - A few sentences were written for wave 1 but can only be seen in December, so you have never seen them
   on the site. They are here too, marked *(wave 1's words)*, so nothing reaches families unseen.
-- The questions that are still open are at the end.
+- A sentence struck through, ~~like this~~, no longer shows anywhere: it has no box to tick, and part 10
+  has the words that replaced it.
+- The questions that are still open are at the end: part 10's own at the end of part 10, and the rest
+  under Questions for Jaimie.
 
 ## 1. The calendar and the scrapbook
 
@@ -32,14 +40,14 @@ How to read it:
 - [ ] While the hunt is on: **The hunt is on!** *(wave 1's words)*
 - [ ] *Bauble* is hiding somewhere in NBCC's area. The first detective to type the word on its tag wins the prize.
 - [ ] Found, place not shown yet: ***Bauble* has been found!**
-- [ ] *Detective R. Tinselfoot* found today's elf at *5:47pm*. The hiding place is shown at *7pm*.
+- ~~*Detective R. Tinselfoot* found today's elf at *5:47pm*. The hiding place is shown at *7pm*.~~ Replaced: see part 10, the calendar for everyone else.
 - [ ] A snow day: ***Bauble* got snowed in**
 - [ ] Door *7* could not open today. It counts as done for everyone.
 - [ ] Next clue: *Tue 8 Dec* at *5:30pm* *(wave 1's words)*
 - [ ] Found and shown: ***Bauble* has been found!** *(wave 1's words)*
-- [ ] *Detective R. Tinselfoot* found today's elf at *Corner Bakehouse, Snowford* at *5:47pm*. *(wave 1's words)*
+- ~~*Detective R. Tinselfoot* found today's elf at *Corner Bakehouse, Snowford* at *5:47pm*.~~ *(wave 1's words)* Replaced: the news never names a place now; see part 10.
 - [ ] Shown, nobody found it: ***Bauble* is still waiting** *(wave 1's words)*
-- [ ] Nobody found today's elf in time. It is at *Corner Bakehouse, Snowford*, and the first detective there still wins the prize.
+- ~~Nobody found today's elf in time. It is at *Corner Bakehouse, Snowford*, and the first detective there still wins the prize.~~ Replaced: see part 10.
 
 ### How it works, steps 2 to 4 *(doors on)*
 
@@ -54,7 +62,7 @@ With the doors off these read exactly as wave 1's did. Step 1 does not change.
 - [ ] The chip on a door found while its place is still hidden: **Found**
 - [ ] Under that door: Found by *Detective R. Tinselfoot*
 - [ ] The chip on a snow day door: **Snow day**
-- [ ] What a screen reader says for a found door whose place is hidden: Door *7*, found. Found by *Detective R. Tinselfoot*. The hiding place is shown at *7pm*.
+- ~~What a screen reader says for a found door whose place is hidden: Door *7*, found. Found by *Detective R. Tinselfoot*. The hiding place is shown at *7pm*.~~ Replaced: see part 10.
 - [ ] What a screen reader says for a snow day door: Door *7*, snow day. *Bauble* got snowed in.
 
 ### A door's note, before its place is shown *(doors on)*
@@ -64,12 +72,18 @@ With the doors off these read exactly as wave 1's did. Step 1 does not change.
 - [ ] While the hunt is on: *Bauble's* clue came out at *5:30pm*. *Bauble* is hiding somewhere in NBCC's area. *(wave 1's words)*
 - [ ] While the hunt is on: The first detective to find the elf and type the word on its tag wins the prize. *Bauble* stays there for everyone else to find.
 - [ ] Found, place not shown yet, the heading: ***Bauble* has been found!**
-- [ ] Found by *Detective R. Tinselfoot* at *5:47pm*. The hiding place is shown at *7pm*.
+- ~~Found by *Detective R. Tinselfoot* at *5:47pm*. The hiding place is shown at *7pm*.~~ Replaced: see part 10.
 - [ ] Clues are still coming out in Detective HQ, and you can still lock in your guess.
 - [ ] A snow day, the heading: ***Bauble* got snowed in**
 - [ ] This door could not open today, so it counts as done for every detective. The hunt goes on tomorrow.
 
 ### The scrapbook behind an open door *(doors on)*
+
+Since catching up on missed doors (part 10), the lines here that name the place (the place at the top,
+the two Nobody found lines and The elf is still at) and the row of photos show only where the place can
+be seen: on a family's own door once it has had its guess there or been there, and on everyone's door
+from Christmas Day to 1 January. So they keep their boxes. Everyone else sees part 10's lines in their
+place.
 
 - [ ] At the top: Door *7* · *Monday 7 December*, then the place: *Corner Bakehouse, Snowford*
 - [ ] Beside the paper rosette: **Found**
@@ -100,6 +114,9 @@ Shown under the scrapbook to a family that is signed in.
 
 On a door whose elf has gone home nothing invites a visit: a family that collected nothing there sees no line of its own.
 
+On a door the family can still crack, its own line stays hidden and the door offers Have a go instead
+(part 10).
+
 ### The family's own photo, on the calendar *(doors on)*
 
 - [ ] Under their photo in the scrapbook: Your photo
@@ -127,8 +144,8 @@ On a door whose elf has gone home nothing invites a visit: a family that collect
 
 - [ ] On each clue's note: **Clue *1*** and the time it came out, *5:30pm*, then the clue as the head elves wrote it, and its picture if it has one
 - [ ] Clue *2* comes out at *6pm*, with a countdown under it
-- [ ] Once all three are out: The hiding place is shown at *7pm*
-- [ ] Once the time to show the place has passed and nobody has found the elf: The hiding place is shown as soon as the elf is found.
+- ~~Once all three are out: The hiding place is shown at *7pm*~~ Replaced: see part 10, Detective HQ.
+- ~~Once the time to show the place has passed and nobody has found the elf: The hiding place is shown as soon as the elf is found.~~ Replaced: see part 10, Detective HQ.
 
 ### The guess
 
@@ -141,6 +158,10 @@ On a door whose elf has gone home nothing invites a visit: a family that collect
 - [ ] There is nothing left to guess just now. Keep an eye on the calendar. *(wave 1's words)*
 
 ### How the door turned out
+
+Since part 10, this shows only to a family that can see the place (it guessed, or has been there). A
+family that may still have its go sees Have a go instead, and once the elf has gone home the case
+changes (part 10).
 
 - [ ] Shown, nobody found it: Nobody found *Bauble* in time. *Bauble* is still waiting at *Corner Bakehouse, Snowford*, and the first detective to type the word on its tag still wins the prize.
 - [ ] Found: *Bauble* was hiding at *Corner Bakehouse, Snowford*. *(wave 1's words)*
@@ -254,10 +275,10 @@ Note: a family that has already won a prize this year and types another door's w
 
 ### A guess that is not taken *(doors on)*
 
-- [ ] Too late: the hiding place is shown now. Have a look at the calendar.
+- ~~Too late: the hiding place is shown now. Have a look at the calendar.~~ Replaced: see part 10, the refusals.
 - [ ] Type where you think *Bauble* is hiding.
 - [ ] That is a bit long. Up to 80 letters is plenty.
-- [ ] A guess naming an earlier door's place: That elf was already found behind door *3*. Try again!
+- [ ] A guess naming an earlier door's place: That elf was already found behind door *3*. Try again! (Since part 10, only to a family that can see door *3*'s place.)
 
 ### A photo that is not taken *(doors on)*
 
@@ -280,6 +301,8 @@ Note: a family that has already won a prize this year and types another door's w
 With the doors off the rules read exactly as they do now ("Each family can win one elf.").
 
 - [ ] The first detective to reach the elf and type the word on its tag wins that door's prize. The elf stays there for everyone else to find. Each family can win one prize.
+
+Part 10 adds two more sentences, on cracking a missed door later.
 
 ## 6. The prints, as Plan 1 changed them
 
@@ -322,7 +345,7 @@ Every one is in Admin > Get involved > All emails, under Elf Detective School, w
 - [ ] Then the clue's words in a box, as the head elves wrote them
 - [ ] A clue with words and a picture: See the picture in Detective HQ.
 - [ ] A clue that is only a picture: Clue 1 is a picture: *a pine cone on a snowy wall*. See it in Detective HQ.
-- [ ] Clue 2 comes out at *6pm* and clue 3 at *6:30pm*, in Detective HQ. The hiding place is shown at *7pm*.
+- ~~Clue 2 comes out at *6pm* and clue 3 at *6:30pm*, in Detective HQ. The hiding place is shown at *7pm*.~~ Replaced: see part 10, the clue email.
 - [ ] The button: Open Detective HQ
 - [ ] If you are reading this a little late, the clue has been in Detective HQ since *5:30pm*.
 - [ ] Did you know? followed by one of the facts for grown ups
@@ -349,12 +372,12 @@ Every one is in Admin > Get involved > All emails, under Elf Detective School, w
 - [ ] Subject and heading: **Elf HQ: *Tuesday 8 December***
 - [ ] **Today's door**
 - [ ] Door *8* is ready. The first clue comes out at *5:30pm*.
-- [ ] Door *8* is NOT ready: *the elf and its tag, the three clues*. Fix it in Doors before *5:30pm*, or it becomes a snow day.
+- ~~Door *8* is NOT ready: *the elf and its tag, the three clues*. Fix it in Doors before *5:30pm*, or it becomes a snow day.~~ Replaced: see part 10, the 8am email.
 - [ ] Door *8* is a snow day.
 - [ ] There is no door today.
 - [ ] **Yesterday**
 - [ ] *Detective R. Tinselfoot* found door *7*'s elf at *5:47pm*.
-- [ ] Nobody found door *7*'s elf; its place was shown.
+- ~~Nobody found door *7*'s elf; its place was shown.~~ Replaced: see part 10, the 8am email.
 - [ ] Door *7* was a snow day.
 - [ ] **Photos**: *3* photos waiting to be checked (or: 1 photo waiting to be checked), with the button Open Head Elf HQ
 - [ ] **Today's posts, ready to copy**
@@ -369,8 +392,8 @@ Each with its door's picture once the door pictures are made.
 
 - [ ] An evening door: Door *8* of NBCC Elf Detective School opens tonight! The first clue comes out at *5:30pm* in Detective HQ, with two more across the evening. Not a detective yet? Join at *https://nbcc.scot/elf*
 - [ ] A morning door: Door *5* of NBCC Elf Detective School opens today! The first clue comes out at *10am* in Detective HQ, with two more across the morning. Not a detective yet? Join at *https://nbcc.scot/elf*
-- [ ] Yesterday's door, found: Door *7* is open! *Detective R. Tinselfoot* found *Bauble* at *Corner Bakehouse, Snowford* at *5:47pm*. *Bauble* stays there all December: call in, type the word on the tag for a candy cane stamp, and add your picture to the door.
-- [ ] Yesterday's door, nobody found it: Door *7* is open! Nobody found *Bauble* in time, so *Bauble* is waiting at *Corner Bakehouse, Snowford*. The first detective to type the word on its tag wins the prize.
+- ~~Yesterday's door, found: Door *7* is open! *Detective R. Tinselfoot* found *Bauble* at *Corner Bakehouse, Snowford* at *5:47pm*. *Bauble* stays there all December: call in, type the word on the tag for a candy cane stamp, and add your picture to the door.~~ Replaced: the posts never name a place now; see part 10, the 8am email.
+- ~~Yesterday's door, nobody found it: Door *7* is open! Nobody found *Bauble* in time, so *Bauble* is waiting at *Corner Bakehouse, Snowford*. The first detective to type the word on its tag wins the prize.~~ Replaced: see part 10, the 8am email.
 
 ### A door's elf has been found (to head elves with alerts on) *(doors on)*
 
@@ -416,7 +439,7 @@ Graduating has its own email, so nobody is also sent a promotion to Graduate.
 
 - [ ] **The first clue is out**: Goes to each grown up with detectives enrolled, when a door's first clue comes out in December. (Its note: The clue words and the picture words are typed in Doors. A clue picture is never in the email.) Versions: Words, A picture only, Words and a picture
 - [ ] **Today is your Elf Detective School day**: Goes to the place's contact at 9am on its day, with what to do and when. Versions: An evening clue, A morning clue
-- [ ] **Elf HQ: the 8am email**: Goes to head elves at 8am each day in December, with the day's door, yesterday's find and the two posts. Versions: A door ready, yesterday found, and A door not ready, yesterday a snow day
+- ~~**Elf HQ: the 8am email**: Goes to head elves at 8am each day in December, with the day's door, yesterday's find and the two posts. Versions: A door ready, yesterday found, and A door not ready, yesterday a snow day~~ Replaced: it has three versions now; see part 10, the 8am email.
 - [ ] **A door's elf has been found**: Goes to head elves whose alerts are on, as soon as an elf is found.
 - [ ] **A photo is waiting to be checked**: Goes to head elves whose alerts are on, when photos start waiting. Never one for every photo.
 - [ ] **Your test alert**: Goes to a head elf who presses the test alert button in Head Elf HQ.
@@ -637,6 +660,220 @@ From NBCC, to head elves with alerts on and a mobile number, once texts are swit
 - [ ] Added. Guesses are checked against it from now.
 - [ ] No door has started yet.
 
+## 10. Catching up on missed doors (Plan 2c-1) *(doors on)*
+
+A family that missed a door's evening, or joined late, can now crack that door's case later from home in
+Detective HQ, with the same three clues and one guess. So a door's place is shown only to a family that
+has had its guess at that door, or whose detective has been there. Everyone else sees who found the elf,
+and never where, until Christmas Day. From Christmas Day until 1 January every place and every approved
+photo is on the calendar for everyone, and having a go closes.
+
+- Everything in this part shows only once December's doors are switched on. Head elves can try all of it
+  on the practice door, through the preview link.
+- In these examples Corner Bakehouse closes at *8:30pm*, as typed in Doors.
+- A right go counts exactly like a right guess on the night, and a visit now counts as done for every
+  detective in the family (the candy cane stamp, the gold seal and the elf on the door stay with the
+  detective who went). Neither adds any words: only the counts change.
+- There are no pictures to approve here. Door pictures are not being made: every door carries the same
+  present, cut out of card like the star (Jaimie, 12 November), which comes in its own small change.
+
+### The calendar for everyone else
+
+Until Christmas Day this is what anyone sees who cannot see a door's place: anyone not signed in, and
+any family that has not had its guess at that door or been there. A family that can see the place gets
+its own door instead, with the place and the photos, in part 1's words. From Christmas Day to 1 January
+everyone sees part 1's words, with every place and photo, and no Have a go.
+
+The news at the top of the calendar, which is the same for everyone and never names a place now (the
+titles above it stay as in part 1):
+
+- [ ] Found, place not shown yet: *Detective R. Tinselfoot* found today's elf at *5:47pm*. You find out whether you cracked it at *7pm*. (It said "The hiding place is shown at 7pm.")
+- [ ] Found and shown: *Detective R. Tinselfoot* found today's elf at *5:47pm*. Missed the hunt? You can still crack the case in Detective HQ.
+- [ ] Shown, nobody found it: Nobody has found today's elf yet, and the first detective to find it still wins the prize. You can crack the case in Detective HQ.
+- [ ] Shown, nobody found it, and its elf has gone home: Nobody found today's elf in time. You can crack the case in Detective HQ. (Its title stays ***Bauble* is still waiting**: see the questions below. Head Elf HQ allows gone home only after a door's day, so families should not meet this; it is there in case.)
+
+What a screen reader says for a door:
+
+- [ ] Found, place not shown yet: Door *7*, found. Found by *Detective R. Tinselfoot*. You find out whether you cracked it at *7pm*. (It said "The hiding place is shown at 7pm.")
+- [ ] Found and shown: Door *7*, found. Found by *Detective R. Tinselfoot*. (Where the place can be seen: Door *7*, found. *Corner Bakehouse, Snowford*. Found by *Detective R. Tinselfoot*.)
+- [ ] Shown, nobody found it: Door *7*, not found yet. (Where the place can be seen: Door *7*, not found yet. *Bauble* is waiting at *Corner Bakehouse, Snowford*.)
+- [ ] Shown, nobody found it, and its elf has gone home: Door *7*. Nobody found *Bauble* in time, and it has gone home. (Where the place can be seen it goes on: *Bauble* was hiding at *Corner Bakehouse, Snowford*.) It said "Door 7, not found yet." and "Bauble is waiting at Corner Bakehouse, Snowford."
+
+A door's note, found and the place not shown yet:
+
+- [ ] Found by *Detective R. Tinselfoot* at *5:47pm*. You find out whether you cracked it at *7pm*. (It said "The hiding place is shown at 7pm.")
+
+The scrapbook behind an open door:
+
+- [ ] Found, the title in place of the place: ***Bauble* was found!**
+- [ ] Nobody found it, the title in place of the place: **Nobody found *Bauble* in time**
+- [ ] Under that title, while nobody has found it and its elf has not gone home: *Bauble* is still hiding, and the first detective to type the word on its tag wins the prize.
+- [ ] At the end, in place of "The elf is still at *Corner Bakehouse*. Visit to add your picture.": Where was *Bauble* hiding? Crack the case in Detective HQ to find out. Then the button: Have a go
+- [ ] The same, while nobody has found it and its elf has not gone home: Where is *Bauble* hiding? Crack the case in Detective HQ to find out.
+
+Have a go is on every open door until Christmas Day. Not signed in, it leads to signing in. A signed in
+family that can still crack the door sees it too, and its own line under the scrapbook stays hidden. The
+row of photos is left out, and "Everyone who found this elf, with *3 pictures*" counts the elves only. A
+found door still names its prize, as in part 1: "*Detective R. Tinselfoot* won the prize cut into this
+door: *a box of paints*." (see the questions below).
+
+### Having a go: a missed door's own page in Detective HQ
+
+Reached from Have a go on the calendar, from today's case in Detective HQ, and from Detective HQ's list
+of doors you can still crack. It works with no script.
+
+- [ ] At the top: Detective HQ, then **Door *7*** (or: **The practice door**, with the chip **Practice**). The browser's tab names the door too, never the place.
+- [ ] Under it: *Bauble*, the elf behind door *7* (or: *Tinsel*, the practice door's elf)
+- [ ] The page's description, shown when its link is shared (search engines are asked not to list the page): Your family's go at a door you missed in NBCC Elf Detective School: its clues one at a time, then one guess.
+- [ ] The buttons: Detective HQ (on the strip at the top), and Back to Detective HQ (at the foot)
+
+The first line of the note, whatever the stage:
+
+- [ ] Found by *Detective R. Tinselfoot* at *5:47pm*.
+- [ ] On the practice door, and where the finder's family has been taken out: Found by A detective at *3:08pm*.
+- [ ] Nobody has found *Bauble* yet.
+- [ ] Once its elf has gone home with nobody finding it: Nobody found *Bauble*.
+
+Having a go, for a family that has not guessed this door or been there:
+
+- [ ] The heading: **Crack the case**
+- [ ] The clues came out on *Monday 7 December*. Read them one at a time, then make your guess.
+- [ ] On the door's own day, with a closing time typed in Doors: The hiding place closes at *8:30pm* today.
+- [ ] Then clue 1 on its note, as in Detective HQ, and while another clue is out, the button: Show me the next clue
+- [ ] The question: Where was *Bauble* hiding? (While nobody has found it and its elf has not gone home: Where is *Bauble* hiding?)
+- [ ] Under the question, as in Detective HQ: Type the name of the place. Spelling does not have to be perfect.
+- [ ] You get one guess at this door.
+- [ ] The button: Lock in my guess
+
+How it went, once the family can see the place (after its go, or when it guessed on the night or has
+been there):
+
+- [ ] The heading: **How it went**
+- [ ] Cracked: You cracked it! *Bauble* was hiding at *Corner Bakehouse, Snowford*.
+- [ ] Not right: Not this time. *Bauble* was hiding at *Corner Bakehouse, Snowford*.
+- [ ] With no guess (the family has been there): *Bauble* was hiding at *Corner Bakehouse, Snowford*.
+- [ ] While nobody has found it and its elf has not gone home, after You cracked it! or Not this time.: *Bauble* is hiding at *Corner Bakehouse, Snowford*, and nobody has found *Bauble* yet. The first detective to type the word on its tag still wins the prize.
+- [ ] Then, if the family has been there, as in part 1: Your family has been there. Candy cane collected.
+- [ ] Or, once its elf has gone home: *Bauble* has gone home now, so there is nothing to find there.
+- [ ] Or else, as in Detective HQ: Visit the hiding place and scan its poster to collect your candy cane.
+- [ ] On the door's own day, with a closing time typed in Doors: *Corner Bakehouse* closes at *8:30pm* today.
+
+A place with no town typed leaves the town out: "*Bauble* was hiding at *Corner Bakehouse*."
+
+From Christmas Day, for a family that has not guessed the door or been there:
+
+- [ ] The heading: **Having a go closed on Christmas Day.** Then, until 1 January, where the elf was hiding, with the line under it, as above.
+
+When a go is not taken, the page says why under the guess:
+
+- [ ] With nothing typed, as in part 4: Type where you think *Bauble* is hiding.
+- [ ] Too long, as in part 4: That is a bit long. Up to 80 letters is plenty.
+- [ ] Sent too often, as in part 4: Too many tries. Please wait a few minutes and try again.
+
+A go pressed twice, or from two tabs or two phones at once, is saved only once, and the page then shows
+how it went.
+
+### Detective HQ
+
+Today's case:
+
+- [ ] Once the place is shown, for a family that did not lock in a guess and has not been there, in place of how the door turned out: You did not lock in a guess in time, but you can still crack this case, with one guess. Then the button: Have a go
+- [ ] What a screen reader says for that button: Have a go at door *7* (or: Have a go at the practice door)
+- [ ] Under the clues, on the door's own day with a closing time typed in Doors: The hiding place closes at *8:30pm* today.
+- [ ] Under how the door turned out, the same day: *Corner Bakehouse* closes at *8:30pm* today.
+
+The clues, once all three are out (the same words as the clue email and the calendar):
+
+- [ ] While the elf is still hiding: You find out whether you cracked it at *7pm*, or later if the elf is still hiding then. (It said "The hiding place is shown at 7pm".)
+- [ ] The same when the place closes at or before then, and once the elf is found: You find out whether you cracked it at *7pm*.
+- [ ] Once that time has passed and nobody has found the elf: You find out whether you cracked it as soon as the elf is found, or at *8:30pm* at the latest. (It said "The hiding place is shown as soon as the elf is found.") The time is the closing time typed in Doors, or 8pm when none is typed; with no time at all, which cannot happen in play, the sentence ends at "found".
+
+Once its elf has gone home with nobody finding it (a safety net: Head Elf HQ allows gone home only after
+a door's day, so families should not meet this on today's case):
+
+- [ ] The heading: ***Bauble* has gone home** (It said "Bauble is still out there".)
+- [ ] Under it: *Bauble* was hiding at *Corner Bakehouse*. (It said "Nobody found Bauble in time. Bauble is still waiting at Corner Bakehouse, and the first detective to type the word on its tag still wins the prize.")
+
+Once its elf has gone home, found or not, "Visit the hiding place and scan its poster to collect your
+candy cane." is left out.
+
+Doors you can still crack, under today's case: only while there is a door to crack, newest first, never
+today's door (today's case offers it), and none from Christmas Day.
+
+- [ ] The heading, on a gold strip: **Doors you can still crack**
+- [ ] Missed a door? Crack its case here, with one guess. You get the same three clues, one at a time.
+- [ ] Each door: **Door *7***, *Mon 7 Dec*, *Bauble*, and the button Have a go
+- [ ] What a screen reader says for each button: Have a go at door *7*
+
+The wardrobe:
+
+- [ ] On a costume locked behind a missed door the family can still crack: Crack it in Detective HQ to catch up (any other missed door still says Visit the place to catch up)
+- [ ] What a screen reader says for that costume: *Snowy owl*, crack it in Detective HQ to catch up
+
+### The refusals
+
+- [ ] In Detective HQ, in place of "Too late: the hiding place is shown now. Have a look at the calendar.", for a guess at a door that is shut or snowed in, or from a family that has been to the place without guessing: There is nothing to guess at this door just now. (A go sent to a door with nothing to crack is told the same, but only a script hears it: the page goes back to Detective HQ.)
+- [ ] A guess sent once the place is shown, from a family that locked in a guess: Your guess is locked in, and the hiding place is shown now. (It shows for a moment while Detective HQ opens again with how the door turned out.)
+- [ ] The same, from a family that did not lock in a guess: The hiding place is shown now, so this is your one go at this door. (It shows for a moment while the door's own page opens for its go. With no script, the page opens straight away and neither of these two shows.)
+- [ ] In Detective HQ, when a guess on the night cannot be saved because the family has already had its go at that door (only if a head elf moved a door's times later after its place was shown): You have already had your go at this door. (A go sent twice is told the same, but only a script hears it: the page shows how the go went.)
+- [ ] A go sent from Christmas Day: Having a go closed on Christmas Day.
+- [ ] A go from a family that has been there (only a script hears it; the page shows how it went): Your family has been to this hiding place, so there is nothing to guess.
+
+"That elf was already found behind door *3*. Try again!" (part 4) is now said only to a family that can
+see door *3*'s place. Anyone else's guess naming that place is taken as an ordinary guess, so it never
+gives door 3's place away.
+
+### The clue email (to each grown up, at clue 1)
+
+- [ ] After the clue, in place of part 7's line: Clue 2 comes out at *6pm* and clue 3 at *6:30pm*, in Detective HQ.
+- [ ] Then, with a closing time typed in Doors: The hiding place closes at *8:30pm* today.
+- [ ] Then: You find out whether you cracked it at *7pm*, or later if the elf is still hiding then.
+- [ ] Or, when the place closes at or before that time: You find out whether you cracked it at *7pm*.
+- [ ] Then its own paragraph: If you miss tonight's hunt, you can still crack this case later in Detective HQ, with one guess. (For a morning clue: If you miss today's hunt, you can still crack this case later in Detective HQ, with one guess.)
+
+So door 7's email says "Clue 2 comes out at 6pm and clue 3 at 6:30pm, in Detective HQ. The hiding place
+closes at 8:30pm today. You find out whether you cracked it at 7pm, or later if the elf is still hiding
+then." and then "If you miss tonight's hunt, you can still crack this case later in Detective HQ, with one
+guess." In All emails, the clue email's samples now show a closing time of 9pm.
+
+### The 8am email (to head elves)
+
+Yesterday's post, ready to copy, which never names the place now:
+
+- [ ] Found: Door *7* is open! *Detective R. Tinselfoot* found *Bauble* at *5:47pm*. Missed it? You can still crack the case in Detective HQ, with one guess.
+- [ ] Found, with no finder who can be named (their family has been taken out): Door *7* is open! A detective found *Bauble* at *5:47pm*. Missed it? You can still crack the case in Detective HQ, with one guess.
+- [ ] Nobody found it: Door *7* is open! Nobody has found *Bauble* yet, so the first detective to find it still wins the prize. Missed it? You can still crack the case in Detective HQ, with one guess.
+- [ ] Nobody found it, and its elf went home overnight: Door *7* is open! Nobody found *Bauble* in time. Missed it? You can still crack the case in Detective HQ, with one guess.
+- [ ] From Christmas Day each of these ends before "Missed it?", because having a go has closed. Door 24's post on Christmas morning, for example: Door *24* is open! *Detective R. Tinselfoot* found *Twinkle* at *10:20am*.
+
+Today's door, and yesterday:
+
+- [ ] Today's door not ready, but able to open: Door *8* is NOT ready: *the prize, dropped off*. Fix it in Doors before *5:30pm*.
+- [ ] Today's door that cannot open as it stands, with no place, no word on its tag or no first clue: Door *8* is NOT ready: *the elf and its tag, the three clues*. Fix it in Doors before *5:30pm*. Without its place, the word on its tag or its first clue, it becomes a snow day.
+- [ ] Yesterday, found, with no finder who can be named: A detective found door *7*'s elf at *5:47pm*.
+- [ ] Yesterday, nobody found it: Nobody found door *7*'s elf in time.
+- [ ] In All emails: **Elf HQ: the 8am email**: Goes to head elves at 8am each day in December, with the day's door, yesterday's find and the two posts. Versions: A door ready, yesterday found; A door that cannot open yet, yesterday a snow day; and A door with things still to do, yesterday found
+
+### The rules page
+
+- [ ] How the hunt works, straight after the guess line: Missed a door on the night? You can still crack its case later in Detective HQ, with one guess.
+- [ ] The grand prize, in place of "Joined late? Visit the places from before you joined to do their doors." (which stays while December's doors are off): Missed a door, or joined late? You can still crack its case later in Detective HQ, with one guess.
+
+### Questions for Jaimie on this part
+
+- **A.** From Christmas Day, yesterday's post stops saying "Missed it? You can still crack the case in Detective HQ, with one guess.", because having a go closes on Christmas Day. But the rules page goes on saying "Missed a door on the night? You can still crack its case later in Detective HQ, with one guess." for as long as December's doors are on, Christmas Day included: should the rules say that having a go ends on Christmas Day?
+- **B.** On Christmas Eve, door 24's clue email says "If you miss today's hunt, you can still crack this case later in Detective HQ, with one guess.", where "later" then means only until midnight: should door 24's email say so?
+- **C.** The calendar's found elf now says "You find out whether you cracked it at 7pm." (in the news, for a screen reader and on the door's note) in place of "The hiding place is shown at 7pm.", because the place is shown then only to a family that has had its guess; the clue email and Detective HQ say the same: are these the words you want?
+- **D.** Once a found door opens, the calendar everyone shares names its prize ("Detective R. Tinselfoot won the prize cut into this door: a box of paints."), and a prize staff chose to show off is on its door before then, while its place stays hidden from everyone else until Christmas Day. So a prize must never name or point at the business giving it: "a cake from The Example Bakehouse" would give the answer away. Doors already says under the prize "A prize must not point at the place giving it.": is that enough of a warning for head elves?
+- **E.** Today's door shown with nobody found, if its elf had gone home, says "Nobody found today's elf in time. You can crack the case in Detective HQ." under the title "Bauble is still waiting": should that title change too, for example to "Bauble has gone home", as Detective HQ says? (Head Elf HQ allows gone home only after a door's day, so families should not see it.)
+- **F.** From Christmas Day, a go sent by a family that has already guessed that door is told "Having a go closed on Christmas Day." rather than "You have already had your go at this door." (on the page itself the family just sees how its guess went): both are true; is that the one you want?
+
+Noticed while gathering these words:
+
+- **G.** Today's case says **Case closed** above "You did not lock in a guess in time, but you can still crack this case, with one guess.": should the heading say something else while a go is still to be had?
+- **H.** Having a go on the door's own evening, the page says "The clues came out on Monday 7 December.", which is that same day: should it say "today" then?
+- **I.** Doors you can still crack leaves out today's door, because today's case already offers its go: would you like it on the list as well?
+
 ## Questions for Jaimie
 
 The choices the builds left open, one sentence each.
@@ -644,7 +881,7 @@ The choices the builds left open, one sentence each.
 1. A door's photos stay hidden until photos from two families are approved on it, so one family's photo never sits beside that family's elves; would you rather let the head elf decide, with a warning on the photo check?
 2. An open door's room on the calendar is the site's pale paper, where the scrapbook mockup you agreed had a darker, dim room: keep the pale paper, or make it darker like the mockup?
 3. On the morning after a snow day the 8am email still says "Yesterday's find is not public yet, so there is no post for it."; should it say something else that morning, or nothing?
-4. The 8am email says a door that is not ready "becomes a snow day", but only a door with no place, no word on its tag or no first clue is snowed in, and a door missing anything else still runs: should that line say so?
+4. The 8am email says a door that is not ready "becomes a snow day", but only a door with no place, no word on its tag or no first clue is snowed in, and a door missing anything else still runs: should that line say so? *Answered in the build: the line now says so, and its words are in part 10 (the 8am email).*
 5. The 8am email also goes on 30 November, saying "There is no door today."; keep it, or start on 1 December?
 6. The question before switching December's doors off does not say that every family's progress and earned costumes disappear while the doors are off: should it say so?
 7. Door 24's snow day note says "The hunt goes on tomorrow.", and a snow day note read on a later day still says the door "could not open today": should those change?
@@ -652,5 +889,5 @@ The choices the builds left open, one sentence each.
 Noticed while gathering these words:
 
 8. The word box on the poster page says "The secret word on the elf's tag" (and the poster says "type the secret word on its tag"), where the newer words say "the word on its tag": should they match?
-9. The clue email says "The hiding place is shown at 7pm", but if nobody has found the elf by then its place stays hidden until someone does or the place closes: should the email say so?
+9. The clue email says "The hiding place is shown at 7pm", but if nobody has found the elf by then its place stays hidden until someone does or the place closes: should the email say so? *Answered by the plan for catching up on missed doors (planner's call 9): the email now says "You find out whether you cracked it at 7pm, or later if the elf is still hiding then." Its words are in part 10 (the clue email).*
 10. The When alerts go box does not say that an alert never comes sooner than half an hour after the last one: should it?

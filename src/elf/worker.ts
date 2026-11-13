@@ -312,13 +312,21 @@ const weekBefore = (door: Door, at: Date): boolean => catchUpOf({ door, runs: []
  *  the same) and the doors it can still crack from home; up to date, with when the entries close (a head elf's time,
  *  or 5pm). A family with no detective gets no such line. Door 23's also says, to every family, when door 24's first
  *  clue comes out (christmasEveOf: nothing when door 24 is snowed in). Every other door's email gets neither, and
- *  reads nothing. Called inside the family's claimed send (ruling F17): a family whose doors cannot be read is tried
- *  again on its own. */
+ *  reads nothing. Called inside the family's claimed send (ruling F17). The clue is the essential part of the email,
+ *  so a family whose doors cannot be read is logged by its id alone and gets its clue without the grand prize lines;
+ *  door 23's line, which needs nothing of the family's, still goes. Never throws. */
 async function prizeLines(door: Door, familyId: number, t: Tick): Promise<PrizeLines> {
   if (!weekBefore(door, t.at)) return NO_PRIZE_LINES;
-  const [doorsDone, knowledge] = await Promise.all([t.deps.familyDoorsDone(t.year, familyId, t.runs, t.at), t.deps.familyKnowledge(t.year, familyId)]);
   // The spec puts no condition on door 23's line, so it goes to a family with no detective too.
   const christmasEve = christmasEveOf({ door, runs: t.runs });
+  let doorsDone: Map<number, DoorsDone>;
+  let knowledge: FamilyKnowledge;
+  try {
+    [doorsDone, knowledge] = await Promise.all([t.deps.familyDoorsDone(t.year, familyId, t.runs, t.at), t.deps.familyKnowledge(t.year, familyId)]);
+  } catch (err) {
+    failed(`grand prize lines for family ${familyId}`, err);
+    return { christmasEve, catchUp: null };
+  }
   const [anyDetective] = doorsDone.values();
   if (!anyDetective) return { christmasEve, catchUp: null };
   const catchUp = catchUpOf({
@@ -341,8 +349,8 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
   const families = await t.deps.familiesStillToEmail(t.year, door, CLUE_EMAILS_A_TICK);
   for (const f of families) {
     await claimed(t.deps, "clue", `${due.key}:${f.familyId}`, async () => {
-      // Read once this family's send is claimed (ruling F17): one whose doors cannot be read is tried again ten minutes
-      // on, on its own, and the others still go.
+      // Read once this family's send is claimed (ruling F17): one whose doors cannot be read still gets its clue, without
+      // the grand prize lines.
       const prize = await prizeLines(door, f.familyId, t);
       const mail = buildElfClueEmail({
         grownUpName: f.grownUpName,

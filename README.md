@@ -12864,7 +12864,9 @@ still crack from home (`doorsToCrack`) or, with none, to visit the places it has
 says, before the clue 2 line, when door 24's first clue comes out (`christmasEveOf`), unless door 24 is a snow
 day; it goes to every family, one with no detective included, which gets no grand prize lines. The worker reads
 each family's doors inside its claimed send (`prizeLines`: `familyDoorsDone` and `familyKnowledge`, on doors 17
-to 23 only), so a family whose read fails is tried again on its own. The lines ride in the clue email, so a
+to 23 only). The clue is the essential part, so a family whose doors cannot be read gets its clue email at once
+without the grand prize lines (door 23's line, which needs nothing of the family's, still goes), and the failure
+is logged with the family's id only, never a name. The lines ride in the clue email, so a
 snowed in door sends neither, and a family that has stopped the emails gets neither. All emails gains four
 versions of the clue email: The week before, up to date; The week before, behind; The week before, behind,
 nothing left to crack from home; and The day before Christmas Eve.

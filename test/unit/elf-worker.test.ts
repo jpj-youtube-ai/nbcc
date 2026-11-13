@@ -600,24 +600,52 @@ describe("the clue email in the week before Christmas Eve", () => {
     expect((deps.familyKnowledge as Mock).mock.calls.map((c) => c[1])).toEqual([3]);
   });
 
-  it("tries a family whose doors cannot be read again on its own ten minutes on, while the others go", async () => {
-    let broken = true;
-    const { deps, sent, tick } = week({
-      done: { 3: doneOf(doorsUpTo(17)), 4: doneOf(doorsUpTo(15)) },
-      knowledge: { 3: guessed(doorsUpTo(17)), 4: guessed(doorsUpTo(15)) },
+  // The final review, issue 3: the clue is the essential part of the email. A family whose doors cannot be read still
+  // gets its clue email straight away, without the grand prize lines, and the failure is logged by its id alone.
+  it("still sends a family whose doors cannot be read its clue email, with none of the week before's lines, logging only its id", async () => {
+    const SUN_20 = at("2026-12-20T10:01:00Z");
+    for (const broken of ["familyDoorsDone", "familyKnowledge"] as const) {
+      vi.mocked(console.error).mockClear();
+      const { deps, sent, tick } = week({
+        done: { 3: doneOf(doorsUpTo(19)), 4: doneOf(doorsUpTo(15)) },
+        knowledge: { 3: guessed(doorsUpTo(19)), 4: guessed(doorsUpTo(15)) },
+      });
+      const read = (deps[broken] as Mock).getMockImplementation()!;
+      (deps[broken] as Mock).mockImplementation(async (...args: unknown[]) => {
+        if (args[1] === 4) throw new Error("the doors could not be read");
+        return read(...args);
+      });
+      await tick(SUN_20);
+      expect(sentOf(sent, "clue").map((s) => s.to), broken).toEqual(["sam@example.org", "alex@example.org"]);
+      const mail = mailTo(sent, "alex@example.org");
+      expect(mail.subject).toBe("Door 20: the first clue is out");
+      expect(mail.text).toContain("Pretend clue one");
+      for (const words of [READY, BEHIND, TOMORROW, "You can still crack"]) expect(mail.text, broken).not.toContain(words);
+      expect(mail.text).toContain(`Stop these emails: ${stopPage(TOKEN_4)}`);
+      // The other family's lines are its own.
+      expect(mailTo(sent, "sam@example.org").text).toContain(READY);
+      // It went, so it is never tried again; and the log names the family by its id alone.
+      expect(deps.markSendFailed).not.toHaveBeenCalled();
+      expect(console.error).toHaveBeenCalledWith("elf worker grand prize lines for family 4 failed:", "the doors could not be read");
+      const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+      for (const name of ["Alex Example", "alex@example.org", "Sam Example"]) expect(logged, broken).not.toContain(name);
+    }
+  });
+
+  // Door 23's Christmas Eve line needs nothing of the family's, so it still goes when the family's doors cannot be read.
+  it("keeps door 23's Christmas Eve line for a family whose doors cannot be read", async () => {
+    const { sent, tick } = week({
+      families: [FAMILY_3],
+      over: {
+        familyKnowledge: vi.fn(async () => {
+          throw new Error("the guesses could not be read");
+        }),
+      },
     });
-    const read = (deps.familyDoorsDone as Mock).getMockImplementation()!;
-    (deps.familyDoorsDone as Mock).mockImplementation(async (year: number, familyId: number, runs: DoorRun[], now: Date) => {
-      if (familyId === 4 && broken) throw new Error("the doors could not be read");
-      return read(year, familyId, runs, now);
-    });
-    await tick(FRI_18);
-    expect(sentOf(sent, "clue").map((s) => s.to)).toEqual(["sam@example.org"]);
-    expect(deps.markSendFailed).toHaveBeenCalledWith("clue", "2026-18:4", "the doors could not be read");
-    broken = false;
-    await tick(at("2026-12-18T17:42:00Z"));
-    expect(sentOf(sent, "clue").map((s) => s.to)).toEqual(["sam@example.org", "alex@example.org"]);
-    expect(mailTo(sent, "alex@example.org").text).toContain("You can still crack 2 doors from home, with one guess each.");
+    await tick(WED_23);
+    const { text } = mailTo(sent, "sam@example.org");
+    expect(text).toContain("Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early.");
+    for (const words of [READY, BEHIND]) expect(text).not.toContain(words);
   });
 });
 

@@ -1,6 +1,6 @@
 import { isDoor } from "../../src/elf/calendar";
 import { ELF_NAMES } from "../../src/elf/names";
-import type { CalendarView, ClaimWin, DoorView, GoView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
+import type { CalendarView, ClaimWin, DoorView, EntryView, GoView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
 
 /** The page a family sees after scanning the poster at an invented shop. Signed in, two detectives,
  *  and the shop's door still shut on the calendar unless told otherwise. */
@@ -242,6 +242,34 @@ export function hqView(over: Partial<HqView> = {}): HqView {
     },
     calendarUrl: "/elf",
     guessUrl: "/elf/hq/guess",
+    // No grand prize section before Christmas Eve (Plan 2c-2), unless told otherwise.
+    grandPrize: null,
+    ...over,
+  };
+}
+
+/** Detective HQ's grand prize section at 10:30am on Christmas Eve (Plan 2c-2): the entries close at 5pm, and
+ *  Ruby has done all 24 doors with no picture in yet, unless told otherwise. */
+export function grandPrize(over: Partial<NonNullable<HqView["grandPrize"]>> = {}): NonNullable<HqView["grandPrize"]> {
+  return {
+    closesAt: at("2026-12-24T17:00:00.000Z"),
+    open: true,
+    detectives: [{ name: "Detective Ruby Tinselfoot", url: "/elf/hq/entry/11", sent: false }],
+    ...over,
+  };
+}
+
+/** The page where Ruby's family sends in her picture for the grand prize, at 10:30am on Christmas Eve (Plan
+ *  2c-2): the entries close at 5pm, no picture is in yet and the family has a mobile, unless told otherwise. */
+export function entryView(over: Partial<EntryView> = {}): EntryView {
+  return {
+    detective: { id: "11", name: "Detective Ruby Tinselfoot" },
+    closesAt: at("2026-12-24T17:00:00.000Z"),
+    open: true,
+    sent: null,
+    askMobile: false,
+    postUrl: "/api/elf/entry/11",
+    hqUrl: "/elf/hq",
     ...over,
   };
 }

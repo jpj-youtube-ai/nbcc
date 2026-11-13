@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
+import { renderEntryPage } from "../../src/elf/pages/entry";
 import { renderGoPage } from "../../src/elf/pages/go";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage as renderElfJoinPage } from "../../src/elf/pages/join";
@@ -30,7 +31,7 @@ import { certificateNotFoundPage } from "../../src/business/certificate-not-foun
 import { preferencesInvalidPage, preferencesPage, unsubscribeConfirmPage, unsubscribeMessagePage } from "../../src/newsletter/email-pages";
 import { doneMessage } from "../../src/newsletter/unsubscribe-copy";
 import { storyCheckPage, storyFailedPage, storyThanksPage, storyTooManyPage } from "../../src/stories/answer-pages";
-import { AFTERNOON, calendarView, goDoneView, goView, hqView, posterView, wardrobeView } from "./elf-fixtures";
+import { AFTERNOON, calendarView, entryView, goDoneView, goView, hqView, posterView, wardrobeView } from "./elf-fixtures";
 
 // TASK-615. Jaimie, 11 November 2026: "every page should have the same banner and the same nav bar
 // across the entire site", and lock it in, because it kept happening: the Santa Sleigh (TASK-612),
@@ -210,6 +211,7 @@ const PAGES: [string, () => string, string?][] = [
   ["Elf Detective School: a hiding place's poster page", () => renderPosterPage(posterView())],
   ["Elf Detective School: having a go at a door", () => renderGoPage(goView())],
   ["Elf Detective School: how a go went", () => renderGoPage(goDoneView())],
+  ["Elf Detective School: sending in a picture", () => renderEntryPage(entryView())],
   ["the Santa Sleigh", () => renderSleighPage({ nights: NIGHTS, phase: "before", stop: 0, totalPence: 12_345 }), "#give"],
   ["the Santa Sleigh's thank you", () => renderSleighThanks(2000), "/sleigh#give"],
   ["the Festive Ball", () => renderBallPage(read("ball.html"), { settings: BALL_SETTINGS, gateOpen: true, salesClosed: true })],

@@ -4,6 +4,7 @@ import { closingShown, doorsToCrack, goesOpen, knowsPlace, mayHaveAGo, placesPub
 import { canGuess, cluesOut, doorState, isClaimable, isOpen, nextClueAt, openedAt, shownAt, type DoorFacts, type DoorState } from "./doors";
 import { badgeWords } from "./emails";
 import { factFor } from "./facts";
+import { grandPrizeClosesAt, prizeSectionShows } from "./grand-prize";
 import { cracked, type SavedGuess } from "./guess";
 import { detectiveNames, familyDetectiveName, type DetectiveNameParts } from "./names";
 import { doorPicture } from "./door-setup";
@@ -12,7 +13,7 @@ import { collageOf, orderScrapbook, type ScrapPhoto, type Scrapbook } from "./sc
 import type { ElfSettings } from "./settings";
 import { sameDay } from "./words";
 import { normaliseFavourites, normaliseLook, wardrobeState } from "./wardrobe";
-import type { CalendarView, DetectiveView, DoorView, FamilyMarks, GoView, HqView, PosterView, TodayView, WardrobeView } from "./pages/types";
+import type { CalendarView, DetectiveView, DoorView, EntryView, FamilyMarks, GoView, HqView, PosterView, TodayView, WardrobeView } from "./pages/types";
 
 // NBCC Elf Detective School: what the database holds, turned into what the screens show. Pure: the
 // rows and the doors' runs come in, the views go out. Nothing is shown before its time: a place, a
@@ -193,8 +194,26 @@ export function marksOf(runs: readonly DoorRun[], family: FamilyRow, doorsDone: 
   return { doors, photos };
 }
 
+/** Detective HQ's grand prize section (Plan 2c-2), or null while it does not show: prizeSectionShows is the one
+ *  rule both for reading the family's entries (hqViewOf in src/routes/elf.ts) and for drawing the section (ruling
+ *  F9). The family's graduates, in the family's order, each with its entry page and whether its picture is in. */
+function grandPrizeOf(
+  o: { settings: ElfSettings; now: Date; entries: ReadonlyMap<number, { sentAt: Date }> },
+  detectives: readonly { id: number; view: DetectiveView }[],
+): HqView["grandPrize"] {
+  const closesAt = grandPrizeClosesAt(o.settings);
+  if (!prizeSectionShows({ doorsOn: o.settings.doorsOn, year: o.settings.year, closesAt, now: o.now })) return null;
+  return {
+    closesAt,
+    open: o.now.getTime() < closesAt.getTime(),
+    detectives: detectives.flatMap((d) => (d.view.graduate ? [{ name: d.view.name, url: `/elf/hq/entry/${d.id}`, sent: o.entries.has(d.id) }] : [])),
+  };
+}
+
 /** Detective HQ's view. `guesses` and `typed` are what the family has done (FamilyKnowledge in catch-up.ts):
- *  this year's while December's doors are on, and the practice door's while a practice runs for this browser. */
+ *  this year's while December's doors are on, and the practice door's while a practice runs for this browser.
+ *  `entries` are the family's grand prize entries this year, by detective (familyEntries in
+ *  src/db/elf-grand-prize.ts): read only while the grand prize section shows, and empty otherwise. */
 export function hqViewFor(o: {
   family: FamilyRow;
   settings: ElfSettings;
@@ -205,6 +224,7 @@ export function hqViewFor(o: {
   doorsDone: Map<number, DoorsDone>;
   finders: Map<Door, DetectiveNameParts[]>;
   photos: FamilyMarks["photos"];
+  entries: ReadonlyMap<number, { sentAt: Date }>;
 }): HqView {
   const real = o.runs.runs.filter((r) => r.door !== 0);
   // With December's doors off, HQ is wave 1: no case today unless a practice run is going, and, as wave
@@ -226,10 +246,11 @@ export function hqViewFor(o: {
     : o.now.getTime() < start.getTime()
       ? start
       : undefined;
+  const detectives = o.family.detectives.map((d) => ({ id: d.id, view: detectiveViewFor(d, o.doorsDone.get(d.id) ?? NO_DOORS) }));
   return {
     now: o.now,
     familyName: firstWord(o.family.grownUpName),
-    detectives: o.family.detectives.map((d) => detectiveViewFor(d, o.doorsDone.get(d.id) ?? NO_DOORS)),
+    detectives: detectives.map((d) => d.view),
     today: todayRun ? todayOf(todayRun, o) : null,
     nextClueAt: next ?? null,
     toCrack,
@@ -237,6 +258,24 @@ export function hqViewFor(o: {
     calendarUrl: "/elf",
     guessUrl: "/api/elf/guess",
     addDetectiveUrl: "/elf/join",
+    grandPrize: grandPrizeOf(o, detectives),
+  };
+}
+
+/** The grand prize entry page's view for one of the family's graduates (Plan 2c-2). The caller has checked that
+ *  the detective is the signed in family's own and has done all 24 doors, and that the entries have opened.
+ *  `sentAt` is when its picture came in, or null before one has; `hasMobile` whether the family has a mobile. */
+export function entryViewFor(o: { detective: DetectiveRow; hasMobile: boolean; closesAt: Date; now: Date; sentAt: Date | null }): EntryView {
+  const id = String(o.detective.id);
+  return {
+    // A family always sees its own detectives' names in full.
+    detective: { id, name: familyDetectiveName({ firstName: o.detective.firstName, surname: o.detective.surname, approved: true }) },
+    closesAt: o.closesAt,
+    open: o.now.getTime() < o.closesAt.getTime(),
+    sent: o.sentAt ? { at: o.sentAt, pictureUrl: `/elf/hq/entry/${id}/picture.jpg` } : null,
+    askMobile: !o.hasMobile,
+    postUrl: `/api/elf/entry/${id}`,
+    hqUrl: "/elf/hq",
   };
 }
 

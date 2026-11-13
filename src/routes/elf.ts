@@ -621,7 +621,7 @@ async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: Fam
     findersOfToday(),
   ]);
   // HQ draws no photos: the calendar's script reads the family's own from /api/elf/me.
-  return hqViewFor({ family, settings, now, runs, guesses: done.guesses, typed: done.typed, doorsDone, finders, photos: [] });
+  return hqViewFor({ family, settings, now, runs, guesses: done.guesses, typed: done.typed, doorsDone, finders, photos: [], entries: new Map() });
 }
 
 export async function getHq(req: Request, res: Response): Promise<Response | void> {

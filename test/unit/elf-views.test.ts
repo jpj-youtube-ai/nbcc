@@ -12,7 +12,7 @@ import { renderHqPage } from "../../src/elf/pages/hq";
 import type { DetectiveNameParts } from "../../src/elf/names";
 import type { DoorsDone } from "../../src/elf/progress";
 import type { Scrapbook } from "../../src/elf/scrapbook";
-import { calendarViewFor, familyDoorView, goViewFor, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
+import { calendarViewFor, entryViewFor, familyDoorView, goViewFor, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
 import { normalisePlaceName } from "../../src/elf/place-names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { defaultLook } from "../../src/elf/wardrobe";
@@ -83,6 +83,7 @@ function hq(over: Partial<Parameters<typeof hqViewFor>[0]> & { now: Date }) {
     doorsDone: new Map(),
     finders: new Map(),
     photos: [],
+    entries: new Map(),
     ...over,
   });
 }
@@ -796,6 +797,94 @@ describe("Detective HQ with December's doors switched off", () => {
     const view = hq({ now: SIX_10, settings: OFF, runs: { runs: WAVE_ONE(SIX_10), practice } });
     expect(view.today?.door).toBe(0);
     expect(view.today?.practice).toBe(true);
+  });
+});
+
+// Plan 2c-2, Task 3: Detective HQ's grand prize section. Ruby (detective 100) has done all 24 doors and Leo
+// (detective 101) 23, as a family would whose doors were all snowed in but door 24. The entries close at 5pm
+// on Christmas Eve unless a head elf set another time.
+describe("Detective HQ's grand prize", () => {
+  const EVERY_DOOR = Array.from({ length: 24 }, (_, i) => i + 1);
+  const DONE = new Map<number, DoorsDone>([
+    [100, { cracked: [], visited: [], snow: EVERY_DOOR }],
+    [101, { cracked: [], visited: [], snow: EVERY_DOOR.slice(0, 23) }],
+  ]);
+  const FIVE_PM = at("2026-12-24T17:00:00.000Z");
+  const prize = (now: Date, over: Partial<Parameters<typeof hqViewFor>[0]> = {}) => hq({ now, doorsDone: DONE, ...over }).grandPrize;
+
+  it("lists only the detective who has done all 24 doors at 9am on Christmas Eve, open until 5pm", () => {
+    expect(prize(at("2026-12-24T09:00:00.000Z"))).toEqual({
+      closesAt: FIVE_PM,
+      open: true,
+      detectives: [{ name: "Detective Ruby Tinselfoot", url: "/elf/hq/entry/100", sent: false }],
+    });
+  });
+
+  it("says the entries are closed from 5pm, and still shows the section until 1 January", () => {
+    expect(prize(at("2026-12-24T16:59:59.000Z"))?.open).toBe(true);
+    expect(prize(FIVE_PM)?.open).toBe(false);
+    expect(prize(at("2026-12-31T23:59:59.000Z"))?.open).toBe(false);
+    expect(prize(FIVE_PM)?.detectives.map((d) => d.url)).toEqual(["/elf/hq/entry/100"]);
+  });
+
+  it("is not there before midnight as Christmas Eve begins, nor from midnight as 1 January 2027 begins", () => {
+    expect(prize(at("2026-12-23T23:59:00.000Z"))).toBeNull();
+    expect(prize(at("2026-12-24T00:00:00.000Z"))).not.toBeNull();
+    expect(prize(at("2027-01-01T00:00:00.000Z"))).toBeNull();
+  });
+
+  it("is not there with December's doors off", () => {
+    expect(prize(at("2026-12-24T09:00:00.000Z"), { settings: { ...SETTINGS, doorsOn: false } })).toBeNull();
+  });
+
+  it("says whose picture is in, from the family's entries", () => {
+    const entries = new Map([[100, { sentAt: at("2026-12-24T10:45:00.000Z") }]]);
+    expect(prize(at("2026-12-24T11:00:00.000Z"), { entries })?.detectives).toEqual([{ name: "Detective Ruby Tinselfoot", url: "/elf/hq/entry/100", sent: true }]);
+  });
+
+  it("lists both detectives once both have done all 24 doors, and none while neither has", () => {
+    const both = new Map<number, DoorsDone>([...DONE].map(([id]) => [id, { cracked: [], visited: [], snow: EVERY_DOOR }]));
+    expect(prize(at("2026-12-24T11:00:00.000Z"), { doorsDone: both })?.detectives.map((d) => d.name)).toEqual(["Detective Ruby Tinselfoot", "Detective Leo Frostwhistle"]);
+    expect(prize(at("2026-12-24T11:00:00.000Z"), { doorsDone: new Map() })).toEqual({ closesAt: FIVE_PM, open: true, detectives: [] });
+  });
+
+  it("closes at the time a head elf set in Settings", () => {
+    const settings = { ...SETTINGS, doorsOn: true, grandPrizeClosesAt: at("2026-12-24T18:30:00.000Z") };
+    expect(prize(at("2026-12-24T18:00:00.000Z"), { settings })).toMatchObject({ closesAt: at("2026-12-24T18:30:00.000Z"), open: true });
+    expect(prize(at("2026-12-24T18:30:00.000Z"), { settings })?.open).toBe(false);
+  });
+});
+
+describe("the grand prize entry page's view", () => {
+  const ruby = FAMILY.detectives[0];
+  const FIVE_PM = at("2026-12-24T17:00:00.000Z");
+  const entry = (over: Partial<Parameters<typeof entryViewFor>[0]> = {}) =>
+    entryViewFor({ detective: ruby, hasMobile: true, closesAt: FIVE_PM, now: at("2026-12-24T10:30:00.000Z"), sentAt: null, ...over });
+
+  it("names the detective as the family sees them, with where the picture goes and the way back", () => {
+    expect(entry()).toEqual({
+      detective: { id: "100", name: "Detective Ruby Tinselfoot" },
+      closesAt: FIVE_PM,
+      open: true,
+      sent: null,
+      askMobile: false,
+      postUrl: "/api/elf/entry/100",
+      hqUrl: "/elf/hq",
+    });
+  });
+
+  it("gives the picture already in, with its private address", () => {
+    const sentAt = at("2026-12-24T10:45:00.000Z");
+    expect(entry({ sentAt }).sent).toEqual({ at: sentAt, pictureUrl: "/elf/hq/entry/100/picture.jpg" });
+  });
+
+  it("asks for a mobile only when the family has none", () => {
+    expect(entry({ hasMobile: false }).askMobile).toBe(true);
+  });
+
+  it("is open until the entries close, and closed from then", () => {
+    expect(entry({ now: at("2026-12-24T16:59:59.000Z") }).open).toBe(true);
+    expect(entry({ now: FIVE_PM }).open).toBe(false);
   });
 });
 

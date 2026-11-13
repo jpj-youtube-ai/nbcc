@@ -630,6 +630,21 @@
 .elf-crack__door .elf-btn { margin-left: auto; }
 @media (min-width: 720px) { .elf-crack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* The grand prize (Plan 2c-2), from Christmas Eve, between today's case and the doors still to crack: a card
+   sheet for each graduate, with the button to send their picture, or a tick once it is in. A long name wraps
+   before the button drops under it, and the cards sit two across once there is room, as the doors' do. */
+.elf-page .section.elf-hq-prize { padding-block: clamp(30px, 5vw, 64px) clamp(8px, 2vw, 16px); }
+.elf-hq-prize .elf-strip { font-size: clamp(1.6rem, 1.35rem + 1.2vw, 2.2rem); }
+.elf-hq-prize .lede { margin-top: 12px; }
+.elf-prize { list-style: none; margin: clamp(16px, 3vw, 24px) 0 0; padding: 0; display: grid; gap: 26px; }
+.elf-prize__detective { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-right: 8px; padding: 16px 20px; color: var(--slate); }
+.elf-prize__detective p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.elf-prize__detective .elf-prize__name { font-family: var(--elf-hand); font-weight: 700; font-size: 1.5rem; line-height: 1.1; color: var(--crimson); }
+.elf-prize__detective .elf-prize__in { color: var(--holly-dark); font-weight: 600; }
+.elf-prize__in .elf-icon { color: var(--holly); }
+.elf-prize__detective .elf-btn { margin-left: auto; }
+@media (min-width: 720px) { .elf-prize { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* The family's marks: all 24 doors, small, each a square of paper; holly once it is done. */
 .elf-hq-marks .lede { margin-top: 12px; }
 .elf-marks { list-style: none; margin: clamp(16px, 3vw, 24px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
@@ -675,6 +690,40 @@
 /* How it went, on today's case's slip of paper, a size up: it is what the family came back for. */
 .elf-go .elf-go__verdict { font-size: clamp(1.08rem, 1rem + 0.5vw, 1.25rem); font-weight: 600; overflow-wrap: break-word; }
 .elf-go__back { max-width: 760px; margin: clamp(18px, 3vw, 26px) auto 0; text-align: center; }
+
+/* =================================================================
+   SENDING IN A PICTURE FOR THE GRAND PRIZE (Plan 2c-2)
+   ================================================================= */
+
+/* The top, centred as Detective HQ's is: Detective HQ's label over the title strip, and who the picture is for. */
+.elf-entry-top .wrap { text-align: center; }
+.elf-entry-top .elf-entry__for { max-width: 52ch; margin-inline: auto; }
+
+/* The page on a note taped to the page, as today's case is in Detective HQ (the note is an .elf-case too, so its
+   words, form and status line look the same): the picture that is in, the form, and the promise. */
+.elf-entry-page { padding-bottom: clamp(8px, 2vw, 20px); }
+/* The picture in, on a cream mount a little out of true: always the whole picture, a drawing never cut off,
+   shrunk to fit the note's width, and never taller than most of a phone's screen. */
+.elf-entry__pic { display: block; width: auto; max-width: 100%; height: auto; max-height: min(70vh, 560px); margin: 4px auto 18px; padding: 8px; border-radius: 3px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.2), 0 8px 10px rgba(94, 0, 0, 0.18); transform: rotate(-1deg); }
+.elf-entry-note .elf-entry__in { color: var(--holly-dark); font-weight: 600; overflow-wrap: anywhere; }
+.elf-entry-note .elf-entry__closes { color: var(--maroon); font-weight: 600; }
+.elf-entry { display: grid; gap: 14px; margin: 6px 0 0; }
+.elf-entry .elf-field { margin: 0; min-width: 0; }
+.elf-entry .elf-field input[type="tel"] {
+  width: 100%; min-height: 52px; padding: 12px 14px; border: 0; border-radius: 6px; color: var(--slate); font: inherit; font-size: 1.15rem;
+  background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply;
+  box-shadow: inset 0 2px 3px rgba(94, 0, 0, 0.2), inset 0 0 0 1.5px color-mix(in srgb, var(--maroon) 55%, transparent);
+}
+.elf-entry .elf-field input:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 2px; }
+.elf-entry .elf-field input[type="file"] { width: 100%; max-width: 100%; }
+.elf-entry .elf-form-status { min-height: 0; margin: 0; overflow-wrap: anywhere; }
+.elf-entry button { justify-self: start; }
+.elf-entry button[disabled] { opacity: 0.6; cursor: progress; }
+/* The promise beside a sprig of holly, as the photo sheet's is. */
+.elf-entry-note .elf-entry__promise { position: relative; isolation: isolate; margin: 18px 0 0; padding: 12px 14px 12px 52px; color: var(--holly-dark); font-size: 0.86rem; line-height: 1.45; }
+.elf-entry__promise::before { content: ""; position: absolute; left: 12px; top: 10px; width: 30px; height: 29px; background: url(/assets/img/elf/paper/deco/holly.webp) center / contain no-repeat; filter: drop-shadow(0 1px 1px rgba(58, 0, 0, 0.3)); }
+.elf-entry__promise::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, var(--holly-soft); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-b); mask: var(--elf-tear-fine-b); }
+.elf-entry__back { max-width: 760px; margin: clamp(18px, 3vw, 26px) auto 0; text-align: center; }
 
 /* =================================================================
    THE WARDROBE: dressing an elf, in paper (mockup 6, approved by Jaimie on 4 November 2026)

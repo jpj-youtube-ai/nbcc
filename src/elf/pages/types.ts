@@ -222,6 +222,31 @@ export interface HqView {
   guessUrl: string;
   /** Where a signed in family adds another detective (wave 1). Left out, no link is shown. */
   addDetectiveUrl?: string;
+  /** The grand prize (Plan 2c-2): while December's doors are on, from midnight as Christmas Eve begins until the
+   *  later of the entries closing and 1 January (prizeSectionShows in src/elf/grand-prize.ts); null otherwise,
+   *  and then Detective HQ has no grand prize section. `closesAt` is when the entries close (grandPrizeClosesAt),
+   *  and `open` whether they still are. `detectives` are the family's graduates only (all 24 doors done), each by
+   *  name as the family sees it, with its entry page (`/elf/hq/entry/${id}`) and whether its picture is in. */
+  grandPrize: { closesAt: Date; open: boolean; detectives: { name: string; url: string; sent: boolean }[] } | null;
+}
+
+/** The page where a family sends in a graduate's picture for the grand prize (Plan 2c-2), from Detective HQ. The
+ *  family's own, so it is private: a picture is seen only by its own family and by head elves. */
+export interface EntryView {
+  /** The graduate: its id, and its name as the family sees it (familyDetectiveName): "Detective Ruby Tinselfoot". */
+  detective: { id: string; name: string };
+  /** When the entries close (grandPrizeClosesAt in src/elf/grand-prize.ts). */
+  closesAt: Date;
+  /** Can a picture still be sent or changed? Until `closesAt`. */
+  open: boolean;
+  /** The picture that is in, once one is: when it came in, and where its own family sees it
+   *  (`/elf/hq/entry/${id}/picture.jpg`, private); null before. */
+  sent: { at: Date; pictureUrl: string } | null;
+  /** Does the family have no mobile number (it enrolled before one was asked for)? Then the form asks for one. */
+  askMobile: boolean;
+  /** Where the picture is sent: `/api/elf/entry/${id}`. */
+  postUrl: string;
+  hqUrl: string;
 }
 
 export interface WardrobeView {

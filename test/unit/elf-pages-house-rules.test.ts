@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { waveOneRuns } from "../../src/db/elf-game";
 import { calendarViewFor } from "../../src/elf/views";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
+import { renderEntryPage } from "../../src/elf/pages/entry";
 import { renderGoPage } from "../../src/elf/pages/go";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage } from "../../src/elf/pages/join";
@@ -18,7 +19,7 @@ import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { CalendarView } from "../../src/elf/pages/types";
-import { AFTERNOON, at, calendarView, claimWin, goDoneView, goOutcome, goView, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
+import { AFTERNOON, at, calendarView, claimWin, entryView, goDoneView, goOutcome, goView, grandPrize, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the house rules every elf screen must keep.
 //
@@ -85,6 +86,21 @@ const toCrack = hqView({
     { door: 3, elfName: "Pudding", clueAt: at("2026-12-03T17:30:00.000Z"), url: "/elf/hq/door/3" },
   ],
 });
+/** Plan 2c-2, Task 3: the grand prize on Christmas Eve, with door 24 snowed in and a missed door still to crack:
+ *  one graduate's picture in, the other's still to send. */
+const theGrandPrize = hqView({
+  now: at("2026-12-24T10:30:00.000Z"),
+  today: { ...today, door: 24, state: "snow", clues: [], nextClueAt: null, revealAt: null, canGuess: false },
+  toCrack: [{ door: 23, elfName: "Sprout", clueAt: at("2026-12-23T17:30:00.000Z"), url: "/elf/hq/door/23" }],
+  grandPrize: grandPrize({
+    detectives: [
+      { name: "Detective Ruby Tinselfoot", url: "/elf/hq/entry/11", sent: true },
+      { name: "Detective Leo Frostwhistle", url: "/elf/hq/entry/12", sent: false },
+    ],
+  }),
+});
+/** Plan 2c-2, Task 3: a picture in, while the entries are open. */
+const pictureIn = entryView({ sent: { at: at("2026-12-24T10:45:00.000Z"), pictureUrl: "/elf/hq/entry/11/picture.jpg" } });
 
 /** Every screen in every state, as [what it is, the page]. */
 const PAGES: [string, string][] = [
@@ -114,6 +130,9 @@ const PAGES: [string, string][] = [
   ["HQ, doors you can still crack", renderHqPage(toCrack)],
   ["HQ, found and cracked, with the place's closing time", renderHqPage(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome, closesAt: at("2026-12-07T20:00:00.000Z") } }))],
   ["HQ, an elf that has gone home", renderHqPage(hqView({ today: { ...today, state: "revealed", canGuess: false, clues: [], nextClueAt: null, revealAt: null, goneHome: true, outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
+  ["HQ, the grand prize", renderHqPage(theGrandPrize)],
+  ["HQ, the grand prize closed", renderHqPage({ ...theGrandPrize, now: at("2026-12-24T17:30:00.000Z"), grandPrize: { ...theGrandPrize.grandPrize!, open: false } })],
+  ["HQ, the grand prize with no graduate yet", renderHqPage({ ...theGrandPrize, grandPrize: grandPrize({ detectives: [] }) })],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
@@ -149,6 +168,11 @@ const PAGES: [string, string][] = [
   ["go page, cracked", renderGoPage(goDoneView())],
   ["go page, its elf gone home", renderGoPage(goDoneView({ verdict: "wrong", goneHome: true }, { found: null }))],
   ["go page, closed", renderGoPage(goView({ stage: "closed", clues: [], nextUrl: null, closesAt: null, outcome: goOutcome({ verdict: "none" }) }))],
+  ["entry, open", renderEntryPage(entryView())],
+  ["entry, open, asking for a mobile", renderEntryPage(entryView({ askMobile: true }))],
+  ["entry, a picture in", renderEntryPage(pictureIn)],
+  ["entry, closed", renderEntryPage(entryView({ open: false }))],
+  ["entry, closed with a picture in", renderEntryPage({ ...pictureIn, open: false })],
 ];
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
@@ -367,6 +391,10 @@ describe("data that tries to break out of the page", () => {
     ["go page, having a go", renderGoPage(poisoned(goView({ clues: twoClues, guessError: "Refused" })))],
     ["go page, how it went", renderGoPage(poisoned(goDoneView({ visited: true })))],
     ["go page, closed", renderGoPage(poisoned(goView({ stage: "closed", clues: [], nextUrl: null, outcome: goOutcome({ verdict: "none" }) })))],
+    // Poisoned, a graduate's entry page is not on this site, so it is left out: here the address stays ours.
+    ["HQ, the grand prize", renderHqPage({ ...poisoned(theGrandPrize), grandPrize: { ...theGrandPrize.grandPrize!, detectives: theGrandPrize.grandPrize!.detectives.map((d) => ({ ...d, name: POISON })) } })],
+    ["entry, open, asking for a mobile", renderEntryPage(poisoned(entryView({ askMobile: true })))],
+    ["entry, a picture in", renderEntryPage(poisoned(pictureIn))],
   ];
 
   it.each(hostile)("%s: is shown as words, never run", (_name, html) => {

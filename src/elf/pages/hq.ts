@@ -15,7 +15,8 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // sheet: their elf in its frame, rank and progress), and the marks they have collected. It is private,
 // so it shows first names in full and is never listed by search engines. While December's doors are on
 // (Plan 2c-1), a family that missed today's evening is offered its one go once the place is shown, and the
-// other missed doors it can still crack are listed under today's case.
+// other missed doors it can still crack are listed under today's case. From Christmas Eve (Plan 2c-2) the
+// grand prize comes between the two: each graduate's picture to send in, until the entries close.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
 // script only saves the guess without leaving the page, and fetches the page again when the next
@@ -252,6 +253,53 @@ function crackSection(view: HqView): string {
   </section>`;
 }
 
+/** The grand prize (Plan 2c-2), straight after today's case from midnight as Christmas Eve begins. While the
+ *  entries are open: what to send and when they close, then each graduate with the button to send their picture,
+ *  or, once it is in, that it is in with a link to change it. Once they have closed: that they have, and each
+ *  graduate whose picture is in. Only an entry page on this site is drawn. With no grand prize in the view (or no
+ *  real closing time to say) the section is not on the page at all, so with December's doors off Detective HQ is
+ *  exactly what it was. */
+function prizeSection(view: HqView): string {
+  const prize = view.grandPrize;
+  if (!prize || typeof prize !== "object" || !real(prize.closesAt)) return "";
+  const time = clockWords(prize.closesAt);
+  const open = prize.open === true;
+  const graduates = (Array.isArray(prize.detectives) ? prize.detectives : []).flatMap((d) => {
+    const url = sitePath(d.url);
+    return url ? [{ name: escapeHtml(d.name), url, sent: d.sent === true }] : [];
+  });
+  const shown = open ? graduates : graduates.filter((d) => d.sent);
+  const items = shown
+    .map((d, i) => {
+      const card = `<li class="elf-prize__detective elf-card elf-card--${SHEETS[i % SHEETS.length]}">`;
+      // Several graduates can each have a button or a link, so each says whose it is to a screen reader alone.
+      if (d.sent) {
+        const said = line(`${icon("tick", 16)} ${d.name}'s picture is in.`, "elf-prize__in");
+        const change = open ? `<a class="elf-btn elf-btn--s" href="${d.url}">Change it<span class="sr-only">: ${d.name}'s picture</span></a>` : "";
+        return card + said + change + `</li>`;
+      }
+      return (
+        card +
+        line(d.name, "elf-prize__name") +
+        `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${d.url}">Send in your picture<span class="sr-only"> for ${d.name}</span></a>` +
+        `</li>`
+      );
+    })
+    .join("");
+  const lede = open
+    ? `Every detective who has done all 24 doors can send in a drawing, or a photo of their naughtiest elf at home. Entries close at ${time} on Christmas Eve.`
+    : `Grand prize entries closed at ${time} on Christmas Eve. Thank you for every picture.`;
+  const none = open && !graduates.length ? `\n      <p>Once a detective has done all 24 doors, you can send in their picture here.</p>` : "";
+  return `
+
+  <section class="section elf-hq-prize" aria-labelledby="elf-prize-heading">
+    <div class="wrap">
+      ${headingStrip({ text: "The grand prize", tag: "h2", back: "crimson", id: "elf-prize-heading" })}
+      <p class="lede">${lede}</p>${none}${items ? `\n      <ul class="elf-prize">${items}</ul>` : ""}
+    </div>
+  </section>`;
+}
+
 /** The costumes waiting in the wardrobe, as presents (draft words for Jaimie). */
 function presentsWords(n: number): string {
   return n === 1 ? "A present to open" : n === 2 ? "Two presents to open" : `${n} presents to open`;
@@ -346,7 +394,7 @@ export function renderHqPage(view: HqView): string {
         ${caseCard(view)}
       </div>
     </div>
-  </section>${crackSection(view)}
+  </section>${prizeSection(view)}${crackSection(view)}
 
   <section class="section elf-hq-team" aria-labelledby="elf-team-heading">
     <div class="wrap">

@@ -554,12 +554,15 @@ describe("the clue email in the week before Christmas Eve", () => {
     expect(text).toContain(READY);
   });
 
-  it("gives a family with no detective neither line, and still sends it the clue", async () => {
+  // The spec puts no condition on door 23's line: every family is told when Christmas Eve starts, and only a family
+  // with a detective is told how it stands for the grand prize.
+  it("gives a family with no detective door 23's Christmas Eve line, and no line for the grand prize", async () => {
     const { sent, tick } = week({ families: [FAMILY_3] });
     await tick(WED_23);
     const { text } = mailTo(sent, "sam@example.org");
     expect(text).toContain("Pretend clue one");
-    for (const words of [TOMORROW, READY, BEHIND]) expect(text).not.toContain(words);
+    expect(text).toContain("Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early.");
+    for (const words of [READY, BEHIND]) expect(text).not.toContain(words);
   });
 
   it("gives door 16's and door 24's emails neither line, and reads nothing of the family's for them", async () => {

@@ -305,14 +305,17 @@ const weekBefore = (door: Door, at: Date): boolean => catchUpOf({ door, runs: []
 /** The lines the week before Christmas Eve adds to one family's clue email (Plan 2c-2). For doors 17 to 23: whether the
  *  family has done every door so far (catchUpOf), from any one detective's doors done (every detective in a family has
  *  the same) and the doors it can still crack from home; up to date, with when the entries close (a head elf's time,
- *  or 5pm). Door 23's also says when door 24's first clue comes out (christmasEveOf: nothing when door 24 is snowed
- *  in). A family with no detective gets neither. Every other door's email gets neither, and reads nothing. Called
- *  inside the family's claimed send (ruling F17): a family whose doors cannot be read is tried again on its own. */
+ *  or 5pm). A family with no detective gets no such line. Door 23's also says, to every family, when door 24's first
+ *  clue comes out (christmasEveOf: nothing when door 24 is snowed in). Every other door's email gets neither, and
+ *  reads nothing. Called inside the family's claimed send (ruling F17): a family whose doors cannot be read is tried
+ *  again on its own. */
 async function prizeLines(door: Door, familyId: number, t: Tick): Promise<PrizeLines> {
   if (!weekBefore(door, t.at)) return NO_PRIZE_LINES;
   const [doorsDone, knowledge] = await Promise.all([t.deps.familyDoorsDone(t.year, familyId, t.runs, t.at), t.deps.familyKnowledge(t.year, familyId)]);
+  // The spec puts no condition on door 23's line, so it goes to a family with no detective too.
+  const christmasEve = christmasEveOf({ door, runs: t.runs });
   const [anyDetective] = doorsDone.values();
-  if (!anyDetective) return NO_PRIZE_LINES;
+  if (!anyDetective) return { christmasEve, catchUp: null };
   const catchUp = catchUpOf({
     door,
     runs: t.runs,
@@ -321,7 +324,7 @@ async function prizeLines(door: Door, familyId: number, t: Tick): Promise<PrizeL
     now: t.at,
   });
   return {
-    christmasEve: christmasEveOf({ door, runs: t.runs }),
+    christmasEve,
     catchUp: catchUp === null ? null : catchUp.ready ? { ready: true, closesAt: grandPrizeClosesAt(t.settings) } : catchUp,
   };
 }

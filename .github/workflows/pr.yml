@@ -153,17 +153,18 @@ jobs:
             exit 1
           fi
       # A share card sets its name smaller the more letters it has, and the wider they are, and the image draws it in
-      # DejaVu, whose letters run wider than the Georgia the card asks for. This draws four names that test the rule
-      # (the widest the name rules allow, all m and w; a short one with wide letters; a long one; and the longest) in
-      # the image, and fails unless each ends clear of the card's red frame: a card made to be shared must never cut a
-      # child's name off. It also draws two whole cards, kept with the four below as the run's "share-cards" to look at.
+      # DejaVu, whose letters run wider than the Georgia the card asks for. This draws six names that test the rule
+      # (the widest the name rules let through, all m and w, and all œ; a short one with wide letters; a long one; the
+      # longest; and one in capitals) in the image, and fails unless each ends clear of the card's red frame: a card
+      # made to be shared must never cut a child's name off. It also draws two whole cards, kept with the six below as
+      # the run's "share-cards" to look at.
       - name: the share card's name must end clear of its frame, or a child's name goes out cut off
         run: |
           set -euo pipefail
           mkdir -p share-cards
           chmod 777 share-cards
           if ! docker run --rm -v "$PWD/share-cards:/cards" nbcc-image-check node dist/scripts/check-share-card.js /cards; then
-            echo "::error::A share card's name runs onto or past its red frame in the image's fonts, or was not drawn at all. Set names smaller: fit in src/elf/print.ts weighs each letter as a share of the size (m and w 1.1, M and W 1.25, other capitals 0.8, everything else 0.64), so raise the weight of the letters that ran over."
+            echo "::error::A share card's name runs onto or past its red frame in the image's fonts, or was not drawn at all. Set names smaller: fit in src/elf/print.ts weighs each letter as a share of the size (m, w, æ and œ 1.1; M, W, Æ and Œ 1.25; other capitals 0.8; everything else 0.64), so raise the weight of the letters that ran over."
             exit 1
           fi
       - name: Keep the share cards drawn in the image

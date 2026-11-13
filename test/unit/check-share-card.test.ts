@@ -19,7 +19,23 @@ describe("the names the check draws", () => {
       "Detective W. Snowpaw",
       "Detective Ruby Merrymittens",
       "Detective Maximiliano-Wolfgang Merrymittens",
+      "Detective Œœœœœœœœœœœœœœœœœœœœ Merrymittens",
+      "Detective HUMPHREY-MAXIMILIANO Merrymittens",
     ]);
+  });
+
+  // The final fix round's re-review: æ and œ are the widest letters outside a to z that the rules let through, and a
+  // family may type a name in capitals.
+  it("include a ticked first name of 20 of the widest letters outside a to z, œ, and one of 20 in capitals, each passing the rules", () => {
+    const [wide, capitals] = NAMES_TO_CHECK.slice(4);
+    for (const d of [wide, capitals]) {
+      expect(d.approved).toBe(true);
+      expect(cleanFirstName(d.firstName)).toEqual({ ok: true, name: d.firstName });
+      expect([...d.firstName].length).toBe(20);
+      expect(d.surname).toBe("Merrymittens");
+    }
+    expect(wide.firstName.toLowerCase()).toMatch(/^œ{20}$/u);
+    expect(capitals.firstName).toMatch(/^[A-Z]+-[A-Z]+$/);
   });
 
   // The final review, issue 9: the check proves the rule, not three names. The widest public name is a ticked first
@@ -56,6 +72,8 @@ describe("deciding whether every name ends clear of the frame", () => {
       [1172, true],
       [1172, true],
       [1172, true],
+      [1172, true],
+      [1172, true],
     ]);
   });
 
@@ -83,12 +101,12 @@ describe("deciding whether every name ends clear of the frame", () => {
       cards.push(card);
       return 1000;
     });
-    expect(cards).toHaveLength(4);
+    expect(cards).toHaveLength(6);
     expect(cards[0]).toContain(">Detective Mwmwmwmwmwmwmwmwmwmw Merrymittens</text>");
     expect(cards[1]).toContain(">Detective W. Snowpaw</text>");
     // Each the biggest whole size at which its weighed letters fit 620 (src/elf/print.ts), counted by hand: 38.1,
-    // 14.65, 18.67 and 30.43.
-    expect(r.lines.map((l) => l.size)).toEqual([16, 42, 33, 20]);
+    // 14.65, 18.67, 30.43, 38.1 (œ weighs as m and w do) and 33.14 (capitals 0.8, and M 1.25).
+    expect(r.lines.map((l) => l.size)).toEqual([16, 42, 33, 20, 16, 18]);
   });
 });
 
@@ -123,7 +141,7 @@ describe("measuring where a name's ink ends", () => {
 });
 
 describe("running it", () => {
-  it("draws the two cards for people and the four it checks into the folder it is given, and answers 0 when every name fits", async () => {
+  it("draws the two cards for people and the six it checks into the folder it is given, and answers 0 when every name fits", async () => {
     const folder = mkdtempSync(join(tmpdir(), "share-cards-"));
     const said = vi.spyOn(console, "log").mockImplementation(() => undefined);
     try {
@@ -134,6 +152,8 @@ describe("running it", () => {
         "check-2-detective-w-snowpaw.png",
         "check-3-detective-ruby-merrymittens.png",
         "check-4-detective-maximiliano-wolfgang-merrymittens.png",
+        "check-5-detective-merrymittens.png",
+        "check-6-detective-humphrey-maximiliano-merrymittens.png",
         "share-card-leo-unticked-name.png",
         "share-card-ruby.png",
       ]);

@@ -308,6 +308,17 @@ describe("the share card", () => {
     expect(nameSize(card)).toBeGreaterThanOrEqual(16);
   });
 
+  // The final fix round's re-review: æ and œ pass the name rules and are nearly as wide as m, so they are weighed as
+  // m and w are, and Æ and Œ as M and W.
+  it("weighs æ and œ as m and w, so a ticked first name of 20 of them fits as the m and w one does", () => {
+    const card = named("Œœœœœœœœœœœœœœœœœœœœ", "Merrymittens");
+    expect(card).toContain(">Detective Œœœœœœœœœœœœœœœœœœœœ Merrymittens<");
+    const weighed = 0.8 + 9 * 0.64 + (1.25 + 19 * 1.1) + (11 * 0.64 + 1.25 + 1.1);
+    expect(nameSize(card) * weighed).toBeLessThanOrEqual(620);
+    expect(nameSize(card)).toBe(nameSize(named("Mwmwmwmwmwmwmwmwmwmw", "Merrymittens")));
+    expect(nameSize(named("Ææææææææææææææææææææ", "Merrymittens"))).toBe(nameSize(card));
+  });
+
   it("never sets a name smaller than 16, even one too wide to fit at it", () => {
     // Twenty capital W: 6.56, then 20 at 1.25, then 9.39, which would need about 15.
     expect(nameSize(named("WWWWWWWWWWWWWWWWWWWW", "Merrymittens"))).toBe(16);

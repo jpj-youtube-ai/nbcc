@@ -37,12 +37,15 @@ const NAME_STARTS = 510;
 /** Every door done, so every costume can be worn. */
 const EVERY_DOOR = { doors: Array.from({ length: 24 }, (_, i) => i + 1) };
 
-/** The names the check draws, widest risk first. */
+/** The names the check draws: the widest the rules let through, and the other kinds of name most likely to run long. */
 export const NAMES_TO_CHECK: readonly DetectiveNameParts[] = [
   { firstName: "Mwmwmwmwmwmwmwmwmwmw", surname: "Merrymittens", approved: true },
   { firstName: "Willow", surname: "Snowpaw", approved: false },
   { firstName: "Ruby", surname: "Merrymittens", approved: true },
   { firstName: "Maximiliano-Wolfgang", surname: "Merrymittens", approved: true },
+  // œ and æ are the widest letters outside a to z that the rules let through, and a family may type in capitals.
+  { firstName: "Œœœœœœœœœœœœœœœœœœœœ", surname: "Merrymittens", approved: true },
+  { firstName: "HUMPHREY-MAXIMILIANO", surname: "Merrymittens", approved: true },
 ];
 
 /** The two whole cards for people to look at: a graduate whose first name staff have ticked, and one whose name

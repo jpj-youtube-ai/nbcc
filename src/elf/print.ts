@@ -382,15 +382,15 @@ export function shareCardSvg(s: ShareCardPrint, elfPicture: string): string {
   // A picture cannot wrap its words, so a long name or rank is set smaller until it fits the
   // 620 units beside the elf. The card is drawn on the server in the fonts it has, DejaVu Serif Bold
   // here, not Georgia, whose letters run wider, and m, w and the capitals wider still. So each
-  // character is weighed for the room it takes, as a share of the size: m and w 1.1, M and W 1.25,
-  // other capitals 0.8, everything else 0.64 (an accented letter as its plain one); and a name may
-  // be set as small as 16, so that the widest the name rules allow (a ticked first name of 20 letters
-  // heavy in m and w, and a 12 letter surname) still fits. src/scripts/check-share-card.ts proves it
-  // in the image (pr.yml).
+  // character is weighed for the room it takes, as a share of the size: m, w, æ and œ 1.1; M, W, Æ
+  // and Œ 1.25; other capitals 0.8; everything else 0.64 (an accented letter as its plain one). A
+  // name may be set as small as 16, so that the widest names the rules let through (a ticked first
+  // name of 20 letters, all m and w or all œ, with a 12 letter surname) still fit.
+  // src/scripts/check-share-card.ts proves it in the image (pr.yml).
   const weightOf = (ch: string): number => {
     const plain = ch.normalize("NFD").charAt(0);
-    if (plain === "m" || plain === "w") return 1.1;
-    if (plain === "M" || plain === "W") return 1.25;
+    if (plain === "m" || plain === "w" || plain === "æ" || plain === "œ") return 1.1;
+    if (plain === "M" || plain === "W" || plain === "Æ" || plain === "Œ") return 1.25;
     return plain !== plain.toLowerCase() ? 0.8 : 0.64;
   };
   const fit = (words: string, biggest: number): number => {

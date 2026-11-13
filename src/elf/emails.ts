@@ -115,10 +115,10 @@ const small = (url: string, words: string): string =>
 
 /** The email to a grown up when a door's first clue comes out. It never says when the place is shown: a family
  *  sees a door's place only once it has had its guess or been there (Plan 2c-1). It says when the family finds
- *  out whether it cracked the case: at the reveal, or later while the elf may still be hiding then, which it may
- *  be unless the place closes as the place is shown or before. A closing time not given, or not a real time, is
- *  none (ruling F13): such a place still closes, at the time a door falls back to, so the family may find out
- *  later. And a family that misses the hunt can still crack the case in Detective HQ, with one guess. */
+ *  out whether it cracked the case: at the reveal, or later if the elf is still hiding then, unless the place
+ *  closes by the reveal. A closing time not given, or not a real time, is none (ruling F13): such a place still
+ *  closes, at the time a door falls back to, so the family may find out later. And a family that misses the hunt
+ *  can still crack the case in Detective HQ, with one guess. */
 export function buildElfClueEmail(o: {
   grownUpName: string;
   door: Door;

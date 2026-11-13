@@ -201,8 +201,8 @@ function caseCard(view: HqView): string {
   }
   // The place is shown: how it turned out for a family that can see it, or its one go for a family that may
   // still crack the case. An elf shown with nobody found is still out there only until it goes home.
-  const heading =
-    today.state === "found" ? "Case closed" : today.goneHome === true ? `${escapeHtml(today.elfName)} has gone home` : `${escapeHtml(today.elfName)} is still out there`;
+  const elf = escapeHtml(today.elfName);
+  const heading = today.state === "found" ? "Case closed" : today.goneHome === true ? `${elf} has gone home` : `${elf} is still out there`;
   return (
     head +
     `<h2 id="elf-case-heading">${heading}</h2>` +

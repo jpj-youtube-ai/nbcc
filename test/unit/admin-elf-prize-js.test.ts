@@ -61,14 +61,23 @@ function page(o: { answers?: Answers; pictures?: Pictures } = {}) {
   const calls: Call[] = [];
   const made: string[] = [];
   const revoked: string[] = [];
-  const held: (() => void)[] = [];
+  const held: ((ok?: boolean) => void)[] = [];
   const server = {
     pictures: o.pictures as Pictures,
+    /** The most "held" pictures that were waiting for an answer at once. */
+    most: 0,
+    /** How many "held" pictures are waiting for an answer now. */
+    waiting: () => held.length,
     letGo: () => {
       while (held.length) held.shift()!();
     },
+    /** Answers the "held" picture asked for first of those waiting: with the picture, or (false) not there. */
+    letGoOne: (ok = true) => {
+      held.shift()?.(ok);
+    },
   };
   const aPicture = () => ({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(["pretend"], { type: "image/jpeg" })), json: () => Promise.resolve({}) });
+  const notThere = () => ({ ok: false, status: 404, json: () => Promise.resolve({ error: "That picture is not there." }) });
   let n = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
@@ -84,8 +93,13 @@ function page(o: { answers?: Answers; pictures?: Pictures } = {}) {
     calls.push({ method, url, body: init.body ? JSON.parse(String(init.body)) : null, auth: headers.Authorization ?? null });
     if (/\/picture$/.test(url)) {
       if (server.pictures === "slow") return new Promise(() => undefined);
-      if (server.pictures === "held") return new Promise((r) => held.push(() => r(aPicture())));
-      if (server.pictures === "broken") return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: "That picture is not there." }) });
+      if (server.pictures === "held") {
+        return new Promise((r) => {
+          held.push((ok = true) => r(ok ? aPicture() : notThere()));
+          server.most = Math.max(server.most, held.length);
+        });
+      }
+      if (server.pictures === "broken") return Promise.resolve(notThere());
       return Promise.resolve(aPicture());
     }
     const all: Answers = { "GET /api/admin/elf/hq": { body: HQ }, ...(o.answers ?? {}) };
@@ -547,6 +561,68 @@ describe("the pictures across reads", () => {
     const img = card("Ruby Tinselfoot").querySelector<HTMLImageElement>("img")!;
     expect(img.hidden).toBe(false);
     expect(env.made).toContain(img.getAttribute("src"));
+  });
+});
+
+// The final review, issue 7: with a hundred pictures in at 5pm, a card each asking at once is a burst on the server and
+// tens of megabytes on a head elf's phone. So the part fetches three at a time, in the order the cards are listed, top
+// first, the next as soon as one has finished, whether it loaded or not; and drawing the part again leaves whatever
+// the drawing before was still waiting to fetch.
+describe("loading the pictures three at a time", () => {
+  const MORE = [
+    { id: 15, detective: "Ada Snowsleuth" },
+    { id: 16, detective: "Max Jinglesnoop" },
+    { id: 17, detective: "Ivy Gingersnap" },
+    { id: 18, detective: "Noah Twinkletoes" },
+  ].map((e, i) => ({ ...LEO, ...e, sentAt: `2026-12-24T16:${30 + i}:00.000Z` }));
+  /** Seven pictures, closed, Kim's the winner. */
+  const SEVEN = { ...CLOSED, entries: [...CLOSED.entries, ...MORE] };
+  /** Which entries' pictures were asked for, in turn. */
+  const asked = (env: Env) => pictureCalls(env).map((c) => Number(/\/grand-prize\/(\d+)\/picture$/.exec(c.url)![1]));
+  const shown = () => cards().filter((c) => !c.querySelector<HTMLImageElement>("img")!.hidden).length;
+
+  it("never has more than three pictures on their way, and loads all seven, top first", async () => {
+    const env = await openPrize(SEVEN, {}, { pictures: "held" });
+    expect(asked(env)).toEqual([12, 13, 14]);
+    while (env.server.waiting() > 0) {
+      env.server.letGoOne();
+      await flush();
+    }
+    expect(env.server.most).toBe(3);
+    expect(asked(env)).toEqual([12, 13, 14, 15, 16, 17, 18]);
+    expect(shown()).toBe(7);
+  });
+
+  it("starts the next as soon as one has finished, whether it loaded or not", async () => {
+    const env = await openPrize(SEVEN, {}, { pictures: "held" });
+    env.server.letGoOne(false); // Ruby's cannot be loaded
+    await flush();
+    expect(asked(env)).toEqual([12, 13, 14, 15]);
+    expect(card("Ruby Tinselfoot").textContent).toContain("The picture could not be loaded.");
+    env.server.letGoOne();
+    await flush();
+    expect(asked(env)).toEqual([12, 13, 14, 15, 16]);
+    expect(env.server.waiting()).toBe(3);
+  });
+
+  it("leaves the pictures the drawing before was still waiting for when the part is drawn again", async () => {
+    // Read again while the first three are on their way: the new read lists only the last two pictures.
+    const LAST_TWO = { ...CLOSED, entries: MORE.slice(2) };
+    const env = await openPrize(SEVEN, { [`GET ${PART_PATH}`]: [{ body: SEVEN }, { body: LAST_TWO }] }, { pictures: "held" });
+    tab("hq").click();
+    tab("prize").click();
+    await flush();
+    expect(cards().map((c) => c.querySelector("h3")!.textContent)).toEqual(["Ivy Gingersnap", "Noah Twinkletoes"]);
+    // The three on their way still count, so nothing more starts until they finish.
+    expect(asked(env)).toEqual([12, 13, 14]);
+    env.server.letGo();
+    await flush();
+    // The drawing before was waiting for 15 to 18: only the new cards' 17 and 18 are fetched.
+    expect(asked(env)).toEqual([12, 13, 14, 17, 18]);
+    env.server.letGo();
+    await flush();
+    expect(shown()).toBe(2);
+    expect(env.server.most).toBe(3);
   });
 });
 

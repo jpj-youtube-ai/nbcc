@@ -3013,9 +3013,12 @@
     // are judged with no age: the site never asks for one. The winner can be marked only once the entries
     // have closed, so a picture never changes under the judge, and marking another moves the mark. The
     // website announces nothing: NBCC rings the winner's grown up. The part's pieces are named .hq-gp, since
-    // .hq-prize is the Doors prize part's.
-    var gp = { box: null, answer: null, error: null, seq: 0, pictures: {}, marking: false };
+    // .hq-prize is the Doors prize part's. The pictures are fetched three at a time, top first, so a hundred
+    // cards at 5pm are never a hundred requests at once (gp.queue, gp.loading).
+    var gp = { box: null, answer: null, error: null, seq: 0, pictures: {}, marking: false, queue: [], loading: 0 };
     var GP_PATH = "/api/admin/elf/grand-prize";
+    /** How many pictures are on their way at once, at most. */
+    var GP_AT_ONCE = 3;
     var GP_WORDS = {
       heading: "Grand prize",
       intro: "Every picture sent in for the grand prize, in the order they came in. Only head elves see them.",
@@ -3092,8 +3095,38 @@
       return kept.promise;
     }
 
+    /** Shows an entry's picture on its card when it comes. One already fetched, or on its way, is shown from what is
+     *  kept, with no request of its own; the rest wait their turn in gp.queue, in the order the cards are listed, at
+     *  most GP_AT_ONCE on their way at once, the next starting as soon as one finishes, loaded or not. Drawing the part
+     *  again empties the queue (drawPrize), so what the drawing before was waiting for is never fetched for it. */
     function showEntryPicture(e, img, wait) {
-      entryPicture(e).then(
+      if (gp.pictures[pictureKey(e)]) return pictureOnCard(entryPicture(e), img, wait);
+      gp.queue.push({ e: e, img: img, wait: wait });
+      nextPictures();
+    }
+
+    function nextPictures() {
+      while (gp.loading < GP_AT_ONCE && gp.queue.length) {
+        var turn = gp.queue.shift();
+        if (gp.pictures[pictureKey(turn.e)]) {
+          pictureOnCard(entryPicture(turn.e), turn.img, turn.wait);
+          continue;
+        }
+        gp.loading++;
+        var coming = entryPicture(turn.e);
+        coming.then(pictureDone, pictureDone);
+        pictureOnCard(coming, turn.img, turn.wait);
+      }
+    }
+
+    /** One picture has come, or could not: the next one in the queue takes its place. */
+    function pictureDone() {
+      gp.loading--;
+      nextPictures();
+    }
+
+    function pictureOnCard(coming, img, wait) {
+      coming.then(
         function (url) {
           img.setAttribute("src", url);
           img.hidden = false;
@@ -3143,6 +3176,9 @@
     function drawPrize() {
       var box = gp.box;
       var p = gp.answer;
+      // The cards are drawn afresh, so whatever the drawing before was still waiting to fetch is left; pictures on
+      // their way still count towards the three, and are kept for the new cards when they come.
+      gp.queue = [];
       box.textContent = "";
       box.appendChild(el("h2", { class: "hq-h2", text: GP_WORDS.heading }));
       box.appendChild(el("p", { class: "hq-words hq-soft", text: GP_WORDS.intro }));

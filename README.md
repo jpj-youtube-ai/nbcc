@@ -12846,7 +12846,10 @@ audited by `setElfSettings` (a time and a link, never a child's name).
 `POST .../:id/winner`; its classes are `.hq-gp`, as `.hq-prize` is Doors' prize part). Every picture sent in,
 in the order they came in (a picture sent again comes in again, so it is placed by its newest), each with the
 detective's full name, the grown up's name and mobile to ring, and when it came in. The pictures are fetched
-with the bearer token into Blob addresses, never a link, and kept across reads by entry and `sentAt`. The tile
+with the bearer token into Blob addresses, never a link, and kept across reads by entry and `sentAt`. They are
+fetched three at a time, in the order the cards are listed, top first, the next as soon as one has finished,
+loaded or not, so a hundred cards at 5pm are never a hundred requests at once; drawing the part again leaves
+whatever the drawing before was still waiting to fetch. The tile
 counts the pictures in (`grandPrizeEntries` in `/api/admin/elf/hq`, from `countEntries`; a screen reader hears
 "Grand prize, 3 pictures"). Anyone with the `elf` section can look; edit marks the winner. The winner can be
 marked only once the entries have closed (409 before), and marking another moves the mark: one winner a year

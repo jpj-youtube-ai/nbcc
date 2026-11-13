@@ -97,6 +97,9 @@ const tick = async (on: boolean) => {
   filter().dispatchEvent(new Event("change", { bubbles: true }));
   await settle();
 };
+// The Overview's recent gifts are cards now (2026-11-12): where each was given, as its mark.
+const fromOnOverview = () =>
+  Array.from(document.querySelectorAll("#overviewRecent .ov-gift")).map((c) => c.querySelector(".ov-mark--from")?.textContent ?? null);
 const pillsIn = (host: string) =>
   Array.from(document.querySelectorAll(host + " .dn-table tbody tr")).map((tr) => tr.querySelector(".dn-source-pill")?.textContent ?? null);
 // The Donations screen is the gift log now (assets/js/admin/gift-log.js): each card's place badge,
@@ -233,13 +236,15 @@ describe("the Red Bag label on a gift", () => {
     expect(placesIn()).toEqual(["Fill a Red Bag", "Donate page"]);
   });
 
-  // The Overview keeps the old compact table, and its pill there.
+  // Search keeps the compact table (the Overview draws cards now), and its pill there.
   it("sits beside the gift, in the Donation cell, so it rides with it when the list becomes cards", async () => {
-    (el("adminEmail") as HTMLInputElement).value = "viewer@nbcc";
-    (el("adminPassword") as HTMLInputElement).value = "pw";
-    el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await openDonations();
+    (document.querySelector('.admin-nav-link[data-view="search"]') as HTMLElement).click();
+    (document.querySelector('.admin-seg[data-kind="donations"]') as HTMLElement).click();
+    (el("searchQuery") as HTMLInputElement).value = "Sample";
+    el("searchForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
     await settle();
-    const cell = document.querySelector('#overviewRecent .dn-table tbody tr td[data-label="Donation"]') as HTMLElement;
+    const cell = document.querySelector('#searchResults .dn-table tbody tr td[data-label="Donation"]') as HTMLElement;
     expect(cell.textContent).toBe("monthly Red Bag");
     const pill = cell.querySelector(".dn-source-pill") as HTMLElement;
     // The admin's own pill, with no colours of its own.
@@ -252,7 +257,7 @@ describe("the Red Bag label on a gift", () => {
     (el("adminPassword") as HTMLInputElement).value = "pw";
     el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
     await settle();
-    expect(pillsIn("#overviewRecent")).toEqual(["Red Bag", null]);
+    expect(fromOnOverview()).toEqual(["Red Bag", null]);
   });
 
   it("is on donation search results too", async () => {
@@ -268,8 +273,8 @@ describe("the Red Bag label on a gift", () => {
   it("is not shown for a source it does not know, or for none", async () => {
     rows = [gift({ id: 30, source: "something_else" }), gift({ id: 31, source: undefined })];
     await openDonations();
-    // The compact table shows no pill; the cards say "Donate page", as the server worded them.
-    expect(pillsIn("#overviewRecent")).toEqual([null, null]);
+    // The Overview's cards show no mark; the Donations cards say "Donate page", as the server worded them.
+    expect(fromOnOverview()).toEqual([null, null]);
     expect(placesIn()).toEqual(["Donate page", "Donate page"]);
   });
 });

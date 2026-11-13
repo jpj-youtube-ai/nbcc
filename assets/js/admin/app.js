@@ -224,6 +224,8 @@
     currentRole = claims.role || "viewer";
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
+    // The phone menu's foot says it too, since the top bar is hidden there (2026-11-12).
+    el("pmWho").textContent = "Signed in as " + (claims.email || "") + (claims.role ? " · " + claims.role : "");
     // TASK-478: a fresh start for whoever has signed in, so nobody sees the last person's pills.
     resetWhatsNew();
     refreshWhatsNew();
@@ -332,6 +334,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
       g.hidden = !g.querySelector(".admin-nav-link:not([hidden])");
     });
+    syncTabBar();
   }
 
   // Fetch an admin API path with the bearer token; a 401 means the session is gone -> back to login.
@@ -484,6 +487,31 @@
 
   // My account (Admin Phase 4, TASK-197): topbar entry point, reachable by every signed-in user
   // regardless of section permissions - not a nav-link, so it isn't part of applyNavFiltering.
+  // The phone menu's foot (2026-11-12): its two buttons press the top bar's own, so they can never
+  // drift from what those do.
+  // The bottom bar (2026-11-12): a tab opens its screen as its menu link does. Everything presses
+  // the Menu button, which takes you up to the menu and, closed again, back to where you were.
+  Array.prototype.forEach.call(doc.querySelectorAll(".pm-bar [data-pm-view]"), function (t) {
+    t.addEventListener("click", function () {
+      selectView(t.getAttribute("data-pm-view"));
+    });
+  });
+  bindClick("pmEverything", function () {
+    var toggle = el("adminNavToggle");
+    toggle.click();
+    // Opened from the foot of the page, the focus would stay down here, after everything in the
+    // menu. Take it to the menu's first screen instead.
+    if (toggle.getAttribute("aria-expanded") === "true") {
+      var first = doc.querySelector("#adminNavList .admin-nav-link:not([hidden])");
+      if (first && first.focus) first.focus();
+    }
+  });
+  bindClick("pmAccountBtn", function () {
+    el("accountBtn").click();
+  });
+  bindClick("pmLogoutBtn", function () {
+    el("logoutBtn").click();
+  });
   bindClick("accountBtn", function () {
     selectView("account");
   });
@@ -564,6 +592,22 @@
     return whatsNewLoad;
   }
 
+  // The bar along the bottom on a phone (2026-11-12). Each tab copies its menu link, so it can never
+  // offer a screen the menu would not, nor disagree with it about what is new or where you are. Run
+  // whenever any of those changes: after the menu is filtered (applyNavFiltering) and after the pills
+  // are drawn (renderNewPills, which selectView runs once it has marked the screen you chose).
+  function syncTabBar() {
+    Array.prototype.forEach.call(doc.querySelectorAll(".pm-bar [data-pm-view]"), function (t) {
+      var link = doc.querySelector('#adminNavList .admin-nav-link[data-view="' + t.getAttribute("data-pm-view") + '"]');
+      t.hidden = !link || link.hidden;
+      var isNew = !!link && !link.hidden && !!link.querySelector(".admin-new-pill");
+      t.classList.toggle("pm-tab--new", isNew);
+      var words = t.querySelector(".pm-tab__new");
+      if (words) words.hidden = !isNew;
+      if (link && link.classList.contains("is-active")) t.setAttribute("aria-current", "page");
+      else t.removeAttribute("aria-current");
+    });
+  }
   function renderNewPills() {
     var any = false;
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link[data-view]"), function (b) {
@@ -597,6 +641,7 @@
         b.insertAdjacentHTML("beforeend", NEW_PILL);
       }
     });
+    syncTabBar();
     var toggle = el("adminNavToggle");
     if (!toggle) return;
     var oldT = toggle.querySelector(".admin-new-pill");
@@ -1041,6 +1086,8 @@
   function markNav(open) {
     navBar.classList.toggle("is-open", open);
     navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    var all = el("pmEverything");
+    if (all) all.setAttribute("aria-expanded", open ? "true" : "false");
   }
   function openNav() {
     if (!navBar || navIsOpen()) return;
@@ -1331,49 +1378,71 @@
   function ovButtonWords(item) {
     return GI_OLD_VIEWS[item.view] ? "Get involved" : item.button;
   }
+  // The Overview in the Donations look (2026-11-12). Each line is a card that is its own button: the
+  // count large at the front, as Donations leads with the amount, the words beside it, and the screen
+  // it opens beneath. Grouped by how soon it matters, under the gift log's kind of heading.
+  var NEED_GROUPS = { 1: "Urgent", 2: "Waiting on you", 3: "Coming due" };
+  function needCard(n) {
+    var esc = H.escapeHtml;
+    var level = Number(n.level);
+    // An older server, mid-deploy, sends the sentence without its count: it still reads, whole.
+    var split = typeof n.count === "number" && isFinite(n.count) && typeof n.words === "string";
+    return (
+      "<li>" +
+      '<button type="button" class="ov-card ov-need' + (level === 1 ? " ov-need--urgent" : "") + (split ? "" : " ov-need--sentence") +
+      '" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' +
+      (split ? '<span class="ov-need__count">' + String(Number(n.count)) + "</span>" : "") +
+      '<span class="ov-need__body">' +
+      '<span class="ov-need__words">' + esc(split ? n.words : n.text) + "</span>" +
+      '<span class="ov-need__where">' + esc(ovButtonWords(n)) + "</span>" +
+      "</span></button></li>"
+    );
+  }
   function needsHtml(d) {
     var esc = H.escapeHtml;
     var needs = d.needs || [];
     var failed = d.failed || [];
-    var list = needs.length
-      ? '<ul class="ov-needs">' +
-        needs
-          .map(function (n) {
-            return (
-              '<li class="ov-need" data-level="' + Number(n.level) + '">' +
-              '<span class="ov-dot" aria-hidden="true"></span>' +
-              '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
-              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' + esc(ovButtonWords(n)) + "</button>" +
-              "</li>"
-            );
-          })
-          .join("") +
-        "</ul>"
-      : "";
+    var groups = [1, 2, 3]
+      .map(function (level) {
+        var mine = needs.filter(function (n) { return Number(n.level) === level; });
+        if (!mine.length) return "";
+        return (
+          '<p class="ov-group" data-level="' + level + '"><span class="ov-pill">' + NEED_GROUPS[level] + "</span></p>" +
+          '<ul class="ov-list">' + mine.map(needCard).join("") + "</ul>"
+        );
+      })
+      .join("");
     // Never "nothing needs you" when part of it could not be checked: that would be a guess.
     var quiet = !needs.length && !failed.length ? '<p class="ov-clear">Nothing needs you right now.</p>' : "";
     var gaps = failed.length
       ? '<p class="ov-failed">Could not check: ' + esc(failed.join(", ")) + ". Open Overview again in a moment.</p>"
       : "";
-    return list + quiet + gaps;
+    return '<div class="ov-needs">' + groups + quiet + gaps + "</div>";
   }
-  // TASK-509: how we are doing, one line each, worded by src/admin/overview-numbers.ts. The card
-  // stays hidden for someone who may see none of them.
+  // "9 things need you." above the cards; nothing on a quiet day, or when it could not load.
+  function ovSummaryWords(needs) {
+    var n = (needs || []).length;
+    return n === 0 ? "" : n === 1 ? "1 thing needs you." : n + " things need you.";
+  }
+  // TASK-509: how we are doing, now the gift log's scoreboard, a tile each with the figure large. The
+  // server sends the figure apart from the rest of its headline; an older one sends the headline only.
   function numbersHtml(numbers) {
     var esc = H.escapeHtml;
     return (
-      '<ul class="ov-numbers">' +
+      '<ul class="ov-tiles">' +
       numbers
         .map(function (n) {
+          var split = typeof n.figure === "string";
           return (
-            '<li class="ov-number">' +
-            '<span class="ov-number-title">' + esc(n.title) + "</span>" +
-            '<span class="ov-number-body">' +
-            '<span class="ov-number-headline">' + esc(n.headline) + "</span>" +
-            '<span class="ov-number-detail">' + esc(n.detail) + "</span>" +
-            "</span>" +
-            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(ovButtonWords(n)) + "</button>" +
-            "</li>"
+            '<li><button type="button" class="ov-tile" data-ov-view="' + esc(n.view) + '">' +
+            '<span class="ov-tile__name">' + esc(n.title) + "</span>" +
+            '<span class="ov-tile__figure">' + esc(split ? n.figure : n.headline) + "</span>" +
+            '<span class="ov-tile__rest">' + esc(split ? n.rest : "") + "</span>" +
+            '<span class="ov-tile__detail">' + esc(n.detail) + "</span>" +
+            // The old rows had a button naming the screen; the tile is the button now, so a screen
+            // reader still hears where it goes.
+            '<span class="sr-only">, opens ' + esc(ovButtonWords(n)) + "</span>" +
+            "</button></li>"
           );
         })
         .join("") +
@@ -1385,36 +1454,96 @@
     el("overviewNumbers").innerHTML = list.length ? numbersHtml(list) : "";
     el("ovNumbersCard").hidden = !list.length;
   }
-  // TASK-510: Coming up, the next 14 days by day, from src/admin/overview-coming-up.ts. Hidden when
-  // nothing this person may see is coming.
+  // TASK-510: Coming up, the next 14 days by day, as slim cards under the day's heading.
   function comingHtml(days) {
     var esc = H.escapeHtml;
-    return days
-      .map(function (d) {
-        return (
-          '<section class="ov-day">' +
-          '<h4 class="ov-day-label">' + esc(d.label) + "</h4>" +
-          '<ul class="ov-events">' +
-          (d.items || [])
-            .map(function (i) {
-              return (
-                '<li class="ov-event">' +
-                '<span class="ov-event-when">' + esc(i.when) + "</span>" +
-                '<span class="ov-event-text">' + esc(i.text) + "</span>" +
-                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(ovButtonWords(i)) + "</button>" +
-                "</li>"
-              );
-            })
-            .join("") +
-          "</ul></section>"
-        );
-      })
-      .join("");
+    return (
+      '<div class="ov-days">' +
+      days
+        .map(function (d) {
+          return (
+            '<section class="ov-day">' +
+            '<h4 class="ov-day-label">' + esc(d.label) + "</h4>" +
+            '<ul class="ov-list">' +
+            (d.items || [])
+              .map(function (i) {
+                return (
+                  '<li><button type="button" class="ov-card ov-event' + (i.when ? "" : " ov-event--allday") +
+                  '" data-ov-view="' + esc(i.view) + '">' +
+                  '<span class="ov-event-when">' + esc(i.when) + "</span>" +
+                  '<span class="ov-event-text">' + esc(i.text) + "</span>" +
+                  '<span class="sr-only">, opens ' + esc(ovButtonWords(i)) + "</span>" +
+                  "</button></li>"
+                );
+              })
+              .join("") +
+            "</ul></section>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
   }
   function showComing(days) {
     var list = days || [];
     el("overviewComing").innerHTML = list.length ? comingHtml(list) : "";
     el("ovComingCard").hidden = !list.length;
+  }
+  // The Overview's own recent gifts: compact cards, as the gift log draws a gift, never the table.
+  // Search still shares donationsTable() and keeps it. The same marks the table showed, worded the
+  // gift log's way, and never a New pill: these five are a glance, not a list to work through.
+  var OV_SOURCE_WORDS = {
+    red_bag: "Red Bag",
+    ball: "Festive Ball",
+    ball_bags: "Red bags at the Ball",
+    santa_sleigh: "Santa Sleigh",
+    invoice: "Invoice",
+  };
+  function ovWhen(iso) {
+    var GL = window.AdminGiftLog;
+    if (!GL || !GL.dayLabel) return H.fmtDate(iso);
+    var day = GL.dayLabel(iso);
+    var time = GL.timeLabel(iso);
+    if (day === "Today") return time;
+    return day === "Yesterday" ? "Yesterday, " + time : day;
+  }
+  function ovGiftsHtml(rows) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    if (!rows.length) return '<p class="ov-empty">No donations yet.</p>';
+    return (
+      '<ul class="ov-list">' +
+      rows
+        .map(function (d) {
+          var elfRow = d.kind === "elf";
+          var marks = [];
+          if (d.gift_aid) marks.push(["aid", "Gift Aid"]);
+          if (d.mode === "monthly") marks.push(["monthly", "Monthly"]);
+          var from = elfRow ? "Elf Detective School" : OV_SOURCE_WORDS[d.source];
+          if (from) marks.push(["from", from]);
+          var pay = H.paymentLabel(d);
+          if (pay.state !== "paid") marks.push(["pay", pay.label]);
+          // A gift opens its donor, as the row's View did; an elf payment opens Head Elf HQ, and only
+          // for someone who may open it. One that opens nothing is drawn still, not as a button.
+          var opener = elfRow
+            ? canView("elf") ? ' data-elf-family="' + Number(d.elf_family_id) + '"' : ""
+            : ' data-donor="' + Number(d.donor_id) + '"';
+          var amount = GL && GL.money ? GL.money(d.amount_pence) : H.formatPence(d.amount_pence);
+          var name = d.donor_name || (elfRow ? d.elf_reference : "") || "";
+          var inner =
+            '<span class="ov-gift__amount">' + esc(amount) + "</span>" +
+            '<span class="ov-gift__who"><span class="ov-gift__name">' + esc(name) + "</span>" +
+            '<span class="ov-gift__time">' + esc(ovWhen(d.created_at)) + "</span></span>" +
+            '<span class="ov-gift__marks">' +
+            marks.map(function (m) { return '<span class="ov-mark ov-mark--' + m[0] + '">' + esc(m[1]) + "</span>"; }).join("") +
+            "</span>";
+          return opener
+            ? '<li><button type="button" class="ov-card ov-gift"' + opener + ">" + inner + "</button></li>"
+            : '<li><div class="ov-card ov-card--still ov-gift">' + inner + "</div></li>";
+        })
+        .join("") +
+      "</ul>"
+    );
   }
   function overviewTime(iso) {
     var t = new Date(iso);
@@ -1433,14 +1562,14 @@
         if (btn.getAttribute("data-ov-view") === "ball") ballAsk(BALL_NEED_SECTIONS[btn.getAttribute("data-ov-key")]);
         selectView(btn.getAttribute("data-ov-view"));
       };
-      el("overviewNeeds").addEventListener("click", openView);
-      el("overviewNumbers").addEventListener("click", openView);
-      el("overviewComing").addEventListener("click", openView);
+      // One delegate for the whole view: the cards, the tiles, Coming up and "See them all".
+      el("view-overview").addEventListener("click", openView);
     }
     authFetch("/api/admin/overview")
       .then(okJson)
       .then(function (d) {
         el("overviewNeeds").innerHTML = needsHtml(d);
+        el("overviewSummary").textContent = ovSummaryWords(d.needs);
         showNumbers(d.numbers);
         showComing(d.comingUp);
         el("overviewUpdated").textContent = overviewTime(d.updatedAt);
@@ -1448,15 +1577,19 @@
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
         el("overviewNeeds").innerHTML = unavailableHtml("The overview could not load. Open it again in a moment.");
+        el("overviewSummary").textContent = "";
         // Never last visit's numbers under a message that says nothing could load.
         showNumbers([]);
         showComing([]);
         el("overviewUpdated").textContent = "";
       });
+    // A button to a screen that would only say no is one that looks tappable and is not.
+    var seeAll = doc.querySelector("#view-overview .ov-see-all");
+    if (seeAll) seeAll.hidden = !canView("donations");
     authFetch("/api/admin/donations?limit=5")
       .then(okJson)
       .then(function (d) {
-        el("overviewRecent").innerHTML = donationsTable(d.results || []);
+        el("overviewRecent").innerHTML = ovGiftsHtml(d.results || []);
       })
       .catch(function (err) {
         el("overviewRecent").innerHTML = unavailableHtml(
@@ -1469,10 +1602,12 @@
 
   // ---- search ----
   var searchKind = "donors";
-  Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg"), function (b) {
+  // Only Search's own kind buttons (data-kind). Bound to every .admin-seg, as it was, a press on
+  // any other screen's segmented buttons took the pressed look off whichever was chosen there.
+  Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (b) {
     b.addEventListener("click", function () {
       searchKind = b.getAttribute("data-kind");
-      Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg"), function (x) {
+      Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (x) {
         x.classList.toggle("is-active", x === b);
       });
     });
@@ -3166,6 +3301,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     storyStatus("");
     var wrap = el("storyDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -3405,126 +3541,243 @@
   // ---- contact form (2026-07-10 spec): list + filter, detail, reply-in-Gmail/mark-new/delete
   // (editor+). Reads/writes go to the isolated contact DB via /api/admin/contact*. Mirrors the
   // Stories view controller above (loadStories/storiesTable/openStory/renderStory).
+  // The Contact form in the Donations look (2026-11-12). Each message is a card under its day's
+  // heading, and opens where it is, the way a gift opens in Donations, rather than on a screen of
+  // its own. One fetch brings every live message, so the three filter tiles can show their counts
+  // and filtering is instant; the list has no cap (listEnquiries), and contact is low volume.
+  //
+  // Only the card's summary button carries data-contact. The opened part sits beside it, not inside
+  // it, so pressing Reply in Gmail or Archive never bubbles up to the opener and redraws the card.
+  // Only one is ever open, so #contactDetail and #contactActionStatus stay unique.
+  var ctRows = [];
+  var ctOpenId = null;
+  var CT_FILTER_WORDS = { "": "No enquiries yet.", new: "Nothing is waiting for a reply.", replied: "Nothing has been replied to yet." };
+  function ctName(r) {
+    return ((r.first_name || "") + " " + (r.last_name || "")).trim();
+  }
+  // The server's own words for who replied and when (repliedSummary, src/contact/enquiry-summary.ts):
+  // "by jaimie@nbcc.scot, 22 Sep 14:03", in UK time, with its own month names. Made here too so a
+  // message marked replied just now reads exactly as it will after a reload.
+  var CT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function ctRepliedSummary(by, at) {
+    if (!at) return null;
+    var when = new Date(at);
+    if (isNaN(when.getTime())) return null;
+    var parts = {};
+    new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/London" })
+      .formatToParts(when)
+      .forEach(function (p) { parts[p.type] = p.value; });
+    var stamp = Number(parts.day) + " " + CT_MONTHS[Number(parts.month) - 1] + " " + parts.hour + ":" + parts.minute;
+    return by ? "by " + by + ", " + stamp : stamp;
+  }
+  function ctMarkHtml(r) {
+    var esc = H.escapeHtml;
+    return r.status === "replied"
+      ? '<span class="ct-mark ct-mark--done">Replied</span>' + (r.replied_summary ? ' <span class="ct-msg__by">' + esc(r.replied_summary) + "</span>" : "")
+      // The red dot by the name says it to the eye, as in the mockup Jaimie approved; these words
+      // say it to a screen reader, which a colour alone cannot.
+      : '<span class="sr-only">Waiting for a reply</span>';
+  }
+  function ctCardHtml(r) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    var id = Number(r.id);
+    var waiting = r.status !== "replied";
+    var text = String(r.message || "");
+    return (
+      '<article class="ct-msg' + (waiting ? " ct-msg--waiting" : "") + '" data-ct-id="' + id + '">' +
+      '<button type="button" class="ct-msg__summary" data-contact="' + id + '" aria-expanded="false">' +
+      '<span class="ct-msg__top"><span class="ct-msg__name">' + esc(ctName(r)) + "</span>" +
+      '<span class="ct-msg__time">' + esc(GL && GL.timeLabel ? GL.timeLabel(r.created_at) : H.fmtDate(r.created_at)) + "</span></span>" +
+      '<span class="ct-msg__snippet">' + esc(text.length > 240 ? text.slice(0, 240) + "…" : text) + "</span>" +
+      '<span class="ct-msg__mark">' + ctMarkHtml(r) + "</span>" +
+      "</button>" +
+      "</article>"
+    );
+  }
+  // The open part of a card, added beside its summary button when it opens (openContact).
+  var CT_MORE_HTML =
+    '<div class="ct-msg__more"><div id="contactDetail" aria-live="polite"></div>' +
+    '<p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p></div>';
+  function ctListHtml(rows) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    if (!rows.length) return '<p class="admin-empty">' + esc(ctRows.length ? CT_FILTER_WORDS[contactStatusFilter] || CT_FILTER_WORDS[""] : CT_FILTER_WORDS[""]) + "</p>";
+    var out = "";
+    var lastDay = null;
+    rows.forEach(function (r) {
+      var key = GL && GL.dayKey ? GL.dayKey(r.created_at) : H.fmtDate(r.created_at);
+      if (key !== lastDay) {
+        out += '<h3 class="ct-day">' + esc(GL && GL.dayLabel ? GL.dayLabel(r.created_at) : H.fmtDate(r.created_at)) + "</h3>";
+        lastDay = key;
+      }
+      out += ctCardHtml(r);
+    });
+    return '<div class="ct-list">' + out + "</div>";
+  }
+  function ctCounts() {
+    var waiting = ctRows.filter(function (r) { return r.status !== "replied"; }).length;
+    var counts = { "": ctRows.length, new: waiting, replied: ctRows.length - waiting };
+    Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .ct-seg"), function (b) {
+      var c = b.querySelector(".ct-seg__count");
+      if (c) c.textContent = String(counts[b.getAttribute("data-status") || ""] || 0);
+    });
+    var line = el("ctWaitingLine");
+    if (line) line.textContent = waiting === 0 ? "Nothing waiting for a reply." : waiting === 1 ? "1 waiting for a reply." : waiting + " waiting for a reply.";
+  }
+  // Redraws the list, every card closed.
+  function ctDraw() {
+    ctOpenId = null;
+    ctCounts();
+    var shown = contactStatusFilter
+      ? ctRows.filter(function (r) { return contactStatusFilter === "replied" ? r.status === "replied" : r.status !== "replied"; })
+      : ctRows;
+    el("contactTable").innerHTML = ctListHtml(shown);
+  }
   Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (b) {
     b.addEventListener("click", function () {
       contactStatusFilter = b.getAttribute("data-status") || "";
       Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (x) {
         x.classList.toggle("is-active", x === b);
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
       });
-      loadContact();
+      // A message that the new filter hides cannot stay open.
+      ctOpenId = null;
+      ctDraw();
     });
   });
-  function contactSnippet(message) {
-    var s = String(message || "");
-    return s.length > 80 ? s.slice(0, 80) + "…" : s;
-  }
-  function contactStatusBadge(status) {
-    return status === "replied"
-      ? '<span class="admin-pill is-replied">Replied</span>'
-      : '<span class="admin-pill is-new">New</span>';
-  }
-  // TASK-425: the status pill, with who replied and when beneath it. replied_summary arrives
-  // already formatted from the server, and is null whenever there is nothing honest to say.
-  // Putting it in the existing cell rather than a new column keeps the table within the width
-  // that TASK-422 fixed for phones.
-  function contactStatusCell(r) {
-    var badge = contactStatusBadge(r.status);
-    if (!r.replied_summary) return badge;
-    return badge + '<span class="admin-replied-by">' + H.escapeHtml(r.replied_summary) + "</span>";
-  }
-
-  function contactTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No enquiries yet.</p>';
-    var body = rows
-      .map(function (r) {
-        return (
-          "<tr><td>" + window.formatReceived(r.created_at) + "</td><td>" +
-          H.escapeHtml(((r.first_name || "") + " " + (r.last_name || "")).trim()) + "</td><td>" +
-          H.escapeHtml(r.email) + "</td><td>" + contactStatusCell(r) + "</td><td>" +
-          H.escapeHtml(contactSnippet(r.message)) +
-          '</td><td><button class="admin-link" type="button" data-contact="' + r.id + '">View</button></td></tr>'
-        );
-      })
-      .join("");
-    return (
-      '<table class="admin-table"><thead><tr><th>Received</th><th>Name</th><th>Email</th>' +
-      "<th>Status</th><th>Message</th><th></th></tr></thead><tbody>" +
-      body + "</tbody></table>"
-    );
-  }
   function loadContact() {
     var wrap = el("contactTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    var path = "/api/admin/contact" + (contactStatusFilter ? "?status=" + encodeURIComponent(contactStatusFilter) : "");
-    authFetch(path)
+    ctOpenId = null;
+    authFetch("/api/admin/contact")
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = contactTable(d.results || []);
+        ctRows = d.results || [];
+        ctDraw();
       })
       .catch(function () {
+        ctRows = [];
         wrap.innerHTML = unavailableHtml("Enquiries are unavailable.");
+        // TASK-476: never the last load's numbers under a message that says nothing could load.
+        var line = el("ctWaitingLine");
+        if (line) line.textContent = "";
+        Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .ct-seg__count"), function (c) {
+          c.textContent = "";
+        });
       });
   }
   function contactStatus(msg) {
-    el("contactActionStatus").textContent = msg || "";
+    var s = el("contactActionStatus");
+    if (s) s.textContent = msg || "";
+  }
+  // A message opens where it is, and pressing its card again closes it. It is done in place, never
+  // by redrawing the list: the card you pressed stays the same button with the focus on it, and
+  // nothing else on the list changes. Only one is ever open, so #contactDetail stays unique.
+  function ctClose() {
+    if (ctOpenId === null) return;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + ctOpenId + '"]');
+    ctOpenId = null;
+    if (!card) return;
+    card.classList.remove("ct-msg--open");
+    var more = card.querySelector(".ct-msg__more");
+    if (more) more.remove();
+    var btn = card.querySelector(".ct-msg__summary");
+    if (btn) btn.setAttribute("aria-expanded", "false");
   }
   function openContact(id) {
+    id = Number(id);
+    var was = ctOpenId;
+    ctClose();
+    if (was === id) return;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + id + '"]');
+    if (!card) return;
+    ctOpenId = id;
     currentContactId = id;
-    showOnly("view-contact-detail");
-    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
-      b.classList.remove("is-active");
-    });
-    contactStatus("");
-    var wrap = el("contactDetail");
+    card.classList.add("ct-msg--open");
+    var btn = card.querySelector(".ct-msg__summary");
+    btn.setAttribute("aria-expanded", "true");
+    card.insertAdjacentHTML("beforeend", CT_MORE_HTML);
+    // Closing a long message above this one moves this one up the page, and iOS Safari does not
+    // keep your place for you, so bring it back into view (clear of the pinned bars: scroll-margin).
+    if (btn.scrollIntoView) btn.scrollIntoView({ block: "nearest" });
+    var wrap = card.querySelector("#contactDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    // A reply for a message you have since closed, or moved on from, is dropped: it belongs to a card
+    // that is no longer open, and drawn into the open one it would show one person's message, and
+    // buttons, in another person's card.
+    var stillOpen = function () { return ctOpenId === id; };
     authFetch("/api/admin/contact/" + id)
       .then(function (res) {
+        if (!stillOpen()) throw new Error("moved on");
         if (res.status === 404) {
           wrap.innerHTML = '<p class="admin-empty">Enquiry not found.</p>';
           throw new Error("not found");
         }
         return okJson(res);
       })
-      .then(renderContact)
+      .then(function (c) {
+        if (stillOpen()) renderContact(c, wrap);
+      })
       .catch(function (err) {
         // TASK-476: a failure is not a record with nothing in it. "Not found" has said so already.
-        if (err && err.message === "not found") return;
+        if (!stillOpen() || (err && err.message === "not found")) return;
         wrap.innerHTML = unavailableHtml("Could not load this enquiry. Please try again.");
       });
   }
-  function renderContact(c) {
+  function renderContact(c, into) {
+    var esc = H.escapeHtml;
     var canWrite = canEdit("contact");
-    var info =
-      '<dl class="admin-dl">' +
-      dl("Name", ((c.first_name || "") + " " + (c.last_name || "")).trim()) +
+    var facts =
+      '<dl class="ct-facts">' +
       dl("Email", c.email) +
       // Optional on the form, so only a line when the sender gave one.
       (c.phone ? dl("Phone", c.phone) : "") +
       dl("Received", window.formatReceived(c.created_at)) +
-      dl("Status", c.status === "replied" ? "Replied" : "New") +
       (c.status === "replied"
-        ? dl("Replied by", (c.replied_by || "") + " · " + window.formatReceived(c.replied_at))
+        ? dl("Replied by", (c.replied_by || "") + (c.replied_at ? " · " + window.formatReceived(c.replied_at) : ""))
         : "") +
       "</dl>" +
-      '<h3 class="admin-subhead">Message</h3><p class="admin-story-text">' + H.escapeHtml(c.message || "") + "</p>";
+      '<p class="ct-msg__full">' + esc(c.message || "") + "</p>";
     var actions = "";
     if (canWrite) {
       actions =
-        '<div class="admin-donor-actions">' +
-        '<button class="btn btn-primary" type="button" id="contactReplyBtn">Reply in Gmail</button> ' +
+        '<div class="ct-actions">' +
+        '<button class="ct-act ct-act--primary" type="button" id="contactReplyBtn">Reply in Gmail</button>' +
         (c.status === "replied"
-          ? '<button class="btn btn-ghost" type="button" id="contactMarkNewBtn">Mark as new</button> '
-          : '<button class="btn btn-ghost" type="button" id="contactMarkRepliedBtn">Mark as replied</button> ') +
-        '<button class="btn" type="button" id="contactArchiveBtn">Archive</button>' +
-        '<button class="btn" type="button" id="contactRestoreBtn" hidden>Restore</button>' +
-        '<button class="btn btn-danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
+          ? '<button class="ct-act" type="button" id="contactMarkNewBtn">Mark as new</button>'
+          : '<button class="ct-act" type="button" id="contactMarkRepliedBtn">Mark as replied</button>') +
+        '<button class="ct-act" type="button" id="contactArchiveBtn">Archive</button>' +
+        '<button class="ct-act" type="button" id="contactRestoreBtn" hidden>Restore</button>' +
+        '<button class="ct-act ct-act--danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
         "</div>";
     }
-    el("contactDetail").innerHTML = info + actions;
+    var wrap = into || el("contactDetail");
+    if (!wrap) return;
+    wrap.innerHTML = facts + actions;
     if (canWrite) wireContactActions(c);
   }
+  // After a status change: the card's mark and the counts follow, without redrawing the opened part
+  // (which holds the message saying it worked).
+  function ctRowChanged(updated) {
+    var row = ctRows.find(function (r) { return Number(r.id) === Number(updated.id); });
+    if (!row) return;
+    row.status = updated.status;
+    row.replied_summary = updated.status === "replied" ? ctRepliedSummary(updated.replied_by, updated.replied_at) : null;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + Number(row.id) + '"]');
+    if (card) {
+      card.classList.toggle("ct-msg--waiting", row.status !== "replied");
+      var mark = card.querySelector(".ct-msg__mark");
+      if (mark) mark.innerHTML = ctMarkHtml(row);
+    }
+    ctCounts();
+  }
   function patchContact(body, okMsg, errMsg) {
-    return authFetch("/api/admin/contact/" + currentContactId, {
+    // The card the change is for. If you have opened another by the time the answer comes, that
+    // card's mark and the counts still follow, but its open part and its status line are left alone.
+    var id = Number(currentContactId);
+    var stillOpen = function () { return ctOpenId === id; };
+    return authFetch("/api/admin/contact/" + id, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -3534,13 +3787,16 @@
       })
       .then(function (updated) {
         if (updated) {
-          renderContact(updated);
-          contactStatus(okMsg);
+          ctRowChanged(updated);
+          if (stillOpen()) {
+            renderContact(updated);
+            contactStatus(okMsg);
+          }
           refreshEnquiryNotice(); // one fewer waiting, or one more if it was un-marked
-        } else contactStatus(errMsg);
+        } else if (stillOpen()) contactStatus(errMsg);
       })
       .catch(function () {
-        contactStatus(errMsg);
+        if (stillOpen()) contactStatus(errMsg);
       });
   }
   function wireContactActions(c) {
@@ -3605,9 +3861,6 @@
       })
       .catch(function () { contactStatus("Could not erase the message."); });
   }
-  bindClick("contactBack", function () {
-    selectView("contact");
-  });
 
   // ---- audit ----
   function loadAudit() {
@@ -5236,6 +5489,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     el("teamPermStatus").textContent = "";
     renderTeamPermMatrix(u);
   }
@@ -8983,6 +9237,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     donorStatus("");
     var wrap = el("donorDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -10629,6 +10884,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     businessSay("businessOutcomeStatus", "");
     businessSay("businessNoteStatus", "");
     el("businessDetail").innerHTML = '<p class="admin-loading">Loading…</p>';

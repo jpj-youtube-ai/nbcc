@@ -15,6 +15,9 @@
     <title>Admin | Night Before Christmas Campaign</title>
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <link rel="stylesheet" href="/assets/css/admin.css" />
+    <!-- The Overview, the Contact form, and the menu and bottom bar on a phone, in the Donations look
+         (2026-11-12). After admin.css so it wins on order alone, with no !important. -->
+    <link rel="stylesheet" href="/assets/css/admin-overview.css" />
     <!-- Admin > Giving > Donations, the gift log: its own stylesheet (.gl-) and script, which draws
          the cards app.js asks for, so it loads before app.js. -->
     <link rel="stylesheet" href="/assets/css/admin-donations.css" />
@@ -113,6 +116,10 @@
 
         <div class="admin-body-grid">
           <nav class="admin-nav" aria-label="Dashboard sections">
+            <!-- On a phone (2026-11-12) the tall top bar is hidden and this one pinned bar carries the logo
+                 and the Menu button, as the mockup Jaimie approved. Hidden wider than 860px, where the top
+                 bar shows as before. Not a menu link, so nothing counting the menu's screens counts it. -->
+            <a class="pm-brand" href="/admin"><img src="/assets/img/nbcc-logo-white.svg" alt="" width="30" height="30" /><span>NBCC Admin</span></a>
             <!-- TASK-454: below 860px the sections sit behind this button (admin.css hides it wider
                  than that), which opens the whole list wrapped into its groups. It replaces a line of
                  twenty buttons that scrolled sideways. -->
@@ -196,6 +203,16 @@
                 </ul>
               </li>
             </ul>
+            <!-- The open phone menu's foot: who is signed in, and the top bar's two buttons, which the top
+                 bar no longer shows on a phone. They press the top bar's own buttons, so they do exactly what
+                 those do. Outside #adminNavList, so it is not a group of the menu. -->
+            <div class="pm-me">
+              <p class="pm-me__who" id="pmWho"></p>
+              <div class="pm-me__actions">
+                <button class="pm-me__btn" type="button" id="pmAccountBtn">My account</button>
+                <button class="pm-me__btn" type="button" id="pmLogoutBtn">Sign out</button>
+              </div>
+            </div>
           </nav>
 
           <div class="admin-content">
@@ -213,27 +230,38 @@
             </div>
             <!-- Overview: the three operational queues at a glance + recent donations. -->
             <section class="admin-view" id="view-overview" aria-labelledby="overview-heading">
-              <div class="ov-head">
-                <h2 id="overview-heading">Overview</h2>
-                <p class="ov-updated" id="overviewUpdated"></p>
+              <!-- The Overview in the Donations look (2026-11-12): what needs you, how we are doing,
+                   what is coming up, from GET /api/admin/overview (TASK-508/509/510), each line only for
+                   people who may open the screen it comes from. Needs you on the left on a wide screen. -->
+              <div class="ov-root">
+                <div class="ov-title">
+                  <h2 id="overview-heading">Overview</h2>
+                  <p class="ov-lede"><span class="ov-summary" id="overviewSummary"></span> <span class="ov-updated" id="overviewUpdated"></span></p>
+                </div>
+                <div class="ov-cols">
+                  <section class="ov-section" aria-labelledby="ovNeedsHead">
+                    <h3 class="ov-h3" id="ovNeedsHead">Needs you</h3>
+                    <div id="overviewNeeds" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+                  </section>
+                  <div class="ov-side">
+                    <section class="ov-section" id="ovNumbersCard" aria-labelledby="ovNumbersHead" hidden>
+                      <h3 class="ov-h3" id="ovNumbersHead">How we are doing</h3>
+                      <div id="overviewNumbers"></div>
+                    </section>
+                    <section class="ov-section" id="ovComingCard" aria-labelledby="ovComingHead" hidden>
+                      <h3 class="ov-h3" id="ovComingHead">Coming up</h3>
+                      <div id="overviewComing"></div>
+                    </section>
+                    <section class="ov-section" aria-labelledby="ovRecentHead">
+                      <div class="ov-section__head">
+                        <h3 class="ov-h3" id="ovRecentHead">Recent donations</h3>
+                        <button class="ov-see-all" type="button" data-ov-view="donations">See them all</button>
+                      </div>
+                      <div id="overviewRecent"><p class="admin-loading">Loading…</p></div>
+                    </section>
+                  </div>
+                </div>
               </div>
-              <!-- TASK-508: what is waiting on someone, most urgent first, from GET /api/admin/overview. -->
-              <section class="ov-card" aria-labelledby="ovNeedsHead">
-                <h3 class="ov-card-head" id="ovNeedsHead">Needs you</h3>
-                <div id="overviewNeeds" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              </section>
-              <!-- TASK-509: how we are doing, one line each, only those this person may see. -->
-              <section class="ov-card" id="ovNumbersCard" aria-labelledby="ovNumbersHead" hidden>
-                <h3 class="ov-card-head" id="ovNumbersHead">How we are doing</h3>
-                <div id="overviewNumbers"></div>
-              </section>
-              <!-- TASK-510: the next 14 days, by day, only what this person may see. -->
-              <section class="ov-card" id="ovComingCard" aria-labelledby="ovComingHead" hidden>
-                <h3 class="ov-card-head" id="ovComingHead">Coming up</h3>
-                <div id="overviewComing"></div>
-              </section>
-              <h3 class="admin-subhead">Recent donations</h3>
-              <div class="admin-table-wrap" id="overviewRecent"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Search: donors / declarations / donations by a free query. -->
@@ -590,27 +618,24 @@
 
             <!-- Contact form: public enquiries from the isolated contact database (2026-07-10 spec). -->
             <section class="admin-view" id="view-contact" aria-labelledby="contact-heading" hidden>
-              <h2 id="contact-heading">Contact form</h2>
-              <p class="admin-view-intro">Messages sent through the public contact form. Open one to read it, reply in Gmail (which marks it Replied), or delete it. These live in their own database, separate from donor and story data.</p>
-              <div class="admin-search-bar">
-                <div class="admin-segmented" role="group" aria-label="Filter by status" id="contactStatusFilter">
-                  <button class="admin-seg is-active" type="button" data-status="">All</button>
-                  <button class="admin-seg" type="button" data-status="new">New</button>
-                  <button class="admin-seg" type="button" data-status="replied">Replied</button>
+              <!-- The Contact form in the Donations look (2026-11-12): a card per message under its day,
+                   opening where it is. Messages live in their own database, separate from donor and story
+                   data (2026-07-10 spec); reply in Gmail, which marks nothing until Mark as replied. -->
+              <div class="ct-root">
+                <div class="ct-title">
+                  <h2 id="contact-heading">Contact form</h2>
+                  <p class="ct-lede"><strong id="ctWaitingLine"></strong> Tap a message to read it and reply.</p>
                 </div>
+                <div class="ct-filter" role="group" aria-label="Show" id="contactStatusFilter">
+                  <button class="admin-seg ct-seg is-active" type="button" data-status="" aria-pressed="true"><span class="ct-seg__count"></span><span class="ct-seg__name">All</span></button>
+                  <button class="admin-seg ct-seg" type="button" data-status="new" aria-pressed="false"><span class="ct-seg__count"></span><span class="ct-seg__name">Waiting</span></button>
+                  <button class="admin-seg ct-seg" type="button" data-status="replied" aria-pressed="false"><span class="ct-seg__count"></span><span class="ct-seg__name">Replied</span></button>
+                </div>
+                <div id="contactTable"><p class="admin-loading">Loading…</p></div>
               </div>
-              <div class="admin-table-wrap" id="contactTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
-            <!-- Contact enquiry detail (reached from a contact row); Editor+ reply/delete actions. -->
-            <section class="admin-view" id="view-contact-detail" aria-labelledby="contact-detail-heading" hidden>
-              <button class="admin-back" id="contactBack" type="button">&larr; Back</button>
-              <h2 id="contact-detail-heading">Enquiry</h2>
-              <div id="contactDetail" aria-live="polite"></div>
-              <p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p>
-            </section>
-
-            <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
+                        <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
 
@@ -2909,6 +2934,18 @@
             </section>
           </div>
         </div>
+        <!-- The bar along the bottom on a phone (2026-11-12): the four screens used most, and
+             Everything, which opens the whole menu. Each tab copies its menu link (app.js, syncTabBar):
+             there only when the link is, a dot when it has a New pill, marked when it is where you are.
+             Not menu links (another class, no data-view), so nothing that counts the menu's screens counts these.
+             Inside #appView, so the sign-in screen never shows it. Hidden wider than 860px. -->
+        <nav class="pm-bar" aria-label="Quick links">
+            <button class="pm-tab" type="button" data-pm-view="overview"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span><span class="pm-tab__word">Overview</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="donations"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 6.5A4.5 4.5 0 0 0 8.5 10v2.5c0 3-1.5 5-3 6.5h12M6 13h8"/></svg></span><span class="pm-tab__word">Donations</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="get-involved"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2c2.9.2 5 2.6 5 5.8"/></svg></span><span class="pm-tab__word">Get involved</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="contact"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/></svg></span><span class="pm-tab__word">Contact</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" id="pmEverything" aria-controls="adminNavList" aria-expanded="false"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><span class="pm-tab__word">Everything</span></button>
+        </nav>
       </div>
     </main>
   </body>

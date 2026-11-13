@@ -5,6 +5,7 @@ import { ensureElfDoors, findElfDoorByPosterCode, getElfDoor, listElfDoors } fro
 import { getPractice, markPracticeFound, clearPractice, inTransaction } from "./elf-practice";
 import type { MadePicture } from "./fundraiser-pictures";
 import { closingInstant, doorInstant, DOOR_COUNT, eveningFor, type Door } from "../elf/calendar";
+import type { FamilyKnowledge } from "../elf/catch-up";
 import { doorSeason, emptyDoor, staffEveningOf, type DoorSetup } from "../elf/door-setup";
 import { doorState, openedAt, type DoorFacts, type DoorState } from "../elf/doors";
 import { isUsableSecretWord } from "../elf/claim";
@@ -253,29 +254,53 @@ interface GuessRow {
   text: string;
   norm: string;
   saved_at: Date;
+  /** True for a go. A row read without it is a guess on the night. */
+  late?: boolean;
 }
 
-const savedGuess = (r: GuessRow): SavedGuess => ({ text: r.text, norm: r.norm, at: r.saved_at });
+const savedGuess = (r: GuessRow): SavedGuess => ({ text: r.text, norm: r.norm, at: r.saved_at, late: r.late === true });
 
-/** Saves a family's guess for a door, replacing its earlier one. */
-export async function saveGuess(year: number, door: number, familyId: number, guess: { text: string; norm: string }, at: Date): Promise<void> {
-  await pool.query(
+/** Saves a family's guess on the night for a door, replacing its earlier one. A go is never replaced:
+ *  the update runs only on a guess from the night. Answers whether the guess was saved: false when the
+ *  family's go was kept, so no row changed. */
+export async function saveGuess(year: number, door: number, familyId: number, guess: { text: string; norm: string }, at: Date): Promise<boolean> {
+  const r = await pool.query(
     `INSERT INTO elf_guesses (year, door, family_id, text, norm, saved_at) VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (year, door, family_id) DO UPDATE SET text = EXCLUDED.text, norm = EXCLUDED.norm, saved_at = EXCLUDED.saved_at`,
+     ON CONFLICT (year, door, family_id) DO UPDATE SET text = EXCLUDED.text, norm = EXCLUDED.norm, saved_at = EXCLUDED.saved_at
+       WHERE NOT elf_guesses.late`,
     [year, door, familyId, guess.text, guess.norm, at],
   );
+  return (r.rowCount ?? 0) > 0;
+}
+
+/** Saves a family's go at a door: one insert, which never overwrites anything. "already" when no row
+ *  comes back, because the family has a guess at the door, from the night or a go; so two tabs or two
+ *  phones locking in at the same moment save one go between them. */
+export async function saveLateGuess(
+  year: number,
+  door: number,
+  familyId: number,
+  guess: { text: string; norm: string },
+  at: Date,
+): Promise<"saved" | "already"> {
+  const r = await pool.query<{ family_id: number }>(
+    `INSERT INTO elf_guesses (year, door, family_id, text, norm, saved_at, late) VALUES ($1, $2, $3, $4, $5, $6, true)
+     ON CONFLICT (year, door, family_id) DO NOTHING RETURNING family_id`,
+    [year, door, familyId, guess.text, guess.norm, at],
+  );
+  return r.rows.length > 0 ? "saved" : "already";
 }
 
 /** A family's guesses, by door. */
 export async function familyGuesses(year: number, familyId: number): Promise<Map<number, SavedGuess>> {
-  const r = await pool.query<GuessRow>("SELECT door, text, norm, saved_at FROM elf_guesses WHERE year = $1 AND family_id = $2", [year, familyId]);
+  const r = await pool.query<GuessRow>("SELECT door, text, norm, saved_at, late FROM elf_guesses WHERE year = $1 AND family_id = $2", [year, familyId]);
   return new Map(r.rows.map((row) => [row.door, savedGuess(row)]));
 }
 
 /** Every guess for a door, leaving removed families out. */
 export async function doorGuesses(year: number, door: number): Promise<{ familyId: number; guess: SavedGuess }[]> {
   const r = await pool.query<GuessRow>(
-    `SELECT g.family_id, g.text, g.norm, g.saved_at FROM elf_guesses g
+    `SELECT g.family_id, g.text, g.norm, g.saved_at, g.late FROM elf_guesses g
        JOIN elf_families f ON f.id = g.family_id
       WHERE g.year = $1 AND g.door = $2 AND f.removed_at IS NULL`,
     [year, door],
@@ -397,6 +422,31 @@ export async function familyVisits(
   return r.rows.map((row) => ({ door: row.door as Door | 0, detectiveId: Number(row.detective_id), countsFrom: row.counts_from, found: row.found }));
 }
 
+/** What a family has done, door by door: its guesses, from the night or a go, and every door where
+ *  one of its detectives has typed the tag's word (the find or a visit), whether or not it counts
+ *  yet. The two reads run at once. */
+export async function familyKnowledge(year: number, familyId: number): Promise<FamilyKnowledge> {
+  const [guesses, visits] = await Promise.all([
+    familyGuesses(year, familyId),
+    pool.query<{ door: number }>("SELECT DISTINCT door FROM elf_visits WHERE year = $1 AND family_id = $2", [year, familyId]),
+  ]);
+  return { guesses, typed: new Set(visits.rows.map((row) => row.door)) };
+}
+
+/** What a family has done at one door, for an answer about that door alone (a photo, the family's own door):
+ *  whether it has a guess there, from the night or a go, and whether one of its detectives has typed the tag's
+ *  word there (the find or a visit), whether or not it counts yet. One query, by the keys both tables are
+ *  indexed on (year, door, ...), never the family's whole year as familyKnowledge reads it. */
+export async function familyKnowsDoor(year: number, door: number, familyId: number): Promise<{ guessed: boolean; typed: boolean }> {
+  const r = await pool.query<{ guessed: boolean; typed: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM elf_guesses WHERE year = $1 AND door = $2 AND family_id = $3) AS guessed,
+            EXISTS (SELECT 1 FROM elf_visits WHERE year = $1 AND door = $2 AND family_id = $3) AS typed`,
+    [year, door, familyId],
+  );
+  const row = r.rows[0];
+  return { guessed: row?.guessed === true, typed: row?.typed === true };
+}
+
 /** The name parts of the detectives who found the door's elf, leaving a removed family out. */
 export async function finderParts(year: number, door: number): Promise<DetectiveNameParts[]> {
   const r = await pool.query<{ first_name: string; surname: string; name_approved: boolean }>(
@@ -450,12 +500,15 @@ export async function finderOf(year: number, door: number): Promise<Finder | nul
 // ---- doors done ---------------------------------------------------------------------------------------
 
 function crackedBy(run: DoorRun, guess: SavedGuess | undefined, now: Date): boolean {
+  // A guess saved after `now` is not there yet: a go saved at 7:10pm does not count at 7:09pm.
+  if (guess && guess.at.getTime() > now.getTime()) return false;
   return cracked({ state: doorState(run.facts, now), openedAt: openedAt(run.facts, now), names: run.names }, guess ?? null);
 }
 
 /** For each of the family's detectives, the doors done at `now`: the family's cracked doors (the same
- *  for each detective), the detective's own stamps that count by now (never the practice door), and the
- *  snowed in doors. */
+ *  for each detective, a right go included), the detective's own stamps that count by now (never the
+ *  practice door), the doors any detective of the family has a counting stamp for (the same for each
+ *  detective), and the snowed in doors. */
 export async function familyDoorsDone(year: number, familyId: number, runs: DoorRun[], now: Date): Promise<Map<number, DoorsDone>> {
   const [detectives, guesses, visits] = await Promise.all([
     pool.query<{ id: number }>("SELECT id FROM elf_detectives WHERE family_id = $1 AND active ORDER BY id", [familyId]),
@@ -467,6 +520,7 @@ export async function familyDoorsDone(year: number, familyId: number, runs: Door
   const open = new Set<number>(realRuns.map((r) => r.door));
   const crackedDoors = realRuns.filter((r) => crackedBy(r, guesses.get(r.door), now)).map((r) => r.door);
   const snowDoors = realRuns.filter((r) => doorState(r.facts, now) === "snow").map((r) => r.door);
+  const familyDoors = [...new Set(visits.filter((v) => open.has(v.door) && v.countsFrom.getTime() <= now.getTime()).map((v) => v.door))].sort((a, b) => a - b);
   const out = new Map<number, DoorsDone>();
   for (const d of detectives.rows) {
     const id = Number(d.id);
@@ -474,7 +528,7 @@ export async function familyDoorsDone(year: number, familyId: number, runs: Door
       .filter((v) => v.detectiveId === id && open.has(v.door) && v.countsFrom.getTime() <= now.getTime())
       .map((v) => v.door)
       .sort((a, b) => a - b);
-    out.set(id, { cracked: crackedDoors, visited, snow: snowDoors });
+    out.set(id, { cracked: crackedDoors, visited, family: familyDoors, snow: snowDoors });
   }
   return out;
 }
@@ -483,15 +537,16 @@ export async function familyDoorsDone(year: number, familyId: number, runs: Door
 export async function detectiveDoorsDone(year: number, detectiveId: number, runs: DoorRun[], now: Date): Promise<DoorsDone> {
   const r = await pool.query<{ family_id: number }>("SELECT family_id FROM elf_detectives WHERE id = $1", [detectiveId]);
   const familyId = r.rows[0]?.family_id;
-  const none: DoorsDone = { cracked: [], visited: [], snow: [] };
+  const none: DoorsDone = { cracked: [], visited: [], family: [], snow: [] };
   if (familyId === undefined) return none;
   return (await familyDoorsDone(year, Number(familyId), runs, now)).get(detectiveId) ?? none;
 }
 
-/** How many families cracked a door and how many visited it by `now`, leaving removed families out. */
-export async function doorCounts(year: number, door: number, now: Date, run: DoorRun): Promise<{ cracked: number; visited: number }> {
+/** How many families cracked a door and how many visited it by `now`, leaving removed families out. A
+ *  go counts as a crack, unless `withLate` is false (Finds does not count late cracks). */
+export async function doorCounts(year: number, door: number, now: Date, run: DoorRun, withLate = true): Promise<{ cracked: number; visited: number }> {
   const guesses = await doorGuesses(year, door);
-  const crackedCount = guesses.filter((g) => crackedBy(run, g.guess, now)).length;
+  const crackedCount = guesses.filter((g) => (withLate || !g.guess.late) && crackedBy(run, g.guess, now)).length;
   const r = await pool.query<{ n: string }>(
     `SELECT count(DISTINCT v.family_id) AS n FROM elf_visits v
        JOIN elf_families f ON f.id = v.family_id
@@ -513,20 +568,46 @@ const SHOWN_PHOTO_SQL = `p.status = 'approved' AND p.deleted_at IS NULL AND f.re
        AND n.status = 'approved' AND n.deleted_at IS NULL AND n.id > p.id)
   AND ${approvedFamiliesSql("p")} >= 2`;
 
-/** A door's scrapbook: the elves that count by `now` and the approved photos, in the scrapbook's order. */
-export async function doorScrapbook(year: number, door: number, now: Date): Promise<Scrapbook> {
+/** A door's photos that are shown (SHOWN_PHOTO_SQL), each with its address. Only for someone who may see
+ *  them: a family that can see the door's place, or everyone from Christmas Day until 1 January. */
+export async function doorPhotos(year: number, door: number): Promise<ScrapPhoto[]> {
+  const photos = await pool.query<{ token: string }>(
+    `SELECT p.token FROM elf_photos p
+       JOIN elf_families f ON f.id = p.family_id
+      WHERE p.year = $1 AND p.door = $2 AND ${SHOWN_PHOTO_SQL}`,
+    [year, door],
+  );
+  return photos.rows.map((p) => ({ token: p.token, url: `/elf/door/${door}/photo/${p.token}.jpg` }));
+}
+
+/** The shown photos (SHOWN_PHOTO_SQL) of each of the doors asked for, read in one query, by door, each with
+ *  its address: for a family's own doors, all drawn in one answer (Plan 2c-1). A door with none has an empty
+ *  list; no doors read nothing. Only for someone who may see every one of those doors' places. */
+export async function doorsPhotos(year: number, doors: readonly number[]): Promise<Map<number, ScrapPhoto[]>> {
+  const out = new Map<number, ScrapPhoto[]>(doors.map((d) => [d, []]));
+  if (doors.length === 0) return out;
+  const photos = await pool.query<{ door: number; token: string }>(
+    `SELECT p.door, p.token FROM elf_photos p
+       JOIN elf_families f ON f.id = p.family_id
+      WHERE p.year = $1 AND p.door = ANY($2::int[]) AND ${SHOWN_PHOTO_SQL}`,
+    [year, [...doors]],
+  );
+  for (const p of photos.rows) {
+    const door = Number(p.door);
+    out.get(door)?.push({ token: p.token, url: `/elf/door/${door}/photo/${p.token}.jpg` });
+  }
+  return out;
+}
+
+/** A door's scrapbook: the elves that count by `now`, and its shown photos only `withPhotos` (a photo can
+ *  show the inside of the place), in the scrapbook's order. */
+export async function doorScrapbook(year: number, door: number, now: Date, withPhotos: boolean): Promise<Scrapbook> {
   const visits = await pool.query<{ id: number; counts_from: Date; found: boolean; first_name: string; surname: string; name_approved: boolean }>(
     `SELECT v.id, v.counts_from, v.found, d.first_name, d.surname, d.name_approved FROM elf_visits v
        JOIN elf_detectives d ON d.id = v.detective_id
        JOIN elf_families f ON f.id = v.family_id
       WHERE v.year = $1 AND v.door = $2 AND v.counts_from <= $3 AND f.removed_at IS NULL`,
     [year, door, now],
-  );
-  const photos = await pool.query<{ token: string }>(
-    `SELECT p.token FROM elf_photos p
-       JOIN elf_families f ON f.id = p.family_id
-      WHERE p.year = $1 AND p.door = $2 AND ${SHOWN_PHOTO_SQL}`,
-    [year, door],
   );
   const elves: ScrapElf[] = visits.rows.map((v) => ({
     visitId: Number(v.id),
@@ -535,8 +616,7 @@ export async function doorScrapbook(year: number, door: number, now: Date): Prom
     found: v.found,
     pictureUrl: `/elf/door/${door}/elf/${v.id}.png`,
   }));
-  const pics: ScrapPhoto[] = photos.rows.map((p) => ({ token: p.token, url: `/elf/door/${door}/photo/${p.token}.jpg` }));
-  return orderScrapbook(elves, pics);
+  return orderScrapbook(elves, withPhotos ? await doorPhotos(year, door) : []);
 }
 
 // ---- photos -------------------------------------------------------------------------------------------

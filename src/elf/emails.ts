@@ -6,7 +6,7 @@ import type { ElfFact } from "./facts";
 import { detectiveNames, type DetectiveNameParts } from "./names";
 import type { Rank } from "./progress";
 import { whenWords } from "./posts";
-import { clockWords, listWords, longDayWords, things } from "./words";
+import { clockWords, findOutWords, listWords, longDayWords, things } from "./words";
 
 // NBCC Elf Detective School: the emails of wave 1 (docs/superpowers/plans/2026-11-03-elf-detective-
 // wave1-sign-up.md, Tasks 5 and 6). Pure builders: the senders are in src/clients/email.ts
@@ -113,7 +113,12 @@ const hello = (typed: string | null): string => {
 const small = (url: string, words: string): string =>
   `<p style="font-size:12px;line-height:1.5;margin:14px 0 0"><a href="${escapeHtml(url)}" style="color:#6F6A66">${escapeHtml(words)}</a></p>`;
 
-/** The email to a grown up when a door's first clue comes out. */
+/** The email to a grown up when a door's first clue comes out. It never says when the place is shown: a family
+ *  sees a door's place only once it has had its guess or been there (Plan 2c-1). It says when the family finds
+ *  out whether it cracked the case: at the reveal, or later if the elf is still hiding then, unless the place
+ *  closes by the reveal. A closing time not given, or not a real time, is none (ruling F13): such a place still
+ *  closes, at the time a door falls back to, so the family may find out later. And a family that misses the hunt
+ *  can still crack the case in Detective HQ, with one guess. */
 export function buildElfClueEmail(o: {
   grownUpName: string;
   door: Door;
@@ -123,6 +128,9 @@ export function buildElfClueEmail(o: {
   clue2At: Date;
   clue3At: Date;
   revealAt: Date;
+  /** When the place closes, on the door's own day, when a closing time is typed in Doors (closingShown in
+   *  src/elf/catch-up.ts); null otherwise. */
+  closesAt: Date | null;
   hqUrl: string;
   fact: ElfFact | null;
   giveUrl: string;
@@ -136,7 +144,14 @@ export function buildElfClueEmail(o: {
       ? "See the picture in Detective HQ."
       : null
     : `Clue 1 is a picture: ${o.clue.pictureAlt ?? ""}. See it in Detective HQ.`;
-  const later = `Clue 2 comes out at ${clockWords(o.clue2At)} and clue 3 at ${clockWords(o.clue3At)}, in Detective HQ. The hiding place is shown at ${clockWords(o.revealAt)}.`;
+  const closesAt = o.closesAt instanceof Date && Number.isFinite(o.closesAt.getTime()) ? o.closesAt : null;
+  const findOut = findOutWords(clockWords(o.revealAt), !(closesAt !== null && closesAt.getTime() <= o.revealAt.getTime()));
+  const later = [
+    `Clue 2 comes out at ${clockWords(o.clue2At)} and clue 3 at ${clockWords(o.clue3At)}, in Detective HQ.`,
+    ...(closesAt ? [`The hiding place closes at ${clockWords(closesAt)} today.`] : []),
+    findOut,
+  ].join(" ");
+  const missed = `If you miss ${whenWords(o.clue1At) === "tonight" ? "tonight's" : "today's"} hunt, you can still crack this case later in Detective HQ, with one guess.`;
   const lateNote = `If you are reading this a little late, the clue has been in Detective HQ since ${clockWords(o.clue1At)}.`;
   const give = "Every pound could help a child wake up to a Red Bag Full of Joy.";
 
@@ -147,6 +162,7 @@ export function buildElfClueEmail(o: {
     (hasWords ? quoteBox(o.clue.words ?? "") : "") +
     (pictureLine ? bodyP(escapeHtml(pictureLine)) : "") +
     bodyP(escapeHtml(later)) +
+    bodyP(escapeHtml(missed)) +
     button(o.hqUrl, "Open Detective HQ") +
     note(escapeHtml(lateNote)) +
     (o.fact ? subheading("Did you know?") + bodyP(escapeHtml(o.fact.grownUp)) : "") +
@@ -159,6 +175,8 @@ export function buildElfClueEmail(o: {
     ...(hasWords ? [`"${o.clue.words}"`, ""] : []),
     ...(pictureLine ? [pictureLine, ""] : []),
     later,
+    "",
+    missed,
     "",
     `Open Detective HQ: ${o.hqUrl}`,
     "",
@@ -215,10 +233,13 @@ const postCard = (post: string, picture: string | null): string =>
       `</td></tr>`,
   );
 
-/** The 8am email to head elves: the day's door, yesterday's find, photos waiting and the two posts. */
+/** The 8am email to head elves: the day's door, yesterday's find, photos waiting and the two posts. A door that
+ *  is not ready becomes a snow day only when it cannot open as it stands (`canRun`: canRun in
+ *  src/db/elf-game.ts, without its place, a usable word on its tag or its first clue, it is snowed in at its
+ *  first clue); anything else it still needs is only a to do. */
 export function buildElfMorningEmail(o: {
   day: Date;
-  today: { door: Door; ready: boolean; toDo: string[]; clue1At: Date; snow: boolean } | null;
+  today: { door: Door; ready: boolean; toDo: string[]; clue1At: Date; snow: boolean; canRun: boolean } | null;
   yesterday: { door: Door; finders: DetectiveNameParts[]; foundAt: Date | null; place: { name: string; town: string } | null; state: DoorState; snow: boolean } | null;
   photosWaiting: number;
   posts: { today: string | null; yesterday: string | null };
@@ -233,15 +254,17 @@ export function buildElfMorningEmail(o: {
       ? `Door ${t.door} is a snow day.`
       : t.ready
         ? `Door ${t.door} is ready. The first clue comes out at ${clockWords(t.clue1At)}.`
-        : `Door ${t.door} is NOT ready: ${t.toDo.join(", ")}. Fix it in Doors before ${clockWords(t.clue1At)}, or it becomes a snow day.`;
+        : `Door ${t.door} is NOT ready: ${t.toDo.join(", ")}. Fix it in Doors before ${clockWords(t.clue1At)}.` +
+          (t.canRun === true ? "" : " Without its place, the word on its tag or its first clue, it becomes a snow day.");
   const y = o.yesterday;
+  // A found elf whose finder cannot be named (the family removed) is still found, as yesterday's post says.
   const yesterdayLine = !y
     ? null
     : y.snow || y.state === "snow"
       ? `Door ${y.door} was a snow day.`
-      : y.finders.length > 0 && y.foundAt
-        ? `${detectiveNames(y.finders)} found door ${y.door}'s elf at ${clockWords(y.foundAt)}.`
-        : `Nobody found door ${y.door}'s elf; its place was shown.`;
+      : y.state === "found" || y.state === "found-hidden"
+        ? `${detectiveNames(y.finders) || "A detective"} found door ${y.door}'s elf${y.foundAt ? ` at ${clockWords(y.foundAt)}` : ""}.`
+        : `Nobody found door ${y.door}'s elf in time.`;
   const waiting = `${things(o.photosWaiting, "photo")} waiting to be checked`;
   const NOT_PUBLIC = "Yesterday's find is not public yet, so there is no post for it.";
 

@@ -469,6 +469,10 @@
 .elf-book .elf-detail__fact { margin-top: 18px; }
 .elf-detail .elf-book__end { margin: 16px 0 0; color: var(--slate-soft); font-size: 0.92rem; text-align: center; }
 .elf-detail .elf-book__gone { color: var(--maroon); font-weight: 600; }
+/* The calendar everyone shares, before Christmas Day: an open door's last line asks where its elf was
+   hiding, and its Have a go button sits on a line of its own under the question, centred, however narrow
+   the phone. */
+.elf-detail .elf-book__go .elf-btn { display: flex; width: fit-content; margin: 10px auto 0; }
 .elf-book .elf-detail__mine { margin-top: 12px; }
 .elf-detail .elf-book__close { margin: 16px 0 0; text-align: center; }
 
@@ -512,11 +516,12 @@
 .elf-hq-case { padding-bottom: clamp(8px, 2vw, 20px); }
 
 /* Today's case, on a note taped to the page: it is what the family came for. While its elf is being
-   hunted, a holly sheet shows under it. */
+   hunted, a holly sheet shows under it, and under a door's go page while the family has its go. */
 .elf-case.elf-note { max-width: 760px; margin: 12px auto 0; padding: clamp(30px, 4vw, 40px) clamp(20px, 4vw, 36px) clamp(22px, 3vw, 32px); color: var(--slate); }
 .elf-case.elf-note::before { background: var(--elf-grain-light) 0 0 / 384px, var(--card); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-card-c); mask: var(--elf-tear-card-c); }
 .elf-case--hunting::after,
-.elf-case--found-hidden::after { content: ""; position: absolute; inset: 9px -9px -10px 8px; z-index: -2; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(1.2deg); }
+.elf-case--found-hidden::after,
+.elf-go--go::after { content: ""; position: absolute; inset: 9px -9px -10px 8px; z-index: -2; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(1.2deg); }
 .elf-case h2 { font-size: clamp(1.6rem, 1.3rem + 1.4vw, 2.3rem); color: var(--maroon); margin-bottom: 12px; text-wrap: balance; }
 .elf-case p { margin: 0 0 10px; }
 .elf-case__door { font-family: var(--elf-hand); font-weight: 700; font-size: 1.7rem; line-height: 1; color: var(--crimson); }
@@ -537,16 +542,20 @@
    aloud to children. A picture fits the note's width. Then when the next clue comes out (counting
    down on the candy cane strip), or when the hiding place is shown. */
 .elf-ladder { list-style: none; margin: 6px 0 clamp(16px, 3vw, 22px); padding: 0; display: grid; gap: 24px; }
-.elf-clue { position: relative; isolation: isolate; margin: 0; padding: clamp(22px, 3vw, 28px) clamp(16px, 3vw, 24px) clamp(16px, 2.5vw, 22px); color: var(--elf-ink-on-tan); filter: var(--elf-drop-small); transform: rotate(-0.4deg); }
+/* A clue is an item of the ladder's grid: min-width 0 lets it be narrower than its longest word, and its words break
+   anywhere they must, so a very long word wraps inside the note at 390 and 360 instead of pushing every note out. */
+.elf-clue { position: relative; isolation: isolate; min-width: 0; margin: 0; padding: clamp(22px, 3vw, 28px) clamp(16px, 3vw, 24px) clamp(16px, 2.5vw, 22px); color: var(--elf-ink-on-tan); filter: var(--elf-drop-small); transform: rotate(-0.4deg); }
 .elf-clue:nth-child(even) { transform: rotate(0.5deg); }
 .elf-clue::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain) 0 0 / 384px, color-mix(in srgb, var(--tan) 45%, var(--card)); background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-tile-a); mask: var(--elf-tear-tile-a); }
 .elf-clue:nth-child(even)::before { -webkit-mask: var(--elf-tear-tile-b); mask: var(--elf-tear-tile-b); }
 .elf-clue .elf-clue__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 0 6px; }
 .elf-clue__n { color: var(--crimson); font-family: var(--elf-hand); font-weight: 700; font-size: 1.55rem; line-height: 1; }
 .elf-clue__at { font-size: 0.86rem; font-weight: 600; }
-.elf-clue .elf-clue__words { margin: 0; font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem); line-height: 1.55; overflow-wrap: break-word; }
+.elf-clue .elf-clue__words { margin: 0; font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem); line-height: 1.55; overflow-wrap: anywhere; }
 .elf-clue__pic { display: block; max-width: 100%; height: auto; margin: 12px 0 0; border-radius: 3px; box-shadow: 0 2px 3px rgba(58, 0, 0, 0.25); }
 .elf-case .elf-ladder__next { margin: 0 0 4px; color: var(--holly-dark); font-weight: 600; }
+/* When the hiding place closes, on the door's own day (Plan 2c-1): under the clues, before the guess. */
+.elf-case .elf-ladder__closes { margin: 10px 0 4px; color: var(--maroon); font-weight: 600; }
 
 /* The guess: one box to type the place in, cut into the note. The site gives every form a card of its
    own; this one already sits on the note. */
@@ -608,6 +617,19 @@
   .elf-detective__frame { width: 118px; padding: 10px; }
 }
 
+/* Doors you can still crack (Plan 2c-1), under today's case: a card sheet for each missed door, newest
+   first, with its number in the hand, its day and its elf, and a go. The words wrap before the button drops
+   under them, and the cards sit two across once there is room. */
+.elf-page .section.elf-hq-crack { padding-block: clamp(30px, 5vw, 64px) clamp(8px, 2vw, 16px); }
+.elf-hq-crack .elf-strip { font-size: clamp(1.6rem, 1.35rem + 1.2vw, 2.2rem); }
+.elf-hq-crack .lede { margin-top: 12px; }
+.elf-crack { list-style: none; margin: clamp(16px, 3vw, 24px) 0 0; padding: 0; display: grid; gap: 26px; }
+.elf-crack__door { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-right: 8px; padding: 16px 20px; color: var(--slate); }
+.elf-crack__door h3 { margin: 0; font-family: var(--elf-hand); font-size: 1.6rem; line-height: 1; color: var(--crimson); }
+.elf-crack__door p { margin: 0; overflow-wrap: anywhere; }
+.elf-crack__door .elf-btn { margin-left: auto; }
+@media (min-width: 720px) { .elf-crack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* The family's marks: all 24 doors, small, each a square of paper; holly once it is done. */
 .elf-hq-marks .lede { margin-top: 12px; }
 .elf-marks { list-style: none; margin: clamp(16px, 3vw, 24px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
@@ -631,6 +653,28 @@
 .elf-marks__sum { margin: 16px 0 20px; color: var(--slate-soft); }
 @media (min-width: 640px) { .elf-marks { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 @media (min-width: 981px) { .elf-marks { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+
+/* =================================================================
+   HAVING A GO: a missed door's own page in Detective HQ (Plan 2c-1)
+   ================================================================= */
+
+/* The top, centred as Detective HQ's is: Detective HQ's label over the door's title strip, the Practice
+   chip on the practice door, and the door's elf. */
+.elf-go-top .wrap { text-align: center; }
+.elf-go-top .elf-practice { justify-content: center; margin: 10px 0 0; }
+.elf-go-top .elf-go__elf { max-width: 52ch; margin-inline: auto; }
+
+/* The case, on a note taped to the page as today's case is in Detective HQ (the note is an .elf-case too,
+   so its words, clues and guess look the same). Who found the elf heads it. */
+.elf-go-case { padding-bottom: clamp(8px, 2vw, 20px); }
+.elf-go .elf-go__found { color: var(--slate-soft); font-weight: 600; }
+.elf-go__found .elf-icon { color: var(--gold-ink); vertical-align: -2px; }
+/* Show me the next clue: a button on a line of its own under the clues, before the one guess. */
+.elf-go .elf-go__next { margin: 0 0 clamp(18px, 3vw, 24px); }
+.elf-go .elf-go__one { margin: 12px 0 0; color: var(--maroon); font-weight: 600; }
+/* How it went, on today's case's slip of paper, a size up: it is what the family came back for. */
+.elf-go .elf-go__verdict { font-size: clamp(1.08rem, 1rem + 0.5vw, 1.25rem); font-weight: 600; overflow-wrap: break-word; }
+.elf-go__back { max-width: 760px; margin: clamp(18px, 3vw, 26px) auto 0; text-align: center; }
 
 /* =================================================================
    THE WARDROBE: dressing an elf, in paper (mockup 6, approved by Jaimie on 4 November 2026)

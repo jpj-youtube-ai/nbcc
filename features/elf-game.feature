@@ -140,7 +140,10 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
   # door 7 can run, so it is never snowed in first. A December that is over is past its 31 January, so the
   # worker clears a photo sent to door 7 away: the tick hook runs it at midday on 1 February, which is past
   # that day whenever this runs. The photo check, the two families rule and a family's take down are played
-  # on the practice door above. The hooks put the year back and take last year's rows away.
+  # on the practice door above. The hooks put the year back and take last year's rows away. Last year's
+  # Christmas Day and 1 January have always passed too, so door 7's place is off the calendar everyone
+  # shares and having a go has closed, whenever this runs: the family that guessed sees the place only on
+  # its own door, and a guess it sends again is told its guess is locked in (Plan 2c-1, Task 7).
   Scenario: A real door played after its evening, with its scrapbook, a photo cleared away, and an unready door snowed in
     Given the school's year is last year, whose December is over
     And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" has opened the doors list
@@ -157,7 +160,14 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     And that browser is the family "second.game.elf.bdd@example.com"
     And the family "first.game.elf.bdd@example.com" guessed "The Example Bakehouse" for door 7 before its evening
     When the family "first.game.elf.bdd@example.com" guesses "The Example Bakehouse" for door 7
-    Then the game answers 400 with the reason "not-hunting"
+    Then the game answers 409 with the reason "locked-in"
+    # The family's own door asks the database about door 7 alone (the whole-branch review, Important 2): the
+    # guess by itself shows the place, and a family that has neither guessed nor been there is not found.
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me/door/7"
+    Then the game answers 200
+    And the family's own door says "The Example Bakehouse"
+    When the family "second.game.elf.bdd@example.com" opens "/api/elf/me/door/7"
+    Then the game answers 404
     When the family "first.game.elf.bdd@example.com" types the word "snowball 999" at door 7
     Then the game answers 400 with the reason "wrong-word"
     And the family has 5 tries left at that door
@@ -187,6 +197,15 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     And door 7 on the calendar says "Detective R. Tinselfoot won this door's prize: A pretend sledge."
     And door 7 on the calendar says "1 family cracked this case"
     And door 7 on the calendar says "2 have been there since"
+    And door 7 on the calendar does not say "The Example Bakehouse"
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me"
+    Then the family can see door 7's place, and has no doors left to crack
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me/door/7"
+    Then the game answers 200
+    And the family's own door says "The Example Bakehouse"
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me/doors"
+    Then the game answers 200
+    And the family's own doors are door 7 alone, and it says "The Example Bakehouse"
     And door 2 on the calendar says "got snowed in"
     And door 2 was snowed in automatically
     When the family "first.game.elf.bdd@example.com" opens "/api/elf/me"
@@ -194,3 +213,49 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     When the family "first.game.elf.bdd@example.com" opens "/elf/hq"
     Then the game page says "Door 7: cracked and visited"
     And the game page says "Door 2: snowed in, so it counts as done."
+
+  # Having a go (Plan 2c-1, Task 6): a family that missed a door's evening cracks it later, on the door's own
+  # page in Detective HQ, with the clues one at a time and one guess. The practice door's times are absolute,
+  # so a step puts its evening hours back: its place was shown at its closing with nobody found, so its elf
+  # is still hiding. Two tabs lock in at the same moment and the database keeps one go (Review Focus 1).
+  # Detective HQ offers the go, and a guess sent there once the place is shown is never saved as the go
+  # (Task 7): a family with no guess is sent to have its go, and one with its guess is told it is locked in.
+  Scenario: A practice evening: having a go once the place is shown, one guess only
+    Given "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" makes a preview link
+    And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" starts a practice evening at "The Example Office" in "Snowford", 1 minute apart
+    And "first.game.elf.bdd@example.com" has already enrolled "Ruby Tinselfoot" and paid
+    And the paying browser comes back from Stripe
+    And it is sent to Detective HQ, signed in
+    And that browser is the family "first.game.elf.bdd@example.com"
+    And "second.game.elf.bdd@example.com" has already enrolled "Leo Frostwhistle" and paid
+    And the paying browser comes back from Stripe
+    And it is sent to Detective HQ, signed in
+    And that browser is the family "second.game.elf.bdd@example.com"
+    And the family "first.game.elf.bdd@example.com" opens the preview link
+    And the family "second.game.elf.bdd@example.com" opens the preview link
+    When the practice door's place is shown with its elf still hiding
+    And the family "first.game.elf.bdd@example.com" opens "/elf/hq/door/0"
+    Then the game answers 200
+    And the game page holds 1 clue
+    And the game page says "You get one guess at this door."
+    When the family "first.game.elf.bdd@example.com" opens "/elf/hq/door/0?clues=3"
+    Then the game page holds 3 clues
+    When the family "first.game.elf.bdd@example.com" opens "/elf/hq"
+    Then the game answers 200
+    And the game page says "Have a go"
+    When the family "first.game.elf.bdd@example.com" guesses "the example office" for the practice door
+    Then the game answers 409 with the reason "have-a-go"
+    When the family "first.game.elf.bdd@example.com" has a go at the practice door with "the example office" from two tabs at once
+    Then one go was taken and the other refused, and the go says "You cracked it!"
+    When the family "first.game.elf.bdd@example.com" opens "/elf/hq/door/0"
+    Then the game page says "The Example Office, Snowford"
+    And the game page holds 0 clues
+    When the family "first.game.elf.bdd@example.com" opens "/elf/hq"
+    Then the game page says "You cracked it!"
+    When the family "second.game.elf.bdd@example.com" has a go at the practice door with "the example cafe"
+    Then the game answers 200
+    And the go says "Not this time."
+    When the family "second.game.elf.bdd@example.com" has a go at the practice door with "the example office"
+    Then the game answers 409 with the reason "already"
+    When the family "second.game.elf.bdd@example.com" guesses "anywhere" for the practice door
+    Then the game answers 409 with the reason "locked-in"

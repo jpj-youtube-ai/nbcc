@@ -19,6 +19,13 @@ const WAVE_ONE_PRIZE = "The first detective to reach the elf and type the secret
 const PRIZE =
   "The first detective to reach the elf and type the word on its tag wins that door's prize. The elf stays there for everyone else to find. Each family can win one prize.";
 
+/** Catching up once December's doors are on (Plan 2c-1): a door missed on the night, or from before a family
+ *  joined, can still be cracked later in Detective HQ, with one guess. With the doors off, joining late still
+ *  means visiting the places, as wave 1 said. */
+const MISSED_ON_THE_NIGHT = "Missed a door on the night? You can still crack its case later in Detective HQ, with one guess.";
+const MISSED_OR_JOINED_LATE = "Missed a door, or joined late? You can still crack its case later in Detective HQ, with one guess.";
+const WAVE_ONE_JOINED_LATE = "Joined late? Visit the places from before you joined to do their doors.";
+
 function pounds(p: number): string {
   return p % 100 === 0 ? `£${p / 100}` : `£${(p / 100).toFixed(2)}`;
 }
@@ -33,6 +40,9 @@ const section = (id: string, title: string, back: PaperColour, body: string) => 
 export function renderRulesPage(view: { settings: ElfSettings }): string {
   const from = escapeHtml(pounds(view.settings.entryFromPence));
   const suggested = escapeHtml(pounds(view.settings.entrySuggestedPence));
+  const doorsOn = view.settings.doorsOn === true;
+  // Written onto the end of the guess line, so with the doors off the page is byte for byte as it was.
+  const missed = doorsOn ? `\n      <li>${MISSED_ON_THE_NIGHT}</li>` : "";
   const main = `
   <section class="section page-top elf-rules-top" aria-labelledby="elf-rules-heading">
     <div class="wrap">
@@ -51,8 +61,8 @@ export function renderRulesPage(view: { settings: ElfSettings }): string {
     `<ul class="elf-rules-list">
       <li>Each day from 1 to 24 December, one elf hides in a local shop, cafe or business. Where it hides is a secret.</li>
       <li>Signed in detectives get three clues each day, from hard to nearly a giveaway: at 5:30pm, 6pm and 6:30pm on school days, and at 10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve.</li>
-      <li>Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.</li>
-      <li>${view.settings.doorsOn === true ? PRIZE : WAVE_ONE_PRIZE}</li>
+      <li>Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.</li>${missed}
+      <li>${doorsOn ? PRIZE : WAVE_ONE_PRIZE}</li>
       <li>Visit a place after its elf is found to collect a candy cane stamp.</li>
     </ul>`,
   )}
@@ -79,7 +89,7 @@ export function renderRulesPage(view: { settings: ElfSettings }): string {
     "elf-rules-prize",
     "The grand prize",
     "holly",
-    `<p>Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest elf at home. A door is done when you crack its case with a right guess, or when you visit its hiding place and collect the candy cane stamp, so you do not have to visit every place. Joined late? Visit the places from before you joined to do their doors.</p>
+    `<p>Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest elf at home. A door is done when you crack its case with a right guess, or when you visit its hiding place and collect the candy cane stamp, so you do not have to visit every place. ${doorsOn ? MISSED_OR_JOINED_LATE : WAVE_ONE_JOINED_LATE}</p>
      <p>The grand prize is judged by Jodie, Head Elf, taking age into account. It is never drawn at random. We phone the winner's grown up on Christmas Eve and deliver the prize on Christmas Day.</p>`,
   )}
   ${section(

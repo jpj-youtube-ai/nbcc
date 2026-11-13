@@ -1209,6 +1209,8 @@ const ELF_MORNING_CLUE = new Date("2026-12-05T10:00:00.000Z");
 const ELF_CLUE_2 = new Date("2026-12-07T18:30:00.000Z");
 const ELF_CLUE_3 = new Date("2026-12-07T19:30:00.000Z");
 const ELF_REVEAL = new Date("2026-12-07T20:30:00.000Z");
+/** The pretend place's closing time, as typed in Doors. */
+const ELF_CLOSES = new Date("2026-12-07T21:00:00.000Z");
 const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (b: string) =>
   buildElfClueEmail({
     grownUpName: "Sam Example",
@@ -1219,16 +1221,22 @@ const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (
     clue2At: ELF_CLUE_2,
     clue3At: ELF_CLUE_3,
     revealAt: ELF_REVEAL,
+    closesAt: ELF_CLOSES,
     hqUrl: `${b}/elf/hq`,
     fact: factFor(7),
     giveUrl: `${b}/donate`,
   });
 const elfReminder = (clue1At: Date) => () =>
   buildElfPlaceReminderEmail({ contactName: "Alex Example", placeName: ELF_PLACE, elfName: "Pip", door: 7, clue1At, closesAt: "5pm", phone: "01632 960 123" });
-const elfMorning = (ready: boolean, snow: boolean) => (b: string) =>
+/** Today's door as the 8am email sees it: ready; not ready but able to open (things still to do); or unable to
+ *  open (no place, no word on its tag or no first clue), when it becomes a snow day at its first clue. */
+const ELF_DOOR_READY = { ready: true, toDo: [], canRun: true };
+const ELF_DOOR_TO_DO = { ready: false, toDo: ["the prize", "dropped off"], canRun: true };
+const ELF_DOOR_CANNOT_OPEN = { ready: false, toDo: ["the elf and its tag", "the three clues"], canRun: false };
+const elfMorning = (door: { ready: boolean; toDo: string[]; canRun: boolean }, snow: boolean) => (b: string) =>
   buildElfMorningEmail({
     day: new Date("2026-12-08T08:00:00.000Z"),
-    today: { door: 8, ready, toDo: ready ? [] : ["the elf's name", "the second clue"], clue1At: ELF_EVENING_CLUE, snow: false },
+    today: { door: 8, ...door, clue1At: ELF_EVENING_CLUE, snow: false },
     yesterday: snow
       ? { door: 7, finders: [], foundAt: null, place: null, state: "snow", snow: true }
       : {
@@ -1250,7 +1258,8 @@ const elfMorning = (ready: boolean, snow: boolean) => (b: string) =>
             state: "found",
             finders: [{ firstName: "Ruby", surname: "Tinselfoot", approved: false }],
             foundAt: ELF_EVENING_CLUE,
-            place: { name: ELF_PLACE, town: "Snowford" },
+            goneHome: false,
+            goesOpen: true,
           }),
     },
     pictures: { today: null, yesterday: null },
@@ -1318,8 +1327,9 @@ const ELF: CatalogueEmail[] = [
     logKinds: ["elfMorning"],
     note: NUMBERS_NOTE,
     versions: [
-      v("ready", "A door ready, yesterday found", elfMorning(true, false)),
-      v("snow", "A door not ready, yesterday a snow day", elfMorning(false, true)),
+      v("ready", "A door ready, yesterday found", elfMorning(ELF_DOOR_READY, false)),
+      v("snow", "A door that cannot open yet, yesterday a snow day", elfMorning(ELF_DOOR_CANNOT_OPEN, true)),
+      v("todo", "A door with things still to do, yesterday found", elfMorning(ELF_DOOR_TO_DO, false)),
     ],
   },
   {

@@ -1,6 +1,6 @@
 import { config } from "../config";
 import { familyWithDetectives, getElfSettings } from "../db/elf";
-import { familyDoorsDone, finderOf, finderParts, loadDoorRuns, markAutomaticSnowDays, type DoorRun, type Finder } from "../db/elf-game";
+import { canRun, familyDoorsDone, finderOf, finderParts, loadDoorRuns, markAutomaticSnowDays, type DoorRun, type Finder } from "../db/elf-game";
 import { listElfDoors } from "../db/elf-doors";
 import { claimSend, familiesStillToEmail, familiesToSweep, markSendFailed, markSent, type ClueFamily } from "../db/elf-sends";
 import { lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert } from "../db/elf-alerts";
@@ -8,6 +8,7 @@ import { countPhotosWaiting, deleteExpiredPhotoFiles, oldestWaitingPhotoDoor } f
 import { sendElfClue, sendElfFindAlert, sendElfMorning, sendElfPhotoAlert, sendElfPlaceReminder, sendElfProud, type FundraiseEmailMessage } from "../clients/email";
 import { sendText, type SmsMessage } from "../clients/sms";
 import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
+import { closingShown, goesOpen } from "./catch-up";
 import { elfTextsOn } from "./texts-on";
 import { doorInstant, doorOn, type Door } from "./calendar";
 import { doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
@@ -283,6 +284,8 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
         clue2At: run.facts.clue2At,
         clue3At: run.facts.clue3At,
         revealAt: run.facts.revealAt,
+        // Only a closing time typed in Doors, on the door's own day, while it is still to come.
+        closesAt: closingShown(run, t.at),
         hqUrl: `${t.deps.siteOrigin}/elf/hq`,
         fact: factFor(door),
         giveUrl: `${t.deps.siteOrigin}/donate`,
@@ -326,13 +329,16 @@ async function morningEmail(date: string, t: Tick): Promise<BuiltEmail> {
 
   let today: Parameters<typeof buildElfMorningEmail>[0]["today"] = null;
   if (todayDoor !== null && todayRun) {
-    const readiness = readinessOf(await t.setup(todayDoor));
+    const setup = await t.setup(todayDoor);
+    const readiness = readinessOf(setup);
     today = {
       door: todayDoor,
       ready: readiness.ready,
       toDo: readiness.items.filter((i) => !i.done).map((i) => lowerFirst(READY_WORDS[i.key])),
       clue1At: todayRun.facts.clue1At,
       snow: todayRun.facts.snowDay,
+      // The snow days' own rule (markAutomaticSnowDays), so the email warns of one only when it will come.
+      canRun: canRun(setup),
     };
   }
 
@@ -344,7 +350,16 @@ async function morningEmail(date: string, t: Tick): Promise<BuiltEmail> {
     const place =
       isOpen(state) && filled(yesterdayRun.placeName) && filled(yesterdayRun.placeTown) ? { name: yesterdayRun.placeName, town: yesterdayRun.placeTown } : null;
     yesterday = { door: yesterdayDoor, finders, foundAt: yesterdayRun.facts.foundAt, place, state, snow: yesterdayRun.facts.snowDay };
-    yesterdayWords = yesterdayPost({ door: yesterdayDoor, elfName: yesterdayRun.elfName, state, finders, foundAt: yesterdayRun.facts.foundAt, place });
+    // The post never names the place (Plan 2c-1), and offers a go only while having a go is open.
+    yesterdayWords = yesterdayPost({
+      door: yesterdayDoor,
+      elfName: yesterdayRun.elfName,
+      state,
+      finders,
+      foundAt: yesterdayRun.facts.foundAt,
+      goneHome: yesterdayRun.facts.goneHome,
+      goesOpen: goesOpen(t.year, t.at),
+    });
   }
 
   // A snow day has no door to post about.

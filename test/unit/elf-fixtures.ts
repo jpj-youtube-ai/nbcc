@@ -1,6 +1,6 @@
 import { isDoor } from "../../src/elf/calendar";
 import { ELF_NAMES } from "../../src/elf/names";
-import type { CalendarView, ClaimWin, DoorView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
+import type { CalendarView, ClaimWin, DoorView, GoView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
 
 /** The page a family sees after scanning the poster at an invented shop. Signed in, two detectives,
  *  and the shop's door still shut on the calendar unless told otherwise. */
@@ -93,6 +93,8 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
     // Monday 7 December 2026 at 3pm: door 7's clue is out at 5:30pm.
     now: at("2026-12-07T15:00:00.000Z"),
     doorDays: Array.from({ length: 24 }, (_, i) => ({ door: i + 1, clueAt: at(`2026-12-${pad(i + 1)}T17:30:00.000Z`), date: `2026-12-${pad(i + 1)}` })),
+    // No door Ruby's family can still crack from Detective HQ (Plan 2c-1), unless told otherwise.
+    crackable: [],
     hqUrl: "/elf/hq",
     calendarUrl: "/elf",
     saveUrl: "/elf/hq/wardrobe/d1",
@@ -132,6 +134,9 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
       goneHome: false,
       factLine: null,
       doorsOn: true,
+      // The doors before the day carry their places, as a family's own doors and everyone's from
+      // Christmas Day do, so none of them offers a go.
+      goUrl: null,
     };
     if (n < dayOfMonth) {
       doors.push({
@@ -218,8 +223,15 @@ export function hqView(over: Partial<HqView> = {}): HqView {
       canGuess: true,
       guessError: null,
       outcome: null,
+      goUrl: null,
+      closesAt: null,
+      goneHome: false,
+      mayShowLater: false,
+      shownBy: null,
     },
     nextClueAt: at("2026-12-08T17:30:00.000Z"),
+    // No missed door to crack (Plan 2c-1), unless told otherwise.
+    toCrack: [],
     marks: {
       doors: [
         { door: 1, cracked: true, visited: true, snow: false },
@@ -233,3 +245,37 @@ export function hqView(over: Partial<HqView> = {}): HqView {
     ...over,
   };
 }
+
+/** Door 7's go page that evening at 7:05pm, for a family that missed it (Plan 2c-1): Twinkle was found at
+ *  5:47pm, the place has been shown since 7pm and closes at 8pm, and clue 1 is showing. Having a go
+ *  unless told otherwise. */
+export function goView(over: Partial<GoView> = {}): GoView {
+  return {
+    door: 7,
+    practice: false,
+    elfName: "Twinkle",
+    day: at("2026-12-07T17:30:00.000Z"),
+    found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective R. Tinselfoot" },
+    stage: "go",
+    stillHiding: false,
+    goneHome: false,
+    clues: [{ n: 1, at: at("2026-12-07T17:30:00.000Z"), words: "I am hiding where the loaves cool.\nFollow your nose!", pictureUrl: null, pictureAlt: null }],
+    nextUrl: "/elf/hq/door/7?clues=2",
+    formUrl: "/elf/hq/door/7/go",
+    guessError: null,
+    closesAt: at("2026-12-07T20:00:00.000Z"),
+    outcome: null,
+    hqUrl: "/elf/hq",
+    ...over,
+  };
+}
+
+/** How door 7 went for a family that can see its place, Corner Bakehouse in Snowford: cracked, unless
+ *  told otherwise. */
+export function goOutcome(over: Partial<NonNullable<GoView["outcome"]>> = {}): NonNullable<GoView["outcome"]> {
+  return { verdict: "cracked", place: { name: "Corner Bakehouse", town: "Snowford" }, stillHiding: false, goneHome: false, visited: false, ...over };
+}
+
+/** Door 7's go page once the family can see the place: how it went, with no clues and no form. */
+export const goDoneView = (outcome: Partial<NonNullable<GoView["outcome"]>> = {}, over: Partial<GoView> = {}): GoView =>
+  goView({ stage: "done", clues: [], nextUrl: null, outcome: goOutcome(outcome), ...over });

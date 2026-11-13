@@ -4,6 +4,9 @@
  * only makes two things nicer:
  *
  *   1. The guess is saved without leaving the page, and the page says so, or says plainly why not.
+ *      Once the place is shown the server sends the family on instead (Plan 2c-1): back to Detective
+ *      HQ when it has its guess, or to the door's page for its one go. The page goes there, and only
+ *      ever to an address on this site.
  *   2. The countdown to the clue ticks, by the SERVER's clock, and when it reaches nought the page
  *      is fetched again a few seconds later, because the clue itself is never in the page before it
  *      is out. Each page waits a different while, so every family's HQ does not ask in one second.
@@ -20,6 +23,9 @@
   // When a clue comes out, each page waits a second and up to five more before it is fetched again.
   var RELOAD_AFTER_MS = 1000;
   var RELOAD_SPREAD_MS = 5000;
+  // An address on this site: one slash, then only what the site's own paths hold (sitePath in
+  // src/elf/pages/shell.ts), so never another site, nor a slash and a backslash.
+  var SITE_PATH = /^\/(?!\/)[A-Za-z0-9/_.~%?=&-]*$/;
 
   /** How long is left: "2:14:09", "14:09", "0:05", and "0:00" once the time has come. The same
    *  words as countdownWords in src/elf/words.ts. */
@@ -36,6 +42,8 @@
   function initHq(doc, win, opts) {
     var clock = opts && opts.now ? opts.now : function () { return Date.now(); };
     var reload = opts && opts.reload ? opts.reload : function () { win.location.reload(); };
+    // A wrapper, as reload is: location.assign taken on its own throws "Illegal invocation".
+    var go = opts && opts.go ? opts.go : function (url) { win.location.assign(url); };
     var random = opts && opts.random ? opts.random : Math.random;
     var card = doc.querySelector(".elf-case");
     var served = card ? Date.parse(card.getAttribute("data-now")) : NaN;
@@ -107,13 +115,22 @@
               })
               .then(function (body) {
                 var said = body && typeof body === "object" ? body : {};
-                return { saved: res.ok && said.ok === true, text: typeof said.text === "string" && said.text ? said.text : place, message: typeof said.message === "string" ? said.message : "" };
+                return {
+                  saved: res.ok && said.ok === true,
+                  text: typeof said.text === "string" && said.text ? said.text : place,
+                  message: typeof said.message === "string" ? said.message : "",
+                  goUrl: typeof said.goUrl === "string" && SITE_PATH.test(said.goUrl) ? said.goUrl : ""
+                };
               });
           })
           .then(function (answer) {
             if (answer.saved) {
               say("Your guess: " + answer.text + ". You can change it until the hiding place is shown.", false);
               if (button) button.textContent = "Change my guess";
+            } else if (answer.goUrl) {
+              // The place is shown now: the server's words while the page goes where it says.
+              say(answer.message, false);
+              go(answer.goUrl);
             } else {
               say(answer.message || NOT_SAVED, true);
             }

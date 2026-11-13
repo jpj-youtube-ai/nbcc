@@ -98,15 +98,18 @@ const clue = (o: Partial<Parameters<typeof buildElfClueEmail>[0]> = {}) =>
     clue2At: C2,
     clue3At: C3,
     revealAt: REVEAL,
+    closesAt: null,
     hqUrl: "https://nbcc.scot/elf/hq",
     fact: FACT,
     giveUrl: "https://nbcc.scot/donate",
     ...o,
   });
+/** An email's html as words: what escapeHtml makes of an apostrophe, read back. */
+const htmlWords = (html: string) => html.replace(/&#39;/g, "'");
 const morning = (o: Partial<Parameters<typeof buildElfMorningEmail>[0]> = {}) =>
   buildElfMorningEmail({
     day: new Date("2026-12-08T08:00:00.000Z"),
-    today: { door: 8, ready: true, toDo: [], clue1At: C1, snow: false },
+    today: { door: 8, ready: true, toDo: [], clue1At: C1, snow: false, canRun: true },
     yesterday: {
       door: 7,
       finders: [{ firstName: "Ruby", surname: "Tinselfoot", approved: false }],
@@ -135,7 +138,7 @@ describe("the clue email", () => {
     const e = clue();
     expect(e.subject).toBe("Door 7: the first clue is out");
     expect(e.html).toContain("I live where the pine cones are.");
-    expect(e.text).toContain("Clue 2 comes out at 6:30pm and clue 3 at 7:30pm, in Detective HQ. The hiding place is shown at 8:30pm.");
+    expect(e.text).toContain("Clue 2 comes out at 6:30pm and clue 3 at 7:30pm, in Detective HQ.");
     expect(e.html).toContain("Open Detective HQ");
     expect(e.text).toContain("If you are reading this a little late, the clue has been in Detective HQ since 5:30pm.");
     expect(e.text).toContain("Did you know?");
@@ -160,6 +163,80 @@ describe("the clue email", () => {
 
   it("leaves out the fact when there is none", () => {
     expect(clue({ fact: null }).text).not.toContain("Did you know?");
+  });
+});
+
+// Plan 2c-1, Task 9: a family sees a door's place only once it has had its guess or been there, so the clue
+// email no longer says when the place "is shown". It says when the family finds out whether it cracked the
+// case, when the place closes on its day (a closing time typed in Doors), and that a missed hunt can still be
+// cracked later in Detective HQ. Door 7 is a Monday evening; door 5 a Saturday morning.
+describe("the clue email, on finding out and catching up", () => {
+  const SIX = new Date("2026-12-07T18:00:00.000Z");
+  const SIX_30 = new Date("2026-12-07T18:30:00.000Z");
+  const SEVEN = new Date("2026-12-07T19:00:00.000Z");
+  const EIGHT = new Date("2026-12-07T20:00:00.000Z");
+  const evening = (o: Partial<Parameters<typeof buildElfClueEmail>[0]> = {}) =>
+    clue({ clue1At: C1, clue2At: SIX, clue3At: SIX_30, revealAt: SEVEN, closesAt: EIGHT, ...o });
+  const at = (hm: string) => new Date(`2026-12-05T${hm}:00.000Z`);
+  const morning = (o: Partial<Parameters<typeof buildElfClueEmail>[0]> = {}) =>
+    clue({ door: 5, clue1At: MORNING_CLUE, clue2At: at("10:30"), clue3At: at("11:00"), revealAt: at("11:30"), ...o });
+
+  it("says when the next clues come, when the place closes, when you find out, and that a missed hunt can be cracked later", () => {
+    const e = evening();
+    for (const said of [
+      "Clue 2 comes out at 6pm and clue 3 at 6:30pm, in Detective HQ.",
+      "The hiding place closes at 8pm today.",
+      "You find out whether you cracked it at 7pm, or later if the elf is still hiding then.",
+      "If you miss tonight's hunt, you can still crack this case later in Detective HQ, with one guess.",
+    ]) {
+      expect(e.text, said).toContain(said);
+      expect(htmlWords(e.html), said).toContain(said);
+    }
+    expect(e.text).not.toContain("is shown at");
+    expect(e.html).not.toContain("is shown at");
+  });
+
+  it("says today's hunt for a 10am clue, and never tonight", () => {
+    const e = morning();
+    expect(e.text).toContain("If you miss today's hunt, you can still crack this case later in Detective HQ, with one guess.");
+    expect(htmlWords(e.html)).toContain("If you miss today's hunt, you can still crack this case later in Detective HQ, with one guess.");
+    expect(e.text.toLowerCase()).not.toContain("tonight");
+    expect(e.html.toLowerCase()).not.toContain("tonight");
+  });
+
+  // Ruling F13: with no closing time typed the place still closes, at the 8pm a door falls back to, so the
+  // family may find out later than the reveal; and a closing time not given at all reads as none.
+  it("says nothing of closing with no closing time, and that the family may find out later", () => {
+    const notGiven: Record<string, unknown> = {
+      grownUpName: "Sam Example",
+      door: 7,
+      elfName: "Pip",
+      clue: { words: "I live where the pine cones are.", pictureAlt: null },
+      clue1At: C1,
+      clue2At: SIX,
+      clue3At: SIX_30,
+      revealAt: SEVEN,
+      hqUrl: "https://nbcc.scot/elf/hq",
+      fact: null,
+      giveUrl: "https://nbcc.scot/donate",
+    };
+    const built = [evening({ closesAt: null }), buildElfClueEmail(notGiven as Parameters<typeof buildElfClueEmail>[0]), evening({ closesAt: new Date("nonsense") })];
+    for (const e of built) {
+      expect(e.text).not.toContain("closes at");
+      expect(e.html).not.toContain("closes at");
+      expect(e.text).toContain("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+    }
+  });
+
+  it("says only when the family finds out when the place closes as it is shown, or before", () => {
+    for (const closes of ["11:30", "11:00"]) {
+      const e = morning({ closesAt: at(closes) });
+      expect(e.text).toContain(`The hiding place closes at ${closes === "11:30" ? "11:30am" : "11am"} today.`);
+      expect(e.text).toContain("You find out whether you cracked it at 11:30am.");
+      expect(e.text).not.toContain("or later if the elf is still hiding then");
+      expect(e.html).not.toContain("or later if the elf is still hiding then");
+    }
+    expect(morning({ closesAt: at("16:00") }).text).toContain("You find out whether you cracked it at 11:30am, or later if the elf is still hiding then.");
   });
 });
 
@@ -199,15 +276,34 @@ describe("the morning email", () => {
     expect(e.html).toContain("Yesterday post");
   });
 
-  it("says a door is not ready, and what to fix", () => {
-    const e = morning({ today: { door: 8, ready: false, toDo: ["a clue", "the elf's name"], clue1At: C1, snow: false } });
-    expect(e.text).toContain("Door 8 is NOT ready: a clue, the elf's name. Fix it in Doors before 5:30pm, or it becomes a snow day.");
+  // From the present PR's review: the worker snows in only a door that cannot open (canRun in
+  // src/db/elf-game.ts: no place, no usable word on its tag, or no first clue). Anything else still to do is a
+  // to do, not a snow day.
+  it("says a door is not ready, and what to fix, with no snow day for a door that can still open", () => {
+    const e = morning({ today: { door: 8, ready: false, toDo: ["the prize", "dropped off"], clue1At: C1, snow: false, canRun: true } });
+    expect(e.text).toContain("Door 8 is NOT ready: the prize, dropped off. Fix it in Doors before 5:30pm.");
+    expect(e.text).not.toContain("snow day");
+    expect(e.html).not.toContain("snow day");
+  });
+
+  it("says a door that cannot open becomes a snow day, and what a door needs to open", () => {
+    const e = morning({ today: { door: 8, ready: false, toDo: ["the elf and its tag", "the three clues"], clue1At: C1, snow: false, canRun: false } });
+    expect(e.text).toContain(
+      "Door 8 is NOT ready: the elf and its tag, the three clues. Fix it in Doors before 5:30pm. Without its place, the word on its tag or its first clue, it becomes a snow day.",
+    );
   });
 
   it("says a snow day, and that nobody found an elf", () => {
-    expect(morning({ today: { door: 8, ready: false, toDo: [], clue1At: C1, snow: true } }).text).toContain("Door 8 is a snow day.");
-    expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "revealed", snow: false } }).text).toContain("Nobody found door 7's elf; its place was shown.");
+    expect(morning({ today: { door: 8, ready: false, toDo: [], clue1At: C1, snow: true, canRun: false } }).text).toContain("Door 8 is a snow day.");
+    expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "revealed", snow: false } }).text).toContain("Nobody found door 7's elf in time.");
     expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "snow", snow: true } }).text).toContain("Door 7 was a snow day.");
+  });
+
+  // Task 9, fix round 1 (the review's Minor 3): a found elf whose finder cannot be named (the family removed) is
+  // still found, as yesterday's post says, never "Nobody found"; and a place shown is shown only to some families.
+  it("names a finder it cannot read as a detective, never as nobody", () => {
+    expect(morning({ yesterday: { door: 7, finders: [], foundAt: C1, place: null, state: "found", snow: false } }).text).toContain("A detective found door 7's elf at 5:30pm.");
+    expect(morning({ yesterday: { door: 7, finders: [], foundAt: C1, place: null, state: "found-hidden", snow: false } }).text).toContain("A detective found door 7's elf at 5:30pm.");
   });
 
   it("says a find is not public yet when there is no post for it", () => {
@@ -292,6 +388,25 @@ describe("their lines in All emails, for staff", () => {
     expect(findEmail("elf-proud")!.who).toBe("Goes to the grown up when their detective wins a door's prize, is promoted or graduates.");
     expect(findEmail("elf-find-alert")!.who).toBe("Goes to head elves whose alerts are on, as soon as an elf is found.");
     expect(findEmail("elf-photo-alert")!.who).toBe("Goes to head elves whose alerts are on, when photos start waiting. Never one for every photo.");
+  });
+
+  // Plan 2c-1, Task 9: staff read the clue email as families get it, with a place's closing time typed.
+  it("show the clue email with when the place closes and when the family finds out, never when the place is shown", () => {
+    for (const version of findEmail("elf-clue")!.versions) {
+      const html = htmlWords(version.render("https://nbcc.scot").html);
+      expect(html, version.id).toContain("closes at");
+      expect(html, version.id).toContain("You find out whether you cracked it at");
+      expect(html, version.id).toContain("you can still crack this case later in Detective HQ, with one guess.");
+      expect(html, version.id).not.toContain("is shown at");
+    }
+  });
+
+  // From the present PR's review: staff see both of the 8am email's not ready lines.
+  it("show the 8am email's snow day only for a door that cannot open", () => {
+    const render = (id: string) => findEmail("elf-morning")!.versions.find((v) => v.id === id)!.render("https://nbcc.scot").html;
+    expect(render("snow")).toContain("Without its place, the word on its tag or its first clue, it becomes a snow day.");
+    expect(render("todo")).toContain("is NOT ready:");
+    expect(render("todo")).not.toContain("becomes a snow day");
   });
 });
 

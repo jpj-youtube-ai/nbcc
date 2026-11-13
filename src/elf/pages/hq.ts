@@ -1,6 +1,6 @@
 import { DOOR_COUNT } from "../calendar";
 import { FRAMES } from "../wardrobe";
-import { clockWords, countdownWords, longDayWords, sleepsUntil, things } from "../words";
+import { clockWords, countdownWords, dayWords, findOutWhenFoundWords, findOutWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
 import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
@@ -13,7 +13,9 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // Three things, in the order a family wants them: today's case (on a taped note: the clue ladder, one
 // note a clue as each comes out, and the family's typed guess), their detectives (each on a card
 // sheet: their elf in its frame, rank and progress), and the marks they have collected. It is private,
-// so it shows first names in full and is never listed by search engines.
+// so it shows first names in full and is never listed by search engines. While December's doors are on
+// (Plan 2c-1), a family that missed today's evening is offered its one go once the place is shown, and the
+// other missed doors it can still crack are listed under today's case.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
 // script only saves the guess without leaving the page, and fetches the page again when the next
@@ -31,8 +33,9 @@ function clueHtml(clue: string): string {
   return escapeHtml(clue).replace(/\r?\n/g, "<br />\n");
 }
 
-/** One clue that is out, on a taped note of its own: its number, its time, its words and its picture. */
-function clueNote(c: TodayView["clues"][number]): string {
+/** One clue that is out, on a taped note of its own: its number, its time, its words and its picture. The
+ *  go page (src/elf/pages/go.ts) draws its clues with it too. */
+export function clueNote(c: TodayView["clues"][number]): string {
   const at = real(c.at) ? clockWords(c.at) : "";
   const picture = sitePath(c.pictureUrl);
   return (
@@ -45,10 +48,19 @@ function clueNote(c: TodayView["clues"][number]): string {
   );
 }
 
+/** May the family find out later than the reveal? As the view says (TodayView.mayShowLater, from the run's own
+ *  closing): while the elf is still hiding and the place closes after the reveal. Once the elf is found the place
+ *  is shown at the reveal (the view's revealAt), whatever else the view holds. */
+function mayFindOutLater(today: TodayView): boolean {
+  return today.state === "hunting" && today.mayShowLater === true;
+}
+
 /** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),
- *  or, once all three are out, when the hiding place is shown (as soon as the elf is found, once the
- *  reveal time has passed with the elf still hiding). Only a clue whose time has come is written,
- *  whatever the view holds; with no real clock, no clue at all. */
+ *  or, once all three are out, when the family finds out whether it cracked the case (the place is shown
+ *  then only to a family that has had its guess), in the words the clue email and the calendar use; and, once
+ *  the reveal time has passed with the elf still hiding, that the place is shown as soon as it is found, or at
+ *  its closing at the latest when that falls today (TodayView.shownBy). Only a clue whose time has come is
+ *  written, whatever the view holds; with no real clock, no clue at all. */
 function clueLadder(today: TodayView, now: Date): string {
   if (!real(now)) return "";
   const out = today.clues.filter((c) => real(c.at) && c.at.getTime() <= now.getTime());
@@ -63,12 +75,19 @@ function clueLadder(today: TodayView, now: Date): string {
     );
   }
   if (next === null && real(today.revealAt)) {
-    return notes + line(`The hiding place is shown at ${clockWords(today.revealAt)}`, "elf-ladder__next");
+    return notes + line(findOutWords(clockWords(today.revealAt), mayFindOutLater(today)), "elf-ladder__next");
   }
   if (next === null && today.state === "hunting") {
-    return notes + line("The hiding place is shown as soon as the elf is found.", "elf-ladder__next");
+    // Past the reveal with the elf still hiding: its place is shown when it is found, or at closing at the latest.
+    return notes + line(findOutWhenFoundWords(real(today.shownBy) ? clockWords(today.shownBy) : ""), "elf-ladder__next");
   }
   return notes;
+}
+
+/** On the door's own day, when the hiding place closes, under the clue ladder and without naming it (the
+ *  spec's answer 5); nothing without a closing time to say. */
+function closesLine(today: TodayView): string {
+  return real(today.closesAt) ? line(`The hiding place closes at ${clockWords(today.closesAt)} today.`, "elf-ladder__closes") : "";
 }
 
 /** Why a guess sent with no script was not taken (the server's words), as a status line, or nothing. */
@@ -97,14 +116,17 @@ function guessForm(today: TodayView, guessUrl: string): string {
   );
 }
 
-/** How a door that has opened turned out for this family. */
+/** How a door that has opened turned out for a family that can see its place, and on the door's own day when
+ *  the place closes. Once the elf has gone home it can no longer be found, nor its place visited (the poster
+ *  refuses the word), so the case says only where it was hiding: no prize still to win, and no visit. */
 function outcomeHtml(today: TodayView): string {
   const outcome = today.outcome;
   if (!outcome) return "";
   const elf = escapeHtml(today.elfName);
   const place = escapeHtml(outcome.place);
+  const goneHome = today.goneHome === true;
   const where =
-    today.state === "revealed"
+    today.state === "revealed" && !goneHome
       ? // Decision 1: the finder wins the prize, and the elf stays at its place.
         line(`Nobody found ${elf} in time. ${elf} is still waiting at ${place}, and the first detective to type the word on its tag still wins the prize.`)
       : line(`${elf} was hiding at ${place}.`) +
@@ -119,7 +141,24 @@ function outcomeHtml(today: TodayView): string {
     : guess
       ? line(`Your guess was ${guess}. Not this time, but there is a new clue tomorrow.`, "elf-case__verdict")
       : line("You did not lock in a guess for this one. There is a new clue tomorrow.", "elf-case__verdict");
-  return where + verdict + line("Visit the hiding place and scan its poster to collect your candy cane.", "elf-case__hint");
+  const closes = real(today.closesAt) ? line(`${place} closes at ${clockWords(today.closesAt)} today.`, "elf-case__hint") : "";
+  const visit = goneHome ? "" : line("Visit the hiding place and scan its poster to collect your candy cane.", "elf-case__hint");
+  return where + verdict + visit + closes;
+}
+
+/** "Have a go", which door it is said to a screen reader alone: Detective HQ can show several at once (today's
+ *  case and the doors still to crack), and a list of the page's links must tell them apart. */
+const haveAGo = (which: string): string => `Have a go<span class="sr-only"> at ${which}</span>`;
+
+/** A family that cannot see the place yet, once it is shown, and may still crack the case: its one go (Plan
+ *  2c-1), in place of how the case turned out. Only a go on this site is offered. */
+function goCard(today: TodayView): string {
+  const go = sitePath(today.goUrl);
+  if (!go) return "";
+  return (
+    line("You did not lock in a guess in time, but you can still crack this case, with one guess.") +
+    `<p><a class="elf-btn elf-btn--crimson" href="${go}">${haveAGo(today.practice ? "the practice door" : `door ${count(today.door)}`)}</a></p>`
+  );
 }
 
 function caseCard(view: HqView): string {
@@ -163,18 +202,54 @@ function caseCard(view: HqView): string {
       head +
       `<h2 id="elf-case-heading">${today.state === "hunting" ? "The hunt is on!" : `${escapeHtml(today.elfName)} has been found!`}</h2>` +
       clueLadder(today, view.now) +
+      closesLine(today) +
       guessForm(today, view.guessUrl)
     );
   }
   if (today.state === "snow") {
     return head + `<h2 id="elf-case-heading">Snow day</h2>` + line(`${escapeHtml(today.elfName)} got snowed in. This door counts as done for everyone.`) + refused;
   }
+  // The place is shown: how it turned out for a family that can see it, or its one go for a family that may
+  // still crack the case. An elf shown with nobody found is still out there only until it goes home.
+  const elf = escapeHtml(today.elfName);
+  const heading = today.state === "found" ? "Case closed" : today.goneHome === true ? `${elf} has gone home` : `${elf} is still out there`;
   return (
     head +
-    `<h2 id="elf-case-heading">${today.state === "found" ? "Case closed" : `${escapeHtml(today.elfName)} is still out there`}</h2>` +
+    `<h2 id="elf-case-heading">${heading}</h2>` +
     refused +
-    outcomeHtml(today)
+    (today.outcome ? outcomeHtml(today) : goCard(today))
   );
+}
+
+/** The missed doors the family may still crack (Plan 2c-1), newest first, each on a card sheet: its number,
+ *  its day, its elf and its go. Only a go on this site is drawn, and with none the list is not on the page
+ *  at all, so with December's doors off Detective HQ is exactly what it was. */
+function crackSection(view: HqView): string {
+  const doors = (Array.isArray(view.toCrack) ? view.toCrack : []).flatMap((d) => {
+    const go = sitePath(d.url);
+    return go ? [{ ...d, go }] : [];
+  });
+  if (!doors.length) return "";
+  const items = doors
+    .map(
+      (d, i) =>
+        `<li class="elf-crack__door elf-card elf-card--${SHEETS[i % SHEETS.length]}">` +
+        `<h3>Door ${count(d.door)}</h3>` +
+        (real(d.clueAt) ? `<p>${dayWords(d.clueAt)}</p>` : "") +
+        `<p>${escapeHtml(d.elfName)}</p>` +
+        `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${d.go}">${haveAGo(`door ${count(d.door)}`)}</a>` +
+        `</li>`,
+    )
+    .join("");
+  return `
+
+  <section class="section elf-hq-crack" aria-labelledby="elf-crack-heading">
+    <div class="wrap">
+      ${headingStrip({ text: "Doors you can still crack", tag: "h2", back: "gold", id: "elf-crack-heading" })}
+      <p class="lede">Missed a door? Crack its case here, with one guess. You get the same three clues, one at a time.</p>
+      <ul class="elf-crack">${items}</ul>
+    </div>
+  </section>`;
 }
 
 /** The costumes waiting in the wardrobe, as presents (draft words for Jaimie). */
@@ -271,7 +346,7 @@ export function renderHqPage(view: HqView): string {
         ${caseCard(view)}
       </div>
     </div>
-  </section>
+  </section>${crackSection(view)}
 
   <section class="section elf-hq-team" aria-labelledby="elf-team-heading">
     <div class="wrap">

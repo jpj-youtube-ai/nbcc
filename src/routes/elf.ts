@@ -25,21 +25,26 @@ import {
   cluePicture,
   detectiveDoorsDone,
   doorCounts,
+  doorPhotos,
+  doorsPhotos,
   doorScrapbook,
   familyDoorsDone,
-  familyGuesses,
   familyHasWon,
+  familyKnowledge,
+  familyKnowsDoor,
   familyPhoto,
   familyVisits,
   finderParts,
   giveBackWordTry,
   loadDoorRun,
   loadDoorRunByPosterCode,
+  loadDoorRuns,
   loadPractice,
   markAutomaticSnowDays,
   recordWord,
   runsFor,
   saveGuess,
+  saveLateGuess,
   sendElfPhoto,
   takeDownOwnPhoto,
   takeWordTry,
@@ -48,22 +53,38 @@ import {
   type FamilyRuns,
 } from "../db/elf-game";
 import { DOOR_COUNT, isDoor, type Door } from "../elf/calendar";
+import { decideGo, doorsKnown, doorsToCrack, knowsPlace, mayHaveAGo, placesPublic, type FamilyKnowledge, type GoRefusal } from "../elf/catch-up";
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
-import { canGuess, cluesOut, doorState, isOpen, shownAt } from "../elf/doors";
+import { canGuess, cluesOut, doorState, isOpen, shownAt, type DoorState } from "../elf/doors";
 import { badgeWords } from "../elf/emails";
-import { decideGuess, type GuessRefusal, type SavedGuess } from "../elf/guess";
+import { decideGuess, type GuessRefusal } from "../elf/guess";
 import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
 import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
+import { goOutcomeWords, renderGoPage } from "../elf/pages/go";
 import { renderHqPage } from "../elf/pages/hq";
 import { claimWinHtml, renderPosterPage, visitWinHtml, wordRefusalWords } from "../elf/pages/poster";
 import { renderRulesPage } from "../elf/pages/rules";
-import type { CalendarView, ClaimWin, FamilyMarks, HqView, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
+import type { CalendarView, ClaimWin, DoorView, FamilyMarks, GoView, HqView, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
 import { progressOf, promotionsBetween, type DoorsDone, type Rank } from "../elf/progress";
 import { makePublicCalendar } from "../elf/public-calendar";
-import type { Scrapbook } from "../elf/scrapbook";
+import type { ScrapPhoto, Scrapbook } from "../elf/scrapbook";
 import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeState } from "../elf/wardrobe";
-import { calendarViewFor, hqViewFor, lookFromForm, marksOf, posterViewFor, todayRunOf, wardrobeViewFor, type DetectiveRow, type FamilyRow } from "../elf/views";
+import {
+  calendarViewFor,
+  doorPlaceOf,
+  familyDoorView,
+  goOutcomeOf,
+  goViewFor,
+  hqViewFor,
+  lookFromForm,
+  marksOf,
+  posterViewFor,
+  todayRunOf,
+  wardrobeViewFor,
+  type DetectiveRow,
+  type FamilyRow,
+} from "../elf/views";
 import { realElfDeps, sendProudMoments, type WordMoment } from "../elf/worker";
 import { elfPng, elfPngKey } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
@@ -563,22 +584,30 @@ function gameFailed(res: Response, what: string, err: unknown, json: boolean): R
   return json ? res.status(500).json({ error: words }) : res.status(500).type("text/plain").send(words);
 }
 
-/** The family's guesses by door: this year's while December's doors are on, and the practice door's
- *  (door 0) while a practice evening runs for this browser. */
-async function guessesFor(res: Response, runs: FamilyRuns, familyId: number): Promise<Map<number, SavedGuess>> {
+/** A family that has neither guessed nor been anywhere: what is read while December's doors are off. */
+const NOTHING_DONE: FamilyKnowledge = { guesses: new Map(), typed: new Set() };
+
+/** What the family has done, door by door (src/elf/catch-up.ts): its guesses, and the doors where one of its
+ *  detectives typed the tag word. This year's while December's doors are on, with the practice door's (door
+ *  0) merged in while a practice evening runs for this browser; with neither, nothing is read. */
+async function knowledgeFor(res: Response, runs: FamilyRuns, familyId: number): Promise<FamilyKnowledge> {
   const settings = settingsOf(res);
-  const guesses = new Map(settings.doorsOn ? await familyGuesses(settings.year, familyId) : []);
-  if (runs.practice) {
-    const practice = (await familyGuesses(0, familyId)).get(0);
-    if (practice) guesses.set(0, practice);
-  }
-  return guesses;
+  const [year, practice] = await Promise.all([
+    settings.doorsOn ? familyKnowledge(settings.year, familyId) : NOTHING_DONE,
+    runs.practice ? familyKnowledge(0, familyId) : NOTHING_DONE,
+  ]);
+  const guesses = new Map(year.guesses);
+  const typed = new Set(year.typed);
+  const practiceGuess = practice.guesses.get(0);
+  if (practiceGuess) guesses.set(0, practiceGuess);
+  if (practice.typed.has(0)) typed.add(0);
+  return { guesses, typed };
 }
 
-/** Detective HQ's view for a family, all read through runsFor: the family's guesses, each detective's
+/** Detective HQ's view for a family, all read through runsFor: what the family has done, each detective's
  *  doors done and, once today's door is found and its place shown, who found it (read for that one door
- *  only). `known` is the doors when the caller has just read them. */
-async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: FamilyRuns): Promise<HqView> {
+ *  only). `known` is the doors, and `knowledge` what the family has done, when the caller has just read them. */
+async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: FamilyRuns, knowledge?: FamilyKnowledge): Promise<HqView> {
   const settings = settingsOf(res);
   const runs = known ?? (await familyRuns(res, now));
   const todayRun = todayRunOf({ settings, now, runs });
@@ -586,13 +615,13 @@ async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: Fam
     if (!todayRun || todayRun.door === 0 || doorState(todayRun.facts, now) !== "found") return new Map();
     return new Map([[todayRun.door, await finderParts(todayRun.year, todayRun.door)]]);
   };
-  const [guesses, doorsDone, finders] = await Promise.all([
-    guessesFor(res, runs, family.id),
+  const [done, doorsDone, finders] = await Promise.all([
+    knowledge ?? knowledgeFor(res, runs, family.id),
     familyDoorsDone(settings.year, family.id, runs.runs, now),
     findersOfToday(),
   ]);
   // HQ draws no photos: the calendar's script reads the family's own from /api/elf/me.
-  return hqViewFor({ family, settings, now, runs, guesses, doorsDone, finders, photos: [] });
+  return hqViewFor({ family, settings, now, runs, guesses: done.guesses, typed: done.typed, doorsDone, finders, photos: [] });
 }
 
 export async function getHq(req: Request, res: Response): Promise<Response | void> {
@@ -617,8 +646,14 @@ export async function getWardrobe(req: Request, res: Response): Promise<Response
     const id = detectiveIdOf(req.params.detective);
     const detective = family.detectives.find((d) => d.id === id);
     if (!detective) return res.status(404).type("text/plain").send("Not found");
-    const doorsDone = await detectiveDoorsDone(settings.year, detective.id, (await familyRuns(res, now)).runs, now);
-    return await sendPage(req, res, renderWardrobePage(wardrobeViewFor({ detective, settings, now, doorsDone })));
+    const { runs } = await familyRuns(res, now);
+    const [doorsDone, knowledge] = await Promise.all([
+      detectiveDoorsDone(settings.year, detective.id, runs, now),
+      // What the family has done, for the missed doors it can still crack from Detective HQ (ruling F7): read
+      // only while December's doors are on, so with them off the wardrobe is exactly what it was.
+      settings.doorsOn ? familyKnowledge(settings.year, family.id) : NOTHING_DONE,
+    ]);
+    return await sendPage(req, res, renderWardrobePage(wardrobeViewFor({ detective, settings, now, doorsDone, runs, knowledge })));
   } catch (err) {
     return gameFailed(res, "wardrobe", err, false);
   }
@@ -698,11 +733,23 @@ elfRouter.post("/api/elf/look", express.urlencoded({ extended: false, limit: "16
 //   GET /api/elf/calendar    the small feed the calendar's script polls: { now, found, status, doors: [{ door, v }] }
 //   GET /api/elf/door/:n     one door's tile and detail, drawn by the same functions as the page
 //   GET /api/elf/me          the signed in family's marks on the calendar and its own photos, or 401:
-//                            { doors: [{ door, cracked, visited, snow }], photos: [{ door, token, status }] }
+//                            { doors: [{ door, cracked, visited, snow }], photos: [{ door, token, status }] },
+//                            and while December's doors are on, known: [door] (the doors whose place the
+//                            family can see, in door order) and goes: [door] (the doors it may still
+//                            crack, newest first)
+//   GET /api/elf/me/door/:n  the family's own door, { tile, detail }, with its place and its photos: only
+//                            while December's doors are on, for a door open on the calendar whose place
+//                            the family can see (or any open door from Christmas Day until 1 January);
+//                            404 otherwise, and 401 signed out
+//   GET /api/elf/me/doors    every one of those doors in one answer, { doors: [{ door, tile, detail }] } in
+//                            door order, which the calendar's script draws when the page loads: only while
+//                            December's doors are on (404 otherwise), and 401 signed out
 //
 // The calendar is the same for every visitor, so it is built at most once every 15 seconds and shared
 // (src/elf/public-calendar.ts), and cached briefly; nothing on it is private, and the practice door is
-// never on it.
+// never on it. Until Christmas Day it names no place and shows no photo. A family's own places and
+// photos never pass through it: they come from the family's own door, drawn over the shared one for that
+// family alone, and never kept by a browser or a shared cache.
 
 const PUBLIC_SHORT_CACHE = "public, max-age=15";
 
@@ -715,7 +762,8 @@ function publicCache(res: Response): void {
 /** How the public calendar is built: snow in what cannot run (only once December's doors are on), read
  *  the doors through runsFor without the practice door, then who found each found door (its place shown
  *  or not) and the counts and scrapbook of each open one. A door neither found nor open shows nothing
- *  more, so nothing more is read for it. */
+ *  more, so nothing more is read for it. A scrapbook's photos are read only while every place is shown
+ *  to everyone, from Christmas Day until 1 January: a photo can show the inside of the place. */
 async function loadPublicCalendar(now: Date): Promise<CalendarView> {
   const settings = await getElfSettings();
   if (settings.doorsOn) await markAutomaticSnowDays(settings.year, now);
@@ -733,7 +781,7 @@ async function loadPublicCalendar(now: Date): Promise<CalendarView> {
     const [parts, counted, book] = await Promise.all([
       found ? finderParts(run.year, door) : null,
       open ? doorCounts(run.year, door, now, run) : null,
-      open ? doorScrapbook(run.year, door, now) : null,
+      open ? doorScrapbook(run.year, door, now, placesPublic(run.year, now)) : null,
     ]);
     if (parts) finders.set(door, parts);
     if (counted) counts.set(door, counted);
@@ -802,8 +850,12 @@ export async function getMe(req: Request, res: Response): Promise<Response | voi
     const family = s ? await familyWithDetectives(s.familyId) : null;
     if (!family) return res.status(401).json({ error: "Not signed in" });
     const runs = await familyRuns(res, now);
-    // This year's doors only: the practice door never counts towards anything.
-    const doorsDone = await familyDoorsDone(settings.year, family.id, runs.runs, now);
+    // This year's doors only: the practice door never counts towards anything. What the family has done
+    // door by door is read only while December's doors are on: with them off this answer is wave 1's.
+    const [doorsDone, knowledge] = await Promise.all([
+      familyDoorsDone(settings.year, family.id, runs.runs, now),
+      settings.doorsOn ? familyKnowledge(settings.year, family.id) : null,
+    ]);
     const { doors } = marksOf(runs.runs, family, doorsDone, [], now);
     // The family's own photo at each door it has visited, so it can take one down from the calendar. An
     // approved photo reads as waiting while its door's place is still hidden.
@@ -814,9 +866,103 @@ export async function getMe(req: Request, res: Response): Promise<Response | voi
       const photo = found[i];
       return photo ? [{ door: m.door, token: photo.token, status: photo.status }] : [];
     });
-    return res.json({ doors, photos });
+    if (!knowledge) return res.json({ doors, photos });
+    // The doors whose place the family can see, which the calendar's script draws from the family's own
+    // door (getMyDoor), and the doors it may still have a go at, newest first.
+    const known = doorsKnown({ runs: runs.runs, knowledge, now });
+    const goes = doorsToCrack({ runs: runs.runs, knowledge, now }).map((r) => r.door);
+    return res.json({ doors, photos, known, goes });
   } catch (err) {
     return gameFailed(res, "marks", err, true);
+  }
+}
+
+/** The one rule (src/elf/catch-up.ts) at one door: can the family see its place? Never while the door is
+ *  not open, whatever the family has done there: a detective who typed the tag word while the place was
+ *  still hidden sees it once the door opens, as everyone who can does. Only what the family has done at this
+ *  door is read (familyKnowsDoor), never its whole year: every photo in an open scrapbook asks this. */
+async function knowsDoorPlace(year: number, familyId: number, door: number, state: DoorState): Promise<boolean> {
+  if (!isOpen(state)) return false;
+  const { guessed, typed } = await familyKnowsDoor(year, door, familyId);
+  return knowsPlace({ state, guessed, typed });
+}
+
+/** A family's own door (Plan 2c-1): the door the calendar everyone shares draws, with its place and its
+ *  photos laid on, for a family that can see the place, or for anyone from Christmas Day until 1 January.
+ *  The calendar's script draws a door in /api/elf/me's `known` from here when that one door changes; all of
+ *  them at once, as the page loads, come from getMyDoors. A door that is not open on the shared calendar,
+ *  or whose place the family cannot see, is not found, and nothing more is read for it. It is this
+ *  family's alone, so no browser or shared cache ever keeps it. */
+export async function getMyDoor(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    const s = await signedInFamily(req);
+    if (!s) return res.status(401).json({ error: "Not signed in" });
+    // A real door, while December's doors are on: never the practice door, which is on no calendar.
+    const n = doorNumberOf(req.params.n);
+    if (!isDoor(n) || !settings.doorsOn) return notFound(res, true);
+    // The door as the shared calendar draws it, so the family's door opens when everyone's does.
+    const view = await publicCalendar.get(now);
+    const shared = view.doors.find((d) => d.door === n);
+    if (!shared || !isOpen(shared.state)) return notFound(res, true);
+    if (!placesPublic(settings.year, now) && !(await knowsDoorPlace(settings.year, s.familyId, n, shared.state))) return notFound(res, true);
+    // A place left empty, or cleared to spaces, is no place (doorPlaceOf), as everywhere else.
+    const place = doorPlaceOf(await loadDoorRun(settings.year, n, now));
+    if (!place) return notFound(res, true);
+    return res.json(ownDoor(view, shared, place, await doorPhotos(settings.year, n)));
+  } catch (err) {
+    return gameFailed(res, "own door", err, true);
+  }
+}
+
+/** The family's own door drawn as the shared calendar draws a door: the shared door, with the family's place
+ *  and the door's photos laid on (familyDoorView), at the shared view's own time. */
+function ownDoor(view: CalendarView, shared: DoorView, place: { name: string; town: string }, photos: readonly ScrapPhoto[]): { tile: string; detail: string } {
+  const mine = familyDoorView(shared, { place, photos });
+  const ctx = { now: view.now, joinUrl: view.joinUrl, hqUrl: view.hqUrl };
+  return { tile: doorTile(mine, view.now), detail: doorDetail(mine, ctx) };
+}
+
+/** Every one of the family's own doors (getMyDoor) in one answer, in door order: each door open on the
+ *  calendar everyone shares whose place the family can see (or every open door from Christmas Day until 1
+ *  January), drawn as getMyDoor draws it. The calendar's script draws the doors in /api/elf/me's `known` from
+ *  here when the page loads, so a family that knows many doors costs one request, with the door rows read once
+ *  and every door's photos in one query (the rulings on Plan 2c-1, Task 8). Nothing more is read once nothing
+ *  is left to draw. It is this family's alone, so no browser or shared cache ever keeps it. */
+export async function getMyDoors(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    const s = await signedInFamily(req);
+    if (!s) return res.status(401).json({ error: "Not signed in" });
+    // While December's doors are on: never for a browser that only plays the practice door.
+    if (!settings.doorsOn) return notFound(res, true);
+    // The doors as the shared calendar draws them, so each family's door opens when everyone's does.
+    const view = await publicCalendar.get(now);
+    const open = view.doors.filter((d) => isOpen(d.state));
+    if (open.length === 0) return res.json({ doors: [] });
+    const everyone = placesPublic(settings.year, now);
+    const known = everyone ? null : await familyKnowledge(settings.year, s.familyId);
+    const seen = known
+      ? open.filter((d) => knowsPlace({ state: d.state, guessed: known.guesses.has(d.door), typed: known.typed.has(d.door) }))
+      : open;
+    if (seen.length === 0) return res.json({ doors: [] });
+    // Each door's place from the one read of the year's doors; a place left empty, or cleared to spaces, is no
+    // place (doorPlaceOf), so its door is left out.
+    const runs = await loadDoorRuns(settings.year, now);
+    const placed = seen.flatMap((d) => {
+      const run = runs.find((r) => r.door === d.door);
+      const place = run ? doorPlaceOf(run) : null;
+      return place ? [{ shared: d, place }] : [];
+    });
+    if (placed.length === 0) return res.json({ doors: [] });
+    const photos = await doorsPhotos(settings.year, placed.map((p) => p.shared.door));
+    return res.json({ doors: placed.map((p) => ({ door: p.shared.door, ...ownDoor(view, p.shared, p.place, photos.get(p.shared.door) ?? []) })) });
+  } catch (err) {
+    return gameFailed(res, "own doors", err, true);
   }
 }
 
@@ -834,6 +980,8 @@ elfRouter.get("/elf/rules", schoolOn, async (req, res) => {
 elfRouter.get("/api/elf/calendar", schoolOn, getCalendarFeed);
 elfRouter.get("/api/elf/door/:n", schoolOn, getDoorFeed);
 elfRouter.get("/api/elf/me", schoolOn, getMe);
+elfRouter.get("/api/elf/me/door/:n", schoolOn, doorsOn, getMyDoor);
+elfRouter.get("/api/elf/me/doors", schoolOn, doorsOn, getMyDoors);
 
 // --- the doors in December: the poster page, the word, the guess, the family's photo, the pictures ------
 //
@@ -844,20 +992,28 @@ elfRouter.get("/api/elf/me", schoolOn, getMe);
 //                                          { outcome: "won" | "visited", html }, or { reason, message,
 //                                          triesLeft? } with 400 (409 for too early and gone home)
 //   POST   /api/elf/guess                  a typed guess, JSON { door, text } or the plain form:
-//                                          { ok: true, text }, or 400 { reason, message, door? }
+//                                          { ok: true, text }, or 400 { reason, message, door? }; once
+//                                          the place is shown, 409 { reason, message, goUrl }: "locked-in"
+//                                          back to Detective HQ, or "have-a-go" to the door's go page (the
+//                                          plain form goes there), and 409 { reason: "already", message }
+//                                          when the family's go was kept in place of the night's save
 //   POST   /api/elf/p/:code/photo          the family's photo for the door, JSON { mime, dataBase64,
 //                                          consent: true } (the bigger body parser is in src/app.ts):
 //                                          202 { status: "waiting", token }
 //   DELETE /api/elf/p/:code/photo          the family takes its photo down, from the poster page
 //   DELETE /api/elf/door/:n/photo          the same, from the door on the calendar
-//   GET    /elf/door/:n/photo/:token.jpg   an approved photo, only while its door is open
+//   GET    /elf/door/:n/photo/:token.jpg   an approved photo, only while its door is open, and only to a
+//                                          signed in family that can see its place (to anyone from
+//                                          Christmas Day until 1 January); never cached
 //   GET    /elf/door/:n/elf/:visitId.png   a visiting detective's elf, only once the visit counts
 //   GET    /elf/hq/clue/:door/:n.jpg       a clue's picture, signed in, only once the clue is out
 //
 // Every one sits behind schoolOn and doorsOn. While December's doors are off the preview link opens
 // the practice door (door 0 of year 0) and nothing else. A family must be signed in for everything but
-// the poster page and the door's pictures, and every post must come from our own pages. Nothing here
-// writes a place, a clue or a tag word into a log, an error or a cache.
+// the poster page and a visiting detective's elf; a door's photo is open to everyone only from Christmas
+// Day until 1 January, and otherwise only to a signed in family that can see the door's place. Every post
+// must come from our own pages. Nothing here writes a place, a clue or a tag word into a log, an error or
+// a cache.
 
 /** A poster's code, and a photo's address: twelve characters of the poster alphabet (no l, o, 0 or 1). */
 const CODE_SHAPE = /^[a-km-np-z2-9]{12}$/;
@@ -1203,21 +1359,27 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
 }
 
 /** What to tell a family whose guess was refused. `elf` names the door's elf; `door` is the open door
- *  whose place was typed. */
+ *  whose place was typed, one whose place the family can see. */
 export function wordsForGuessRefusal(reason: GuessRefusal, elf: string, door?: number): string {
   switch (reason) {
     case "not-hunting":
-      return "Too late: the hiding place is shown now. Have a look at the calendar.";
+      return "There is nothing to guess at this door just now.";
     case "empty":
       return `Type where you think ${elf} is hiding.`;
     case "too-long":
       return "That is a bit long. Up to 80 letters is plenty.";
     case "place-already-open":
       return `That elf was already found behind door ${door ?? ""}. Try again!`;
+    case "locked-in":
+      return "Your guess is locked in, and the hiding place is shown now.";
+    case "have-a-go":
+      return "The hiding place is shown now, so this is your one go at this door.";
   }
 }
 
-/** A typed guess: where the family thinks the elf is hiding (src/elf/guess.ts). */
+/** A typed guess: where the family thinks the elf is hiding (src/elf/guess.ts). Once the place is shown a
+ *  guess is never saved as the family's go: a family with its guess is sent back to Detective HQ to see how
+ *  it did, and one that may still crack the case is sent to have its one go on the door's page. */
 export async function postGuess(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const json = wantsJson(req);
@@ -1235,27 +1397,168 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
     if (!run) return notFound(res, json);
     // The plain form has no script to show the words: Detective HQ is drawn again with them in the guess
     // form's status line (or in the case, once there is no form to say it in).
-    const hqSaying = async (status: number, message: string): Promise<Response | void> => {
+    const hqSaying = async (status: number, message: string, knowledge?: FamilyKnowledge): Promise<Response | void> => {
       const family = await familyWithDetectives(s.familyId);
       if (!family) return res.redirect(303, "/elf/sign-in");
-      const view = await hqViewOf(res, family, now, runs);
+      const view = await hqViewOf(res, family, now, runs, knowledge);
       const today = view.today && view.today.door === run.door ? { ...view.today, guessError: message } : view.today;
       return sendPage(req, res.status(status), renderHqPage({ ...view, today }));
     };
     if (limited) return await hqSaying(429, ELF_TOO_MANY);
     const state = doorState(run.facts, now);
-    const openPlaces = runs.runs.flatMap((r) => (r.door !== 0 && isOpen(doorState(r.facts, now)) ? [{ door: r.door, names: r.names }] : []));
-    const decision = decideGuess({ doorState: state, openPlaces }, body.text);
+    // What the family has done: whether it has a guess at this door or may have its go, and the open doors
+    // whose place it can see, the only places a refusal may name (Review Focus 3). Any other door's place is
+    // an ordinary guess, so a refusal never gives a place away.
+    const knowledge = await knowledgeFor(res, runs, s.familyId);
+    const guessed = knowledge.guesses.has(run.door);
+    const typed = knowledge.typed.has(run.door);
+    const known = new Set<number>(doorsKnown({ runs: runs.runs, knowledge, now }));
+    const openPlaces = runs.runs.flatMap((r) => (isDoor(r.door) && known.has(r.door) ? [{ door: r.door, names: r.names }] : []));
+    const decision = decideGuess(
+      { doorState: state, openPlaces, hasGuess: guessed, mayHaveAGo: mayHaveAGo({ year: run.year, state, guessed, typed, now }) },
+      body.text,
+    );
     if (!decision.ok) {
       // A door's elf is named only once the door can be guessed: until then its name stays a surprise.
       const message = wordsForGuessRefusal(decision.reason, canGuess(state) ? run.elfName : "the elf", decision.door);
+      // The place is shown: back to Detective HQ with its guess, or to the door's page for its one go.
+      const goUrl = decision.reason === "locked-in" ? "/elf/hq" : decision.reason === "have-a-go" ? `/elf/hq/door/${run.door}` : null;
+      if (goUrl) return json ? res.status(409).json({ reason: decision.reason, message, goUrl }) : res.redirect(303, goUrl);
       if (json) return res.status(400).json({ reason: decision.reason, message, ...(decision.door === undefined ? {} : { door: decision.door }) });
-      return await hqSaying(400, message);
+      return await hqSaying(400, message, knowledge);
     }
-    await saveGuess(run.year, run.door, s.familyId, { text: decision.text, norm: decision.norm }, now);
+    // The night's save never replaces the family's go (saveGuess): then nothing was saved, and it is told so.
+    if (!(await saveGuess(run.year, run.door, s.familyId, { text: decision.text, norm: decision.norm }, now))) {
+      const message = wordsForGoRefusal("already", run.elfName);
+      return json ? res.status(409).json({ reason: "already", message }) : await hqSaying(409, message, knowledge);
+    }
     return json ? res.status(200).json({ ok: true, text: decision.text }) : res.redirect(303, "/elf/hq");
   } catch (err) {
     return gameFailed(res, "guess", err, json);
+  }
+}
+
+// --- having a go: a missed door's own page in Detective HQ (Plan 2c-1) --------------------------------
+//
+//   GET  /elf/hq/door/:n      the go page: the door's clues one at a time (?clues=2, ?clues=3), then one
+//                             guess; once the family can see the place, how it went
+//   POST /elf/hq/door/:n/go   the one guess, JSON { text } or the plain form (text, and how many clues
+//                             were showing): JSON answers 200 { cracked, message }, or { reason, message }
+//                             with 400 (empty, too long), 409 (closed, already, been there) or 404 (not
+//                             open); the plain form goes back to the door's page, which shows how it went,
+//                             or draws it again with the words in its form's status line
+//
+// Both sit behind schoolOn and doorsOn, so while December's doors are off only the practice door has a go
+// page, through the preview link. Each is the family's own, so no browser or shared cache keeps either.
+
+/** How many clues the go page shows, from its address or its form: 2 or 3, and 1 for anything else. */
+function cluesAsked(raw: unknown): number {
+  return raw === "2" ? 2 : raw === "3" ? 3 : 1;
+}
+
+/** The door's place, when there is a go to be had at the door at `now`: it is open, and has a place. A
+ *  door shut, hunted, found with its place still hidden or snowed in has nothing to crack yet, and nor has
+ *  an open door with no place (a door never runs without one). */
+function goPlaceOf(run: DoorRun, now: Date): { name: string; town: string } | null {
+  return isOpen(doorState(run.facts, now)) ? doorPlaceOf(run) : null;
+}
+
+/** The go page's view for a family: what it has done at the door (read here, unless the caller has just
+ *  read it) and, once the elf is found, who found it, read for that one door (never the practice door's,
+ *  which names no finder). */
+async function goViewOf(o: { run: DoorRun; familyId: number; now: Date; cluesShown: number; guessError?: string | null; known?: FamilyKnowledge }): Promise<GoView> {
+  const { run, now } = o;
+  const named = run.door !== 0 && doorState(run.facts, now) === "found";
+  const [known, finders] = await Promise.all([o.known ?? familyKnowledge(run.year, o.familyId), named ? finderParts(run.year, run.door) : []]);
+  return goViewFor({ run, now, guess: known.guesses.get(run.door) ?? null, typed: known.typed.has(run.door), finders, cluesShown: o.cluesShown, guessError: o.guessError });
+}
+
+export async function getGo(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const now = new Date();
+  try {
+    const family = await familyOr(req, res);
+    if (!family) return;
+    // The door as it is at this moment, read through runsFor as every family route reads it.
+    const run = gameRun(res, await familyRuns(res, now), doorNumberOf(req.params.n));
+    if (!run) return notFound(res);
+    if (!goPlaceOf(run, now)) return res.redirect(303, "/elf/hq");
+    return await sendPage(req, res, renderGoPage(await goViewOf({ run, familyId: family.id, now, cluesShown: cluesAsked(req.query.clues) })));
+  } catch (err) {
+    return gameFailed(res, "go page", err, false);
+  }
+}
+
+/** What to tell a family whose go was refused. Only "empty" names the door's elf, and decideGo reaches it
+ *  only at an open door: a door's elf is never named before its door opens. */
+export function wordsForGoRefusal(reason: GoRefusal, elf: string): string {
+  switch (reason) {
+    case "not-open":
+      return "There is nothing to guess at this door just now.";
+    case "closed":
+      return "Having a go closed on Christmas Day.";
+    case "already":
+      return "You have already had your go at this door.";
+    case "been-there":
+      return "Your family has been to this hiding place, so there is nothing to guess.";
+    case "empty":
+      return `Type where you think ${elf} is hiding.`;
+    case "too-long":
+      return "That is a bit long. Up to 80 letters is plenty.";
+  }
+}
+
+/** Each refusal's status: what was typed, 400; a go the family cannot have, 409; nothing to crack, 404. */
+const GO_REFUSAL_STATUS: Record<GoRefusal, number> = { empty: 400, "too-long": 400, closed: 409, already: 409, "been-there": 409, "not-open": 404 };
+
+/** A family's one go at a door it missed (src/elf/catch-up.ts): decideGo at this moment, then one insert
+ *  that never overwrites anything (saveLateGuess), so two tabs or two phones locking in at once save one go
+ *  between them, and a guess from the night is never replaced. A go counts against the family's guesses. */
+export async function postGo(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const json = wantsJson(req);
+  if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const now = new Date();
+  try {
+    const s = await signedInFamily(req);
+    if (!s) return json ? res.status(401).json({ error: "Please sign in again." }) : res.redirect(303, "/elf/sign-in");
+    const limited = !allowedOnce(req, s.familyId, limits.guessFamily);
+    if (limited && json) return res.status(429).json({ reason: "too-many-requests", message: ELF_TOO_MANY });
+    // The door as it is at this moment, never the calendar's copy.
+    const run = gameRun(res, await familyRuns(res, now), doorNumberOf(req.params.n));
+    if (!run) return notFound(res, json);
+    const doorPage = `/elf/hq/door/${run.door}`;
+    const place = goPlaceOf(run, now);
+    // The plain form has no script to show the words: the go page is drawn again with them in its form's
+    // status line, with as many clues showing as the family had open.
+    const pageSaying = async (status: number, message: string | null, known?: FamilyKnowledge): Promise<Response> =>
+      sendPage(req, res.status(status), renderGoPage(await goViewOf({ run, familyId: s.familyId, now, cluesShown: cluesAsked(body.clues), guessError: message, known })));
+    const refuse = async (reason: GoRefusal, known?: FamilyKnowledge): Promise<Response | void> => {
+      const message = wordsForGoRefusal(reason, run.elfName);
+      if (json) return res.status(GO_REFUSAL_STATUS[reason]).json({ reason, message });
+      if (reason === "not-open") return res.redirect(303, "/elf/hq");
+      if (reason === "already" || reason === "been-there") return res.redirect(303, doorPage);
+      // Closed, the page says so itself, in place of the form.
+      return await pageSaying(GO_REFUSAL_STATUS[reason], reason === "closed" ? null : message, known);
+    };
+    if (limited) return place ? await pageSaying(429, ELF_TOO_MANY) : res.redirect(303, "/elf/hq");
+    if (!place) return await refuse("not-open");
+    const known = await familyKnowledge(run.year, s.familyId);
+    const typed = known.typed.has(run.door);
+    const decision = decideGo({ year: run.year, state: doorState(run.facts, now), guessed: known.guesses.has(run.door), typed, now }, body.text);
+    if (!decision.ok) return await refuse(decision.reason, known);
+    const go = { text: decision.text, norm: decision.norm };
+    if ((await saveLateGuess(run.year, run.door, s.familyId, go, now)) === "already") return await refuse("already", known);
+    if (!json) return res.redirect(303, doorPage);
+    // Said straight away: whether it cracked the case, and where the elf was, which the family may see now.
+    const outcome = goOutcomeOf({ run, now, place, guess: { ...go, at: now, late: true }, typed });
+    return res.status(200).json({
+      cracked: outcome.verdict === "cracked",
+      message: goOutcomeWords({ elfName: run.elfName, verdict: outcome.verdict, place: outcome.place, stillHiding: outcome.stillHiding }),
+    });
+  } catch (err) {
+    return gameFailed(res, "go", err, json);
   }
 }
 
@@ -1357,20 +1660,28 @@ export function deletePhotoByDoor(req: Request, res: Response): Promise<Response
 }
 
 export async function getDoorPhoto(req: Request, res: Response): Promise<Response | void> {
-  // Never kept until there is a photo to serve, so no cache holds a "not yet" from before the reveal.
-  res.setHeader("Cache-Control", "no-store");
+  // Only ever for whoever asked, and never kept by a browser or a shared cache: not a photo, which can
+  // show the inside of the place and can be taken down at any moment, and not a "not yet" from before.
+  res.setHeader("Cache-Control", "private, no-store");
   const n = doorNumberOf(req.params.n);
   const token = String(req.params.token);
   if (!CODE_SHAPE.test(token) || !gameDoor(res, n)) return notFound(res);
   const now = new Date();
   try {
     const run = await oneGameRun(res, n, now);
+    if (!run) return notFound(res);
+    const state = doorState(run.facts, now);
     // Only while its door is open: a photo sent while the place was still hidden never gives it away.
-    if (!run || !isOpen(doorState(run.facts, now))) return notFound(res);
+    if (!isOpen(state)) return notFound(res);
+    // And only to someone who may see the place: anyone from Christmas Day until 1 January (never at the
+    // practice door), otherwise a signed in family that can see it (the one rule).
+    if (!placesPublic(run.year, now)) {
+      const s = await signedInFamily(req);
+      if (!s || !(await knowsDoorPlace(run.year, s.familyId, run.door, state))) return notFound(res);
+    }
     const photo = await approvedPhoto(run.year, run.door, token);
     if (!photo) return notFound(res);
-    // Kept briefly, so a photo taken down stops being served within minutes.
-    return sendPicture(res, photo, pictureCache(res, run.door, "public, max-age=300"));
+    return sendPicture(res, photo, "private, no-store");
   } catch (err) {
     return gameFailed(res, "door photo", err, false);
   }
@@ -1459,6 +1770,8 @@ elfRouter.get("/elf/p/:code", schoolOn, doorsOn, getPoster);
 elfRouter.post("/elf/p/:code/word", forms, schoolOn, doorsOn, postWord);
 elfRouter.post("/api/elf/word", forms, schoolOn, doorsOn, postWord);
 elfRouter.post("/api/elf/guess", forms, schoolOn, doorsOn, postGuess);
+elfRouter.get("/elf/hq/door/:n", schoolOn, doorsOn, getGo);
+elfRouter.post("/elf/hq/door/:n/go", forms, schoolOn, doorsOn, postGo);
 elfRouter.post(ELF_PHOTO_POST_PATH, schoolOn, doorsOn, postPhoto);
 elfRouter.delete(ELF_PHOTO_POST_PATH, schoolOn, doorsOn, deletePhotoByCode);
 elfRouter.delete("/api/elf/door/:n/photo", schoolOn, doorsOn, deletePhotoByDoor);

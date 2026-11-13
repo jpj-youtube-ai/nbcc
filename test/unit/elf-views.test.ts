@@ -6,11 +6,14 @@ import { DOOR_PICTURES } from "../../src/elf/door-setup";
 import { runOf, waveOneRuns, type DoorRun } from "../../src/db/elf-game";
 import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
 import type { Door } from "../../src/elf/calendar";
+import type { FamilyKnowledge } from "../../src/elf/catch-up";
 import type { SavedGuess } from "../../src/elf/guess";
+import { renderHqPage } from "../../src/elf/pages/hq";
 import type { DetectiveNameParts } from "../../src/elf/names";
 import type { DoorsDone } from "../../src/elf/progress";
 import type { Scrapbook } from "../../src/elf/scrapbook";
-import { calendarViewFor, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
+import { calendarViewFor, familyDoorView, goViewFor, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
+import { normalisePlaceName } from "../../src/elf/place-names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { defaultLook } from "../../src/elf/wardrobe";
 
@@ -76,13 +79,17 @@ function hq(over: Partial<Parameters<typeof hqViewFor>[0]> & { now: Date }) {
     settings: { ...SETTINGS, doorsOn: true },
     runs: { runs: WAVE_ONE(over.now), practice: null },
     guesses: new Map(),
+    typed: new Set(),
     doorsDone: new Map(),
     finders: new Map(),
     photos: [],
     ...over,
   });
 }
-const wardrobe = (detective = FAMILY.detectives[0], doorsDone: DoorsDone = EMPTY_DONE) => wardrobeViewFor({ detective, settings: SETTINGS, now: NOW, doorsDone });
+/** A family that has neither guessed nor been anywhere. */
+const NOTHING_DONE: FamilyKnowledge = { guesses: new Map(), typed: new Set() };
+const wardrobe = (detective = FAMILY.detectives[0], doorsDone: DoorsDone = EMPTY_DONE) =>
+  wardrobeViewFor({ detective, settings: SETTINGS, now: NOW, doorsDone, runs: WAVE_ONE(NOW), knowledge: NOTHING_DONE });
 const FAMILY: FamilyRow = {
   id: 3,
   grownUpName: "Sam Example",
@@ -237,15 +244,17 @@ describe("the calendar's doors through the evening", () => {
     expect(d.factLine).toBeNull();
   });
 
-  it("gives a found door its place, scrapbook, collage and prize, even with Show it off unticked", () => {
+  // Plan 2c-1, Task 4: before Christmas Day the calendar everyone shares names no place and shows no photo.
+  it("gives a found door its elves, collage, counts and prize, even with Show it off unticked, but not its place or photos", () => {
     const d = calDoor7(
       { now: SEVEN_30, finders: new Map([[7 as Door, [RUBY]]]), scrapbooks: new Map([[7 as Door, BOOK]]), counts: new Map([[7 as Door, { cracked: 2, visited: 3 }]]) },
       { foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3, prizeShowOff: false },
     );
     expect(d.state).toBe("found");
-    expect(d.place).toEqual({ name: "The Toy Shop", town: "Troon" });
+    expect(d.place).toBeNull();
+    expect(d.goUrl).toBe("/elf/hq/door/7");
     expect(d.revealAt).toBeNull();
-    expect(d.scrapbook).toBe(BOOK);
+    expect(d.scrapbook).toEqual({ elves: BOOK.elves, photos: [], count: 2 });
     expect(d.counts).toEqual({ cracked: 2, visited: 3 });
     expect(d.collage).toEqual(["/elf/door/7/elf/1.png", "/elf/door/7/elf/2.png"]);
     expect(d.prize).toBe("A pretend prize");
@@ -301,6 +310,466 @@ describe("the calendar's doors through the evening", () => {
       const text = JSON.stringify(calDoor7({ now }, { ...over, prizeShowOff: false }));
       for (const secret of ["Toy Shop", "Troon", "kettle", "SNOWBALL", "pretend prize", "/elf/door/7/photo"]) expect(text).not.toContain(secret);
     }
+  });
+});
+
+// Plan 2c-1, Task 4, and Review Focus 4: the calendar everyone shares carries no place and no photo for an
+// open door from its shown moment until Christmas Day, carries both from Christmas Day, and neither from 1
+// January (Jaimie's answer 6). Door 7's run holds its place every time, and the scrapbook given for it holds
+// a photo, so each test fails if either leaks. Door 7 is found at 5:47pm on Monday 7 December and its place
+// shown at 7pm; never found, it is shown at the place's 8pm closing. December has no clock change, so
+// London's time is UTC's.
+const CORNER: Partial<DoorSetup> = { placeName: "Corner Bakehouse", placeTown: "Snowford", names: [{ id: 1, name: "The Bakehouse" }] };
+const FOUND_AT_547: Partial<DoorSetup> = { ...CORNER, foundAt: at("2026-12-07T17:47:00Z"), foundFamilyId: 3 };
+const SEVEN_05 = at("2026-12-07T19:05:00Z");
+/** Door 7 on the calendar everyone shares at `now`, found at 5:47pm unless told otherwise. */
+const shared7 = (now: Date, over: Partial<DoorSetup> = FOUND_AT_547) => calDoor7({ now, scrapbooks: new Map([[7 as Door, BOOK]]) }, over);
+
+describe("the calendar everyone shares, from a door's shown moment to the new year", () => {
+  it("gives an open door no place and no photo, and the go page, from its shown moment until Christmas Day", () => {
+    for (const now of [SEVEN_05, at("2026-12-24T23:59:59Z")]) {
+      const d = shared7(now);
+      expect(d.state, now.toISOString()).toBe("found");
+      expect(d.place).toBeNull();
+      expect(d.goUrl).toBe("/elf/hq/door/7");
+      expect(d.scrapbook?.photos).toEqual([]);
+      // The elves stay, counted on their own.
+      expect(d.scrapbook?.elves).toEqual(BOOK.elves);
+      expect(d.scrapbook?.count).toBe(2);
+      const text = JSON.stringify(d);
+      for (const secret of ["Bakehouse", "Snowford", "/photo/", "tok1"]) expect(text, now.toISOString()).not.toContain(secret);
+    }
+  });
+
+  it("does the same for a door shown with nobody found", () => {
+    const d = shared7(at("2026-12-07T20:05:00Z"), CORNER);
+    expect(d.state).toBe("revealed");
+    expect(d.place).toBeNull();
+    expect(d.goUrl).toBe("/elf/hq/door/7");
+    expect(d.scrapbook?.photos).toEqual([]);
+    for (const secret of ["Bakehouse", "Snowford", "/photo/"]) expect(JSON.stringify(d)).not.toContain(secret);
+  });
+
+  it("gives an open door its place and its scrapbook as given, photos and all, and no go page, from Christmas Day until 1 January", () => {
+    for (const now of [at("2026-12-25T00:00:00Z"), at("2026-12-31T23:59:59Z")]) {
+      const d = shared7(now);
+      expect(d.place, now.toISOString()).toEqual({ name: "Corner Bakehouse", town: "Snowford" });
+      expect(d.goUrl).toBeNull();
+      expect(d.scrapbook).toBe(BOOK);
+    }
+  });
+
+  it("takes the place and the photos off again from 1 January, and offers no go", () => {
+    const d = shared7(at("2027-01-01T00:00:00Z"));
+    expect(d.state).toBe("found");
+    expect(d.place).toBeNull();
+    expect(d.goUrl).toBeNull();
+    expect(d.scrapbook?.photos).toEqual([]);
+  });
+
+  it("offers no go at a door that is not open: found with its place hidden, snowed in, hunted or shut", () => {
+    expect(shared7(SIX_45, { ...CORNER, foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 })).toMatchObject({ state: "found-hidden", goUrl: null, place: null });
+    expect(shared7(SIX_10, { ...CORNER, snowDayAt: at("2026-12-07T17:30:00Z") })).toMatchObject({ state: "snow", goUrl: null });
+    expect(shared7(SIX_10, CORNER)).toMatchObject({ state: "hunting", goUrl: null });
+    expect(shared7(at("2026-12-07T17:00:00Z"), CORNER)).toMatchObject({ state: "shut", goUrl: null });
+  });
+
+  // The spec: nothing worked out from the place either. The view is the same whatever the place is called.
+  it("is the same whatever the place is called, so nothing on it can be worked out from the place", () => {
+    const elsewhere = { ...FOUND_AT_547, placeName: "Mistletoe Mill", placeTown: "Exampleton", names: [] };
+    expect(shared7(SEVEN_05, elsewhere)).toEqual(shared7(SEVEN_05));
+  });
+});
+
+// Plan 2c-1, Task 4: a family's own door, which the family's own route draws for a family that can see the
+// place (Task 5): the shared door with the place, its elves and the door's photos, and no go page.
+describe("a family's own door", () => {
+  const photos = [
+    { token: "zz9photo", url: "/elf/door/7/photo/zz9photo.jpg" },
+    { token: "aa1photo", url: "/elf/door/7/photo/aa1photo.jpg" },
+  ];
+  const mine = { place: { name: "Corner Bakehouse", town: "Snowford" }, photos };
+
+  it("is the shared door with its place, its elves and the photos sorted by token and counted with them, and no go page", () => {
+    const shared = shared7(SEVEN_05);
+    const d = familyDoorView(shared, mine);
+    expect(d.place).toEqual({ name: "Corner Bakehouse", town: "Snowford" });
+    expect(d.scrapbook?.elves).toEqual(BOOK.elves);
+    expect(d.scrapbook?.photos).toEqual([photos[1], photos[0]]);
+    expect(d.scrapbook?.count).toBe(BOOK.elves.length + 2);
+    expect(d.goUrl).toBeNull();
+    // Everything else is the shared door's, and nothing given is changed.
+    expect({ ...d, place: shared.place, scrapbook: shared.scrapbook, goUrl: shared.goUrl }).toEqual(shared);
+    expect(photos.map((p) => p.token)).toEqual(["zz9photo", "aa1photo"]);
+  });
+
+  // From Christmas Day the shared door holds the photos too: the family's own door takes them from `mine`
+  // alone, so none is shown twice.
+  it("takes only the shared door's elves, so from Christmas Day no photo is shown twice", () => {
+    const christmas = shared7(at("2026-12-25T00:00:00Z"));
+    expect(christmas.scrapbook?.photos.length).toBe(1);
+    const d = familyDoorView(christmas, mine);
+    expect(d.scrapbook?.photos).toEqual([photos[1], photos[0]]);
+    expect(d.scrapbook?.count).toBe(BOOK.elves.length + 2);
+  });
+
+  it("gives back a door that is not open as it was", () => {
+    const hidden = shared7(SIX_45, { ...CORNER, foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 });
+    expect(hidden.state).toBe("found-hidden");
+    expect(familyDoorView(hidden, mine)).toBe(hidden);
+  });
+});
+
+// Plan 2c-1, Task 6: having a go at a missed door, on its own page in Detective HQ. Door 7 is found at 5:47pm
+// on Monday 7 December and its place shown at 7pm; the place closes at 8pm (typed as "20:00"). Its run holds
+// the place every time, so each test that says the place is not in the view fails if it leaks.
+describe("the go page's view", () => {
+  const CLOSING: Partial<DoorSetup> = { ...FOUND_AT_547, closesAt: "20:00" };
+  const PLACE = { name: "Corner Bakehouse", town: "Snowford" };
+  const go7 = (now: Date, o: { guess?: SavedGuess | null; typed?: boolean; cluesShown?: number; finders?: DetectiveNameParts[]; over?: Partial<DoorSetup> } = {}) =>
+    goViewFor({ run: run(7, now, { ...CLOSING, ...o.over }), now, guess: o.guess ?? null, typed: o.typed ?? false, finders: o.finders ?? [RUBY], cluesShown: o.cluesShown ?? 1 });
+  /** A go, made at 7:05pm unless told otherwise: one guess, once the place was shown. */
+  const go = (text: string, made = SEVEN_05): SavedGuess => ({ text, norm: normalisePlaceName(text), at: made, late: true });
+  /** The practice door (year 0, door 0) on door 7's evening. */
+  const practice = (now: Date): DoorRun => ({ ...run(7, now, CLOSING), year: 0, door: 0, closesAt: null });
+
+  it("offers a family that missed the evening its go: clue 1, the link to the next, and the closing time", () => {
+    const v = go7(SEVEN_05);
+    expect(v.stage).toBe("go");
+    expect(v).toMatchObject({ door: 7, practice: false, elfName: "Bauble", formUrl: "/elf/hq/door/7/go", hqUrl: "/elf/hq", guessError: null, outcome: null });
+    expect(v.clues.map((c) => c.n)).toEqual([1]);
+    expect(v.clues[0].words).toBe("Practice clue 1: it lives where the kettle lives");
+    expect(v.nextUrl).toBe("/elf/hq/door/7?clues=2");
+    expect(v.closesAt?.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+    expect(v.day.toISOString()).toBe("2026-12-07T17:30:00.000Z");
+    expect(v.found).toEqual({ at: at("2026-12-07T17:47:00Z"), by: "Detective R. Tinselfoot" });
+    expect(v.stillHiding).toBe(false);
+    const text = JSON.stringify(v);
+    for (const secret of ["Corner Bakehouse", "Snowford", "The Bakehouse"]) expect(text).not.toContain(secret);
+  });
+
+  it("shows the clues asked for, held to 1 to 3, with the next clue's link until all three show", () => {
+    const three = go7(SEVEN_05, { cluesShown: 3 });
+    expect(three.clues.map((c) => c.n)).toEqual([1, 2, 3]);
+    expect(three.nextUrl).toBeNull();
+    expect(go7(SEVEN_05, { cluesShown: 2 })).toMatchObject({ nextUrl: "/elf/hq/door/7?clues=3" });
+    expect(go7(SEVEN_05, { cluesShown: 2 }).clues.map((c) => c.n)).toEqual([1, 2]);
+    expect(go7(SEVEN_05, { cluesShown: 9 }).clues.map((c) => c.n)).toEqual([1, 2, 3]);
+    for (const odd of [0, -2, 1.5, Number.NaN]) expect(go7(SEVEN_05, { cluesShown: odd }).clues.map((c) => c.n), String(odd)).toEqual([1]);
+  });
+
+  // Ruling F11: one clue mapper, the one Detective HQ's case uses, so a picture is served by its own address.
+  it("draws each clue as Detective HQ's case does, its picture and all", () => {
+    const three = go7(SEVEN_05, { cluesShown: 3 });
+    expect(three.clues[1]).toMatchObject({ n: 2, pictureUrl: "/elf/hq/clue/7/2.jpg", pictureAlt: "A pretend picture" });
+    const today = hq({ now: SEVEN_05, runs: { runs: withDoor7(SEVEN_05, CLOSING), practice: null } }).today!;
+    expect(three.clues).toEqual(today.clues);
+  });
+
+  it("offers no next clue that is not there: a door with clue 1 only shows it alone", () => {
+    const one = go7(SEVEN_05, { cluesShown: 1, over: { clues: [setup(7).clues[0]] } });
+    expect(one.clues.map((c) => c.n)).toEqual([1]);
+    expect(one.nextUrl).toBeNull();
+  });
+
+  it("says when the hiding place closes only on the door's own day", () => {
+    expect(go7(at("2026-12-08T10:00:00Z")).closesAt).toBeNull();
+    expect(go7(SEVEN_05, { over: { closesAt: null } }).closesAt).toBeNull();
+  });
+
+  it("is done once the family has had its go: cracked, with no clues and no next link", () => {
+    const v = go7(SEVEN_05, { guess: go("the bakehouse") });
+    expect(v.stage).toBe("done");
+    expect(v.clues).toEqual([]);
+    expect(v.nextUrl).toBeNull();
+    expect(v.outcome).toEqual({ verdict: "cracked", place: PLACE, stillHiding: false, goneHome: false, visited: false });
+  });
+
+  it("says wrong for any other guess, and cracked for a right guess saved on the night", () => {
+    expect(go7(SEVEN_05, { guess: go("the toy shop") })).toMatchObject({ stage: "done", outcome: { verdict: "wrong", place: PLACE } });
+    const night: SavedGuess = { text: "Corner Bakehouse", norm: normalisePlaceName("Corner Bakehouse"), at: at("2026-12-07T18:40:00Z"), late: false };
+    expect(go7(SEVEN_05, { guess: night })).toMatchObject({ stage: "done", outcome: { verdict: "cracked" } });
+  });
+
+  it("is done for a family whose detective typed the tag word: no verdict, and visited", () => {
+    const v = go7(SEVEN_05, { typed: true });
+    expect(v.stage).toBe("done");
+    expect(v.outcome).toEqual({ verdict: "none", place: PLACE, stillHiding: false, goneHome: false, visited: true });
+  });
+
+  it("is closed from midnight as Christmas Day begins, with the place for everyone until 1 January", () => {
+    const christmas = go7(at("2026-12-25T00:00:00Z"));
+    expect(christmas.stage).toBe("closed");
+    expect(christmas.clues).toEqual([]);
+    expect(christmas.outcome).toEqual({ verdict: "none", place: PLACE, stillHiding: false, goneHome: false, visited: false });
+    const newYear = go7(at("2027-01-01T00:00:00Z"));
+    expect(newYear.stage).toBe("closed");
+    expect(newYear.outcome).toBeNull();
+    expect(JSON.stringify(newYear)).not.toContain("Corner Bakehouse");
+    // A family that has had its guess still sees how it went.
+    expect(go7(at("2027-01-01T00:00:00Z"), { guess: go("the bakehouse") })).toMatchObject({ stage: "done", outcome: { verdict: "cracked" } });
+  });
+
+  // Ruling F8: the elf is still hiding only at a door shown with nobody found, and only until it goes home.
+  it("knows the elf is still hiding at a door shown with nobody found, until it has gone home", () => {
+    const unfound = { foundAt: null, foundFamilyId: null };
+    const hiding = go7(at("2026-12-07T20:05:00Z"), { over: unfound });
+    expect(hiding).toMatchObject({ stage: "go", stillHiding: true, found: null });
+    expect(go7(at("2026-12-07T20:05:00Z"), { over: unfound, typed: true }).outcome).toMatchObject({ stillHiding: true, goneHome: false });
+    const home = { ...unfound, goneHomeAt: at("2026-12-07T20:01:00Z") };
+    expect(go7(at("2026-12-07T20:05:00Z"), { over: home })).toMatchObject({ stage: "go", stillHiding: false });
+    expect(go7(at("2026-12-07T20:05:00Z"), { over: home, typed: true }).outcome).toMatchObject({ stillHiding: false, goneHome: true });
+  });
+
+  it("says A detective when a found elf has no finder rows, never a name", () => {
+    expect(go7(SEVEN_05, { finders: [] }).found?.by).toBe("A detective");
+  });
+
+  it("names no finder before the moment of the find", () => {
+    expect(go7(SIX_10, { over: { foundAt: at("2026-12-07T18:40:00Z") } }).found).toBeNull();
+  });
+
+  // Rulings on Plan 2c-1, the notes for every task that shows a place: the one rule is asked only of an open door.
+  it("never gives the place before the door opens, even to the family whose detective typed the tag word", () => {
+    const v = go7(SIX_45, { typed: true, guess: go("the bakehouse", SIX_10) });
+    expect(v.stage).toBe("closed");
+    expect(v.outcome).toBeNull();
+    expect(v.clues).toEqual([]);
+    expect(JSON.stringify(v)).not.toContain("Corner Bakehouse");
+  });
+
+  it("never tells the place of a door that did not open, even from Christmas Day: a snowed in door keeps it", () => {
+    const snowed = go7(at("2026-12-25T00:00:00Z"), { over: { foundAt: null, foundFamilyId: null, snowDayAt: at("2026-12-07T17:30:00Z") } });
+    expect(snowed).toMatchObject({ stage: "closed", outcome: null });
+    expect(JSON.stringify(snowed)).not.toContain("Corner Bakehouse");
+  });
+
+  it("gives an open door with no place no outcome", () => {
+    expect(go7(SEVEN_05, { typed: true, over: { placeName: null, placeTown: null } }).outcome).toBeNull();
+  });
+
+  it("carries the words of a go refused from the form with no script", () => {
+    const v = goViewFor({ run: run(7, SEVEN_05, CLOSING), now: SEVEN_05, guess: null, typed: false, finders: [], cluesShown: 2, guessError: "That is a bit long." });
+    expect(v.guessError).toBe("That is a bit long.");
+  });
+
+  it("plays the practice door as door 0, whose go never closes, with no pictures and no closing time", () => {
+    const v = goViewFor({ run: practice(SEVEN_05), now: SEVEN_05, guess: null, typed: false, finders: [], cluesShown: 3 });
+    expect(v).toMatchObject({ door: 0, practice: true, stage: "go", formUrl: "/elf/hq/door/0/go", closesAt: null });
+    expect(v.clues.map((c) => c.pictureUrl)).toEqual([null, null, null]);
+    expect(goViewFor({ run: practice(SEVEN_05), now: SEVEN_05, guess: null, typed: false, finders: [], cluesShown: 1 }).nextUrl).toBe("/elf/hq/door/0?clues=2");
+    const christmas = at("2026-12-25T00:00:00Z");
+    expect(goViewFor({ run: practice(christmas), now: christmas, guess: null, typed: false, finders: [], cluesShown: 1 }).stage).toBe("go");
+    // As Detective HQ's case, the practice door names no finder, whatever it is handed.
+    expect(goViewFor({ run: practice(SEVEN_05), now: SEVEN_05, guess: null, typed: false, finders: [RUBY], cluesShown: 1 }).found?.by).toBe("A detective");
+  });
+
+  // Rulings on Plan 2c-1, from Task 6's review: once the elf has gone home unfound the page says nobody found
+  // it, with no "yet", so the view says whether it has gone home; and no closing time is said after then.
+  it("says whether the elf has gone home, and gives no closing time once it has", () => {
+    expect(go7(SEVEN_05).goneHome).toBe(false);
+    const SEVEN_30 = at("2026-12-07T19:30:00Z");
+    expect(go7(SEVEN_30, { over: { goneHomeAt: at("2026-12-07T19:20:00Z") } })).toMatchObject({ goneHome: true, closesAt: null });
+    const unfound = { foundAt: null, foundFamilyId: null, goneHomeAt: at("2026-12-07T20:01:00Z") };
+    expect(go7(at("2026-12-07T20:05:00Z"), { over: unfound })).toMatchObject({ found: null, stillHiding: false, goneHome: true });
+  });
+});
+
+// Plan 2c-1, Task 7: Detective HQ catches up. At 7:05pm on Monday 7 December, door 7, found at 5:47pm, has had
+// its place shown since 7pm, and the place closes at 8pm (typed as "20:00"). Doors 3 and 5 were found on their
+// days and are open; doors 4 and 6 were snowed in. Every run holds its place, so each test that says the
+// place is not in the view fails if it leaks.
+const DOOR7_CLOSING: Partial<DoorSetup> = { ...FOUND_AT_547, closesAt: "20:00" };
+/** The doors at `now`: 3 and 5 found and open, 4 and 6 snowed in, 7 as given (found at 5:47pm and closing
+ *  at 8pm unless told otherwise), and the rest wave 1's. */
+function catchUpDoors(now: Date, seven: Partial<DoorSetup> = DOOR7_CLOSING): DoorRun[] {
+  const wave = WAVE_ONE(now);
+  return [
+    wave[0],
+    wave[1],
+    run(3, now, { ...CORNER, elfName: "Pudding", foundAt: at("2026-12-03T18:10:00Z"), foundFamilyId: 4 }),
+    run(4, now, { snowDayAt: at("2026-12-04T17:30:00Z") }),
+    run(5, now, { ...CORNER, elfName: "Sprout", foundAt: at("2026-12-05T11:10:00Z"), foundFamilyId: 4 }),
+    run(6, now, { snowDayAt: at("2026-12-06T10:00:00Z") }),
+    run(7, now, seven),
+    ...wave.slice(7),
+  ];
+}
+/** A guess saved on the night, or a go (`late`). */
+const saved = (text: string, made: Date, late = false): SavedGuess => ({ text, norm: normalisePlaceName(text), at: made, late });
+
+describe("Detective HQ catching up", () => {
+  const hq7 = (o: { now?: Date; guesses?: [number, SavedGuess][]; typed?: number[]; seven?: Partial<DoorSetup>; settings?: typeof SETTINGS } = {}) => {
+    const now = o.now ?? SEVEN_05;
+    return hq({
+      now,
+      runs: { runs: catchUpDoors(now, o.seven), practice: null },
+      guesses: new Map(o.guesses ?? []),
+      typed: new Set(o.typed ?? []),
+      ...(o.settings ? { settings: o.settings } : {}),
+    });
+  };
+
+  it("offers a family that has neither guessed nor been to today's door its go, with no outcome, and says when the place closes", () => {
+    const today = hq7().today!;
+    expect(today).toMatchObject({ door: 7, state: "found", canGuess: false, outcome: null, goUrl: "/elf/hq/door/7" });
+    expect(today.closesAt?.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+    for (const secret of ["Corner Bakehouse", "Snowford", "The Bakehouse"]) expect(JSON.stringify(today)).not.toContain(secret);
+  });
+
+  it("tells a family that guessed on the night how it went, and offers no go", () => {
+    const today = hq7({ guesses: [[7, saved("the bakehouse", at("2026-12-07T18:40:00Z"))]] }).today!;
+    expect(today.outcome).toMatchObject({ place: "Corner Bakehouse", cracked: true });
+    expect(today.goUrl).toBeNull();
+    expect(today.closesAt?.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+  });
+
+  it("tells a family whose detective typed the tag word where the elf was, and offers no go", () => {
+    const today = hq7({ typed: [7] }).today!;
+    expect(today.outcome).toMatchObject({ place: "Corner Bakehouse", cracked: false });
+    expect(today.goUrl).toBeNull();
+  });
+
+  it("says a go at today's door cracked the case once the family has had it", () => {
+    const today = hq7({ guesses: [[7, saved("the bakehouse", SEVEN_05, true)]] }).today!;
+    expect(today.outcome?.cracked).toBe(true);
+    expect(today.goUrl).toBeNull();
+  });
+
+  // Rulings on Plan 2c-1, the notes for every task that shows a place: the one rule is asked only of an open door.
+  it("never gives the place before the door opens, even to the family whose detective found the elf", () => {
+    const today = hq7({ now: SIX_45, typed: [7], guesses: [[7, saved("the bakehouse", SIX_10)]], seven: { ...DOOR7_CLOSING, foundAt: at("2026-12-07T18:40:00Z") } }).today!;
+    expect(today.state).toBe("found-hidden");
+    expect(today.outcome).toBeNull();
+    expect(today.goUrl).toBeNull();
+    expect(JSON.stringify(today)).not.toContain("Corner Bakehouse");
+  });
+
+  it("still offers the go once the elf has gone home, with no closing time", () => {
+    const today = hq7({ seven: { ...DOOR7_CLOSING, goneHomeAt: at("2026-12-07T19:02:00Z") } }).today!;
+    expect(today).toMatchObject({ goUrl: "/elf/hq/door/7", closesAt: null, outcome: null });
+  });
+
+  // Task 9, fix round 1 (the review's Minor 1): whether a family may find out later than the reveal is the run's
+  // own: while the elf is hunted and the place closes after the reveal (its typed closing, or the 8pm a door
+  // falls back to). Never the closing time HQ shows, which is gone once it has passed.
+  it("says the place may be shown later than the reveal only while the elf is hunted and the place closes after it", () => {
+    const hunting = (closesAt: string | null, now = SIX_45) => hq7({ now, seven: { ...CORNER, closesAt } }).today!;
+    expect(hunting("20:00").mayShowLater).toBe(true);
+    // The 8pm a door falls back to, with no closing time typed (ruling F13).
+    expect(hunting(null).mayShowLater).toBe(true);
+    expect(hunting("19:00").mayShowLater).toBe(false);
+    expect(hunting("18:45", at("2026-12-07T18:50:00Z")).mayShowLater).toBe(false);
+    const found = hq7({ now: SIX_10, seven: { ...CORNER, closesAt: "20:00", foundAt: at("2026-12-07T18:05:00Z"), foundFamilyId: 3 } }).today!;
+    expect(found).toMatchObject({ state: "found-hidden", mayShowLater: false });
+  });
+
+  // Fix round 1 (the ruling on the ladder's sibling line): once the reveal time has passed with the elf still
+  // hiding, its place is shown when it is found or at the place's closing, typed or the 8pm fallback.
+  it("gives the latest the place is shown while the elf is hunted, and says it once the reveal has passed", () => {
+    const latest = (closesAt: string | null, now: Date) => hq7({ now, seven: { ...CORNER, closesAt } }).today!.shownBy?.toISOString() ?? null;
+    expect(latest("20:30", SEVEN_05)).toBe("2026-12-07T20:30:00.000Z");
+    expect(latest(null, SEVEN_05)).toBe("2026-12-07T20:00:00.000Z");
+    // Before the reveal, an unfound elf's place is shown at the reveal at the latest when the place closes first.
+    expect(latest("18:45", at("2026-12-07T18:50:00Z"))).toBe("2026-12-07T19:00:00.000Z");
+    expect(hq7({ now: SIX_10, seven: { ...CORNER, foundAt: at("2026-12-07T18:05:00Z"), foundFamilyId: 3 } }).today!.shownBy).toBeNull();
+    expect(hq7().today!.shownBy).toBeNull();
+    const page = renderHqPage(hq7({ now: SEVEN_05, seven: { ...CORNER, closesAt: null } }));
+    expect(page).toContain("You find out whether you cracked it as soon as the elf is found, or at 8pm at the latest.");
+  });
+
+  // The whole-branch review, Important 1: a closing typed at or before clue 1 is read as that time the next day
+  // (closingInstant), so it is never the latest a family finds out today. HQ names a latest only when it falls on
+  // the door's own day; otherwise the sentence ends at "found".
+  it("names no latest when the closing typed falls on the next day, a 5pm closing with a 5:30pm clue", () => {
+    const view = hq7({ now: at("2026-12-07T19:15:00Z"), seven: { ...CORNER, closesAt: "17:00" } });
+    expect(view.today).toMatchObject({ state: "hunting", shownBy: null });
+    const page = renderHqPage(view);
+    expect(page).toContain("You find out whether you cracked it as soon as the elf is found.");
+    expect(page).not.toContain("at the latest");
+  });
+
+  it("says only the reveal's time between a closing typed before the reveal and the reveal", () => {
+    const view = hq7({ now: at("2026-12-07T18:50:00Z"), seven: { ...CORNER, closesAt: "18:45" } });
+    expect(view.today).toMatchObject({ state: "hunting", closesAt: null });
+    const page = renderHqPage(view);
+    expect(page).toContain("You find out whether you cracked it at 7pm.");
+    expect(page).not.toContain("or later if the elf is still hiding then");
+  });
+
+  // Task 9, from Task 7's review: the case knows when the elf has gone home, so it never promises the prize or a
+  // visit then.
+  it("says whether today's elf has gone home", () => {
+    expect(hq7().today!.goneHome).toBe(false);
+    const gone = hq7({ guesses: [[7, saved("the bakehouse", at("2026-12-07T18:40:00Z"))]], seven: { ...DOOR7_CLOSING, goneHomeAt: at("2026-12-07T19:02:00Z") } }).today!;
+    expect(gone).toMatchObject({ goneHome: true, outcome: { place: "Corner Bakehouse", cracked: true } });
+  });
+
+  it("offers the practice door's go, once its place is shown, to a family that has not guessed it", () => {
+    const practice: DoorRun = { ...run(7, SEVEN_05, DOOR7_CLOSING), year: 0, door: 0, closesAt: null };
+    const view = hq({ now: SEVEN_05, runs: { runs: catchUpDoors(SEVEN_05), practice } });
+    expect(view.today).toMatchObject({ door: 0, practice: true, outcome: null, goUrl: "/elf/hq/door/0", closesAt: null });
+    const guessed = hq({ now: SEVEN_05, runs: { runs: catchUpDoors(SEVEN_05), practice }, guesses: new Map([[0, saved("the bakehouse", SIX_10)]]) });
+    expect(guessed.today).toMatchObject({ goUrl: null, outcome: { cracked: true } });
+  });
+
+  it("lists the other doors the family can still crack, newest first, each with its day, elf and go page, but not today's", () => {
+    const view = hq7();
+    expect(view.toCrack).toEqual([
+      { door: 5, elfName: "Sprout", clueAt: at("2026-12-05T10:00:00Z"), url: "/elf/hq/door/5" },
+      { door: 3, elfName: "Pudding", clueAt: at("2026-12-03T17:30:00Z"), url: "/elf/hq/door/3" },
+    ]);
+    for (const secret of ["Corner Bakehouse", "Snowford"]) expect(JSON.stringify(view.toCrack)).not.toContain(secret);
+  });
+
+  it("leaves a door off the list once the family has guessed it, rightly or wrongly, or been there", () => {
+    expect(hq7({ guesses: [[5, saved("the toy shop", at("2026-12-05T10:40:00Z"))]] }).toCrack.map((d) => d.door)).toEqual([3]);
+    expect(hq7({ typed: [3] }).toCrack.map((d) => d.door)).toEqual([5]);
+  });
+
+  // Ruling F9: the list leaves out only the door today's case shows.
+  it("keeps today's real door on the list while today's case is the practice door", () => {
+    const practice: DoorRun = { ...run(7, SEVEN_05, DOOR7_CLOSING), year: 0, door: 0, closesAt: null };
+    expect(hq({ now: SEVEN_05, runs: { runs: catchUpDoors(SEVEN_05), practice } }).toCrack.map((d) => d.door)).toEqual([7, 5, 3]);
+  });
+
+  it("lists no door from midnight as Christmas Day begins", () => {
+    expect(hq7({ now: at("2026-12-25T00:00:00Z") }).toCrack).toEqual([]);
+  });
+
+  // Review Focus 5: with December's doors off, Detective HQ is exactly today's.
+  it("lists nothing, and the page says nothing new, with December's doors off", () => {
+    const off = hq7({ settings: { ...SETTINGS, doorsOn: false } });
+    expect(off.today).toBeNull();
+    expect(off.toCrack).toEqual([]);
+    const page = renderHqPage(off);
+    for (const words of ["Doors you can still crack", "Have a go", "closes at"]) expect(page).not.toContain(words);
+  });
+});
+
+// Ruling F7: a missed door's costume says "Crack it in Detective HQ to catch up" only while the family can still
+// crack that door, so never at a door it guessed wrongly, nor at any door from Christmas Day.
+describe("the wardrobe's doors still to crack", () => {
+  const ON = { ...SETTINGS, doorsOn: true };
+  const crackable = (o: { now?: Date; knowledge?: FamilyKnowledge; settings?: typeof SETTINGS } = {}) => {
+    const now = o.now ?? SEVEN_05;
+    return wardrobeViewFor({ detective: FAMILY.detectives[0], settings: o.settings ?? ON, now, doorsDone: EMPTY_DONE, runs: catchUpDoors(now), knowledge: o.knowledge ?? NOTHING_DONE }).crackable;
+  };
+
+  it("are the doors the family may still have a go at, newest first", () => {
+    expect(crackable()).toEqual([7, 5, 3]);
+  });
+
+  it("leave out a door the family guessed, even wrongly, and one it has been to", () => {
+    expect(crackable({ knowledge: { guesses: new Map([[5, saved("the toy shop", at("2026-12-05T10:40:00Z"))]]), typed: new Set([3]) } })).toEqual([7]);
+  });
+
+  it("are none from midnight as Christmas Day begins", () => {
+    expect(crackable({ now: at("2026-12-25T00:00:00Z") })).toEqual([]);
+  });
+
+  it("are none with December's doors off", () => {
+    expect(crackable({ settings: SETTINGS })).toEqual([]);
   });
 });
 
@@ -389,11 +858,12 @@ describe("Detective HQ in the evening", () => {
     expect(today.outcome).toBeNull();
   });
 
-  // Final review, Important 2: an unfound door's place is shown at its closing time, which would tell a
-  // family how late the place is open (a hint) and is wrong once the elf is found. So HQ says the staff
-  // reveal time until it passes, then nothing (the page says "as soon as the elf is found"); a find
-  // before the reveal keeps the real shown time. The place closes at 8:30pm here.
-  it("gives the staff reveal time before it, none after it while the elf hides, and never the closing time", () => {
+  // Final review, Important 2: an unfound door's place is shown at its closing time, which is wrong as the
+  // reveal once the elf is found. So HQ says the staff reveal time until it passes, then nothing (the page
+  // says "as soon as the elf is found"); a find before the reveal keeps the real shown time. The spec's
+  // answer 5 (Plan 2c-1) tells a family when the place closes, but on its own, through closesAt, on the
+  // door's own day: never as when the place is shown. The place closes at 8:30pm here.
+  it("gives the staff reveal time before it and none after it while the elf hides, never the closing time as the reveal, and the closing time on its own", () => {
     const closing = { closesAt: "20:30" };
     const hunting = (now: Date) => hq({ now, runs: { runs: withDoor7(now, closing), practice: null } }).today!;
     expect(hunting(at("2026-12-07T18:45:00Z"))).toMatchObject({ state: "hunting", nextClueAt: null });
@@ -405,9 +875,16 @@ describe("Detective HQ in the evening", () => {
     const foundHidden = hq({ now: SIX_45, runs: { runs: withDoor7(SIX_45, { ...closing, foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 }), practice: null } }).today!;
     expect(foundHidden.state).toBe("found-hidden");
     expect(foundHidden.revealAt?.toISOString()).toBe("2026-12-07T19:00:00.000Z");
+    expect(foundHidden.closesAt?.toISOString()).toBe("2026-12-07T20:30:00.000Z");
     for (const now of [SIX_10, SIX_45, at("2026-12-07T19:00:00Z"), SEVEN_30, at("2026-12-07T20:15:00Z")]) {
-      expect(JSON.stringify(hunting(now))).not.toContain("2026-12-07T20:30:00.000Z");
+      expect(hunting(now).revealAt?.toISOString(), now.toISOString()).not.toBe("2026-12-07T20:30:00.000Z");
+      expect(hunting(now).closesAt?.toISOString(), now.toISOString()).toBe("2026-12-07T20:30:00.000Z");
     }
+    // Not before clue 1, and not once the place has closed.
+    expect(hunting(at("2026-12-07T17:00:00Z")).closesAt).toBeNull();
+    expect(hunting(at("2026-12-07T20:30:00Z")).closesAt).toBeNull();
+    // Never the 8pm a door falls back to with no closing time typed.
+    expect(hq({ now: SIX_10, runs: { runs: withDoor7(SIX_10), practice: null } }).today!.closesAt).toBeNull();
   });
 
   it("keeps the same rule for the practice door, which closes an hour after its reveal", () => {

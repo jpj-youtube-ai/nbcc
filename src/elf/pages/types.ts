@@ -35,7 +35,9 @@ export interface DoorView {
   /** The name of this door's elf. */
   elfName: string;
   /** Where it was hiding. Null until the door is open. The screens also refuse to show it before
-   *  then, whatever is passed in: two locks on the one secret. */
+   *  then, whatever is passed in: two locks on the one secret. On the calendar everyone shares it is
+   *  set only from Christmas Day until 1 January (placesPublic in src/elf/catch-up.ts); a family that
+   *  can see the place gets its own door with it (familyDoorView in src/elf/views.ts). */
   place: { name: string; town: string } | null;
   /** Who found it, from the moment it is found (even while the place is still hidden), else null.
    *  `by` is PUBLIC: it MUST come from detectiveNames in src/elf/names.ts, which shows a first name
@@ -45,7 +47,9 @@ export interface DoorView {
   revealAt: Date | null;
   /** How many families cracked it and how many families have visited. Null until the door is open. */
   counts: { cracked: number; visited: number } | null;
-  /** The elves and photos on the door. Null until the door is open. */
+  /** The elves and photos on the door. Null until the door is open. On the calendar everyone shares it
+   *  holds the elves only, counted on their own, until Christmas Day, and the photos too from then until
+   *  1 January: a photo can show the inside of the place. */
   scrapbook: Scrapbook | null;
   /** The door tile's mini collage: elf pictures only, never a photo. Empty until the door is open. */
   collage: string[];
@@ -56,6 +60,10 @@ export interface DoorView {
   /** Are December's doors on? Off, the door reads exactly as wave 1's did, today's door's words among
    *  it: no new words go live with the doors off. */
   doorsOn: boolean;
+  /** Where to have a go at this door in Detective HQ: `/elf/hq/door/${n}` on an open door while having a
+   *  go is open (until Christmas Day), the same for every visitor; null otherwise, and on a family's own
+   *  door, whose family can see the place. */
+  goUrl: string | null;
 }
 
 export interface CalendarView {
@@ -111,8 +119,10 @@ export interface TodayView {
   nextClueAt: Date | null;
   /** When the place is shown, when that can be said: the staff reveal time while the hunt is on before
    *  it, and the real time once the elf is found before it. Null once the reveal time has passed with
-   *  the elf still hiding (the place is then shown as soon as it is found), and once the door is open.
-   *  Never the place's closing time. */
+   *  the elf still hiding (the place is then shown as soon as it is found, or at its closing at the latest:
+   *  shownBy below), and once the door is open.
+   *  Never the place's closing time as when the place is shown: when the place closes is said on its own,
+   *  through closesAt. */
   revealAt: Date | null;
   /** The guess the family typed, as typed, or null. */
   guess: { text: string; at: Date } | null;
@@ -121,10 +131,74 @@ export interface TodayView {
   /** Why the guess just typed was not taken, when it came from the form with no script; null otherwise.
    *  Drawn in the guess form's status line. */
   guessError: string | null;
-  /** How it ended, once the door is open: where the elf was, who found it (nobody yet for a revealed
-   *  door), and whether this family cracked the case. `by` names ANOTHER family's detectives, so
-   *  it is public too: it MUST come from detectiveNames, like DoorView.found.by. */
+  /** How it ended, once the door is open and the family can see the place (the one rule, knowsPlace in
+   *  src/elf/catch-up.ts: it has a guess at the door, or one of its detectives typed the tag word): where
+   *  the elf was, who found it (nobody yet for a revealed door), and whether this family cracked the case.
+   *  Null otherwise, so a go at today's door can never be cracked by reading Detective HQ. `by` names
+   *  ANOTHER family's detectives, so it is public too: it MUST come from detectiveNames, like
+   *  DoorView.found.by. */
   outcome: { place: string; by: string | null; at: Date | null; cracked: boolean } | null;
+  /** Where the family has its one go at this door (the go page, `/elf/hq/door/${n}`), while it may have
+   *  one (mayHaveAGo in src/elf/catch-up.ts): the door is open and the family has neither guessed it nor
+   *  been there. Null otherwise. */
+  goUrl: string | null;
+  /** On the door's own day, when its hiding place closes, until then (closingShown in
+   *  src/elf/catch-up.ts); null otherwise. */
+  closesAt: Date | null;
+  /** Has the door's elf gone home? Then it can no longer be found and its place no longer visited, so the case
+   *  says where the elf was hiding, with no prize to win and no visit to make, and never that it is still out
+   *  there. */
+  goneHome: boolean;
+  /** May the place be shown later than the reveal time? Only while the elf is still hunted and the place closes
+   *  after the reveal: the run's own closing, the one typed in Doors or the 8pm a door falls back to (shownAt in
+   *  src/elf/doors.ts). Never worked out from closesAt above, which is gone once a typed closing has passed. */
+  mayShowLater: boolean;
+  /** While the elf is still hunted, the latest its place is shown: when it would be with the elf never found, at
+   *  the reveal or at the place's closing (typed in Doors, or the 8pm a door falls back to), whichever is later.
+   *  Only when that falls on the door's own day: a closing typed at or before clue 1 counts as the next day's, so
+   *  it is null then, as it is otherwise. Once the reveal time has passed, Detective HQ says it as the latest a
+   *  family finds out. */
+  shownBy: Date | null;
+}
+
+/** A door's page in Detective HQ for having a go (Plan 2c-1): a family that missed a door's evening
+ *  cracks it later, from home, with the same clues and one guess. The family's own: it is private. */
+export interface GoView {
+  /** 1 to 24, or 0 for the practice door. */
+  door: Door | 0;
+  practice: boolean;
+  elfName: string;
+  /** When the door's clues came out: the calendar's clue 1 time (DoorRun.calendarAt). */
+  day: Date;
+  /** Who found the elf, and when, once it is found; else null. `by` names ANOTHER family's detectives,
+   *  so it is public: it MUST come from detectiveNames, like DoorView.found.by. */
+  found: { at: Date; by: string } | null;
+  /** "done" once the family can see the place (the one rule: it has had its guess, or been there);
+   *  "go" while it may have its go; "closed" otherwise (from Christmas Day, having a go is closed). */
+  stage: "go" | "done" | "closed";
+  /** Is the elf still waiting at its place with nobody having found it: shown unfound, and not gone home?
+   *  Then the form asks where it is hiding, not where it was (ruling F8). */
+  stillHiding: boolean;
+  /** Has the door's elf gone home? Then a door nobody found says nobody found its elf, with no "yet". */
+  goneHome: boolean;
+  /** In "go" only: the clues the family has asked to see, clue 1 first, as Detective HQ's case draws
+   *  them. Empty in the other stages. */
+  clues: TodayView["clues"];
+  /** In "go" only: where Show me the next clue leads, while another clue is still to show; else null. */
+  nextUrl: string | null;
+  /** Where the guess form posts. */
+  formUrl: string;
+  /** Why the go sent with no script was not taken (the server's words), drawn in the form's status line;
+   *  null otherwise. */
+  guessError: string | null;
+  /** On the door's own day, when its hiding place closes, until then (closingShown in
+   *  src/elf/catch-up.ts); null otherwise. */
+  closesAt: Date | null;
+  /** How it went, once the family can see the place ("done"), and in "closed" while every place is shown
+   *  to everyone (Christmas Day until 1 January), with no verdict. Null otherwise: the place is never in
+   *  the view before then. `visited` is whether a detective of the family has typed the tag word. */
+  outcome: { verdict: "cracked" | "wrong" | "none"; place: { name: string; town: string }; stillHiding: boolean; goneHome: boolean; visited: boolean } | null;
+  hqUrl: string;
 }
 
 export interface HqView {
@@ -136,6 +210,10 @@ export interface HqView {
   today: TodayView | null;
   /** When the next clue comes out, for a day with no case of its own. */
   nextClueAt: Date | null;
+  /** The missed doors the family may still crack, newest first (doorsToCrack in src/elf/catch-up.ts): real
+   *  doors only, never the door today's case shows (ruling F9), and none while December's doors are off.
+   *  Each with its elf, when its clues came out (DoorRun.calendarAt) and its go page. */
+  toCrack: { door: Door; elfName: string; clueAt: Date; url: string }[];
   marks: FamilyMarks;
   calendarUrl: string;
   /** Where the guess form posts when there is no script. */
@@ -160,6 +238,10 @@ export interface WardrobeView {
   now: Date;
   /** Doors 1 to 24: each one's clue time (as the calendar has it) and its date, YYYY-MM-DD. */
   doorDays: { door: number; clueAt: Date; date: string }[];
+  /** The doors the family may still crack from Detective HQ (doorsToCrack in src/elf/catch-up.ts; ruling
+   *  F7): a missed door among them says to crack it there, and any other missed door to visit the place, as
+   *  before. None while December's doors are off, and none from Christmas Day. */
+  crackable: readonly number[];
   hqUrl: string;
   /** The calendar: where the school's logo in the bar leads. */
   calendarUrl: string;

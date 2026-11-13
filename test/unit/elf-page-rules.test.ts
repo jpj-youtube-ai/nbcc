@@ -89,8 +89,9 @@ describe("how the hunt works, with December's doors off and on", () => {
 
   it("says the finder wins that door's prize, the elf stays there, and one prize a family, once December's doors are on", () => {
     const on = hunt(page(true));
-    expect(on).toHaveLength(5);
-    expect(on[3]).toBe(
+    // Six since Plan 2c-1, Task 9's line on a door missed on the night, after the guess.
+    expect(on).toHaveLength(6);
+    expect(on[4]).toBe(
       "The first detective to reach the elf and type the word on its tag wins that door's prize. The elf stays there for everyone else to find. Each family can win one prize.",
     );
     expect(on.join(" ")).not.toContain("win one elf");
@@ -102,6 +103,39 @@ describe("how the hunt works, with December's doors off and on", () => {
     for (const doorsOn of [false, true]) {
       expect((page(doorsOn).querySelector("main")?.textContent ?? "").replace(/\s+/g, " ")).not.toMatch(/[‒–—―]| - /);
     }
+  });
+});
+
+// Plan 2c-1, Task 9: a family that missed a door on the night, or joined late, can still crack its case later in
+// Detective HQ, with one guess. The rules say so only once December's doors are on; with them off, both parts
+// read exactly as they do today (Review Focus 5).
+describe("catching up on a missed door, with December's doors off and on", () => {
+  const page = (doorsOn: boolean) =>
+    new DOMParser().parseFromString(renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true, doorsOn } }), "text/html");
+  const hunt = (d: Document) =>
+    [...d.querySelectorAll('[aria-labelledby="elf-rules-how"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim());
+  const prize = (d: Document) => (d.querySelector('[aria-labelledby="elf-rules-prize"]')?.textContent ?? "").replace(/\s+/g, " ");
+
+  it("says a door missed on the night can be cracked later, straight after the guess, once the doors are on", () => {
+    const on = hunt(page(true));
+    const guess = on.indexOf("Work out where the elf is hiding and type your guess in Detective HQ. A right guess earns new things for your elf.");
+    expect(guess).toBeGreaterThan(-1);
+    expect(on[guess + 1]).toBe("Missed a door on the night? You can still crack its case later in Detective HQ, with one guess.");
+  });
+
+  it("says a missed door, or one from before a family joined, can be cracked later, in place of visiting, once the doors are on", () => {
+    const on = prize(page(true));
+    expect(on).toContain(
+      "so you do not have to visit every place. Missed a door, or joined late? You can still crack its case later in Detective HQ, with one guess.",
+    );
+    expect(on).not.toContain("Joined late? Visit the places");
+  });
+
+  it("reads exactly as today with the doors off: joining late means visiting, and nothing is said of one guess", () => {
+    const off = page(false);
+    expect(prize(off)).toContain("Joined late? Visit the places from before you joined to do their doors.");
+    expect(hunt(off)).toHaveLength(5);
+    expect((off.querySelector("main")?.textContent ?? "").replace(/\s+/g, " ")).not.toContain("with one guess");
   });
 });
 

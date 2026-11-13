@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { waveOneRuns } from "../../src/db/elf-game";
 import { calendarViewFor } from "../../src/elf/views";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
+import { renderGoPage } from "../../src/elf/pages/go";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage } from "../../src/elf/pages/join";
 import { renderRulesPage } from "../../src/elf/pages/rules";
@@ -16,7 +17,8 @@ import { FESTIVE_SURNAMES } from "../../src/elf/names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
-import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
+import type { CalendarView } from "../../src/elf/pages/types";
+import { AFTERNOON, at, calendarView, claimWin, goDoneView, goOutcome, goView, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the house rules every elf screen must keep.
 //
@@ -52,10 +54,37 @@ const opened = {
   counts: { cracked: 31, visited: 4 },
   factLine: "NBCC began with a question from a girl aged 12 in Annbank.",
 };
+/** Plan 2c-1, Task 4: door 7 open on the calendar everyone shares before Christmas Day, with no place and
+ *  no photo, and a go in Detective HQ. */
+const forEveryoneElse = { ...opened, place: null, scrapbook: { ...scrapbook, photos: [], count: 2 }, goUrl: "/elf/hq/door/7" };
+/** The calendar from Christmas Day, when every place and photo is shown to everyone: door 7 with its place,
+ *  its photo and no go. */
+function fromChristmasDay(): CalendarView {
+  const view = calendarView(at("2026-12-25T10:00:00.000Z"));
+  const seven = { state: "found" as const, found, ...opened, place: { name: "Corner Bakehouse", town: "Snowford" } };
+  return { ...view, doors: view.doors.map((d) => (d.door === 7 ? { ...d, ...seven } : d)) };
+}
 const today = hqView().today!;
 const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
 const everyoneStamped = posterView({ open: true, claimable: false, detectives: posterView().detectives.map((d) => ({ ...d, hasStamp: true })) });
 const twoClues = [today.clues[0], { n: 2 as const, at: at("2026-12-07T18:00:00.000Z"), words: "Practice clue 2: it has a lid.", pictureUrl: "/elf/hq/clue/7/2.jpg", pictureAlt: "A pretend drawing of a lid" }];
+/** Plan 2c-1, Task 6: door 7's go page with two clues showing, one with its picture. */
+const goingTwo = goView({ clues: twoClues, nextUrl: "/elf/hq/door/7?clues=3" });
+/** Plan 2c-1, Task 7: door 7's case at 7:05pm for a family that may still have a go: its place shown since
+ *  7pm and closing at 8pm. */
+const mayGo = hqView({
+  now: at("2026-12-07T19:05:00.000Z"),
+  today: { ...today, state: "found", canGuess: false, clues: [], nextClueAt: null, revealAt: null, goUrl: "/elf/hq/door/7", closesAt: at("2026-12-07T20:00:00.000Z") },
+});
+/** Plan 2c-1, Task 7: the missed doors the family can still crack, under today's case with the hunt on and the
+ *  place's closing time. */
+const toCrack = hqView({
+  today: { ...today, closesAt: at("2026-12-07T20:00:00.000Z") },
+  toCrack: [
+    { door: 5, elfName: "Sprout", clueAt: at("2026-12-05T10:00:00.000Z"), url: "/elf/hq/door/5" },
+    { door: 3, elfName: "Pudding", clueAt: at("2026-12-03T17:30:00.000Z"), url: "/elf/hq/door/3" },
+  ],
+});
 
 /** Every screen in every state, as [what it is, the page]. */
 const PAGES: [string, string][] = [
@@ -68,6 +97,8 @@ const PAGES: [string, string][] = [
   ["calendar, a snow day", renderCalendarPage(calendarView(at("2026-12-07T18:10:00.000Z"), { state: "snow" }))],
   ["calendar, a door whose elves have gone home", renderCalendarPage(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "found", found, ...opened, goneHome: true }))],
   ["calendar, all done", renderCalendarPage(calendarView(at("2026-12-25T10:00:00.000Z")))],
+  ["calendar, an open door for everyone else", renderCalendarPage(calendarView(at("2026-12-07T19:05:00.000Z"), { state: "found", found, ...forEveryoneElse }))],
+  ["calendar, an open door from Christmas Day", renderCalendarPage(fromChristmasDay())],
   ["HQ, before the clue", renderHqPage(hqView({ today: { ...today, state: "shut", clues: [], canGuess: false } }))],
   ["HQ, the hunt on", renderHqPage(hqView())],
   ["HQ, two clues out", renderHqPage(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } }))],
@@ -79,10 +110,15 @@ const PAGES: [string, string][] = [
   ["HQ, place shown", renderHqPage(hqView({ today: { ...today, state: "revealed", canGuess: false, outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
   ["HQ, no door today", renderHqPage(hqView({ now: at("2026-11-20T10:00:00.000Z"), today: null, nextClueAt: at("2026-12-01T17:30:00.000Z") }))],
   ["HQ, all over", renderHqPage(hqView({ now: at("2026-12-26T10:00:00.000Z"), today: null, nextClueAt: null }))],
+  ["HQ, have a go at today's door", renderHqPage(mayGo)],
+  ["HQ, doors you can still crack", renderHqPage(toCrack)],
+  ["HQ, found and cracked, with the place's closing time", renderHqPage(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome, closesAt: at("2026-12-07T20:00:00.000Z") } }))],
+  ["HQ, an elf that has gone home", renderHqPage(hqView({ today: { ...today, state: "revealed", canGuess: false, clues: [], nextClueAt: null, revealAt: null, goneHome: true, outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
   ["rules", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
+  ["rules, with December's doors on", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true, doorsOn: true } })],
   ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z"), runs: waveOneRuns(2026, at("2026-11-13T09:00:00.000Z")), finders: new Map(), counts: new Map(), scrapbooks: new Map() }))],
   ["sign in, the email", renderSignInPage({ stage: "email" })],
   ["sign in, the code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "If that email has detectives enrolled, we have sent a sign in code to it." })],
@@ -106,6 +142,13 @@ const PAGES: [string, string][] = [
   ["poster, the elves gone home", renderPosterPage(posterView({ open: true, claimable: false, goneHome: true }))],
   ["poster, your photo waiting", renderPosterPage(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "waiting" } }))],
   ["poster, your photo declined", renderPosterPage(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "declined" } }))],
+  ["go page, having a go", renderGoPage(goView())],
+  ["go page, two clues showing", renderGoPage(goingTwo)],
+  ["go page, a go refused", renderGoPage(goView({ guessError: "Type where you think Twinkle is hiding." }))],
+  ["go page, the practice door with its elf still hiding", renderGoPage(goView({ door: 0, practice: true, found: null, stillHiding: true, nextUrl: "/elf/hq/door/0?clues=2", formUrl: "/elf/hq/door/0/go", closesAt: null }))],
+  ["go page, cracked", renderGoPage(goDoneView())],
+  ["go page, its elf gone home", renderGoPage(goDoneView({ verdict: "wrong", goneHome: true }, { found: null }))],
+  ["go page, closed", renderGoPage(goView({ stage: "closed", clues: [], nextUrl: null, closesAt: null, outcome: goOutcome({ verdict: "none" }) }))],
 ];
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
@@ -291,7 +334,7 @@ describe.each(PAGES)("%s", (_name, html) => {
 
 const POISON = `<img src=x onerror="alert(1)"><script>alert(2)</script>"'&`;
 // Fields that choose between fixed answers. They are looked up or switched on, never written out.
-const CHOICES = new Set(["state", "status", "skin", "hair", "hairStyle", "form", "reason", "fresh"]);
+const CHOICES = new Set(["state", "status", "skin", "hair", "hairStyle", "form", "reason", "fresh", "stage", "verdict"]);
 
 /** The same view with every word swapped for markup, and every address pointed off the site. */
 function poisoned<T>(value: T, key = ""): T {
@@ -311,11 +354,19 @@ describe("data that tries to break out of the page", () => {
     ["HQ, found", renderHqPage(poisoned(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome } })))],
     ["wardrobe", renderWardrobePage(poisoned(wardrobeView()))],
     ["calendar, a scrapbook's photos", renderCalendarPage(poisoned(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...opened })))],
+    ["calendar, an open door's go", renderCalendarPage(poisoned(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...forEveryoneElse })))],
     ["HQ, two clues out", renderHqPage(poisoned(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } })))],
+    ["HQ, have a go at today's door", renderHqPage(poisoned(mayGo))],
+    ["HQ, doors you can still crack", renderHqPage(poisoned(toCrack))],
+    // Poisoned, a door's go is not on this site, so the list is not drawn at all: here its go stays ours.
+    ["HQ, a door to crack with its elf named in markup", renderHqPage({ ...poisoned(toCrack), toCrack: toCrack.toCrack.map((d) => ({ ...d, elfName: POISON })) })],
     ["poster", renderPosterPage(poisoned(posterView({ open: true, claimable: true })))],
     ["poster, your photo", renderPosterPage(poisoned(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "approved" } })))],
     ["poster, a claim that won", renderPosterPage(poisoned(posterView({ open: true, claimable: false })), { form: "word", ok: true, outcome: "won", win: poisoned(claimWin()) })],
     ["poster, a visit that counted", renderPosterPage(poisoned(everyoneStamped), { form: "word", ok: true, outcome: "visited", visit: poisoned(visitWin()) })],
+    ["go page, having a go", renderGoPage(poisoned(goView({ clues: twoClues, guessError: "Refused" })))],
+    ["go page, how it went", renderGoPage(poisoned(goDoneView({ visited: true })))],
+    ["go page, closed", renderGoPage(poisoned(goView({ stage: "closed", clues: [], nextUrl: null, outcome: goOutcome({ verdict: "none" }) })))],
   ];
 
   it.each(hostile)("%s: is shown as words, never run", (_name, html) => {

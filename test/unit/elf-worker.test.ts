@@ -369,6 +369,23 @@ describe("the clue email, at 5:31pm on 7 December", () => {
     expect(first.text).toContain("Clue 1 is a picture: A pretend picture. See it in Detective HQ.");
     expect(first.html).not.toContain("/elf/hq/clue/");
   });
+
+  // Plan 2c-1, Task 9: the email says when the place closes on its day (closingShown), only when a closing time
+  // is typed in Doors; it never says when the place is shown, and says a missed hunt can be cracked later.
+  it("tells each family when the place closes when a closing time is typed, and nothing of closing when none is", async () => {
+    const typed = withClue({ loadDoorRuns: vi.fn(async () => [door7({ closesAt: "20:00", facts: { closesAt: at("2026-12-07T20:00:00Z") } })]) });
+    await typed.tick(FIVE_31);
+    const closing = sentOf(typed.sent, "clue")[0].text;
+    expect(closing).toContain("The hiding place closes at 8pm today.");
+    expect(closing).toContain("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+    expect(closing).toContain("If you miss tonight's hunt, you can still crack this case later in Detective HQ, with one guess.");
+    expect(closing).not.toContain("is shown at");
+    const none = withClue({ loadDoorRuns: vi.fn(async () => [door7({ closesAt: null })]) });
+    await none.tick(FIVE_31);
+    const plain = sentOf(none.sent, "clue")[0].text;
+    expect(plain).not.toContain("closes at");
+    expect(plain).toContain("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+  });
 });
 
 // ---- snow days, and the order of a tick -------------------------------------------------------------
@@ -496,10 +513,11 @@ describe("the morning email, at 8am on 7 December", () => {
     expect(text).toContain("Detective R. Tinselfoot found door 6's elf at 10:20am.");
     expect(text).toContain("3 photos waiting to be checked");
     expect(text).toContain("Door 7 of NBCC Elf Detective School opens tonight!");
-    expect(text).toContain("Door 6 is open! Detective R. Tinselfoot found Pip at The Example Mill, Snowford at 10:20am.");
+    expect(text).toContain("Door 6 is open! Detective R. Tinselfoot found Pip at 10:20am. Missed it? You can still crack the case in Detective HQ, with one guess.");
     expect(text).toContain("https://nbcc.example.org/admin");
-    // Today's place is never named before it is shown.
+    // Today's place is never named before it is shown, and (Plan 2c-1) the posts never name yesterday's either.
     expect(text).not.toContain("The Example Bakehouse");
+    expect(text).not.toContain("The Example Mill");
     expect(deps.finderParts).toHaveBeenCalledWith(2026, 6);
     expect(deps.markSent).toHaveBeenCalledWith("morning", "2026-12-07");
   });
@@ -508,7 +526,18 @@ describe("the morning email, at 8am on 7 December", () => {
     const { sent, tick } = morning({ listDoors: vi.fn(async () => [door7Setup({ droppedOffAt: null })]) });
     await tick(EIGHT);
     const text = sentOf(sent, "morning")[0].text;
-    expect(text).toContain("Door 7 is NOT ready: dropped off. Fix it in Doors before 5:30pm, or it becomes a snow day.");
+    // Door 7 has its place, the word on its tag and its first clue, so it opens: what it still needs is a to do.
+    expect(text).toContain("Door 7 is NOT ready: dropped off. Fix it in Doors before 5:30pm.");
+    expect(text).not.toContain("becomes a snow day");
+  });
+
+  // From the present PR's review: only a door that cannot open is snowed in at its first clue (canRun).
+  it("says today's door becomes a snow day only when it cannot open as it stands", async () => {
+    const { sent, tick } = morning({ listDoors: vi.fn(async () => [door7Setup({ tagWord: null })]) });
+    await tick(EIGHT);
+    expect(sentOf(sent, "morning")[0].text).toContain(
+      "Door 7 is NOT ready: the elf and its tag. Fix it in Doors before 5:30pm. Without its place, the word on its tag or its first clue, it becomes a snow day.",
+    );
   });
 
   it("calls a snowed in door a snow day, today and yesterday, with no post for either", async () => {
@@ -530,6 +559,28 @@ describe("the morning email, at 8am on 7 December", () => {
     await tick(at("2026-12-07T08:00:30Z"));
     // The two head elves with alerts on, once each.
     expect(sentOf(sent, "morning").map((m) => m.to)).toEqual(["alex@example.org", "jo@example.org"]);
+  });
+
+  // Ruling F6: on Christmas Day the morning email still posts door 24, but having a go closed at midnight.
+  it("no longer offers a go in door 24's post on Christmas Day, and never names its place", async () => {
+    const facts: DoorFacts = {
+      clue1At: at("2026-12-24T10:00:00Z"),
+      clue2At: at("2026-12-24T10:30:00Z"),
+      clue3At: at("2026-12-24T11:00:00Z"),
+      revealAt: at("2026-12-24T11:30:00Z"),
+      closesAt: at("2026-12-24T16:00:00Z"),
+      foundAt: at("2026-12-24T10:20:00Z"),
+      snowDay: false,
+      goneHome: false,
+    };
+    const door24: DoorRun = { ...door6(), door: 24, facts, calendarAt: facts.clue1At };
+    const { sent, tick } = morning({ loadDoorRuns: vi.fn(async () => [door24]) });
+    await tick(at("2026-12-25T08:00:00Z"));
+    const text = sentOf(sent, "morning")[0].text;
+    expect(text).toContain("Door 24 is open! Detective R. Tinselfoot found Pip at 10:20am.");
+    expect(text).not.toContain("Missed it?");
+    expect(text).not.toContain("crack the case");
+    expect(text).not.toContain("The Example Mill");
   });
 });
 

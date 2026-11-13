@@ -154,6 +154,30 @@ describe("the calendar page", () => {
     expect(board.getAttribute("data-me")).toBe("/api/elf/me");
   });
 
+  // Plan 2c-1, Task 8: the calendar everyone shares carries no place before Christmas Day, so the script draws the
+  // doors a signed in family can see from the family's own answers: one door, or all of them at once. From
+  // Christmas Day until 1 January the shared calendar carries every place itself, so the script asks for none.
+  it("tells the script where a family's own doors are, and when the calendar everyone shares carries every place", () => {
+    const board = page(view(AFTERNOON)).querySelector("#elf-board")!;
+    expect(board.getAttribute("data-me-door")).toBe("/api/elf/me/door/");
+    expect(board.getAttribute("data-me-doors")).toBe("/api/elf/me/doors");
+    expect(board.getAttribute("data-places-from")).toBe("2026-12-25T00:00:00.000Z");
+    expect(board.getAttribute("data-places-until")).toBe("2027-01-01T00:00:00.000Z");
+  });
+
+  it("still draws, with no Christmas window, for a year that has no Christmas Day", () => {
+    const board = page(view(AFTERNOON, {}, { year: 0 })).querySelector("#elf-board")!;
+    expect(board.getAttribute("data-me-door")).toBe("/api/elf/me/door/");
+    expect(board.hasAttribute("data-places-from")).toBe(false);
+    expect(board.hasAttribute("data-places-until")).toBe(false);
+  });
+
+  // Ruling F4 on Plan 2c-1: with December's doors off the calendar is exactly today's.
+  it("tells the script nothing more while December's doors are off", () => {
+    const board = page(view(at("2026-11-20T10:00:00.000Z"), {}, { doorsOn: false })).querySelector("#elf-board")!;
+    expect(board.getAttributeNames()).toEqual(["class", "id", "role", "aria-label", "data-now", "data-feed", "data-door-api", "data-me"]);
+  });
+
   it("tells the script the time on the server, so a countdown is right even if the phone's clock is wrong", () => {
     expect(page(view(AFTERNOON)).querySelector("#elf-board")!.getAttribute("data-now")).toBe("2026-12-07T15:00:00.000Z");
   });
@@ -305,22 +329,30 @@ describe("today's news at the top of the calendar", () => {
     expect(renderCalendarPage(hunting)).not.toContain("Secret Cinema");
   });
 
-  it("says who found today's elf and when the next clue comes", () => {
-    const found = view(at("2026-12-07T19:00:00.000Z"), {
+  // Plan 2c-1, Task 4: the news is the same for everyone, so it never names the place. Today's door holds
+  // its place here, so the test fails if the news names it.
+  it("says who found today's elf and when, never where, that the case can still be cracked, and when the next clue comes", () => {
+    const found = view(at("2026-12-07T19:05:00.000Z"), {
       state: "found",
-      place: { name: "The Toy Shop", town: "Troon" },
-      found: { at: at("2026-12-07T17:52:00.000Z"), by: "Detective Sam Snowsleuth" },
+      place: { name: "Corner Bakehouse", town: "Snowford" },
+      found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective R. Tinselfoot" },
       collage: ["/elf/pic/9.svg"],
       counts: { cracked: 3, visited: 1 },
+      goUrl: "/elf/hq/door/7",
     });
     const status = calendarStatus(found);
     expect(status.title).toBe("Bauble has been found!");
-    expect(status.html).toContain("Detective Sam Snowsleuth");
-    expect(status.html).toContain("The Toy Shop, Troon");
-    expect(status.html).toContain("Next clue: Tue 8 Dec at 5:30pm");
+    expect(status.html).toBe(
+      "<p>Detective R. Tinselfoot found today's elf at 5:47pm. Missed the hunt? You can still crack the case in Detective HQ.</p>" +
+        "<p>Next clue: Tue 8 Dec at 5:30pm</p>",
+    );
+    expect(status.html).not.toContain(" at , ");
   });
 
-  it("says who found today's elf and when, and when its place is shown, while the place is still hidden", () => {
+  // Plan 2c-1, Task 9: the place is never shown to everyone at the reveal, only to a family that has had its
+  // guess, so the news says when a family finds out whether it cracked the case, in the clue email's words. So
+  // do the door's words for a screen reader and its detail: nowhere on the page says the place "is shown".
+  it("says who found today's elf and when, and when a family finds out whether it cracked it, while the place is still hidden", () => {
     const hidden = view(at("2026-12-07T18:10:00.000Z"), {
       state: "found-hidden",
       found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Sam Snowsleuth" },
@@ -330,8 +362,9 @@ describe("today's news at the top of the calendar", () => {
     const status = calendarStatus(hidden);
     expect(status.title).toBe("Bauble has been found!");
     expect(words(new DOMParser().parseFromString(status.html, "text/html").body)).toBe(
-      "Detective Sam Snowsleuth found today's elf at 5:47pm. The hiding place is shown at 7pm.",
+      "Detective Sam Snowsleuth found today's elf at 5:47pm. You find out whether you cracked it at 7pm.",
     );
+    expect(renderCalendarPage(hidden)).not.toContain("is shown at");
     expect(renderCalendarPage(hidden)).not.toContain("Secret Cinema");
     // Its card is styled as the find; the class is the kind in letters, as the page's script writes it.
     expect(page(hidden).querySelector(".elf-status")!.classList.contains("elf-status--foundhidden")).toBe(true);
@@ -346,11 +379,23 @@ describe("today's news at the top of the calendar", () => {
     expect(page(snow).querySelector(".elf-status")!.classList.contains("elf-status--snow")).toBe(true);
   });
 
-  it("says a revealed elf is still waiting", () => {
-    const revealed = view(at("2026-12-07T21:30:00.000Z"), { state: "revealed", place: { name: "The Toy Shop", town: "Troon" } });
+  // Plan 2c-1, Task 4: shown with nobody found, never where, and the case can still be cracked. Today's door
+  // holds its place here, so the test fails if the news names it.
+  it("says a revealed elf is still waiting, never where, that its prize can still be won and its case cracked", () => {
+    const revealed = view(at("2026-12-07T21:30:00.000Z"), { state: "revealed", place: { name: "Corner Bakehouse", town: "Snowford" }, goUrl: "/elf/hq/door/7" });
     const status = calendarStatus(revealed);
     expect(status.title).toBe("Bauble is still waiting");
-    expect(status.html).toContain("The Toy Shop, Troon");
+    expect(status.html).toBe(
+      "<p>Nobody has found today's elf yet, and the first detective to find it still wins the prize. You can crack the case in Detective HQ.</p>" +
+        "<p>Next clue: Tue 8 Dec at 5:30pm</p>",
+    );
+  });
+
+  // Ruling F8 on Plan 2c-1: an elf that has gone home cannot be found, so nobody still wins its prize.
+  it("never says the first detective still wins once today's elf has gone home", () => {
+    const gone = calendarStatus(view(at("2026-12-07T21:30:00.000Z"), { state: "revealed", place: { name: "Corner Bakehouse", town: "Snowford" }, goneHome: true, goUrl: "/elf/hq/door/7" }));
+    expect(gone.title).toBe("Bauble is still waiting");
+    expect(gone.html).toBe("<p>Nobody found today's elf in time. You can crack the case in Detective HQ.</p><p>Next clue: Tue 8 Dec at 5:30pm</p>");
   });
 
   // Final review, Important 7, decision 1: the finder wins the prize; the elf stays at its place.
@@ -358,8 +403,9 @@ describe("today's news at the top of the calendar", () => {
     const said = (html: string) => words(new DOMParser().parseFromString(html, "text/html").body);
     const hunting = calendarStatus(view(at("2026-12-07T18:00:00.000Z"), { state: "hunting" }));
     expect(said(hunting.html)).toBe("Bauble is hiding somewhere in NBCC's area. The first detective to type the word on its tag wins the prize.");
-    const revealed = calendarStatus(view(at("2026-12-07T21:30:00.000Z"), { state: "revealed", place: { name: "The Toy Shop", town: "Snowford" } }));
-    expect(said(revealed.html)).toContain("Nobody found today's elf in time. It is at The Toy Shop, Snowford, and the first detective there still wins the prize.");
+    const revealed = calendarStatus(view(at("2026-12-07T21:30:00.000Z"), { state: "revealed" }));
+    expect(said(revealed.html)).toContain("Nobody has found today's elf yet, and the first detective to find it still wins the prize.");
+    expect(said(revealed.html)).not.toContain("wins the elf");
   });
 
   it("looks ahead to the next clue on a morning before today's is out, when yesterday's is done", () => {
@@ -429,6 +475,14 @@ describe("the advent calendar at every width", () => {
     expect(css).toMatch(/\.elf-pol--first \{[^}]*grid-column:\s*span 2/);
     // The finder's picture is the mockup's shape: wider than it is tall.
     expect(css).toMatch(/\.elf-pol--first \.elf-pol__shot \{[^}]*aspect-ratio:\s*1\.25/);
+  });
+
+  // Plan 2c-1, Task 4: on the calendar everyone shares, an open door's Have a go button sits on a line of
+  // its own under the question, centred, however narrow the phone.
+  it("puts an open door's Have a go button on a line of its own under its question", () => {
+    expect(css).toMatch(/\.elf-book__go \.elf-btn \{[^}]*display:\s*flex;/);
+    expect(css).toMatch(/\.elf-book__go \.elf-btn \{[^}]*width:\s*fit-content;/);
+    expect(css).toMatch(/\.elf-book__go \.elf-btn \{[^}]*margin:\s*10px auto 0;/);
   });
 
   // Measured at 320 pixels wide: a long festive surname and a two word place no longer broke a word.

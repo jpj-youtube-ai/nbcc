@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { renderHqPage } from "../../src/elf/pages/hq";
@@ -24,6 +25,8 @@ let clock = 0;
 let reloads = 0;
 let calls: { url: string; body: Record<string, unknown> }[] = [];
 let answer: { status: number; body: unknown } | "offline" = { status: 200, body: { ok: true } };
+/** Where the page was sent (opts.go). */
+let went: string[] = [];
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -43,7 +46,8 @@ function load(view: HqView = hqView(), extra: Record<string, unknown> = {}): Hq 
     return Promise.resolve({ ok: a.status >= 200 && a.status < 300, status: a.status, json: () => Promise.resolve(a.body) });
   });
   reloads = 0;
-  hq = initHq(document, window, { now: () => clock, reload: () => (reloads += 1), ...extra }) as Hq;
+  went = [];
+  hq = initHq(document, window, { now: () => clock, reload: () => (reloads += 1), go: (url: string) => went.push(url), ...extra }) as Hq;
   return hq;
 }
 
@@ -113,16 +117,68 @@ describe("locking in a guess", () => {
     expect(words($(".elf-guess__status"))).toBe("Type a place first.");
   });
 
-  it("says when the door has just opened and guessing is over, in the server's words", async () => {
-    answer = { status: 409, body: { ok: false, reason: "not-hunting", message: "Too late: the hiding place is shown now. Have a look at the calendar." } };
+  it("says when there is nothing to guess at the door, in the server's words, and stays on the page", async () => {
+    answer = { status: 400, body: { reason: "not-hunting", message: "There is nothing to guess at this door just now." } };
     load();
     await choose("The Bookshop");
-    expect(words($(".elf-guess__status"))).toBe("Too late: the hiding place is shown now. Have a look at the calendar.");
+    expect(words($(".elf-guess__status"))).toBe("There is nothing to guess at this door just now.");
     expect($(".elf-guess__status").classList.contains("is-error")).toBe(true);
+    expect(went).toEqual([]);
+  });
+
+  // Plan 2c-1, Task 7: once the place is shown, a guess is never saved as the go. A family with its guess is
+  // sent back to Detective HQ to see how it did; one that may have a go is sent to have it.
+  it("goes where the server sends it once the place is shown: to the go page, or back to Detective HQ", async () => {
+    answer = { status: 409, body: { reason: "have-a-go", message: "The hiding place is shown now, so this is your one go at this door.", goUrl: "/elf/hq/door/7" } };
+    load();
+    await choose("The Bookshop");
+    expect(went).toEqual(["/elf/hq/door/7"]);
+    expect($(".elf-guess__status").classList.contains("is-error")).toBe(false);
+    answer = { status: 409, body: { reason: "locked-in", message: "Your guess is locked in, and the hiding place is shown now.", goUrl: "/elf/hq" } };
+    await choose("The Bookshop");
+    expect(went).toEqual(["/elf/hq/door/7", "/elf/hq"]);
+  });
+
+  it("goes nowhere but this site: any other address is only said as words", async () => {
+    load();
+    for (const goUrl of ["//elsewhere.example/hq", "https://elsewhere.example/hq", "/\\elsewhere.example", "javascript:alert(1)", "elf/hq", 7]) {
+      answer = { status: 409, body: { reason: "have-a-go", message: "The hiding place is shown now, so this is your one go at this door.", goUrl } };
+      await choose("The Bookshop");
+      expect(went, String(goUrl)).toEqual([]);
+      expect(words($(".elf-guess__status")), String(goUrl)).toBe("The hiding place is shown now, so this is your one go at this door.");
+      expect($(".elf-guess__status").classList.contains("is-error")).toBe(true);
+    }
+  });
+
+  // Task 9, from Task 7's review: the script reads an address on this site by sitePath's own rule
+  // (src/elf/pages/shell.ts), character for character, with no needless escape inside its brackets.
+  it("reads an address on this site by the page's own rule, character for character", () => {
+    const shell = readFileSync(resolve(ROOT, "src/elf/pages/shell.ts"), "utf8");
+    const script = readFileSync(resolve(ROOT, "assets/js/elf-hq.js"), "utf8");
+    const rule = /typeof value === "string" && (\/\^.+?\$\/)\.test\(value\)/.exec(shell)?.[1];
+    expect(rule).toBe("/^\\/(?!\\/)[A-Za-z0-9/_.~%?=&-]*$/");
+    expect(script).toContain(`var SITE_PATH = ${rule};`);
+  });
+
+  // Ruling F15: the page's own way to go is a function wrapper, as reload is. A bare win.location.assign, called
+  // on its own, throws "Illegal invocation" in a real browser.
+  it("goes through the window's own location when no way to go is given, called on that location", async () => {
+    document.documentElement.innerHTML = new DOMParser().parseFromString(renderHqPage(hqView()), "text/html").documentElement.innerHTML;
+    const assigned: { self: unknown; url: string }[] = [];
+    const location = {
+      assign(this: unknown, url: string) {
+        assigned.push({ self: this, url });
+      },
+    };
+    const fetch = vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ reason: "have-a-go", message: "Go on.", goUrl: "/elf/hq/door/7" }) }));
+    const win = { fetch, location, setInterval: () => 1, clearInterval: () => undefined, setTimeout: () => 1, clearTimeout: () => undefined };
+    hq = initHq(document, win, { now: () => clock }) as Hq;
+    await choose("The Bookshop");
+    expect(assigned).toEqual([{ self: location, url: "/elf/hq/door/7" }]);
   });
 
   it("names the door when the place typed was already found", async () => {
-    answer = { status: 409, body: { ok: false, reason: "place-already-open", door: 3, message: "That elf was already found behind door 3. Try again!" } };
+    answer = { status: 400, body: { reason: "place-already-open", door: 3, message: "That elf was already found behind door 3. Try again!" } };
     load();
     await choose("The Bookshop");
     expect(words($(".elf-guess__status"))).toContain("already found behind door 3");

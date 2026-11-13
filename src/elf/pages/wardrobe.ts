@@ -75,13 +75,17 @@ export function doorChip(door: number, view: WardrobeView): { kind: DoorChipKind
   return { kind: "soon", words: clueAt ? dayWords(clueAt) : `Door ${door}` };
 }
 
-/** Why a locked costume is locked, on its note: what the door's chip says, in a sentence. */
+/** Why a locked costume is locked, on its note: what the door's chip says, in a sentence. A missed door the
+ *  family can still crack from Detective HQ (Plan 2c-1) says so: it may not know the place to visit. */
 function lockNote(door: number, view: WardrobeView): string {
   const kind = doorChip(door, view).kind;
   if (kind === "today") return "Crack today's door to open it";
-  if (kind === "missed") return "Visit the place to catch up";
+  if (kind === "missed") return crackable(view).includes(door) ? "Crack it in Detective HQ to catch up" : "Visit the place to catch up";
   return `Opens with door ${door}`;
 }
+
+/** The doors the family can still crack from Detective HQ, or none when the view holds no list. */
+const crackable = (view: WardrobeView): readonly number[] => (Array.isArray(view.crackable) ? view.crackable : []);
 
 /** The chip's look (src/elf/pages/paper.ts's pieces) for each kind. */
 const CHIP_LOOK: Record<DoorChipKind, string> = { start: "done", presents: "new", done: "done", today: "today", missed: "missed", soon: "soon" };

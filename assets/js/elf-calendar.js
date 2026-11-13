@@ -1,7 +1,7 @@
 /* NBCC Elf Detective School: the public calendar comes alive.
  *
  * The calendar page (src/elf/pages/calendar.ts) already works with no script: every door is a link
- * to its own detail. This only makes it nicer, in six ways:
+ * to its own detail. This only makes it nicer, in seven ways:
  *
  *   1. A tap opens a door's detail in place, under the door's own row, and a second tap shuts it.
  *   2. Countdowns tick, by the SERVER's clock: a phone with the wrong time still counts down right.
@@ -12,6 +12,9 @@
  *      family's own photo in an open door's scrapbook, with a button to take it down.
  *   5. "Close door n" in a scrapbook shuts it and puts focus back on the door.
  *   6. An elf on a door that could not be drawn just now (the server was busy) is asked for again.
+ *   7. While December's doors are on, the calendar everyone shares names no place before Christmas
+ *      Day, so a door whose place the family can see is drawn from the family's own private answer,
+ *      with its place and photos; a door it may still have a go at keeps the Have a go line.
  *
  * Nothing here decides anything. If every request fails, the page stays exactly as it was served.
  *
@@ -46,11 +49,33 @@
     var feedUrl = board.getAttribute("data-feed");
     var doorApi = board.getAttribute("data-door-api");
     var meUrl = board.getAttribute("data-me");
+    // Where a family's own doors are, one or all at once: on the board only while December's doors are on.
+    var meDoorApi = board.getAttribute("data-me-door");
+    var meDoorsUrl = board.getAttribute("data-me-doors");
+    // From Christmas Day until 1 January the calendar everyone shares carries every place and photo itself.
+    var placesFrom = Date.parse(board.getAttribute("data-places-from") || "");
+    var placesUntil = Date.parse(board.getAttribute("data-places-until") || "");
     var skew = 0;
     var marks = {};
     // The family's own photo at each door: its token.
     var photos = {};
     var signedIn = false;
+    // The doors whose place the family can see, from its answer while December's doors are on (null before it
+    // answers, and always with the doors off), and the doors it may still have a go at.
+    var known = null;
+    var goes = [];
+    // Each door the family can see that its own answer has not drawn yet, or that is opening while that answer
+    // cannot be read: when it was first missed.
+    var owed = {};
+    // Settles once the family's answer has been taken in and its own doors drawn (loadMarks); polls draw after it,
+    // or after READY_WAIT_MS if it hangs (settled).
+    var ready = Promise.resolve();
+    var settled = Promise.resolve();
+    var READY_WAIT_MS = 10000;
+    // How many of the family's answers have been taken in, so a return to the page can tell whether a poll has just
+    // read one; and whether the page has been hidden since it was last shown.
+    var reads = 0;
+    var away = false;
     var failures = 0;
     var stopped = false;
     var ticker = null;
@@ -232,11 +257,21 @@
       var mine = detail.querySelector(".elf-detail__mine");
       var kind = door.getAttribute("data-kind");
       if (mine && (kind === "found" || kind === "revealed")) {
+        var hint = detail.querySelector(".elf-detail__hint");
+        // A door the family may still have a go at keeps the calendar's Have a go line, which is its hint: the
+        // family cannot know the place, so a line of its own would only invite a visit there. So does an open door in
+        // neither of the family's lists while its own doors are drawn (tonight's, drawn as everyone sees it when the
+        // family's answer could not be read as it opened): the family cannot know that place either.
+        if (goes.indexOf(Number(n)) !== -1 || (mineOn() && !isKnown(n))) {
+          mine.textContent = "";
+          mine.hidden = true;
+          if (hint) hint.hidden = false;
+          return;
+        }
         var said = mineWords(mark, !!detail.querySelector(".elf-book__gone"));
         mine.textContent = said;
         mine.hidden = said === "";
         // The family's own line says what is left to do, so the general hint would only repeat it.
-        var hint = detail.querySelector(".elf-detail__hint");
         if (hint) hint.hidden = true;
       }
     }
@@ -295,7 +330,7 @@
           function (res) {
             if (!res.ok) throw new Error("not taken down");
             delete photos[door];
-            return refresh(door).then(downButStillShown, downButStillShown);
+            return redrawOne(door).then(downButStillShown, downButStillShown);
           },
           function () {
             throw new Error("not taken down");
@@ -339,34 +374,289 @@
       true
     );
 
+    // The family's private answer, or null when it is not signed in or there is no answer.
+    function readMe() {
+      return win.fetch(meUrl, { credentials: "same-origin" }).then(function (res) {
+        return res.status === 200 ? res.json() : null;
+      });
+    }
+
+    // Door numbers from an answer, each once.
+    function doorNumbers(list) {
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        var n = Number(list[i]);
+        if (isFinite(n) && out.indexOf(n) === -1) out.push(n);
+      }
+      return out;
+    }
+
+    // Take in the family's answer: its marks, its own photos and, while December's doors are on, the doors whose
+    // place it can see and the doors it may still have a go at. Answers whether there was one.
+    function takeMe(body) {
+      if (!body || !body.doors) return false;
+      // Signed in, even with no marks yet: every open door then says what is left to do.
+      signedIn = true;
+      var mine = body.photos || [];
+      for (var p = 0; p < mine.length; p++) {
+        if (mine[p] && typeof mine[p].token === "string") photos[mine[p].door] = mine[p].token;
+      }
+      for (var i = 0; i < body.doors.length; i++) {
+        marks[body.doors[i].door] = {
+          cracked: body.doors[i].cracked === true,
+          visited: body.doors[i].visited === true,
+          snow: body.doors[i].snow === true
+        };
+      }
+      // Only on a calendar drawn with December's doors on: drawn with them off, the page stays exactly as it was.
+      known = meDoorApi && Array.isArray(body.known) ? doorNumbers(body.known) : null;
+      goes = meDoorApi && Array.isArray(body.goes) ? doorNumbers(body.goes) : [];
+      reads += 1;
+      return true;
+    }
+
     function loadMarks() {
       if (!meUrl) return Promise.resolve();
-      return win
-        .fetch(meUrl, { credentials: "same-origin" })
-        .then(function (res) {
-          return res.status === 200 ? res.json() : null;
-        })
+      return readMe()
         .then(function (body) {
-          if (!body || !body.doors) return;
-          // Signed in, even with no marks yet: every open door then says what is left to do.
-          signedIn = true;
-          var mine = body.photos || [];
-          for (var p = 0; p < mine.length; p++) {
-            if (mine[p] && typeof mine[p].token === "string") photos[mine[p].door] = mine[p].token;
-          }
-          for (var i = 0; i < body.doors.length; i++) {
-            marks[body.doors[i].door] = {
-              cracked: body.doors[i].cracked === true,
-              visited: body.doors[i].visited === true,
-              snow: body.doors[i].snow === true
-            };
-          }
+          if (!takeMe(body)) return;
           eachDoor(function (door) {
             applyMarks(door.getAttribute("data-door"));
           });
+          return loadMine();
         })
         .catch(function () {
           // Not signed in, or no answer: the board stays as it was served.
+        });
+    }
+
+    // ---- a family's own places (Plan 2c-1) -----------------------------------------------------
+    //
+    // While December's doors are on, the calendar everyone shares names no place before Christmas Day. A door
+    // whose place the family can see is drawn from the family's own answer instead, drawn by the server with the
+    // same code: its place, its photos, and no Have a go. It keeps the shared calendar's fingerprint, so the feed
+    // is still compared with the shared calendar. One door comes from its own route, more than one from the one
+    // answer holding them all, never a request a door. From Christmas Day until 1 January the shared calendar
+    // carries every place and photo itself, so nothing of the family's own is asked for then.
+
+    // A door the family's own answer has not drawn is asked for again on each poll for up to a minute: the
+    // calendar everyone shares is never more than 15 seconds old, so the family's door is never far behind it.
+    var GIVE_UP_MS = 60 * 1000;
+
+    function placesForEveryone() {
+      var t = now();
+      return placesFrom <= t && t < placesUntil;
+    }
+
+    // Are the family's own doors drawn from its own answers just now?
+    function mineOn() {
+      return !!meDoorApi && !!meDoorsUrl && known !== null && !placesForEveryone();
+    }
+
+    function isKnown(n) {
+      return known !== null && known.indexOf(Number(n)) !== -1;
+    }
+
+    // Draw these doors from the family's own answer. `newer` holds the feed's newer fingerprint for a door it says
+    // has changed; any other door keeps the one it has. Answers the doors it did not draw: an answer that fails,
+    // or that has not got a door yet, leaves that door as it is, and nothing is said.
+    function drawMine(doors, newer) {
+      if (doors.length === 0) return Promise.resolve([]);
+      var one = doors.length === 1;
+      return win
+        .fetch(one ? meDoorApi + doors[0] : meDoorsUrl, { credentials: "same-origin" })
+        .then(function (res) {
+          return res.status === 200 ? res.json() : null;
+        })
+        .then(
+          function (body) {
+            var drawn = {};
+            var items = one ? (body ? [{ door: doors[0], tile: body.tile, detail: body.detail }] : []) : body && Array.isArray(body.doors) ? body.doors : [];
+            for (var i = 0; i < items.length; i++) {
+              var n = Number(items[i] && items[i].door);
+              if (doors.indexOf(n) === -1 || drawn[n]) continue;
+              var was = doorOf(n);
+              if (put(n, parsed(items[i]), newer[n] || (was ? was.getAttribute("data-v") : null))) {
+                drawn[n] = true;
+                delete owed[n];
+              }
+            }
+            return doors.filter(function (d) {
+              return !drawn[d];
+            });
+          },
+          function () {
+            return doors.slice();
+          }
+        );
+    }
+
+    // Is door n, missed again at `t`, still worth asking for? Its first miss starts its minute; once the minute is
+    // up it is owed no more.
+    function stillOwed(n, t) {
+      if (owed[n] === undefined) owed[n] = t;
+      if (t - owed[n] < GIVE_UP_MS) return true;
+      delete owed[n];
+      return false;
+    }
+
+    // The doors the family's own answer did not draw are owed, and asked for again on the next poll. After a
+    // minute a door is given up on: a door the feed says has changed is then drawn as the calendar everyone
+    // shares draws it, and either way it is not asked for again until it changes again.
+    function missed(doors, changed) {
+      // A miss that lands once the family's own doors are no longer drawn (Christmas Day began while it was being
+      // asked for) is owed nothing, as nothing is owed then (redraw).
+      if (!mineOn()) return Promise.resolve();
+      var t = now();
+      var chain = Promise.resolve();
+      doors.forEach(function (n) {
+        if (stillOwed(n, t)) return;
+        if (changed.indexOf(n) !== -1) {
+          chain = chain.then(function () {
+            return refresh(n);
+          });
+        }
+      });
+      return chain;
+    }
+
+    // As the page loads: every door the family can see, from its own answer.
+    function loadMine() {
+      if (!mineOn() || known.length === 0) return Promise.resolve();
+      return drawMine(known.slice(), {}).then(function (left) {
+        return missed(left, []);
+      });
+    }
+
+    // Is a door of this kind standing open, its place shown? As isOpenKind in src/elf/pages/door.ts.
+    function openKind(kind) {
+      return kind === "found" || kind === "revealed";
+    }
+
+    // Does door n open with this fresh drawing: from a kind with no place shown to found or revealed?
+    function opens(n, got) {
+      var was = doorOf(n);
+      return !!was && !!got && !openKind(was.getAttribute("data-kind")) && openKind(got.door.getAttribute("data-kind"));
+    }
+
+    // Doors the family cannot see that are opening now: tonight's door at its shown moment. A family that guessed can
+    // see its place from now on, so the family's answer is read again, once a poll (ruling F5, narrowed to a door
+    // turning open). Each door is then drawn from the family's own answer if it can see the place (it joins `mine`),
+    // else from the shared drawing already fetched. If the answer cannot be read just now, each is left exactly as
+    // it was, keeping its fingerprint, so the next poll sees it opening and asks again, for up to a minute; after
+    // that it is drawn as the calendar everyone shares draws it.
+    function opened(held, mine) {
+      if (held.length === 0) return Promise.resolve();
+      var before = known ? known.slice() : [];
+      return readMe()
+        .catch(function () {
+          return null;
+        })
+        .then(function (body) {
+          var read = takeMe(body);
+          if (read) {
+            eachDoor(function (door) {
+              applyMarks(door.getAttribute("data-door"));
+            });
+          }
+          // Every door the family has come to know since its last read is drawn from its own answer too, not only the
+          // opening ones: a door cracked in Detective HQ, say, which everyone else still sees unchanged. So this read
+          // does a return's work as well (backAgain), and nothing the family can now see is left to a reload.
+          if (read && mineOn()) {
+            for (var k = 0; k < known.length; k++) {
+              if (before.indexOf(known[k]) === -1 && mine.indexOf(known[k]) === -1) mine.push(known[k]);
+            }
+          }
+          var t = now();
+          held.forEach(function (h) {
+            if (read && mineOn() && isKnown(h.n)) {
+              if (mine.indexOf(h.n) === -1) mine.push(h.n);
+              return;
+            }
+            if (!read && stillOwed(h.n, t)) return;
+            delete owed[h.n];
+            put(h.n, h.got, null);
+          });
+        });
+    }
+
+    // Draw again the doors the feed says have changed: a door the family can see from the family's own answer,
+    // together with any it still owes; every other door from the calendar everyone shares, one at a time, as
+    // the site is small and a day's worth of changes is a handful of doors. A shared door that turns open is held
+    // back until the family's answer has been read again (opened).
+    function redraw(changed, newer) {
+      var mine = [];
+      if (mineOn()) {
+        for (var i = 0; i < known.length; i++) {
+          if (changed.indexOf(known[i]) !== -1 || owed[known[i]] !== undefined) mine.push(known[i]);
+        }
+      } else {
+        // Nothing is owed while the family's own doors are not drawn (from Christmas Day, or with the doors off),
+        // so a door owed before then gets its whole minute when they are drawn again.
+        owed = {};
+      }
+      var shared = changed.filter(function (n) {
+        return mine.indexOf(n) === -1;
+      });
+      var held = [];
+      return shared
+        .reduce(function (chain, n) {
+          return chain.then(function () {
+            return fetchShared(n).then(function (fresh) {
+              // A door the family came to know while this drawing was on its way (its answer landing late, say) is
+              // drawn from the family's own answer instead, with the feed's fingerprint (drawMine below).
+              if (mineOn() && isKnown(n)) {
+                if (mine.indexOf(n) === -1) mine.push(n);
+                return;
+              }
+              var got = parsed(fresh);
+              if (mineOn() && opens(n, got)) held.push({ n: n, got: got });
+              else put(n, got, null);
+            });
+          });
+        }, Promise.resolve())
+        .then(function () {
+          return opened(held, mine);
+        })
+        .then(function () {
+          return drawMine(mine, newer);
+        })
+        .then(function (left) {
+          return missed(left, changed);
+        });
+    }
+
+    // Draw one door again: a door the family can see from its own answer, any other from the shared calendar.
+    function redrawOne(n) {
+      return mineOn() && isKnown(n) ? drawMine([Number(n)], {}) : refresh(n);
+    }
+
+    // Back on the page after being away: the family may have been to a place, or had a go, meanwhile (on its phone,
+    // say, while this tab waited). Its answer is read again, the marks laid on afresh, and each door it can now see
+    // that it could not before is drawn from its own answer. Only while its own doors are drawn: never with
+    // December's doors off, nor from Christmas Day until 1 January.
+    function backAgain() {
+      if (stopped || !mineOn()) return Promise.resolve();
+      var before = known.slice();
+      return readMe()
+        .catch(function () {
+          return null;
+        })
+        .then(function (body) {
+          if (!takeMe(body)) return undefined;
+          eachDoor(function (door) {
+            applyMarks(door.getAttribute("data-door"));
+          });
+          if (!mineOn()) return undefined;
+          var newly = known.filter(function (n) {
+            return before.indexOf(n) === -1;
+          });
+          return drawMine(newly, {}).then(function (left) {
+            return missed(left, []);
+          });
+        })
+        .catch(function () {
+          // An answer that cannot be taken in just now: the board stays as it is, and nothing is said.
         });
     }
 
@@ -392,31 +682,49 @@
       body.innerHTML = status.html;
     }
 
-    // Draw one door again. The HTML is the server's own, made by the code that drew the page.
+    // A door the server drew, { tile, detail } as HTML made by the code that drew the page, read into its door and
+    // its detail; null when it is not one.
+    function parsed(fresh) {
+      if (!fresh || typeof fresh.tile !== "string" || typeof fresh.detail !== "string") return null;
+      var box = doc.createElement("template");
+      box.innerHTML = fresh.tile + fresh.detail;
+      var door = box.content.querySelector(".elf-door");
+      var detail = box.content.querySelector(".elf-detail");
+      return door && detail ? { door: door, detail: detail } : null;
+    }
+
+    // Put a door the server drew (parsed) in place of the one on the page. `v`, when given, is the fingerprint the
+    // door keeps: the shared calendar's, for a door drawn from the family's own answer. Answers whether it was put.
+    function put(n, got, v) {
+      var oldDoor = doorOf(n);
+      var oldDetail = detailOf(n);
+      if (!got || !oldDoor || !oldDetail) return false;
+      var door = got.door;
+      var detail = got.detail;
+      if (v) door.setAttribute("data-v", v);
+      var wasOpen = oldDetail.classList.contains("is-open");
+      var wasFound = oldDoor.getAttribute("data-kind") === "found";
+      oldDoor.parentNode.replaceChild(door, oldDoor);
+      oldDetail.parentNode.replaceChild(detail, oldDetail);
+      if (wasOpen) detail.classList.add("is-open");
+      dress(door);
+      if (!wasFound && door.getAttribute("data-kind") === "found") door.classList.add("is-opening");
+      applyMarks(n);
+      return true;
+    }
+
+    // One door as the calendar everyone shares draws it, or null.
+    function fetchShared(n) {
+      return win.fetch(doorApi + n).then(function (res) {
+        return res.ok ? res.json() : null;
+      });
+    }
+
+    // Draw one door again, as the calendar everyone shares draws it.
     function refresh(n) {
-      return win
-        .fetch(doorApi + n)
-        .then(function (res) {
-          return res.ok ? res.json() : null;
-        })
-        .then(function (fresh) {
-          var oldDoor = doorOf(n);
-          var oldDetail = detailOf(n);
-          if (!fresh || typeof fresh.tile !== "string" || typeof fresh.detail !== "string" || !oldDoor || !oldDetail) return;
-          var box = doc.createElement("template");
-          box.innerHTML = fresh.tile + fresh.detail;
-          var door = box.content.querySelector(".elf-door");
-          var detail = box.content.querySelector(".elf-detail");
-          if (!door || !detail) return;
-          var wasOpen = oldDetail.classList.contains("is-open");
-          var wasFound = oldDoor.getAttribute("data-kind") === "found";
-          oldDoor.parentNode.replaceChild(door, oldDoor);
-          oldDetail.parentNode.replaceChild(detail, oldDetail);
-          if (wasOpen) detail.classList.add("is-open");
-          dress(door);
-          if (!wasFound && door.getAttribute("data-kind") === "found") door.classList.add("is-opening");
-          applyMarks(n);
-        });
+      return fetchShared(n).then(function (fresh) {
+        put(n, parsed(fresh), null);
+      });
     }
 
     function poll() {
@@ -432,18 +740,22 @@
           if (feed.now) setSkew(feed.now);
           setTally(feed.found);
           setStatus(feed.status);
-          var changed = [];
-          var list = feed.doors || [];
-          for (var i = 0; i < list.length; i++) {
-            var door = doorOf(list[i].door);
-            if (door && door.getAttribute("data-v") !== list[i].v) changed.push(list[i].door);
-          }
-          // One at a time: the site is small, and a day's worth of changes is a handful of doors.
-          return changed.reduce(function (chain, n) {
-            return chain.then(function () {
-              return refresh(n);
-            });
-          }, Promise.resolve());
+          // While December's doors are on, no door is drawn until the family's answer is in: a poll begun as the page
+          // loads could otherwise put a shared door over one just drawn from the family's own answer. With them off
+          // there is no family's door to keep, and a poll draws at once, as it always has.
+          return (meDoorApi ? settled : Promise.resolve()).then(function () {
+            var changed = [];
+            var newer = {};
+            var list = feed.doors || [];
+            for (var i = 0; i < list.length; i++) {
+              var door = doorOf(list[i].door);
+              if (door && door.getAttribute("data-v") !== list[i].v) {
+                changed.push(Number(list[i].door));
+                newer[list[i].door] = list[i].v;
+              }
+            }
+            return redraw(changed, newer);
+          });
         })
         .catch(function () {
           // No news is not an error anyone needs to see. Try again later, a little less often.
@@ -484,12 +796,39 @@
     eachDoor(dress);
     tick();
     ticker = win.setInterval(tick, 1000);
+    // Shown again: news at once, as always. Back after being hidden, the family's answer is then read again once for
+    // this return (backAgain), unless that poll has just read it as tonight's door opened.
     doc.addEventListener("visibilitychange", function () {
-      if (!doc.hidden) poll();
+      if (doc.hidden) {
+        away = true;
+        return;
+      }
+      var back = away;
+      away = false;
+      var seen = reads;
+      var polled = poll();
+      if (back) {
+        polled.then(function () {
+          return reads === seen ? backAgain() : undefined;
+        });
+      }
     });
     loop();
 
-    return { tick: tick, poll: poll, ready: loadMarks(), stop: stop };
+    // Set before any poll's answer can come back, so every poll draws after the family's answer is in. If that answer
+    // hangs, polls stop waiting for it 10 seconds after the page starts: the doors are drawn as the calendar everyone
+    // shares draws them, and the family's own land when its answer comes.
+    ready = loadMarks();
+    if (meDoorApi) {
+      settled = new Promise(function (resolve) {
+        var late = win.setTimeout(resolve, READY_WAIT_MS);
+        ready.then(function () {
+          win.clearTimeout(late);
+          resolve();
+        });
+      });
+    }
+    return { tick: tick, poll: poll, ready: ready, stop: stop };
   }
 
   if (typeof module !== "undefined" && module.exports) {

@@ -637,6 +637,12 @@ const beforeSeven = (): CalendarView =>
     revealAt: at("2026-12-07T19:00:00.000Z"),
   });
 
+/** Door 5 as the calendar everyone shares draws it before Christmas Day (ruling F15): open, with no place, and a go. */
+function withGoAtFive(view: CalendarView): CalendarView {
+  view.doors[4] = { ...view.doors[4], place: null, goUrl: "/elf/hq/door/5" };
+  return view;
+}
+
 /** The pretend server a little later: another detective's elf has joined door 7's scrapbook. */
 function secondElfOnSeven(): void {
   server = sharedSeven(at("2026-12-07T19:20:00.000Z"), { scrapbook: { elves: [ELF_71, ELF_72], photos: [], count: 2 }, collage: [ELF_71.pictureUrl, ELF_72.pictureUrl] });
@@ -1149,6 +1155,119 @@ describe("a family's own places", () => {
       expect(calls).toEqual(["/api/elf/calendar", "/api/elf/door/7", "/api/elf/me", "/api/elf/me/door/7"]);
       expect(words(detail(7))).toContain("Corner Bakehouse");
     });
+
+    // From the re-review of Task 8, Important A: the read at tonight's opening stands in for the return's own, so it
+    // draws every door the family has come to know since its last read, not only tonight's.
+    it("draw every door the family has come to know while away, with tonight's, from one answer", async () => {
+      me = meOn({ goes: [5, 7] });
+      const calendar = load(withGoAtFive(beforeSeven()));
+      await calendar.ready;
+      expect(detail(5).querySelector<HTMLElement>(".elf-book__go")!.hidden).toBe(false);
+      // Away across 7pm: the family cracks door 5 in Detective HQ, which leaves door 5 as everyone sees it, and door 7
+      // opens. The family guessed door 7, so it can see both places now.
+      hide(true);
+      server = withGoAtFive(sharedSeven(at("2026-12-07T19:00:05.000Z")));
+      places.set(5, { name: "Mistletoe Mill", town: "Exampleton" });
+      places.set(7, CORNER);
+      me = meOn({ known: [5, 7] });
+      calls = [];
+      hide(false);
+      await settle();
+      expect(calls).toEqual(["/api/elf/calendar", "/api/elf/door/7", "/api/elf/me", "/api/elf/me/doors"]);
+      expect(words(detail(5))).toContain("Mistletoe Mill, Exampleton");
+      expect(detail(5).querySelector(".elf-book__go")).toBeNull();
+      expect(words(detail(7))).toContain("Corner Bakehouse, Snowford");
+    });
+
+    // Minor C: a return whose answer cannot be taken in is passed over quietly, as the page's load is.
+    it("pass over an answer it cannot take in on the return, saying nothing and leaving nothing unhandled", async () => {
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => unhandled.push(reason);
+      process.on("unhandledRejection", onUnhandled);
+      try {
+        me = meOn({ goes: [7] });
+        const calendar = load(sharedSeven(SEVEN_05));
+        await calendar.ready;
+        hide(true);
+        // Not the answer it should be: a door that is not there.
+        me = { status: 200, body: { doors: [null], photos: [], known: [7], goes: [] } };
+        hide(false);
+        await settle();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(unhandled).toEqual([]);
+        expect(words($("#elf-board"))).not.toMatch(TROUBLE);
+      } finally {
+        process.off("unhandledRejection", onUnhandled);
+      }
+    });
+  });
+
+  it("draw every door the family has come to know since its last read when tonight's door opens, the page shown throughout", async () => {
+    // Door 3 the family could see from the start: it is drawn from the family's answer as the page loads.
+    places.set(3, { name: "Holly Hall", town: "Snowford" });
+    me = meOn({ known: [3], goes: [5, 7] });
+    const calendar = load(withGoAtFive(beforeSeven()));
+    await calendar.ready;
+    expect(words(detail(3))).toContain("Holly Hall");
+    door(3).setAttribute("data-test-drawn", "at load");
+    // The family cracked door 5 in Detective HQ in another tab, and door 7 opens, which it guessed.
+    server = withGoAtFive(sharedSeven(at("2026-12-07T19:00:05.000Z")));
+    places.set(5, { name: "Mistletoe Mill", town: "Exampleton" });
+    places.set(7, CORNER);
+    me = meOn({ known: [3, 5, 7] });
+    calls = [];
+    await calendar.poll();
+    expect(calls).toEqual(["/api/elf/calendar", "/api/elf/door/7", "/api/elf/me", "/api/elf/me/doors"]);
+    expect(words(detail(5))).toContain("Mistletoe Mill, Exampleton");
+    expect(detail(5).querySelector(".elf-book__go")).toBeNull();
+    expect(words(detail(7))).toContain("Corner Bakehouse, Snowford");
+    // Door 3 was drawn already, so it is not drawn again.
+    expect(door(3).getAttribute("data-test-drawn")).toBe("at load");
+  });
+
+  it("draw tonight's door as everyone sees it at once when December's doors are switched off just as it opens", async () => {
+    me = meOn();
+    const calendar = load(beforeSeven());
+    await calendar.ready;
+    server = sharedSeven(at("2026-12-07T19:00:05.000Z"));
+    // The family's answer as it is with the doors off: no known, no goes.
+    me = { status: 200, body: { doors: [], photos: [] } };
+    calls = [];
+    await calendar.poll();
+    expect(calls).toEqual(["/api/elf/calendar", "/api/elf/door/7", "/api/elf/me"]);
+    expect(door(7).getAttribute("data-kind")).toBe("found");
+    expect(door(7).getAttribute("data-v")).toBe(doorVersion(server.doors[6], server.now));
+  });
+
+  // From the re-review of Task 8, Minor B: a door the family comes to know while its shared drawing is on the way (the
+  // family's answer landing late, after the 10 seconds) is drawn from the family's own answer, never the shared one.
+  it("draw a door from the family's own answer when its answer lands while the shared drawing is on the way", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    try {
+      places.set(7, CORNER);
+      me = meOn({ known: [7] });
+      const answerMe = holdBack("/api/elf/me");
+      const answerSharedSeven = holdBack("/api/elf/door/7");
+      const calendar = load(sharedSeven(SEVEN_05));
+      secondElfOnSeven();
+      const polled = calendar.poll();
+      // Past the 10 seconds: the poll asks for door 7 as everyone sees it, and that answer is on its way.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(calls).toContain("/api/elf/door/7");
+      // The family's answer lands first, and its door 7 is drawn from it.
+      answerMe();
+      await calendar.ready;
+      expect(words(detail(7))).toContain("Corner Bakehouse");
+      // Then the shared drawing lands.
+      answerSharedSeven();
+      await polled;
+      await flush();
+      expect(words(detail(7))).toContain("Corner Bakehouse");
+      expect(detail(7).querySelectorAll(".elf-collage figure").length).toBe(2);
+      expect(door(7).getAttribute("data-v")).toBe(doorVersion(server.doors[6], server.now));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Ruling F15 on Plan 2c-1: door 5 as the calendar everyone shares draws it before Christmas Day, with no place and

@@ -545,6 +545,7 @@
     // that it is drawn as the calendar everyone shares draws it.
     function opened(held, mine) {
       if (held.length === 0) return Promise.resolve();
+      var before = known ? known.slice() : [];
       return readMe()
         .catch(function () {
           return null;
@@ -555,6 +556,14 @@
             eachDoor(function (door) {
               applyMarks(door.getAttribute("data-door"));
             });
+          }
+          // Every door the family has come to know since its last read is drawn from its own answer too, not only the
+          // opening ones: a door cracked in Detective HQ, say, which everyone else still sees unchanged. So this read
+          // does a return's work as well (backAgain), and nothing the family can now see is left to a reload.
+          if (read && mineOn()) {
+            for (var k = 0; k < known.length; k++) {
+              if (before.indexOf(known[k]) === -1 && mine.indexOf(known[k]) === -1) mine.push(known[k]);
+            }
           }
           var t = now();
           held.forEach(function (h) {
@@ -592,6 +601,12 @@
         .reduce(function (chain, n) {
           return chain.then(function () {
             return fetchShared(n).then(function (fresh) {
+              // A door the family came to know while this drawing was on its way (its answer landing late, say) is
+              // drawn from the family's own answer instead, with the feed's fingerprint (drawMine below).
+              if (mineOn() && isKnown(n)) {
+                if (mine.indexOf(n) === -1) mine.push(n);
+                return;
+              }
               var got = parsed(fresh);
               if (mineOn() && opens(n, got)) held.push({ n: n, got: got });
               else put(n, got, null);
@@ -637,6 +652,9 @@
           return drawMine(newly, {}).then(function (left) {
             return missed(left, []);
           });
+        })
+        .catch(function () {
+          // An answer that cannot be taken in just now: the board stays as it is, and nothing is said.
         });
     }
 

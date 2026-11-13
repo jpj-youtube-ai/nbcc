@@ -13,8 +13,8 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     And an admin user "alex.prize.admin.bdd@example.com" with role "admin" and password "Elf-Prize-Admin-1"
 
   # Played in last year's December, whose 24 doors and Christmas are always over: every door but door 7 was not
-  # ready at its first clue, so the first calendar read (or the elf worker, which ticks in CI too) snows it in,
-  # and a family that has been to door 7 has done all 24 doors. The entries' closing moment is set by SQL from the
+  # ready at its first clue, so the elf worker's tick snows it in, and a family that has been to door 7 has done
+  # all 24 doors. The entries' closing moment is set by SQL from the
   # database's own clock, an hour from now and then a minute ago, so every answer holds whenever this runs, and no
   # step compares the real clock with a date written here. The hooks put the closing, the graduates' video and the
   # year back, and take last year's rows away (the entries with them).
@@ -32,8 +32,11 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     And the paying browser comes back from Stripe
     And it is sent to Detective HQ, signed in
     And that browser is the family "second.prize.elf.bdd@example.com"
-    When someone signed out reads door 2 on the calendar until it says "got snowed in"
-    And the family "first.prize.elf.bdd@example.com" types the word "SNOWBALL 472" at door 7
+    # The worker's tick snows in every door that cannot run, at once. A calendar read can be handed the build of
+    # the scenario before (one build is shared for 15 seconds), and then snows in nothing here.
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" runs the elf worker at midday on 1 February this year
+    Then every door but door 7 is snowed in
+    When the family "first.prize.elf.bdd@example.com" types the word "SNOWBALL 472" at door 7
     Then the word wins, and the card says "You're first!"
     When the family "second.prize.elf.bdd@example.com" types the word "snowball 472" at door 7
     Then the word is a visit, and the card says "Door 7 done!"

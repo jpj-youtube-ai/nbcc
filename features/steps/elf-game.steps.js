@@ -818,6 +818,16 @@ Given("the grand prize entries closed a minute ago", async function () {
   await pool.query("UPDATE elf_settings SET grand_prize_closes_at = now() - interval '1 minute' WHERE id = 1");
 });
 
+// What makes a family that has been to that one door a graduate: every other door of the school's year snowed in.
+Then("every door but door {int} is snowed in", async function (door) {
+  const r = await pool.query("SELECT door, snow_day_at FROM elf_doors WHERE year = (SELECT year FROM elf_settings WHERE id = 1) ORDER BY door");
+  assert.equal(r.rows.length, 24, JSON.stringify(r.rows.map((x) => x.door)));
+  assert.deepEqual(
+    r.rows.filter((x) => x.snow_day_at === null).map((x) => x.door),
+    [door],
+  );
+});
+
 When("the family {string} opens its detective's entry page", async function (email) {
   await asFamily(this, familyOf(this, email), "GET", `/elf/hq/entry/${await detectiveIdOf(email)}`);
 });

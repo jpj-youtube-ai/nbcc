@@ -124,9 +124,10 @@ export function decideGo(
 
 /** The closing time the clues show: the place's own closing time, only when one is typed in Doors (the
  *  8pm a door falls back to is not the place's real time), only when it falls on the door's own day in
- *  London, from clue 1 (never on a snow day) until it has passed. Otherwise null. */
+ *  London, from clue 1 (never on a snow day) until it has passed, and never once the elf has gone home (a
+ *  visit is refused then, so the place is no longer worth a trip). Otherwise null. */
 export function closingShown(run: DoorRun, now: Date): Date | null {
-  if (run.closesAt === null) return null;
+  if (run.closesAt === null || run.facts.goneHome) return null;
   const closes = run.facts.closesAt;
   if (!sameDay(closes, run.facts.clue1At)) return null;
   const state = doorState(run.facts, now);

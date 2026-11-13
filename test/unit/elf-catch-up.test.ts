@@ -263,4 +263,13 @@ describe("the closing time the clues show", () => {
   it("is not shown when the place closes on the next day", () => {
     expect(closingAt(SIX_10, { closesAt: "01:00" })).toBeNull();
   });
+
+  // Rulings on Plan 2c-1, from Task 6's review: once the elf has gone home a visit is refused, so the place
+  // is no longer worth a trip and no screen or email says when it closes.
+  it("is not shown once the elf has gone home, found or not", () => {
+    const SEVEN_30 = at("2026-12-07T19:30:00Z");
+    expect(closingAt(SEVEN_30, { foundAt: SIX_47 })?.toISOString()).toBe(EIGHT_PM);
+    expect(closingAt(SEVEN_30, { foundAt: SIX_47, goneHomeAt: at("2026-12-07T19:20:00Z") })).toBeNull();
+    expect(closingAt(SEVEN_30, { goneHomeAt: at("2026-12-07T19:20:00Z") })).toBeNull();
+  });
 });

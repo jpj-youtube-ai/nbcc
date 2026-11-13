@@ -42,6 +42,7 @@ import {
   recordWord,
   runsFor,
   saveGuess,
+  saveLateGuess,
   sendElfPhoto,
   takeDownOwnPhoto,
   takeWordTry,
@@ -50,17 +51,18 @@ import {
   type FamilyRuns,
 } from "../db/elf-game";
 import { DOOR_COUNT, isDoor, type Door } from "../elf/calendar";
-import { doorsKnown, doorsToCrack, knowsPlace, placesPublic } from "../elf/catch-up";
+import { decideGo, doorsKnown, doorsToCrack, knowsPlace, placesPublic, type FamilyKnowledge, type GoRefusal } from "../elf/catch-up";
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
 import { canGuess, cluesOut, doorState, isOpen, shownAt, type DoorState } from "../elf/doors";
 import { badgeWords } from "../elf/emails";
 import { decideGuess, type GuessRefusal, type SavedGuess } from "../elf/guess";
 import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
 import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
+import { goOutcomeWords, renderGoPage } from "../elf/pages/go";
 import { renderHqPage } from "../elf/pages/hq";
 import { claimWinHtml, renderPosterPage, visitWinHtml, wordRefusalWords } from "../elf/pages/poster";
 import { renderRulesPage } from "../elf/pages/rules";
-import type { CalendarView, ClaimWin, FamilyMarks, HqView, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
+import type { CalendarView, ClaimWin, FamilyMarks, GoView, HqView, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
 import { progressOf, promotionsBetween, type DoorsDone, type Rank } from "../elf/progress";
 import { makePublicCalendar } from "../elf/public-calendar";
@@ -69,6 +71,8 @@ import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeS
 import {
   calendarViewFor,
   familyDoorView,
+  goOutcomeOf,
+  goViewFor,
   hqViewFor,
   lookFromForm,
   marksOf,
@@ -1338,6 +1342,130 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
   }
 }
 
+// --- having a go: a missed door's own page in Detective HQ (Plan 2c-1) --------------------------------
+//
+//   GET  /elf/hq/door/:n      the go page: the door's clues one at a time (?clues=2, ?clues=3), then one
+//                             guess; once the family can see the place, how it went
+//   POST /elf/hq/door/:n/go   the one guess, JSON { text } or the plain form (text, and how many clues
+//                             were showing): JSON answers 200 { cracked, message }, or { reason, message }
+//                             with 400 (empty, too long), 409 (closed, already, been there) or 404 (not
+//                             open); the plain form goes back to the door's page, which shows how it went,
+//                             or draws it again with the words in its form's status line
+//
+// Both sit behind schoolOn and doorsOn, so while December's doors are off only the practice door has a go
+// page, through the preview link. Each is the family's own, so no browser or shared cache keeps either.
+
+/** How many clues the go page shows, from its address or its form: 2 or 3, and 1 for anything else. */
+function cluesAsked(raw: unknown): number {
+  return raw === "2" ? 2 : raw === "3" ? 3 : 1;
+}
+
+/** The door's place, when there is a go to be had at the door at `now`: it is open, and has a place. A
+ *  door shut, hunted, found with its place still hidden or snowed in has nothing to crack yet, and nor has
+ *  an open door with no place (a door never runs without one). */
+function goPlaceOf(run: DoorRun, now: Date): { name: string; town: string } | null {
+  return isOpen(doorState(run.facts, now)) && run.placeName?.trim() ? { name: run.placeName, town: run.placeTown ?? "" } : null;
+}
+
+/** The go page's view for a family: what it has done at the door (read here, unless the caller has just
+ *  read it) and, once the elf is found, who found it, read for that one door (never the practice door's,
+ *  which names no finder). */
+async function goViewOf(o: { run: DoorRun; familyId: number; now: Date; cluesShown: number; guessError?: string | null; known?: FamilyKnowledge }): Promise<GoView> {
+  const { run, now } = o;
+  const named = run.door !== 0 && doorState(run.facts, now) === "found";
+  const [known, finders] = await Promise.all([o.known ?? familyKnowledge(run.year, o.familyId), named ? finderParts(run.year, run.door) : []]);
+  return goViewFor({ run, now, guess: known.guesses.get(run.door) ?? null, typed: known.typed.has(run.door), finders, cluesShown: o.cluesShown, guessError: o.guessError });
+}
+
+export async function getGo(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const now = new Date();
+  try {
+    const family = await familyOr(req, res);
+    if (!family) return;
+    // The door as it is at this moment, read through runsFor as every family route reads it.
+    const run = gameRun(res, await familyRuns(res, now), doorNumberOf(req.params.n));
+    if (!run) return notFound(res);
+    if (!goPlaceOf(run, now)) return res.redirect(303, "/elf/hq");
+    return await sendPage(req, res, renderGoPage(await goViewOf({ run, familyId: family.id, now, cluesShown: cluesAsked(req.query.clues) })));
+  } catch (err) {
+    return gameFailed(res, "go page", err, false);
+  }
+}
+
+/** What to tell a family whose go was refused. Only "empty" names the door's elf, and decideGo reaches it
+ *  only at an open door: a door's elf is never named before its door opens. */
+export function wordsForGoRefusal(reason: GoRefusal, elf: string): string {
+  switch (reason) {
+    case "not-open":
+      return "There is nothing to guess at this door just now.";
+    case "closed":
+      return "Having a go closed on Christmas Day.";
+    case "already":
+      return "You have already had your go at this door.";
+    case "been-there":
+      return "Your family has been to this hiding place, so there is nothing to guess.";
+    case "empty":
+      return `Type where you think ${elf} is hiding.`;
+    case "too-long":
+      return "That is a bit long. Up to 80 letters is plenty.";
+  }
+}
+
+/** Each refusal's status: what was typed, 400; a go the family cannot have, 409; nothing to crack, 404. */
+const GO_REFUSAL_STATUS: Record<GoRefusal, number> = { empty: 400, "too-long": 400, closed: 409, already: 409, "been-there": 409, "not-open": 404 };
+
+/** A family's one go at a door it missed (src/elf/catch-up.ts): decideGo at this moment, then one insert
+ *  that never overwrites anything (saveLateGuess), so two tabs or two phones locking in at once save one go
+ *  between them, and a guess from the night is never replaced. A go counts against the family's guesses. */
+export async function postGo(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const json = wantsJson(req);
+  if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const now = new Date();
+  try {
+    const s = await signedInFamily(req);
+    if (!s) return json ? res.status(401).json({ error: "Please sign in again." }) : res.redirect(303, "/elf/sign-in");
+    const limited = !allowedOnce(req, s.familyId, limits.guessFamily);
+    if (limited && json) return res.status(429).json({ reason: "too-many-requests", message: ELF_TOO_MANY });
+    // The door as it is at this moment, never the calendar's copy.
+    const run = gameRun(res, await familyRuns(res, now), doorNumberOf(req.params.n));
+    if (!run) return notFound(res, json);
+    const doorPage = `/elf/hq/door/${run.door}`;
+    const place = goPlaceOf(run, now);
+    // The plain form has no script to show the words: the go page is drawn again with them in its form's
+    // status line, with as many clues showing as the family had open.
+    const pageSaying = async (status: number, message: string | null, known?: FamilyKnowledge): Promise<Response> =>
+      sendPage(req, res.status(status), renderGoPage(await goViewOf({ run, familyId: s.familyId, now, cluesShown: cluesAsked(body.clues), guessError: message, known })));
+    const refuse = async (reason: GoRefusal, known?: FamilyKnowledge): Promise<Response | void> => {
+      const message = wordsForGoRefusal(reason, run.elfName);
+      if (json) return res.status(GO_REFUSAL_STATUS[reason]).json({ reason, message });
+      if (reason === "not-open") return res.redirect(303, "/elf/hq");
+      if (reason === "already" || reason === "been-there") return res.redirect(303, doorPage);
+      // Closed, the page says so itself, in place of the form.
+      return await pageSaying(GO_REFUSAL_STATUS[reason], reason === "closed" ? null : message, known);
+    };
+    if (limited) return place ? await pageSaying(429, ELF_TOO_MANY) : res.redirect(303, "/elf/hq");
+    if (!place) return await refuse("not-open");
+    const known = await familyKnowledge(run.year, s.familyId);
+    const typed = known.typed.has(run.door);
+    const decision = decideGo({ year: run.year, state: doorState(run.facts, now), guessed: known.guesses.has(run.door), typed, now }, body.text);
+    if (!decision.ok) return await refuse(decision.reason, known);
+    const go = { text: decision.text, norm: decision.norm };
+    if ((await saveLateGuess(run.year, run.door, s.familyId, go, now)) === "already") return await refuse("already", known);
+    if (!json) return res.redirect(303, doorPage);
+    // Said straight away: whether it cracked the case, and where the elf was, which the family may see now.
+    const outcome = goOutcomeOf({ run, now, place, guess: { ...go, at: now, late: true }, typed });
+    return res.status(200).json({
+      cracked: outcome.verdict === "cracked",
+      message: goOutcomeWords({ elfName: run.elfName, verdict: outcome.verdict, place: outcome.place, stillHiding: outcome.stillHiding }),
+    });
+  } catch (err) {
+    return gameFailed(res, "go", err, json);
+  }
+}
+
 export const ELF_PHOTO_POST_PATH = "/api/elf/p/:code/photo";
 
 /** The photo post's bigger body parser (src/app.ts), behind its guard: only a POST is read with it, and
@@ -1546,6 +1674,8 @@ elfRouter.get("/elf/p/:code", schoolOn, doorsOn, getPoster);
 elfRouter.post("/elf/p/:code/word", forms, schoolOn, doorsOn, postWord);
 elfRouter.post("/api/elf/word", forms, schoolOn, doorsOn, postWord);
 elfRouter.post("/api/elf/guess", forms, schoolOn, doorsOn, postGuess);
+elfRouter.get("/elf/hq/door/:n", schoolOn, doorsOn, getGo);
+elfRouter.post("/elf/hq/door/:n/go", forms, schoolOn, doorsOn, postGo);
 elfRouter.post(ELF_PHOTO_POST_PATH, schoolOn, doorsOn, postPhoto);
 elfRouter.delete(ELF_PHOTO_POST_PATH, schoolOn, doorsOn, deletePhotoByCode);
 elfRouter.delete("/api/elf/door/:n/photo", schoolOn, doorsOn, deletePhotoByDoor);

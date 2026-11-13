@@ -9,11 +9,13 @@ import type { Server } from "node:http";
 // typed the door's tag word (the one rule, src/elf/catch-up.ts); from Christmas Day until 1 January
 // everyone sees every place. The calendar everyone shares carries no place, so a signed in family gets
 // its own door from GET /api/elf/me/door/:n, and a door's photos go only to whoever may see its place,
-// never kept by a browser or a shared cache. Driven over HTTP through the real router, as
-// test/unit/elf-routes-game.test.ts drives it, with the database mocked and the doors built by the real
-// loaders from the mocked door rows. The clock is 7:05pm on Monday 7 December 2026 unless a test says
-// otherwise: door 7, found at 5:47pm, has had its place shown since 7pm, and doors 1 to 6 were snowed
-// in, so door 7 is the only open door. Every family, place, clue and word here is invented.
+// never kept by a browser or a shared cache. A family that missed a door's evening has a go at it on
+// the door's own page in Detective HQ (GET /elf/hq/door/:n, POST /elf/hq/door/:n/go): the clues one at a
+// time, then one guess. Driven over HTTP through the real router, as test/unit/elf-routes-game.test.ts
+// drives it, with the database mocked and the doors built by the real loaders from the mocked door rows.
+// The clock is 7:05pm on Monday 7 December 2026 unless a test says otherwise: door 7, found at 5:47pm, has
+// had its place shown since 7pm and closes at 8:30pm, and doors 1 to 6 were snowed in, so door 7 is the
+// only open door. Every family, place, clue and word here is invented.
 
 const db = vi.hoisted(() => ({ getElfSettings: vi.fn(), findElfSession: vi.fn(), familyWithDetectives: vi.fn() }));
 const doors = vi.hoisted(() => ({ listElfDoors: vi.fn(), getElfDoor: vi.fn(), findElfDoorByPosterCode: vi.fn(), ensureElfDoors: vi.fn() }));
@@ -28,6 +30,7 @@ const game = vi.hoisted(() => ({
   doorScrapbook: vi.fn(),
   doorPhotos: vi.fn(),
   approvedPhoto: vi.fn(),
+  saveLateGuess: vi.fn(),
 }));
 
 vi.mock("../../src/db/elf", () => db);
@@ -35,12 +38,16 @@ vi.mock("../../src/db/elf-doors", () => doors);
 vi.mock("../../src/db/elf-practice", () => practice);
 vi.mock("../../src/db/elf-game", async (orig) => ({ ...(await orig<typeof import("../../src/db/elf-game")>()), ...game }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+// What every page of the site gains in its banner and footer as it goes out (TASK-615) is not this file's
+// to check: the pages here go out as drawn, as in test/unit/elf-routes-game.test.ts.
+vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string) => html }));
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
-import { elfRouter, resetPublicCalendar } from "../../src/routes/elf";
+import { elfRouter, GUESS_LIMIT, resetElfLimits, resetPublicCalendar } from "../../src/routes/elf";
 import { loadDoorRuns } from "../../src/db/elf-game";
 import type { FamilyKnowledge } from "../../src/elf/catch-up";
+import { ELF_NAMES } from "../../src/elf/names";
 import { doorDetail, doorTile } from "../../src/elf/pages/door";
 import type { Scrapbook } from "../../src/elf/scrapbook";
 import { calendarViewFor, familyDoorView } from "../../src/elf/views";
@@ -73,6 +80,9 @@ let server: Server;
 let base = "";
 beforeAll(async () => {
   const app = express();
+  // As src/app.ts runs behind its proxy: a test can then send from an address other than the box itself,
+  // whose requests are never limited.
+  app.set("trust proxy", 1);
   app.use(express.json());
   app.use(elfRouter);
   server = app.listen(0);
@@ -88,6 +98,7 @@ beforeEach(() => {
   vi.setSystemTime(SEVEN_05);
   for (const group of [db, doors, practice, game]) for (const f of Object.values(group)) f.mockReset();
   resetPublicCalendar();
+  resetElfLimits();
   db.getElfSettings.mockResolvedValue(ON);
   db.findElfSession.mockResolvedValue({ familyId: 3 });
   db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? FAMILY : null));
@@ -103,6 +114,7 @@ beforeEach(() => {
   game.doorScrapbook.mockResolvedValue(BOOK);
   game.doorPhotos.mockResolvedValue([PHOTO]);
   game.approvedPhoto.mockResolvedValue({ mime: "image/jpeg", bytes: Buffer.from("the photo") });
+  game.saveLateGuess.mockResolvedValue("saved");
 });
 afterEach(() => vi.useRealTimers());
 
@@ -414,6 +426,301 @@ describe("a photo on a door", () => {
     expect(r.status).toBe(500);
     expect(r.text).toBe(WORDS);
     expect(game.approvedPhoto).not.toHaveBeenCalled();
+    logged.mockRestore();
+  });
+});
+
+// ---- having a go: a door's own page in Detective HQ ----------------------------------------------
+
+/** How many clue notes a page holds. */
+const clueNotes = (html: string) => (html.match(/<li class="elf-clue">/g) ?? []).length;
+const CRACKED_7 = "You cracked it! Wigglepop was hiding at The Example Bakehouse, Exampleton.";
+const GO_FORM = 'action="/elf/hq/door/7/go"';
+
+describe("a door's go page", () => {
+  it("offers a family that missed door 7 clue 1 and its one guess, never kept by any cache", async () => {
+    const r = await call("GET", "/elf/hq/door/7");
+    expect(r.status).toBe(200);
+    // Ruling F14: the family's own page.
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.headers.get("content-type")).toContain("text/html");
+    expect(clueNotes(r.text)).toBe(1);
+    expect(r.text).toContain("Pretend clue one");
+    expect(r.text).not.toContain("Pretend clue two");
+    expect(r.text).toContain("Found by Detective Ava Snowdrift at 5:47pm.");
+    expect(r.text).toContain(`<form class="elf-guess" method="post" ${GO_FORM}>`);
+    expect(r.text).toContain("You get one guess at this door.");
+    expect(r.text).toContain("The hiding place closes at 8:30pm today.");
+    expect(r.text).toContain("<title>Door 7 |");
+    for (const secret of ["Example Bakehouse", "Exampleton", "Example Bakes"]) expect(r.text).not.toContain(secret);
+    expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+    expect(game.finderParts).toHaveBeenCalledWith(2026, 7);
+  });
+
+  it("shows the clues asked for: two or three, and one for anything else", async () => {
+    expect(clueNotes((await call("GET", "/elf/hq/door/7?clues=3")).text)).toBe(3);
+    expect(clueNotes((await call("GET", "/elf/hq/door/7?clues=2")).text)).toBe(2);
+    for (const odd of ["clues=4", "clues=0", "clues=x", "clues=", "clues=3&clues=3"]) {
+      expect(clueNotes((await call("GET", `/elf/hq/door/7?${odd}`)).text), odd).toBe(1);
+    }
+  });
+
+  it("sends a door that is not open back to Detective HQ: door 8 still shut, door 7 found with its place hidden, and door 7 snowed in", async () => {
+    const shut = await call("GET", "/elf/hq/door/8");
+    expect(shut.status).toBe(303);
+    expect(shut.headers.get("location")).toBe("/elf/hq");
+    vi.setSystemTime(SIX_10);
+    expect((await call("GET", "/elf/hq/door/7")).headers.get("location")).toBe("/elf/hq");
+    vi.setSystemTime(SEVEN_05);
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 3, 4, 5, 6]), door7({ snowDayAt: at("2026-12-07T17:30:00.000Z"), snowDayBy: "automatic" })]);
+    const snowed = await call("GET", "/elf/hq/door/7");
+    expect(snowed.status).toBe(303);
+    expect(snowed.headers.get("location")).toBe("/elf/hq");
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+  });
+
+  it("sends an open door with no place back to Detective HQ", async () => {
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 3, 4, 5, 6]), foundDoor7({ placeName: "  ", placeTown: null })]);
+    const r = await call("GET", "/elf/hq/door/7");
+    expect(r.status).toBe(303);
+    expect(r.headers.get("location")).toBe("/elf/hq");
+  });
+
+  it("asks someone signed out to sign in, and reads nothing of any family's", async () => {
+    const r = await call("GET", "/elf/hq/door/7", { cookie: null });
+    expect(r.status).toBe(303);
+    expect(r.headers.get("location")).toBe("/elf/sign-in");
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+  });
+
+  it("shows a family that guessed door 7 on the night how it went, with its place and no form", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    const r = await call("GET", "/elf/hq/door/7");
+    expect(r.status).toBe(200);
+    expect(r.text).toContain(CRACKED_7);
+    expect(r.text).toContain("The Example Bakehouse closes at 8:30pm today.");
+    expect(clueNotes(r.text)).toBe(0);
+    expect(r.text).not.toContain(GO_FORM);
+  });
+
+  it("shows a family whose detective typed door 7's tag word where the elf was, and that it has been there", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [7] }));
+    const r = await call("GET", "/elf/hq/door/7");
+    expect(r.text).toContain("Wigglepop was hiding at The Example Bakehouse, Exampleton.");
+    expect(r.text).toContain("Your family has been there. Candy cane collected.");
+    expect(r.text).not.toContain(GO_FORM);
+  });
+
+  it("is not found for anything but a door, nor for the practice door without the preview link, nor with December's doors off", async () => {
+    for (const bad of ["25", "x", "7.5"]) expect((await call("GET", `/elf/hq/door/${bad}`)).status, bad).toBe(404);
+    expect((await call("GET", "/elf/hq/door/0")).status).toBe(404);
+    db.getElfSettings.mockResolvedValue(OFF);
+    expect((await call("GET", "/elf/hq/door/7")).status).toBe(404);
+    expect((await call("GET", "/elf/hq/door/7", { cookie: PRACTICE_PASS })).status).toBe(404);
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+  });
+
+  it("plays the practice door through the preview link, with December's doors off, naming no finder", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
+    const r = await call("GET", "/elf/hq/door/0?clues=3", { cookie: PRACTICE_PASS });
+    expect(r.status).toBe(200);
+    expect(r.text).toContain("<title>The practice door |");
+    expect(r.text).toContain("Tinsel, the practice door's elf");
+    expect(clueNotes(r.text)).toBe(3);
+    expect(r.text).toContain("Practice clue 1: it lives where the kettle lives.");
+    expect(r.text).not.toContain("The Example Office");
+    expect(game.familyKnowledge).toHaveBeenCalledWith(0, 3);
+    expect(game.finderParts).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 with the game's words when what the family has done cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    const r = await call("GET", "/elf/hq/door/7");
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    expect(JSON.stringify(logged.mock.calls)).not.toContain("Example Bakehouse");
+    logged.mockRestore();
+  });
+});
+
+describe("having a go at a door", () => {
+  const goAt = (text: unknown, o: { door?: string; cookie?: string | null; headers?: Record<string, string> } = {}) =>
+    call("POST", `/elf/hq/door/${o.door ?? "7"}/go`, { json: { text }, cookie: o.cookie, headers: o.headers });
+  const formGo = (form: Record<string, string>, o: { door?: string; cookie?: string | null } = {}) => call("POST", `/elf/hq/door/${o.door ?? "7"}/go`, { form, cookie: o.cookie });
+
+  it("saves a family's one go, and says straight away that it cracked the case and where the elf was", async () => {
+    const r = await goAt("the example bakehouse");
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ cracked: true, message: CRACKED_7 });
+    expect(game.saveLateGuess).toHaveBeenCalledWith(2026, 7, 3, { text: "the example bakehouse", norm: "examplebakehouse" }, SEVEN_05);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("says not this time for a wrong go, still with where the elf was, and saves the go as typed, trimmed", async () => {
+    const r = await goAt("  The Example Cafe ");
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ cracked: false, message: "Not this time. Wigglepop was hiding at The Example Bakehouse, Exampleton." });
+    expect(game.saveLateGuess).toHaveBeenCalledWith(2026, 7, 3, { text: "The Example Cafe", norm: "examplecafe" }, SEVEN_05);
+  });
+
+  it("refuses a second go: the database keeps one, and a guess from the night is the family's go", async () => {
+    game.saveLateGuess.mockResolvedValue("already");
+    const r = await goAt("the example bakehouse");
+    expect(r.status).toBe(409);
+    expect(r.data).toEqual({ reason: "already", message: "You have already had your go at this door." });
+    game.saveLateGuess.mockClear();
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    const night = await goAt("the example bakehouse");
+    expect(night.status).toBe(409);
+    expect(night.data).toEqual({ reason: "already", message: "You have already had your go at this door." });
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("tells a family whose detective typed the tag word that there is nothing to guess", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [7] }));
+    const r = await goAt("the example bakehouse");
+    expect(r.status).toBe(409);
+    expect(r.data).toEqual({ reason: "been-there", message: "Your family has been to this hiding place, so there is nothing to guess." });
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("is closed from midnight as Christmas Day begins", async () => {
+    vi.setSystemTime(at("2026-12-25T00:00:00.000Z"));
+    const r = await goAt("the example bakehouse");
+    expect(r.status).toBe(409);
+    expect(r.data).toEqual({ reason: "closed", message: "Having a go closed on Christmas Day." });
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("asks for a place when nothing is typed, naming the elf, and refuses a long one", async () => {
+    const empty = await goAt("");
+    expect(empty.status).toBe(400);
+    expect(empty.data).toEqual({ reason: "empty", message: "Type where you think Wigglepop is hiding." });
+    expect((await goAt("   ")).data.reason).toBe("empty");
+    const long = await goAt("x".repeat(81));
+    expect(long.status).toBe(400);
+    expect(long.data).toEqual({ reason: "too-long", message: "That is a bit long. Up to 80 letters is plenty." });
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("refuses a go at a door that is not open, door 8, never naming its elf", async () => {
+    const r = await goAt("the example bakehouse", { door: "8" });
+    expect(r.status).toBe(404);
+    expect(r.data).toEqual({ reason: "not-open", message: "There is nothing to guess at this door just now." });
+    expect(r.text).not.toContain(ELF_NAMES[7]);
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("refuses a go at an open door with no place, as a door with nothing to guess", async () => {
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 3, 4, 5, 6]), foundDoor7({ placeName: null, placeTown: null })]);
+    const r = await goAt("example bakes");
+    expect(r.status).toBe(404);
+    expect(r.data).toMatchObject({ reason: "not-open" });
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("is not found for anything but a door", async () => {
+    for (const bad of ["25", "x"]) expect((await goAt("x", { door: bad })).status, bad).toBe(404);
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("goes back to the door's page after the plain form, which shows how it went", async () => {
+    const r = await formGo({ text: "the example bakehouse" });
+    expect(r.status).toBe(303);
+    expect(r.headers.get("location")).toBe("/elf/hq/door/7");
+    expect(game.saveLateGuess).toHaveBeenCalledWith(2026, 7, 3, { text: "the example bakehouse", norm: "examplebakehouse" }, SEVEN_05);
+  });
+
+  it("goes back to the door's page for the plain form's go once the family has had its go or been there", async () => {
+    game.saveLateGuess.mockResolvedValue("already");
+    expect((await formGo({ text: "the example cafe" })).headers.get("location")).toBe("/elf/hq/door/7");
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    expect((await formGo({ text: "the example cafe" })).headers.get("location")).toBe("/elf/hq/door/7");
+    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [7] }));
+    const been = await formGo({ text: "the example cafe" });
+    expect(been.status).toBe(303);
+    expect(been.headers.get("location")).toBe("/elf/hq/door/7");
+  });
+
+  it("draws the page again for the plain form's empty or long go, with the words in its status line and the clues it had showing", async () => {
+    const empty = await formGo({ text: "  ", clues: "3" });
+    expect(empty.status).toBe(400);
+    expect(empty.headers.get("content-type")).toContain("text/html");
+    expect(empty.headers.get("cache-control")).toBe("private, no-store");
+    expect(empty.text).toContain('<p class="elf-guess__status is-error" role="status">Type where you think Wigglepop is hiding.</p>');
+    expect(clueNotes(empty.text)).toBe(3);
+    const long = await formGo({ text: "x".repeat(81) });
+    expect(long.status).toBe(400);
+    expect(long.text).toContain('<p class="elf-guess__status is-error" role="status">That is a bit long. Up to 80 letters is plenty.</p>');
+    expect(clueNotes(long.text)).toBe(1);
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("draws the page closed for the plain form from Christmas Day", async () => {
+    vi.setSystemTime(at("2026-12-25T00:00:00.000Z"));
+    const r = await formGo({ text: "the example bakehouse" });
+    expect(r.status).toBe(409);
+    expect(r.text).toContain("Having a go closed on Christmas Day.");
+    expect(r.text).not.toContain(GO_FORM);
+  });
+
+  it("sends the plain form's go at a door that is not open back to Detective HQ", async () => {
+    const r = await formGo({ text: "the example bakehouse" }, { door: "8" });
+    expect(r.status).toBe(303);
+    expect(r.headers.get("location")).toBe("/elf/hq");
+  });
+
+  it("asks someone signed out to sign in, and refuses a go sent from another site", async () => {
+    const out = await goAt("the example bakehouse", { cookie: null });
+    expect(out.status).toBe(401);
+    expect(out.data).toEqual({ error: "Please sign in again." });
+    const outForm = await formGo({ text: "the example bakehouse" }, { cookie: null });
+    expect(outForm.status).toBe(303);
+    expect(outForm.headers.get("location")).toBe("/elf/sign-in");
+    const elsewhere = await goAt("the example bakehouse", { headers: { Origin: "https://elsewhere.example" } });
+    expect(elsewhere.status).toBe(403);
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  // Ruling F15: a go counts against the family's guesses, 60 in 15 minutes, from whatever address.
+  it("limits each family's goes with its guesses: JSON is told, and the plain form's page says so in its status line", async () => {
+    const goFrom = (address: string, json = true) =>
+      call("POST", "/elf/hq/door/7/go", { ...(json ? { json: { text: "the example cafe" } } : { form: { text: "the example cafe" } }), headers: { "X-Forwarded-For": address } });
+    expect(GUESS_LIMIT).toEqual({ max: 60, windowMs: 900_000 });
+    for (let i = 1; i <= 60; i++) expect((await goFrom(`203.0.113.${i}`)).status, `go ${i}`).toBe(200);
+    const r = await goFrom("203.0.113.61");
+    expect(r.status).toBe(429);
+    expect(r.data).toEqual({ reason: "too-many-requests", message: "Too many tries. Please wait a few minutes and try again." });
+    const form = await goFrom("203.0.113.62", false);
+    expect(form.status).toBe(429);
+    expect(form.headers.get("content-type")).toContain("text/html");
+    expect(form.text).toContain('<p class="elf-guess__status is-error" role="status">Too many tries. Please wait a few minutes and try again.</p>');
+    expect(game.saveLateGuess).toHaveBeenCalledTimes(60);
+  });
+
+  it("plays the practice door through the preview link: a go there is door 0 of year 0", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
+    const r = await call("POST", "/elf/hq/door/0/go", { json: { text: "the example office" }, cookie: PRACTICE_PASS });
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ cracked: true, message: "You cracked it! Tinsel was hiding at The Example Office, Exampleton." });
+    expect(game.saveLateGuess).toHaveBeenCalledWith(0, 0, 3, { text: "the example office", norm: "exampleoffice" }, SEVEN_05);
+    expect(game.familyKnowledge).toHaveBeenCalledWith(0, 3);
+  });
+
+  it("answers 500 with the game's words when what the family has done cannot be read, and saves nothing", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    const r = await goAt("the example bakehouse");
+    expect(r.status).toBe(500);
+    expect(r.data).toEqual({ error: WORDS });
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+    const lines = JSON.stringify(logged.mock.calls);
+    expect(lines).toContain("connection lost");
+    expect(lines).not.toContain("example bakehouse");
     logged.mockRestore();
   });
 });

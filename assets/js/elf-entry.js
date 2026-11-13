@@ -4,9 +4,12 @@
  * chosen picture is made smaller in the browser (at most 1600 pixels on its longest side, a fresh JPEG under
  * 2 MB, as the photo sheet makes a photo), sent as JSON { mime, dataBase64 } with the mobile number when the
  * page asks for one, and the server's answer is shown in the form's status line: its thank you, or why not.
- * The button stays off while a picture is on its way. Once a picture is in, the page shows it as the server
- * draws it then, with no reload: the picture, fetched fresh from its own address, and the button that sends a
- * new one.
+ * The button stays off while a picture is on its way. While the picture maker is busy (a 503, when too many
+ * pictures are arriving at once, as in the rush before the entries close) the same picture is sent again by
+ * itself, still "Sending your picture": five sends in all, each 2 to 3 seconds after the busy answer, and only
+ * then the busy words. The server gives back the try a busy answer took. Once a picture is in, the page shows
+ * it as the server draws it then, with no reload: the picture, fetched fresh from its own address, and the
+ * button that sends a new one.
  *
  * Nothing here decides anything. The server says whether the picture is taken, makes it again so nothing from
  * the camera is kept, and writes the words: this only shows them.
@@ -36,6 +39,14 @@
   var QUALITY = 0.86;
   // Tried once more if the first drawing is over 2 MB.
   var LOWER_QUALITY = 0.7;
+
+  // The picture maker's answer while too many pictures are waiting, and how often the same picture is sent while
+  // it lasts: five sends in all, each 2 to 3 seconds after the busy answer, spread so pictures sent at the same
+  // moment do not all come back at the same moment.
+  var BUSY = 503;
+  var SENDS_WHILE_BUSY = 5;
+  var BUSY_WAIT_MS = 2000;
+  var BUSY_SPREAD_MS = 1000;
 
   // --- reading and making pictures, in a real browser ----------------------------------------------
   // Copied from assets/js/elf-poster.js (browserRead, browserMake, base64Bytes and rawBase64), keeping its limits.
@@ -183,6 +194,26 @@
         });
     }
 
+    function pause(ms) {
+      return new Promise(function (done) {
+        win.setTimeout(done, ms);
+      });
+    }
+
+    /** Sends the picture (`json`), and the same again while the picture maker is busy: five sends in all, each 2 to 3
+     *  seconds after its busy answer. Any other answer, or the fifth busy one, is the answer. Never rejects. */
+    function sendPicture(json) {
+      function attempt(n) {
+        return request(form.getAttribute("data-api"), { method: "POST", headers: { "Content-Type": "application/json" }, body: json }).then(function (res) {
+          if (res.status !== BUSY || n >= SENDS_WHILE_BUSY) return res;
+          return pause(BUSY_WAIT_MS + Math.floor(Math.random() * BUSY_SPREAD_MS)).then(function () {
+            return attempt(n + 1);
+          });
+        });
+      }
+      return attempt(1);
+    }
+
     // The picture to send: drawn again smaller if the browser can, the file as it came if it cannot.
     function prepare(file) {
       return read(file).then(function (pic) {
@@ -223,7 +254,7 @@
           var body = { mime: made.mime, dataBase64: made.base64 };
           var mobile = form.querySelector('input[name="mobile"]');
           if (mobile) body.mobile = mobile.value;
-          return request(form.getAttribute("data-api"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(function (res) {
+          return sendPicture(JSON.stringify(body)).then(function (res) {
             return res.ok ? { thanks: typeof res.body.message === "string" ? res.body.message : "" } : { words: refusal(res.body) };
           });
         })

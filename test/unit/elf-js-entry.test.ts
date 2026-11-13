@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -30,6 +30,8 @@ const MOBILE_WORDS = "Please type a UK mobile number, like 07700 900 123.";
 
 let calls: Call[] = [];
 let answer: Answer = { status: 201, body: { ok: true, message: THANKS } };
+/** Answers taken in turn, one a request, before `answer` is used again. */
+let answers: Answer[] = [];
 /** While set, every request waits for it to be called before it answers. */
 let gate: Promise<void> | null = null;
 
@@ -50,8 +52,8 @@ function load(view: EntryView = entryView(), opts: Record<string, unknown> = {})
     const headers = (init?.headers ?? {}) as Record<string, string>;
     calls.push({ url, json: typeof body === "string" ? JSON.parse(body) : null, type: headers["Content-Type"] ?? null, method: init?.method ?? null, credentials: init?.credentials ?? null });
     if (gate) await gate;
-    if (answer === "offline") throw new Error("offline");
-    const a = answer;
+    const a = answers.length > 0 ? answers.shift()! : answer;
+    if (a === "offline") throw new Error("offline");
     return { ok: a.status >= 200 && a.status < 300, status: a.status, json: () => Promise.resolve(a.body) };
   });
   initEntry(document, window, opts);
@@ -77,6 +79,7 @@ async function jpegFile(): Promise<File> {
 
 afterEach(() => {
   answer = { status: 201, body: { ok: true, message: THANKS } };
+  answers = [];
   gate = null;
 });
 
@@ -187,6 +190,119 @@ describe("sending in a picture", () => {
   it("does nothing on a page with no form, once the entries have closed", async () => {
     expect(() => load(entryView({ open: false }))).not.toThrow();
     expect(calls).toEqual([]);
+  });
+});
+
+// The final review's issue 1: a rush before the close fills the one picture maker, which answers 503 at once while too
+// many pictures are waiting. The page keeps saying it is sending and sends the same picture again by itself, up to four
+// more times, each 2 to 3 seconds after the busy answer, and only then shows the busy words: so a family that presses
+// once just before the close still gets its picture in. The clock is faked here, so each wait is stepped through.
+describe("while the picture maker is busy", () => {
+  const BUSY_WORDS = "Lots of photos arriving just now. Please try again in a minute.";
+  const BUSY: Answer = { status: 503, body: { error: BUSY_WORDS } };
+  const IN: Answer = { status: 201, body: { ok: true, message: THANKS } };
+  // The picture is made smaller by the browser, so nothing here waits on a file being read.
+  const opts = {
+    read: () => Promise.resolve({ src: "blob:x", width: 400, height: 300, img: {} }),
+    make: () => Promise.resolve({ mime: "image/jpeg", base64: "c21hbGw=" }),
+  };
+  /** Runs every promise waiting to run; nothing here waits on the faked clock. */
+  const flush = async () => {
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+  };
+  const submit = () => $("form.elf-entry").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  /** Every sentence the status line has said, in turn. */
+  let said: string[] = [];
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The page, a picture picked and sent, and its first answer back. */
+  async function sendOnce(): Promise<void> {
+    load(entryView(), opts);
+    said = [];
+    new MutationObserver((records) => {
+      for (const r of records) for (const n of r.addedNodes) said.push(n.textContent ?? "");
+    }).observe(status(), { childList: true });
+    const input = $<HTMLInputElement>('form.elf-entry input[type="file"]');
+    Object.defineProperty(input, "files", { configurable: true, value: [new File([new Uint8Array([1, 2, 3])], "drawing.jpg", { type: "image/jpeg" })] });
+    submit();
+    await flush();
+  }
+
+  it("sends the same picture again 2 to 3 seconds after a busy answer, still sending, then shows the thank you and never the busy words", async () => {
+    answers = [BUSY, IN];
+    await sendOnce();
+    expect(calls).toHaveLength(1);
+    expect(words(status())).toBe("Sending your picture");
+    expect(button().disabled).toBe(true);
+    // A press while it waits sends nothing more.
+    submit();
+    await vi.advanceTimersByTimeAsync(1999);
+    await flush();
+    expect(calls).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1001);
+    await flush();
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(calls[0]);
+    expect(words(status())).toBe(THANKS);
+    expect(status().classList.contains("is-error")).toBe(false);
+    expect(button().disabled).toBe(false);
+    expect(said).not.toContain(BUSY_WORDS);
+    expect(said).toEqual(["Sending your picture", THANKS]);
+  });
+
+  it("shows the busy words only after a fifth busy answer, and then sends no more", async () => {
+    answers = [BUSY, BUSY, BUSY, BUSY, BUSY];
+    await sendOnce();
+    for (let n = 2; n <= 4; n++) {
+      await vi.advanceTimersByTimeAsync(3000);
+      await flush();
+      expect(calls, `send ${n}`).toHaveLength(n);
+      expect(words(status()), `send ${n}`).toBe("Sending your picture");
+      expect(button().disabled, `send ${n}`).toBe(true);
+    }
+    await vi.advanceTimersByTimeAsync(3000);
+    await flush();
+    expect(calls).toHaveLength(5);
+    expect(words(status())).toBe(BUSY_WORDS);
+    expect(status().classList.contains("is-error")).toBe(true);
+    expect(button().disabled).toBe(false);
+    for (const c of calls) expect(c).toEqual(calls[0]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flush();
+    expect(calls).toHaveLength(5);
+  });
+
+  it("shows any other answer as soon as it comes, and sends no more", async () => {
+    answers = [BUSY, { status: 409, body: { error: "Grand prize entries closed at 5pm on Christmas Eve." } }];
+    await sendOnce();
+    await vi.advanceTimersByTimeAsync(3000);
+    await flush();
+    expect(calls).toHaveLength(2);
+    expect(words(status())).toBe("Grand prize entries closed at 5pm on Christmas Eve.");
+    expect(status().classList.contains("is-error")).toBe(true);
+    expect(button().disabled).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flush();
+    expect(calls).toHaveLength(2);
+  });
+
+  it("says it could not reach NBCC when the signal goes after a busy answer, and sends no more", async () => {
+    answers = [BUSY, "offline"];
+    await sendOnce();
+    await vi.advanceTimersByTimeAsync(3000);
+    await flush();
+    expect(calls).toHaveLength(2);
+    expect(words(status())).toBe("We could not reach NBCC. Check your signal and try again.");
+    expect(button().disabled).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flush();
+    expect(calls).toHaveLength(2);
   });
 });
 

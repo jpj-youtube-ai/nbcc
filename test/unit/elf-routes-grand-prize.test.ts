@@ -73,7 +73,7 @@ vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentB
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
 import sharp from "sharp";
-import { elfPhotoBodyGuard, elfRouter, ELF_ENTRY_POST_PATH, ELF_PHOTO_POST_PATH, PHOTO_TRIES, resetElfLimits, resetPublicCalendar } from "../../src/routes/elf";
+import { elfPhotoBodyGuard, elfRouter, ELF_ENTRY_POST_PATH, ELF_PHOTO_POST_PATH, PHOTO_ADDRESS_TRIES, PHOTO_TRIES, resetElfLimits, resetPublicCalendar } from "../../src/routes/elf";
 import { PICTURE_JSON_BODY_LIMIT } from "../../src/routes/fundraiser-pictures";
 import { ELF_PNG_QUEUE_MAX, inTurn } from "../../src/elf/elf-png";
 import { MOBILE_WORDS } from "../../src/elf/join";
@@ -384,6 +384,30 @@ describe("sending in a picture", () => {
     expect(r.status).toBe(429);
     expect(r.data).toEqual({ error: "You have tried to send a lot of pictures today. Please try again tomorrow." });
     nothingDone();
+  });
+
+  // The final review's issue 1: a rush before the close fills the one picture maker, and the entry page sends again
+  // while it answers busy. A busy answer is no fault of the family's, so it gives back the try it took, on the family's
+  // tries and on the address's, and pressing again never uses up the day's tries.
+  it("gives back the try a busy picture maker took, so a family can be told busy as often as its tries allow and still get its picture in", async () => {
+    const from = { "X-Forwarded-For": "203.0.113.42" };
+    for (let i = 1; i <= PHOTO_TRIES.max; i++) {
+      spies.processPicture.mockResolvedValueOnce({ ok: false, reason: "busy" });
+      expect((await send({}, { headers: from })).status, `press ${i}`).toBe(503);
+    }
+    const r = await send({}, { headers: from });
+    expect(r.status).toBe(201);
+    expect(r.data).toEqual({ ok: true, message: THANKS });
+    expect(prize.saveEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the busy answer's try back on the address's tries too", async () => {
+    const from = { "X-Forwarded-For": "203.0.113.43" };
+    for (let i = 1; i <= PHOTO_ADDRESS_TRIES.max; i++) {
+      spies.processPicture.mockResolvedValueOnce({ ok: false, reason: "busy" });
+      expect((await send({}, { headers: from })).status, `press ${i}`).toBe(503);
+    }
+    expect((await send({}, { headers: from })).status).toBe(201);
   });
 
   // Planner's call 4: sending a picture shares the photo's daily tries.

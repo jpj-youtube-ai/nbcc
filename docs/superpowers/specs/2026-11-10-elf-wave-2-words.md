@@ -1007,7 +1007,7 @@ In the same line, as an error:
 - [ ] As for a door's photo (part 4): That picture is not one we can use. Try a JPG, PNG or WebP photo.
 - [ ] As for a door's photo: That picture is too big. Try a smaller one.
 - [ ] As for a door's photo, a picture the website cannot open: We could not open that picture. Please try a different photo.
-- [ ] As for a door's photo, when too many pictures are arriving at once: Lots of photos arriving just now. Please try again in a minute. (It says photos for a grand prize picture too: tick it, or write the words you would like for a picture.)
+- [ ] As for a door's photo, when too many pictures are arriving at once: Lots of photos arriving just now. Please try again in a minute. (It says photos for a grand prize picture too: tick it, or write the words you would like for a picture. The page first sends the picture again by itself, up to four more times, 2 to 3 seconds apart, still saying Sending your picture, so a family sees this only if all five are turned away; and a picture turned away like this does not count towards the family's 20 tries.)
 - [ ] With no signal: We could not reach NBCC. Check your signal and try again.
 - [ ] Anything else that goes wrong on the way: Something went wrong. Refresh the page and try again.
 - [ ] Signed out meanwhile, as in part 4: Please sign in again.

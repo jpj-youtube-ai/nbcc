@@ -1132,7 +1132,7 @@ export const WORD_ADDRESS_LIMIT = { max: 300, windowMs: 15 * 60_000 } as const;
  *  are: the database's limit of five a day applies only once a picture has been made, so these keep
  *  anyone from keeping the one picture maker busy. An address gets more, for a shared connection. */
 export const PHOTO_TRIES = { max: 20, windowMs: 24 * 60 * 60_000 } as const;
-const PHOTO_ADDRESS_TRIES = { max: 60, windowMs: PHOTO_TRIES.windowMs } as const;
+export const PHOTO_ADDRESS_TRIES = { max: 60, windowMs: PHOTO_TRIES.windowMs } as const;
 /** Guesses each family may send in 15 minutes: every one is saved, so this is plenty for a family
  *  changing its mind, and far too few for a script to keep the database busy. */
 export const GUESS_LIMIT = { max: 60, windowMs: 15 * 60_000 } as const;
@@ -1164,6 +1164,20 @@ function allowedOnce(
   if (isLoopbackRequest(req)) return true;
   const t = Date.now();
   return family.allow(String(familyId), t) && (!address || address.allow(req.ip ?? "unknown", t));
+}
+
+/** Gives back the try allowedOnce took, to the family and to the address, for an answer that was no fault of the
+ *  family's: the picture maker busy. So pressing again while it is busy never uses up the day's tries. Nothing for a
+ *  request made on the box itself, which allowedOnce never counts. */
+function giveBackOnce(
+  req: Request,
+  familyId: number,
+  family: ReturnType<typeof createRateLimiter>,
+  address?: ReturnType<typeof createRateLimiter>,
+): void {
+  if (isLoopbackRequest(req)) return;
+  family.giveBack(String(familyId));
+  address?.giveBack(req.ip ?? "unknown");
 }
 
 const NO_DOORS: DoorsDone = { cracked: [], visited: [] };
@@ -1615,25 +1629,29 @@ const PHOTO_READ = PICTURE_READ_WORDS;
 const PHOTO_BUSY = { error: PICTURE_BUSY_WORDS };
 const PHOTO_TOO_MANY_TRIES = { error: "You have tried to send a lot of photos today. Please try again tomorrow." };
 
+/** A picture made again by madePicture, or the refusal it has already answered: `busy` when the picture maker had too
+ *  many waiting (503), which is no fault of the family's. */
+type Made = { ok: true; picture: MadePicture } | { ok: false; busy: boolean };
+
 /** A picture sent as JSON { mime, dataBase64 }, checked and made again as the fundraisers' pictures are: a JPEG,
  *  PNG or WebP whose bytes really are that, made again here so nothing from the camera is kept (not where, not
  *  when, not the phone) and what is stored is always a fresh JPEG. A door's photo and a graduate's grand prize
- *  picture both take it. The made picture, or null once the refusal has been answered, with the photo route's
+ *  picture both take it. The made picture, or why not once the refusal has been answered, with the photo route's
  *  statuses and words. */
-async function madePicture(res: Response, body: Record<string, unknown>): Promise<MadePicture | null> {
+async function madePicture(res: Response, body: Record<string, unknown>): Promise<Made> {
   const bytes = decodeBase64(typeof body.dataBase64 === "string" ? body.dataBase64 : "");
   const check = checkPictureUpload(typeof body.mime === "string" ? body.mime : "", bytes);
   if (!check.ok) {
     const size = check.reason === "size";
     res.status(size ? 413 : 400).json({ error: LOOK_AGAIN, fields: { photo: size ? PHOTO_SIZE : PHOTO_TYPE } });
-    return null;
+    return { ok: false, busy: false };
   }
   const made = await processPicture("main", bytes);
-  if (made.ok) return { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height };
+  if (made.ok) return { ok: true, picture: { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height } };
   if (made.reason === "busy") res.status(503).json(PHOTO_BUSY);
   else if (made.reason === "size") res.status(413).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_SIZE } });
   else res.status(400).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_READ } });
-  return null;
+  return { ok: false, busy: made.reason === "busy" };
 }
 
 export async function postPhoto(req: Request, res: Response): Promise<Response | void> {
@@ -1652,10 +1670,11 @@ export async function postPhoto(req: Request, res: Response): Promise<Response |
     if (!visits.some((v) => v.door === run.door)) return res.status(403).json(NOT_VISITED);
     if (body.consent !== true) return res.status(400).json(NO_CONSENT);
     if (!allowedOnce(req, s.familyId, limits.photoFamily, limits.photoAddress)) return res.status(429).json(PHOTO_TOO_MANY_TRIES);
-    // Made again here, so nothing from the camera is kept: not where, not when, not the phone.
-    const picture = await madePicture(res, body);
-    if (!picture) return;
-    const sent = await sendElfPhoto({ year: run.year, door: run.door, familyId: s.familyId, picture, at: now });
+    // Made again here, so nothing from the camera is kept: not where, not when, not the phone. A busy answer still
+    // counts as a try here: the door is done by its visit, and its photo is extra.
+    const made = await madePicture(res, body);
+    if (!made.ok) return;
+    const sent = await sendElfPhoto({ year: run.year, door: run.door, familyId: s.familyId, picture: made.picture, at: now });
     if (sent === "limit") return res.status(429).json(PHOTO_LIMIT);
     return res.status(202).json({ status: "waiting", token: sent.token });
   } catch (err) {
@@ -1891,9 +1910,14 @@ export async function postEntry(req: Request, res: Response): Promise<Response |
     if (askMobile && mobile === null) return res.status(400).json({ error: MOBILE_WORDS, fields: { mobile: MOBILE_WORDS } });
     if (!allowedOnce(req, family.id, limits.photoFamily, limits.photoAddress)) return res.status(429).json(ENTRY_TOO_MANY_TRIES);
     // Made again here, so nothing from the camera is kept: not where, not when, not the phone.
-    const picture = await madePicture(res, body);
-    if (!picture) return;
-    const saved = await saveEntry({ year: settings.year, detectiveId: own.detective.id, familyId: family.id, picture, mobile, at: now });
+    const made = await madePicture(res, body);
+    if (!made.ok) {
+      // The page sends again while the picture maker is busy (assets/js/elf-entry.js), so a busy answer gives its try
+      // back: a rush before the close never uses up a family's tries.
+      if (made.busy) giveBackOnce(req, family.id, limits.photoFamily, limits.photoAddress);
+      return;
+    }
+    const saved = await saveEntry({ year: settings.year, detectiveId: own.detective.id, familyId: family.id, picture: made.picture, mobile, at: now });
     const message = `Thank you! ${name}'s picture is in. You can change it until ${clockWords(closesAt)} on Christmas Eve.`;
     return res.status(saved.replaced ? 200 : 201).json({ ok: true, message });
   } catch (err) {

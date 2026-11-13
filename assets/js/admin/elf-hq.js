@@ -3092,6 +3092,9 @@
 
     function loadPrizeEntries() {
       buildPrize();
+      // While a marking is on its way, its answer draws the part from a list read after the marking. A read
+      // asked for now could land after it and draw the old winner back, so none is.
+      if (gp.marking) return Promise.resolve();
       var mine = ++gp.seq;
       return ask("GET", GP_PATH)
         .then(function (d) {

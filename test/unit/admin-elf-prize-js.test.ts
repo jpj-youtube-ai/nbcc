@@ -357,6 +357,84 @@ describe("marking the winner", () => {
     expect(chipsOf(card("Kim Hollyhunt"))).toEqual([]);
   });
 
+  // Task 5's review, Minor 1: the tile opened again while a marking is on its way must never draw over the
+  // marking, whichever answer comes back first.
+  describe("when the tile is opened again while a marking is on its way", () => {
+    /** Opens the part, presses Mark as the winner on Ruby's card with the marking held, then opens the tile
+     *  again. `post` lets the marking's answer go; `read` lets go of a read asked for meanwhile, if any was,
+     *  with what the part was before the marking. */
+    async function markThenReopen() {
+      let letGoPost: (a: Answer) => void = () => undefined;
+      let letGoRead: (a: Answer) => void = () => undefined;
+      const readAnswers: OneAnswer[] = [{ body: CLOSED }, () => new Promise<Answer>((r) => (letGoRead = r))];
+      const env = await openPrize(CLOSED, {
+        [`GET ${PART_PATH}`]: readAnswers,
+        [`POST ${PART_PATH}/12/winner`]: () => new Promise<Answer>((r) => (letGoPost = r)),
+      });
+      const ruby = card("Ruby Tinselfoot");
+      buttonIn(ruby, "Mark as the winner")!.click();
+      await flush();
+      tab("hq").click();
+      tab("prize").click();
+      await flush();
+      const reads = () => env.calls.filter((c) => c.method === "GET" && c.url === PART_PATH).length;
+      return { ruby, reads, post: (a: Answer) => letGoPost(a), read: (a: Answer) => letGoRead(a) };
+    }
+    const saysMarked = () => card("Ruby Tinselfoot").querySelector<HTMLElement>(".hq-status")!.textContent;
+
+    it("asks for no read until the marking is answered", async () => {
+      const m = await markThenReopen();
+      expect(m.reads()).toBe(1);
+    });
+
+    it("keeps the new winner when the marking is answered first", async () => {
+      const m = await markThenReopen();
+      m.post({ body: RUBY_WINS });
+      await flush();
+      m.read({ body: CLOSED });
+      await flush();
+      expect(chipsOf(card("Ruby Tinselfoot"))).toEqual(["The winner"]);
+      expect(chipsOf(card("Kim Hollyhunt"))).toEqual([]);
+      expect(saysMarked()).toBe("Marked as the winner.");
+    });
+
+    it("keeps the buttons held, then the new winner, when a read would be answered first", async () => {
+      const m = await markThenReopen();
+      m.read({ body: CLOSED });
+      await flush();
+      expect(markButtons()).toHaveLength(2);
+      for (const b of markButtons()) expect(b.disabled).toBe(true);
+      m.post({ body: RUBY_WINS });
+      await flush();
+      expect(chipsOf(card("Ruby Tinselfoot"))).toEqual(["The winner"]);
+      expect(chipsOf(card("Kim Hollyhunt"))).toEqual([]);
+      expect(saysMarked()).toBe("Marked as the winner.");
+    });
+
+    it("says a refusal on its card, which is still on the page", async () => {
+      const m = await markThenReopen();
+      m.read({ body: CLOSED });
+      await flush();
+      m.post({ status: 409, body: { error: WINNER_TAKEN } });
+      await flush();
+      expect(card("Ruby Tinselfoot")).toBe(m.ruby);
+      const said = m.ruby.querySelector<HTMLElement>(".hq-status")!;
+      expect(said.textContent).toBe(WINNER_TAKEN);
+      expect(said.classList.contains("is-error")).toBe(true);
+      for (const b of markButtons()) expect(b.disabled).toBe(false);
+    });
+
+    it("reads again when the tile is opened once the marking is answered", async () => {
+      const m = await markThenReopen();
+      m.post({ body: RUBY_WINS });
+      await flush();
+      tab("hq").click();
+      tab("prize").click();
+      await flush();
+      expect(m.reads()).toBe(2);
+    });
+  });
+
   it("shows a refusal's sentence on that card as an error, and keeps the card as it was", async () => {
     await openPrize(CLOSED, { [`POST ${PART_PATH}/12/winner`]: { status: 409, body: { error: WINNER_TAKEN } } });
     const ruby = card("Ruby Tinselfoot");

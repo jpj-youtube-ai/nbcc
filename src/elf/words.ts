@@ -91,10 +91,19 @@ export function things(count: number, one: string, many: string = `${one}s`): st
   return `${count} ${count === 1 ? one : many}`;
 }
 
+const FIND_OUT = "You find out whether you cracked it";
+
 /** When a family finds out whether it cracked a door's case (Plan 2c-1, Task 9): at the shown moment, `at` as
  *  clockWords says it, or later if the elf is still hiding then (`orLater`). A place is shown then only to a
  *  family that has had its guess, so nothing says the place "is shown". The clue email, the calendar and
  *  Detective HQ all say it with this. */
 export function findOutWords(at: string, orLater: boolean): string {
-  return `You find out whether you cracked it at ${at}${orLater ? ", or later if the elf is still hiding then" : ""}.`;
+  return `${FIND_OUT} at ${at}${orLater ? ", or later if the elf is still hiding then" : ""}.`;
+}
+
+/** The same, once the reveal time has passed with the elf still hiding: its place is shown as soon as it is
+ *  found, or at the place's closing time at the latest (`latest`, as clockWords says it: the typed closing or
+ *  the 8pm a door falls back to). With no time to say, the find alone. */
+export function findOutWhenFoundWords(latest: string): string {
+  return `${FIND_OUT} as soon as the elf is found${latest ? `, or at ${latest} at the latest` : ""}.`;
 }

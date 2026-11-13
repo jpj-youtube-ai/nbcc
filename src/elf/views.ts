@@ -152,6 +152,7 @@ function todayOf(
     // An unfound elf's place is shown at the reveal or the closing, whichever is later (shownAt), so only a
     // closing after the reveal can make it later; the 8pm a door falls back to counts.
     mayShowLater: state === "hunting" && run.facts.closesAt.getTime() > run.facts.revealAt.getTime(),
+    shownBy: state === "hunting" ? shownAt({ ...run.facts, foundAt: null }) : null,
   };
 }
 

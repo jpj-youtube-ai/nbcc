@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clockWords, countdownWords, dayWords, findOutWords, listWords, longDayWords, sameDay, sleepsUntil, things } from "../../src/elf/words";
+import { clockWords, countdownWords, dayWords, findOutWhenFoundWords, findOutWords, listWords, longDayWords, sameDay, sleepsUntil, things } from "../../src/elf/words";
 
 // NBCC Elf Detective School: times, dates and lists as people read them. December is winter time in
 // London, so a time on the clock there is the same as in UTC; one summer case checks the clocks.
@@ -123,5 +123,13 @@ describe("when a family finds out", () => {
   it("says the time, and that it may be later while the elf could still be hiding then", () => {
     expect(findOutWords("7pm", false)).toBe("You find out whether you cracked it at 7pm.");
     expect(findOutWords("7pm", true)).toBe("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+  });
+
+  // Fix round 1: once the reveal time has passed with the elf still hiding, its place is shown when it is found,
+  // or at the place's closing time at the latest (shownAt), so both are said.
+  it("says, once the reveal has passed, as soon as the elf is found or at the closing time at the latest", () => {
+    expect(findOutWhenFoundWords("8pm")).toBe("You find out whether you cracked it as soon as the elf is found, or at 8pm at the latest.");
+    // With no time to say (not a real one), the find alone.
+    expect(findOutWhenFoundWords("")).toBe("You find out whether you cracked it as soon as the elf is found.");
   });
 });

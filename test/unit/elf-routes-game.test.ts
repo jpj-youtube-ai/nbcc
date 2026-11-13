@@ -1563,7 +1563,8 @@ describe("Detective HQ with the doors on", () => {
     expect(before.text).toContain("The hiding place closes at 8:30pm today.");
     vi.setSystemTime(at("2026-12-07T19:15:00.000Z"));
     const after = await call("GET", "/elf/hq");
-    expect(after.text).toContain("The hiding place is shown as soon as the elf is found.");
+    // Past the reveal with the elf still hiding, the place is shown when it is found, or at closing at the latest.
+    expect(after.text).toContain("You find out whether you cracked it as soon as the elf is found, or at 8:30pm at the latest.");
     expect(after.text).not.toContain("shown at");
     expect(after.text).toContain("The hiding place closes at 8:30pm today.");
   });
@@ -1577,8 +1578,9 @@ describe("Detective HQ with the doors on", () => {
     expect(before.text).not.toContain("7:20pm");
     vi.setSystemTime(at("2026-12-07T18:30:00.000Z"));
     const after = await call("GET", "/elf/hq", { cookie: PRACTICE_PASS });
-    expect(after.text).toContain("The hiding place is shown as soon as the elf is found.");
-    expect(after.text).not.toContain("7:20pm");
+    // Its closing, an hour after the reveal, is the latest the place is shown, so it is said as that.
+    expect(after.text).toContain("You find out whether you cracked it as soon as the elf is found, or at 7:20pm at the latest.");
+    expect(after.text).not.toContain("closes at 7:20pm");
   });
 
   // Plan 2c-1: how today's case ended comes only to a family that can see the place, here by its guess.

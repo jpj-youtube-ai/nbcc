@@ -1,6 +1,6 @@
 import { DOOR_COUNT } from "../calendar";
 import { FRAMES } from "../wardrobe";
-import { clockWords, countdownWords, dayWords, findOutWords, longDayWords, sleepsUntil, things } from "../words";
+import { clockWords, countdownWords, dayWords, findOutWhenFoundWords, findOutWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
 import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
@@ -77,7 +77,8 @@ function clueLadder(today: TodayView, now: Date): string {
     return notes + line(findOutWords(clockWords(today.revealAt), mayFindOutLater(today)), "elf-ladder__next");
   }
   if (next === null && today.state === "hunting") {
-    return notes + line("The hiding place is shown as soon as the elf is found.", "elf-ladder__next");
+    // Past the reveal with the elf still hiding: its place is shown when it is found, or at closing at the latest.
+    return notes + line(findOutWhenFoundWords(real(today.shownBy) ? clockWords(today.shownBy) : ""), "elf-ladder__next");
   }
   return notes;
 }

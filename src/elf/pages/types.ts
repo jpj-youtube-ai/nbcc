@@ -152,6 +152,10 @@ export interface TodayView {
    *  after the reveal: the run's own closing, the one typed in Doors or the 8pm a door falls back to (shownAt in
    *  src/elf/doors.ts). Never worked out from closesAt above, which is gone once a typed closing has passed. */
   mayShowLater: boolean;
+  /** While the elf is still hunted, the latest its place is shown: when it would be with the elf never found, at
+   *  the reveal or at the place's closing (typed in Doors, or the 8pm a door falls back to), whichever is later.
+   *  Null otherwise. Once the reveal time has passed, Detective HQ says it as the latest a family finds out. */
+  shownBy: Date | null;
 }
 
 /** A door's page in Detective HQ for having a go (Plan 2c-1): a family that missed a door's evening

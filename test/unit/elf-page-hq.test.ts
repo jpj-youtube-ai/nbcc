@@ -132,12 +132,18 @@ describe("the clue ladder", () => {
   });
 
   // Final review, Important 2: once the reveal time has passed with the elf still hiding, the place is
-  // shown the moment the elf is found (or at closing, which is said on its own line, as below).
-  it("says the hiding place is shown as soon as the elf is found, once the reveal time has passed", () => {
-    const doc = page(today({ clues: [CLUE_1, CLUE_2, CLUE_3], nextClueAt: null, revealAt: null }, { now: at("2026-12-07T19:20:00.000Z") }));
-    expect(words(doc.querySelector(".elf-ladder__next"))).toBe("The hiding place is shown as soon as the elf is found.");
+  // shown the moment the elf is found, or at its closing at the latest (shownAt). Task 9, fix round 1: said as
+  // when a family finds out whether it cracked it, with the closing (typed, or the 8pm fallback) as the latest.
+  it("says a family finds out as soon as the elf is found, or at the closing at the latest, once the reveal time has passed", () => {
+    const after = (shownBy: Date | null) =>
+      page(today({ clues: [CLUE_1, CLUE_2, CLUE_3], nextClueAt: null, revealAt: null, shownBy }, { now: at("2026-12-07T19:20:00.000Z") }));
+    const doc = after(at("2026-12-07T20:00:00.000Z"));
+    expect(words(doc.querySelector(".elf-ladder__next"))).toBe("You find out whether you cracked it as soon as the elf is found, or at 8pm at the latest.");
     expect(doc.querySelector(".elf-case .elf-cd")).toBeNull();
     expect(doc.querySelector("form.elf-guess")).not.toBeNull();
+    expect(words(doc.querySelector(".elf-case"))).not.toContain("is shown");
+    // With no real time to give, the find alone.
+    expect(words(after(null).querySelector(".elf-ladder__next"))).toBe("You find out whether you cracked it as soon as the elf is found.");
   });
 });
 

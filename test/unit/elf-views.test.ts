@@ -664,6 +664,20 @@ describe("Detective HQ catching up", () => {
     expect(found).toMatchObject({ state: "found-hidden", mayShowLater: false });
   });
 
+  // Fix round 1 (the ruling on the ladder's sibling line): once the reveal time has passed with the elf still
+  // hiding, its place is shown when it is found or at the place's closing, typed or the 8pm fallback.
+  it("gives the latest the place is shown while the elf is hunted, and says it once the reveal has passed", () => {
+    const latest = (closesAt: string | null, now: Date) => hq7({ now, seven: { ...CORNER, closesAt } }).today!.shownBy?.toISOString() ?? null;
+    expect(latest("20:30", SEVEN_05)).toBe("2026-12-07T20:30:00.000Z");
+    expect(latest(null, SEVEN_05)).toBe("2026-12-07T20:00:00.000Z");
+    // Before the reveal, an unfound elf's place is shown at the reveal at the latest when the place closes first.
+    expect(latest("18:45", at("2026-12-07T18:50:00Z"))).toBe("2026-12-07T19:00:00.000Z");
+    expect(hq7({ now: SIX_10, seven: { ...CORNER, foundAt: at("2026-12-07T18:05:00Z"), foundFamilyId: 3 } }).today!.shownBy).toBeNull();
+    expect(hq7().today!.shownBy).toBeNull();
+    const page = renderHqPage(hq7({ now: SEVEN_05, seven: { ...CORNER, closesAt: null } }));
+    expect(page).toContain("You find out whether you cracked it as soon as the elf is found, or at 8pm at the latest.");
+  });
+
   it("says only the reveal's time between a closing typed before the reveal and the reveal", () => {
     const view = hq7({ now: at("2026-12-07T18:50:00Z"), seven: { ...CORNER, closesAt: "18:45" } });
     expect(view.today).toMatchObject({ state: "hunting", closesAt: null });

@@ -516,6 +516,30 @@
 .hq-down .hq-field, .hq-down .hq-actions { width: 100%; }
 .hq-end { margin: 0; padding: var(--hq-space-md) var(--hq-space-lg); border: 2px solid var(--hq-ink); border-radius: 14px; background: #FFF8EA; font-size: 0.88rem; }
 
+/* ---- Grand prize: every picture sent in, as cards, and the one winner. Named .hq-gp, because .hq-prize is
+   the Doors prize part's. Each card is its picture over its words, shown whole in a square and never cropped
+   or scrolled; the cards sit in two columns once the part is wide. The winner's card is gold. Long names and
+   words wrap. ---- */
+.hq-gp { display: grid; gap: var(--hq-space-md); align-content: start; }
+.hq-root .hq-gp .hq-h2 { margin: 0; }
+.hq-gp p { overflow-wrap: break-word; }
+.hq-gp__when { font-family: var(--hq-head); font-weight: 700; color: var(--hq-ink); }
+.hq-gp__list { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-lg); margin: var(--hq-space-sm) 0; padding: 0; list-style: none; }
+.hq-gp__list > li { display: grid; min-width: 0; }
+.hq-gp-entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-md); align-content: start; min-width: 0; padding: var(--hq-space-lg); border: 2px solid var(--hq-ink); border-radius: 18px; background: var(--hq-card); }
+.hq-gp-entry.is-winner { border-color: var(--hq-gold-ink); background: var(--hq-gold-soft); box-shadow: var(--hq-pop); }
+.hq-gp-entry__pic { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); place-items: center; justify-self: center; width: 100%; max-width: 440px; aspect-ratio: 1 / 1; margin: 0; padding: var(--hq-space-sm); border: 1.5px solid rgba(58, 11, 11, 0.3); border-radius: 12px; background: repeating-linear-gradient(135deg, #F3E7D6 0 12px, #FAF3E8 12px 24px); overflow: hidden; }
+.hq-gp-entry__img, .hq-gp-entry__wait { grid-area: 1 / 1; }
+.hq-gp-entry__img { width: 100%; height: 100%; object-fit: contain; }
+.hq-gp-entry__wait { padding: var(--hq-space-md); font-family: var(--hq-hand); font-weight: 700; font-size: 1.25rem; line-height: 1.15; color: var(--hq-maroon); text-align: center; }
+.hq-gp-entry__img[hidden], .hq-gp-entry__wait[hidden] { display: none; }
+.hq-gp-entry__facts { display: grid; gap: var(--hq-space-xs); justify-items: start; align-content: start; min-width: 0; }
+.hq-root .hq-gp-entry__facts .hq-h3 { font-size: 1.15rem; color: var(--hq-maroon); overflow-wrap: break-word; max-width: 100%; }
+.hq-gp-entry__chip { background: var(--hq-maroon); color: var(--hq-on-dark); font-weight: 700; }
+.hq-gp-entry__mobile a { font-weight: 700; color: var(--hq-maroon); text-underline-offset: 3px; }
+.hq-gp-entry__facts .hq-actions { margin-top: var(--hq-space-sm); }
+@container (min-width: 1040px) { .hq-gp__list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 @media (prefers-reduced-motion: no-preference) {
   .hq-lever__knob { transition: transform 0.28s var(--hq-ease); }
   .hq-toggle i::after { transition: transform 0.22s var(--hq-ease); }

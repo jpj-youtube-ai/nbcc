@@ -57,12 +57,12 @@ beforeEach(() => {
 });
 
 describe("Head Elf HQ's menu", () => {
-  it("draws six tiles, with HQ open", () => {
+  it("draws seven tiles, with HQ open", () => {
     page();
-    expect(tabs().map((t) => t.textContent!.trim())).toEqual(["HQ", "Families", "Doors", "Finds", "Money", "Settings"]);
+    expect(tabs().map((t) => t.textContent!.trim())).toEqual(["HQ", "Families", "Doors", "Finds", "Grand prize", "Money", "Settings"]);
     expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
     expect(panel("hq").hidden).toBe(false);
-    for (const id of ["families", "doors", "finds", "money", "settings"]) expect(panel(id).hidden, id).toBe(true);
+    for (const id of ["families", "doors", "finds", "prize", "money", "settings"]) expect(panel(id).hidden, id).toBe(true);
     expect(document.querySelector("#elfHq h1")!.textContent).toBe("Elf Detective School");
   });
 

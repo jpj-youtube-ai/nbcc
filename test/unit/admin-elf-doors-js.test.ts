@@ -147,10 +147,10 @@ beforeEach(() => {
 });
 
 describe("the menu with the Doors tile", () => {
-  it("draws six tiles, Doors then Finds, between Families and Money", () => {
+  it("draws seven tiles, Doors, Finds then Grand prize, between Families and Money", () => {
     page();
     const names = [...document.querySelectorAll("#elfHq [role=tab]")].map((t) => t.textContent!.trim());
-    expect(names).toEqual(["HQ", "Families", "Doors", "Finds", "Money", "Settings"]);
+    expect(names).toEqual(["HQ", "Families", "Doors", "Finds", "Grand prize", "Money", "Settings"]);
   });
 });
 

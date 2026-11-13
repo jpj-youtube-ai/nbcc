@@ -3,8 +3,8 @@
  *
  * The school runs itself; this is where head elves (Jodie, the Head Elf, and whoever is given the "elf"
  * section in the Team matrix) see that it is going right and step in. A game's menu screen: big tiles
- * for HQ, Families, Money and Settings, each opening its part below. The open part is remembered for
- * the browser tab, as the admin remembers its open section.
+ * for HQ, Families, Doors, Finds, Grand prize, Money and Settings, each opening its part below. The open
+ * part is remembered for the browser tab, as the admin remembers its open section.
  *
  * Its own file beside app.js, as assets/js/admin/red-bag-list.js is: it fills #elfHq, reads the signed
  * in person's token the way app.js keeps it, and asks /api/admin/elf/* (src/routes/admin-elf.ts).
@@ -26,6 +26,7 @@
     { id: "families", name: "Families", icon: PAPER + "icons/icon-friend.webp" },
     { id: "doors", name: "Doors", icon: PAPER + "icons/icon-frame.webp" },
     { id: "finds", name: "Finds", icon: PAPER + "icons/icon-camera.webp" },
+    { id: "prize", name: "Grand prize", icon: PAPER + "icons/icon-surprise.webp" },
     { id: "money", name: "Money", coin: true },
     { id: "settings", name: "Settings", icon: PAPER + "icons/icon-paint.webp" },
   ];
@@ -156,14 +157,15 @@
     mount.textContent = "";
     mount.appendChild(root);
 
-    /** A count on a tile (the names waiting for a tick on Families), or none. */
-    function tileCount(id, n) {
+    /** A count on a tile (the names waiting for a tick on Families), or none. A screen reader hears the tile's
+     *  name, the count and its `words`: "Families, 6 waiting", or the Grand prize's "3 pictures". */
+    function tileCount(id, n, words) {
       var c = counts[id];
       if (!c) return;
       var name = TABS.filter(function (t) { return t.id === id; })[0].name;
       c.hidden = !(n > 0);
       c.textContent = n > 0 ? String(n) : "";
-      if (n > 0) tabs[id].setAttribute("aria-label", name + ", " + n + " waiting");
+      if (n > 0) tabs[id].setAttribute("aria-label", name + ", " + n + " " + (words || "waiting"));
       else tabs[id].removeAttribute("aria-label");
     }
 
@@ -180,6 +182,7 @@
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
       if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
       if (id === "finds") loadFinds();
+      if (id === "prize") loadPrizeEntries();
       if (id === "settings" && data) { loadPractice(); loadAlerts(); loadGrandPrize(); }
     }
 
@@ -3003,6 +3006,219 @@
       box.appendChild(el("p", { class: "hq-end", text: deletionDay() + ": every photo is deleted. The log keeps these lines, without the pictures." }));
     }
 
+    // ---- Grand prize: every picture sent in for the grand prize, and the one winner (Plan 2c-2) ----
+    // Read afresh each time the tile opens (src/routes/admin-elf-prize.ts, /api/admin/elf/grand-prize). Head
+    // elves see each detective's full name, the grown up's mobile to ring and the picture, which is fetched
+    // with the signed in token into a Blob address (never in a link), as the photo check does. The pictures
+    // are judged with no age: the site never asks for one. The winner can be marked only once the entries
+    // have closed, so a picture never changes under the judge, and marking another moves the mark. The
+    // website announces nothing: NBCC rings the winner's grown up. The part's pieces are named .hq-gp, since
+    // .hq-prize is the Doors prize part's.
+    var prize = { box: null, answer: null, error: null, seq: 0, picSeq: 0, pictures: {}, made: [], marking: false };
+    var PRIZE_PART_PATH = "/api/admin/elf/grand-prize";
+    var GP_WORDS = {
+      heading: "Grand prize",
+      intro: "Every picture sent in for the grand prize, in the order they came in. Only head elves see them.",
+      none: "No pictures have come in yet.",
+      note: "The website announces nothing. NBCC rings the winner's grown up on Christmas Eve and takes the prize round on Christmas Day.",
+      winner: "The winner",
+      mark: "Mark as the winner",
+      marked: "Marked as the winner.",
+      noMobile: "No mobile number",
+      loading: "Loading the picture…",
+      noPicture: "The picture could not be loaded.",
+    };
+
+    /** The count on the Grand prize tile, said as pictures. */
+    function prizeCount(n) {
+      tileCount("prize", n, plural(n, "picture", "pictures"));
+    }
+
+    /** A usable answer from the entries routes, or null. */
+    function entriesAnswerOf(d) {
+      return d && Array.isArray(d.entries) && typeof d.closesAt === "string" ? d : null;
+    }
+
+    /** Lets go of every picture's Blob address, and of any picture still on its way. */
+    function clearEntryPictures() {
+      prize.picSeq++;
+      if (win.URL && typeof win.URL.revokeObjectURL === "function") {
+        prize.made.forEach(function (url) {
+          win.URL.revokeObjectURL(url);
+        });
+      }
+      prize.made = [];
+      prize.pictures = {};
+    }
+
+    /** An entry's picture as a Blob address: fetched with the token once for each read of the part, and
+     *  shared by every drawing of its card until the part is read again. */
+    function entryPicture(id) {
+      if (!prize.pictures[id]) {
+        var mine = prize.picSeq;
+        prize.pictures[id] = win
+          .fetch(PRIZE_PART_PATH + "/" + id + "/picture", { headers: { Authorization: "Bearer " + token() } })
+          .then(function (res) {
+            if (!res.ok || typeof res.blob !== "function") throw new Error("not found");
+            return res.blob();
+          })
+          .then(function (blob) {
+            if (!win.URL || typeof win.URL.createObjectURL !== "function") throw new Error("no blob addresses");
+            var url = win.URL.createObjectURL(blob);
+            if (mine !== prize.picSeq) {
+              if (typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
+              throw new Error("read again");
+            }
+            prize.made.push(url);
+            return url;
+          });
+      }
+      return prize.pictures[id];
+    }
+
+    function showEntryPicture(e, img, wait) {
+      var mine = prize.picSeq;
+      entryPicture(e.id).then(
+        function (url) {
+          img.setAttribute("src", url);
+          img.hidden = false;
+          wait.hidden = true;
+        },
+        function () {
+          if (mine === prize.picSeq) wait.textContent = GP_WORDS.noPicture;
+        },
+      );
+    }
+
+    function loadPrizeEntries() {
+      buildPrize();
+      var mine = ++prize.seq;
+      return ask("GET", PRIZE_PART_PATH)
+        .then(function (d) {
+          if (mine !== prize.seq) return;
+          clearEntryPictures();
+          prize.answer = entriesAnswerOf(d);
+          prize.error = prize.answer ? null : WORDS.didNotWork;
+          if (prize.answer) prizeCount(prize.answer.entries.length);
+          drawPrize();
+        })
+        .catch(function (e) {
+          if (mine !== prize.seq) return;
+          clearEntryPictures();
+          prize.answer = null;
+          prize.error = e.message;
+          drawPrize();
+        });
+    }
+
+    function buildPrize() {
+      if (prize.box) return;
+      parts.prize.textContent = "";
+      prize.box = el("section", { class: "hq-panel hq-gp", "aria-label": GP_WORDS.heading }, [
+        el("h2", { class: "hq-h2", text: GP_WORDS.heading }),
+        el("p", { class: "hq-loading", text: WORDS.loading }),
+      ]);
+      parts.prize.appendChild(prize.box);
+    }
+
+    function drawPrize() {
+      var box = prize.box;
+      var p = prize.answer;
+      box.textContent = "";
+      box.appendChild(el("h2", { class: "hq-h2", text: GP_WORDS.heading }));
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: GP_WORDS.intro }));
+      if (!p) {
+        var failed = el("p", { class: "hq-status", role: "status" });
+        say(failed, prize.error || WORDS.didNotWork, false);
+        box.appendChild(failed);
+        return;
+      }
+      var at = timeShort(p.closesAt);
+      box.appendChild(
+        el("p", {
+          class: "hq-words hq-gp__when",
+          text: p.closed ? "Entries closed at " + at + " on Christmas Eve." : "Entries close at " + at + " on Christmas Eve. You can mark the winner after that.",
+        }),
+      );
+      if (p.entries.length === 0) {
+        box.appendChild(el("p", { class: "hq-words", text: GP_WORDS.none }));
+      } else {
+        var list = el("ul", { class: "hq-gp__list" });
+        p.entries.forEach(function (e) {
+          list.appendChild(el("li", {}, [entryCard(e, p)]));
+        });
+        box.appendChild(list);
+      }
+      box.appendChild(el("p", { class: "hq-end", text: GP_WORDS.note }));
+    }
+
+    /** One picture's card: the picture, the detective, the grown up and the mobile to ring (as the family's
+     *  sheet shows it), when it came in, the chip on the winner, and, once the entries have closed and for a
+     *  head elf who may edit, the button on every other card. */
+    function entryCard(e, p) {
+      var img = el("img", { class: "hq-gp-entry__img", alt: "The picture sent in for " + e.detective, hidden: true });
+      var wait = el("span", { class: "hq-gp-entry__wait", text: GP_WORDS.loading });
+      var said = el("p", { class: "hq-status", role: "status" });
+      var facts = el("div", { class: "hq-gp-entry__facts" }, [
+        el("h3", { class: "hq-h3", text: e.detective }),
+        e.winner ? el("span", { class: "hq-chip hq-gp-entry__chip", text: GP_WORDS.winner }) : null,
+        el("p", { class: "hq-words", text: "Grown up: " + e.grownUpName }),
+        e.mobile
+          ? el("p", { class: "hq-words hq-gp-entry__mobile" }, ["Mobile ", el("a", { href: "tel:" + e.mobile, text: mobileWords(e.mobile) })])
+          : el("p", { class: "hq-words hq-soft", text: GP_WORDS.noMobile }),
+        el("p", { class: "hq-words hq-soft", text: "Came in " + longDay(e.sentAt) + " at " + timeShort(e.sentAt) }),
+      ]);
+      if (p.closed && p.canEdit && !e.winner) {
+        var mark = el("button", { class: "hq-btn hq-btn--go", type: "button", text: GP_WORDS.mark });
+        mark.addEventListener("click", function () {
+          markPrizeWinner(e, mark, said);
+        });
+        facts.appendChild(el("div", { class: "hq-actions" }, [mark]));
+      }
+      facts.appendChild(said);
+      showEntryPicture(e, img, wait);
+      return el("article", { class: "hq-gp-entry" + (e.winner ? " is-winner" : ""), "data-entry": e.id }, [el("figure", { class: "hq-gp-entry__pic" }, [img, wait]), facts]);
+    }
+
+    /** Marks one entry as the winner, holding every button meanwhile. The part is drawn again from the answer
+     *  and the new winner's card says so where its button was, with the focus there. A refusal, such as
+     *  another head elf's marking at the same moment, says the server's sentence on this card as an error and
+     *  gives the buttons back. */
+    function markPrizeWinner(e, button, said) {
+      if (prize.marking) return;
+      prize.marking = true;
+      var held = Array.prototype.slice.call(prize.box.querySelectorAll(".hq-gp-entry button"));
+      held.forEach(function (b) {
+        b.disabled = true;
+      });
+      say(said, "", null);
+      ask("POST", PRIZE_PART_PATH + "/" + e.id + "/winner")
+        .then(function (d) {
+          var p = entriesAnswerOf(d);
+          if (!p) throw new Error(WORDS.didNotWork);
+          prize.marking = false;
+          prize.answer = p;
+          prize.error = null;
+          prizeCount(p.entries.length);
+          drawPrize();
+          var now = prize.box.querySelector('.hq-gp-entry[data-entry="' + e.id + '"] .hq-status');
+          if (now) {
+            say(now, GP_WORDS.marked, true);
+            now.setAttribute("tabindex", "-1");
+            now.focus();
+          }
+        })
+        .catch(function (err) {
+          prize.marking = false;
+          held.forEach(function (b) {
+            b.disabled = false;
+          });
+          say(said, err.message, false);
+          var at = doc.activeElement;
+          if (!at || at === doc.body || at === button) button.focus();
+        });
+    }
+
     // ---- Settings: Alerts, who gets a text and an email when a photo is waiting ----
     // Read afresh each time Settings opens (src/routes/admin-elf.ts, /api/admin/elf/alerts). A head elf
     // changes only their own mobile and tick; the rest are shown as words.
@@ -3342,6 +3558,7 @@
       tileCount("families", data.numbers ? data.numbers.namesToCheck : 0);
       tileCount("doors", data.doorsNotReady || 0);
       tileCount("finds", data.photosWaiting || 0);
+      prizeCount(data.grandPrizeEntries || 0);
       drawHq();
       drawMoneyPart();
       drawSettingsPart();
@@ -3357,6 +3574,7 @@
           draw();
           if (!parts.settings.hidden) { loadPractice(); loadAlerts(); loadGrandPrize(); }
           if (!parts.finds.hidden) loadFinds();
+          if (!parts.prize.hidden) loadPrizeEntries();
           // A sheet already open was drawn before anyone knew whether this person may change it.
           if (fam.sheet) drawSheet();
           var asked = remembered(FAMILY_KEY);

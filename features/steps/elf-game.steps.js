@@ -836,6 +836,13 @@ When("the family {string} sends its detective's picture for the grand prize, wit
   await sendEntry(this, email, mobile);
 });
 
+// The picture's own route, as the entry page shows it (GET /elf/hq/entry/:detective/picture.jpg): asked for as the
+// family `email`, for the first detective of the family `owner`. It goes to its own family only, so for another
+// family's detective it is not found.
+When("the family {string} asks for the grand prize picture of the detective of {string}", async function (email, owner) {
+  await asFamily(this, familyOf(this, email), "GET", `/elf/hq/entry/${await detectiveIdOf(owner)}/picture.jpg`);
+});
+
 // Every family is enrolled with a mobile (features/steps/elf-join.steps.js): this one is taken off again, as a
 // family that enrolled before one was asked for has none.
 Given("the family {string} has no mobile number", async function (email) {

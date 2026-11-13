@@ -44,6 +44,11 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     When the family "first.prize.elf.bdd@example.com" sends its detective's picture for the grand prize
     Then the game answers 200
     And the family "first.prize.elf.bdd@example.com" has one grand prize entry, with its picture
+    # The picture's own route, as the entry page shows it: to its own family only.
+    When the family "first.prize.elf.bdd@example.com" asks for the grand prize picture of the detective of "first.prize.elf.bdd@example.com"
+    Then the game answers 200 with a picture of type "image/jpeg"
+    When the family "second.prize.elf.bdd@example.com" asks for the grand prize picture of the detective of "first.prize.elf.bdd@example.com"
+    Then the game answers 404
     Given the family "second.prize.elf.bdd@example.com" has no mobile number
     When the family "second.prize.elf.bdd@example.com" sends its detective's picture for the grand prize
     Then the game answers 400

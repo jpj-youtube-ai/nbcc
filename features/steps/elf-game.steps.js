@@ -720,9 +720,9 @@ When("the family {string} has a go at the practice door with {string}", async fu
   await asFamily(this, familyOf(this, email), "POST", "/elf/hq/door/0/go", { text });
 });
 
-/** A go at the practice door, as the go page's form posts it with a script: JSON to the door's own address.
- *  The answer is handed back rather than kept as the world's one answer, so two sent together each keep
- *  their own. */
+/** A go at the practice door, as a script would send it: JSON to the door's own address (the go page itself
+ *  posts a plain form, with no script). The answer is handed back rather than kept as the world's one
+ *  answer, so two sent together each keep their own. */
 async function goAtPractice(family, text) {
   const res = await fetch(`${BASE_URL}/elf/hq/door/0/go`, {
     method: "POST",

@@ -143,7 +143,7 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
   # on the practice door above. The hooks put the year back and take last year's rows away. Last year's
   # Christmas Day and 1 January have always passed too, so door 7's place is off the calendar everyone
   # shares and having a go has closed, whenever this runs: the family that guessed sees the place only on
-  # its own door.
+  # its own door, and a guess it sends again is told its guess is locked in (Plan 2c-1, Task 7).
   Scenario: A real door played after its evening, with its scrapbook, a photo cleared away, and an unready door snowed in
     Given the school's year is last year, whose December is over
     And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" has opened the doors list
@@ -160,7 +160,7 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     And that browser is the family "second.game.elf.bdd@example.com"
     And the family "first.game.elf.bdd@example.com" guessed "The Example Bakehouse" for door 7 before its evening
     When the family "first.game.elf.bdd@example.com" guesses "The Example Bakehouse" for door 7
-    Then the game answers 400 with the reason "not-hunting"
+    Then the game answers 409 with the reason "locked-in"
     When the family "first.game.elf.bdd@example.com" types the word "snowball 999" at door 7
     Then the game answers 400 with the reason "wrong-word"
     And the family has 5 tries left at that door
@@ -208,6 +208,8 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
   # page in Detective HQ, with the clues one at a time and one guess. The practice door's times are absolute,
   # so a step puts its evening hours back: its place was shown at its closing with nobody found, so its elf
   # is still hiding. Two tabs lock in at the same moment and the database keeps one go (Review Focus 1).
+  # Detective HQ offers the go, and a guess sent there once the place is shown is never saved as the go
+  # (Task 7): a family with no guess is sent to have its go, and one with its guess is told it is locked in.
   Scenario: A practice evening: having a go once the place is shown, one guess only
     Given "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" makes a preview link
     And "alex.game.admin.bdd@example.com" with password "Elf-Game-Admin-1" starts a practice evening at "The Example Office" in "Snowford", 1 minute apart
@@ -228,13 +230,22 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     And the game page says "You get one guess at this door."
     When the family "first.game.elf.bdd@example.com" opens "/elf/hq/door/0?clues=3"
     Then the game page holds 3 clues
+    When the family "first.game.elf.bdd@example.com" opens "/elf/hq"
+    Then the game answers 200
+    And the game page says "Have a go"
+    When the family "first.game.elf.bdd@example.com" guesses "the example office" for the practice door
+    Then the game answers 409 with the reason "have-a-go"
     When the family "first.game.elf.bdd@example.com" has a go at the practice door with "the example office" from two tabs at once
     Then one go was taken and the other refused, and the go says "You cracked it!"
     When the family "first.game.elf.bdd@example.com" opens "/elf/hq/door/0"
     Then the game page says "The Example Office, Snowford"
     And the game page holds 0 clues
+    When the family "first.game.elf.bdd@example.com" opens "/elf/hq"
+    Then the game page says "You cracked it!"
     When the family "second.game.elf.bdd@example.com" has a go at the practice door with "the example cafe"
     Then the game answers 200
     And the go says "Not this time."
     When the family "second.game.elf.bdd@example.com" has a go at the practice door with "the example office"
     Then the game answers 409 with the reason "already"
+    When the family "second.game.elf.bdd@example.com" guesses "anywhere" for the practice door
+    Then the game answers 409 with the reason "locked-in"

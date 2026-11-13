@@ -49,7 +49,11 @@ describe("the photos a notification lists", () => {
     const [sql, params] = mainQuery.mock.calls[0];
     expect(sql).toContain("p.status = 'waiting'");
     expect(sql).toContain("f.removed_at IS NULL");
-    expect(sql).toContain("p.sent_at > $1::timestamptz AND p.sent_at <= $2");
+    // Both ends are shifted back two minutes (the upload stamps sent_at before the slow work), so the
+    // windows still tile exactly while a photo still being saved is never skipped over.
+    expect(sql.replace(/\s+/g, " ")).toContain(
+      "p.sent_at > $1::timestamptz - interval '2 minutes' AND p.sent_at <= $2::timestamptz - interval '2 minutes'",
+    );
     expect(sql).toContain("LIMIT $3");
     // Only the time and the count leave the database: no family, child, detective or place.
     const selected = sql.slice(sql.indexOf("SELECT"), sql.indexOf("FROM"));

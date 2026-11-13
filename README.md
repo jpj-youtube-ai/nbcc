@@ -6848,6 +6848,7 @@ your previous visit carry the same pill for as long as you stay.
 | Newsletter | somebody signed up on the website (not imports or staff additions) | on "Added", for website sign-ups |
 | Events | only when there is a new feature (below) | none |
 | Analytics (TASK-482) | only when there is a new feature (below): page views are not news | none |
+| Elf Detective School | a photo is waiting to be checked. The mark can clear without you opening it: once a colleague checks the photo it stops counting for everyone | none |
 
 **The rules** are in `src/admin/whats-new.ts`, tested in `test/unit/whats-new.test.ts`:
 - **You only see pills on sections you can open.** Each section uses the same permission as its
@@ -12344,9 +12345,6 @@ only, never the number). The rules (`photoAlertDue`):
 
 - one at a time: when photos start waiting, one email to every head elf with alerts on and one text to
   each of them with a mobile, and no more until every photo waiting at that alert has been checked;
-  head elves with the NBCC Admin app also get the app's own notification, on top of the text and the
-  email (see **What buzzes** under the admin phone app): it is separate, free, follows each person's own
-  Notifications settings, and changes nothing about the text or the email;
 - never sooner than 30 minutes after the last alert, so a quick head elf who clears each photo as it
   comes is not texted for every one (C13);
 - nothing between 9pm and 8am, London time; at 8am, one alert if any photo is waiting;
@@ -12355,6 +12353,12 @@ only, never the number). The rules (`photoAlertDue`):
 - a find is told by email only, to the same people (C7);
 - neither alert shows the photo or the family's name, and following a link changes nothing;
 - a text that Amazon refuses never stops the email, and Settings > Alerts names whose text did not go.
+
+Head elves with the NBCC Admin app also get the app's own notification for each waiting photo, on top of
+the text and the email. It is separate and free, and it follows none of the rules above: it sends one for
+every photo, at any hour unless that person has set quiet hours, and each person can switch it off in
+Monitor > Notifications. It changes nothing about the text or the email (see **What buzzes** under the
+admin phone app).
 
 **Send me a test alert** sends the caller the test email and, when they have a mobile and texts are
 tried, the test text, and says which went. Texts go only once they are switched on in production

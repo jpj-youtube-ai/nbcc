@@ -155,12 +155,19 @@ const DETAILS: Record<keyof typeof LATEST, { db: "main" | "contact" | "stories";
             WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
   },
   // Only the time: nothing that names a family, a child, a detective or a place is selected.
+  //
+  // BOTH ends of the window are shifted back two minutes. The upload stamps sent_at at the start of
+  // the request, before the slow work (a phone upload, then the picture's encode passes) and the
+  // commit, so a sweep can run while a photo's row is not yet visible. Looking two minutes behind
+  // the sweep covers that; shifting both ends keeps the windows tiling exactly, so nothing is sent
+  // twice. (The New mark's twin above needs no shift: it has no window.)
   elf: {
     db: "main",
     sql: `SELECT p.sent_at AS at, count(*) OVER () AS total
             FROM elf_photos p JOIN elf_families f ON f.id = p.family_id
            WHERE p.status = 'waiting' AND f.removed_at IS NULL
-             AND p.sent_at > $1::timestamptz AND p.sent_at <= $2
+             AND p.sent_at > $1::timestamptz - interval '2 minutes'
+             AND p.sent_at <= $2::timestamptz - interval '2 minutes'
            ORDER BY p.sent_at LIMIT $3`,
   },
 };

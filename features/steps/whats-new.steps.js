@@ -98,7 +98,8 @@ Then("{string} is new to {string}", async function (area, email) {
     // run failed on an account and a sign-up made within one millisecond of each other.
     const times = await pool.query(
       `SELECT (SELECT created_at::text FROM users WHERE email = $1) AS account_made,
-              (SELECT max(consented_at)::text FROM list_subscribers WHERE email = $2) AS signed_up`,
+              (SELECT max(consented_at)::text FROM list_subscribers WHERE email = $2) AS signed_up,
+              (SELECT max(sent_at)::text FROM elf_photos) AS latest_elf_photo_sent`,
       [email, SIGNUP],
     );
     assert.fail(`${area} should be new to ${email}: answered ${JSON.stringify(found)}, ${JSON.stringify(times.rows[0])}`);

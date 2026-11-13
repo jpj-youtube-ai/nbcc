@@ -67,8 +67,15 @@
     // Each door the family can see that its own answer has not drawn yet, or that is opening while that answer
     // cannot be read: when it was first missed.
     var owed = {};
-    // Settles once the family's answer has been taken in and its own doors drawn (loadMarks); polls draw after it.
+    // Settles once the family's answer has been taken in and its own doors drawn (loadMarks); polls draw after it,
+    // or after READY_WAIT_MS if it hangs (settled).
     var ready = Promise.resolve();
+    var settled = Promise.resolve();
+    var READY_WAIT_MS = 10000;
+    // How many of the family's answers have been taken in, so a return to the page can tell whether a poll has just
+    // read one; and whether the page has been hidden since it was last shown.
+    var reads = 0;
+    var away = false;
     var failures = 0;
     var stopped = false;
     var ticker = null;
@@ -402,6 +409,7 @@
       // Only on a calendar drawn with December's doors on: drawn with them off, the page stays exactly as it was.
       known = meDoorApi && Array.isArray(body.known) ? doorNumbers(body.known) : null;
       goes = meDoorApi && Array.isArray(body.goes) ? doorNumbers(body.goes) : [];
+      reads += 1;
       return true;
     }
 
@@ -606,6 +614,32 @@
       return mineOn() && isKnown(n) ? drawMine([Number(n)], {}) : refresh(n);
     }
 
+    // Back on the page after being away: the family may have been to a place, or had a go, meanwhile (on its phone,
+    // say, while this tab waited). Its answer is read again, the marks laid on afresh, and each door it can now see
+    // that it could not before is drawn from its own answer. Only while its own doors are drawn: never with
+    // December's doors off, nor from Christmas Day until 1 January.
+    function backAgain() {
+      if (stopped || !mineOn()) return Promise.resolve();
+      var before = known.slice();
+      return readMe()
+        .catch(function () {
+          return null;
+        })
+        .then(function (body) {
+          if (!takeMe(body)) return undefined;
+          eachDoor(function (door) {
+            applyMarks(door.getAttribute("data-door"));
+          });
+          if (!mineOn()) return undefined;
+          var newly = known.filter(function (n) {
+            return before.indexOf(n) === -1;
+          });
+          return drawMine(newly, {}).then(function (left) {
+            return missed(left, []);
+          });
+        });
+    }
+
     // ---- news from the live feed ---------------------------------------------------------
 
     function setTally(found) {
@@ -689,7 +723,7 @@
           // While December's doors are on, no door is drawn until the family's answer is in: a poll begun as the page
           // loads could otherwise put a shared door over one just drawn from the family's own answer. With them off
           // there is no family's door to keep, and a poll draws at once, as it always has.
-          return (meDoorApi ? ready : Promise.resolve()).then(function () {
+          return (meDoorApi ? settled : Promise.resolve()).then(function () {
             var changed = [];
             var newer = {};
             var list = feed.doors || [];
@@ -742,13 +776,38 @@
     eachDoor(dress);
     tick();
     ticker = win.setInterval(tick, 1000);
+    // Shown again: news at once, as always. Back after being hidden, the family's answer is then read again once for
+    // this return (backAgain), unless that poll has just read it as tonight's door opened.
     doc.addEventListener("visibilitychange", function () {
-      if (!doc.hidden) poll();
+      if (doc.hidden) {
+        away = true;
+        return;
+      }
+      var back = away;
+      away = false;
+      var seen = reads;
+      var polled = poll();
+      if (back) {
+        polled.then(function () {
+          return reads === seen ? backAgain() : undefined;
+        });
+      }
     });
     loop();
 
-    // Set before any poll's answer can come back, so every poll draws after the family's answer is in.
+    // Set before any poll's answer can come back, so every poll draws after the family's answer is in. If that answer
+    // hangs, polls stop waiting for it 10 seconds after the page starts: the doors are drawn as the calendar everyone
+    // shares draws them, and the family's own land when its answer comes.
     ready = loadMarks();
+    if (meDoorApi) {
+      settled = new Promise(function (resolve) {
+        var late = win.setTimeout(resolve, READY_WAIT_MS);
+        ready.then(function () {
+          win.clearTimeout(late);
+          resolve();
+        });
+      });
+    }
     return { tick: tick, poll: poll, ready: ready, stop: stop };
   }
 

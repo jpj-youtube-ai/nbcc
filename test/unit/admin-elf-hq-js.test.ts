@@ -48,6 +48,8 @@ function page(o: { answers?: Record<string, unknown>; status?: number; shown?: b
 }
 
 const tabs = () => [...document.querySelectorAll<HTMLButtonElement>("#elfHq [role=tab]")];
+/** A tile by its id, never by its place in the menu, which a new tile moves (Plan 2c-2 adds one after Finds). */
+const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#hqTab-${id}`)!;
 const panel = (id: string) => document.querySelector<HTMLElement>(`#elfHq [role=tabpanel][data-tab="${id}"]`)!;
 
 beforeEach(() => {
@@ -504,7 +506,7 @@ describe("the Money screen", () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     document.body.insertAdjacentHTML("beforeend", '<button class="admin-nav-link" data-view="donations">Donations</button><input type="checkbox" id="donationsElfFilter">');
     await hq.open();
-    tabs()[4].click();
+    tab("money").click();
     expect(moneyPart().textContent).toContain("£1,486");
     expect(moneyPart().textContent).toContain("from 128 families");
     expect(moneyPart().textContent).toContain("Entries are a payment to take part, so they are never claimed for Gift Aid.");
@@ -523,7 +525,7 @@ describe("the Money screen", () => {
   it("says when there is no money yet", async () => {
     const { hq } = page();
     await hq.open();
-    tabs()[4].click();
+    tab("money").click();
     expect(moneyPart().textContent).toContain("No payments yet.");
   });
 });
@@ -532,7 +534,7 @@ describe("the Settings screen", () => {
   it("steps the prices in pounds within their limits, and saves both in pence", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, entryFromPence: 200, entrySuggestedPence: 600 } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     const [least, suggested] = [...settingsPart().querySelectorAll<HTMLElement>(".hq-stepper")];
     const out = (s: HTMLElement) => s.querySelector("output")!.textContent;
     const press = (s: HTMLElement, which: "less" | "more", times = 1) => {
@@ -560,7 +562,7 @@ describe("the Settings screen", () => {
   it("shows the server's refusal as an error", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "The suggested amount cannot be less than the least a family pays." }) }));
     inPart(settingsPart(), "Save the prices")!.click();
@@ -574,7 +576,7 @@ describe("the Settings screen", () => {
     const url = "https://nbcc.scot/elf/preview/" + "a".repeat(64);
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/preview": { url } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().textContent).toContain("There is no preview link.");
     inPart(settingsPart(), "Make a preview link")!.click();
     await flush();
@@ -590,7 +592,7 @@ describe("the Settings screen", () => {
   it("ends the preview link", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, settings: { ...BUSY.settings, previewOn: true } }, "/api/admin/elf/preview": { ok: true } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     inPart(settingsPart(), "End the link")!.click();
     await flush();
     expect(calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/admin/elf/preview"]);
@@ -601,7 +603,7 @@ describe("the Settings screen", () => {
   it("shows someone who is not an admin the prices and the link as words, with nothing to press", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, previewOn: true } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().textContent).toContain("The least anyone pays is £1 for each detective, and we suggest £5.");
     expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
     expect(settingsPart().textContent).toContain("Only an admin can change these.");
@@ -636,7 +638,7 @@ describe("the place phone in Settings", () => {
   it("lets an admin save it", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().querySelector('label[for="hqPlacePhone"]')!.textContent).toBe("NBCC's phone number for places");
     expect(settingsPart().textContent).toContain("It goes on every staff card.");
     const box = settingsPart().querySelector<HTMLInputElement>("#hqPlacePhone")!;
@@ -650,7 +652,7 @@ describe("the place phone in Settings", () => {
   it("shows a head elf who is not an admin the number as words", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().textContent).toContain("NBCC's phone number for places: 01632 960 123");
     expect(settingsPart().querySelector("#hqPlacePhone")).toBeNull();
   });
@@ -680,7 +682,7 @@ describe("the practice door in Settings", () => {
   async function openSettings(answers: Record<string, unknown>) {
     const env = page({ answers });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     return env;
   }
@@ -800,7 +802,7 @@ describe("the practice door in Settings", () => {
       return Promise.resolve(answer({ practice: RUNNING, previewOn: true }));
     });
     tabs()[0].click();
-    tabs()[5].click(); // a fresh reading, held back
+    tab("settings").click(); // a fresh reading, held back
     field("placeName").value = "The Example Office";
     field("placeTown").value = "Snowford";
     inPart(panelNow(), "Start a practice evening")!.click();
@@ -820,7 +822,7 @@ describe("the practice door in Settings", () => {
   it("reads the practice afresh each time Settings is opened, and when HQ opens on Settings", async () => {
     const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE });
     tabs()[0].click();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     expect(urls(calls).filter((u) => u === "GET /api/admin/elf/practice")).toHaveLength(2);
     // Settings was the open tile: the next visit reads the practice with HQ.
@@ -1000,7 +1002,7 @@ describe("the practice door's own mutations", () => {
   it("applies a start's answer even when Settings was left and entered again while it was on its way", async () => {
     const env = page({ answers: { "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: null, previewOn: true } } });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     let answerPost: () => void = () => {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1012,7 +1014,7 @@ describe("the practice door's own mutations", () => {
     panelNow().querySelector<HTMLInputElement>('input[name="placeTown"]')!.value = "Snowford";
     inPart(panelNow(), "Start a practice evening")!.click();
     tabs()[0].click(); // away while the start is on its way
-    tabs()[5].click(); // and back: a fresh reading goes out
+    tab("settings").click(); // and back: a fresh reading goes out
     await flush();
     answerPost();
     await flush();
@@ -1023,7 +1025,7 @@ describe("the practice door's own mutations", () => {
   it("applies a clear's answer in the same way", async () => {
     const env = page({ answers: { "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: RUN, previewOn: true } } });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     let answerClear: () => void = () => {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1033,7 +1035,7 @@ describe("the practice door's own mutations", () => {
     });
     inPart(panelNow(), "Clear the practice")!.click();
     tabs()[0].click();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     answerClear();
     await flush();
@@ -1053,7 +1055,7 @@ describe("Alerts in Settings", () => {
   async function openSettings(answers: Record<string, unknown>) {
     const env = page({ answers: { "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false }, "GET /api/admin/elf/alerts": ALERTS, ...answers } });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     return env;
   }
@@ -1191,7 +1193,7 @@ describe("The grand prize in Settings", () => {
   async function openSettings(answers: Record<string, unknown>) {
     const env = page({ answers: { "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false }, [`GET ${PATH}`]: PRIZE, ...answers } });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     return env;
   }
@@ -1370,7 +1372,7 @@ describe("The grand prize in Settings", () => {
     w.fetch = vi.fn((url: string, init: RequestInit = {}) =>
       url === PATH ? Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "Admin is temporarily unavailable" }) }) : before(url, init),
     );
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     const line = prizeNow().querySelector<HTMLElement>(".hq-status")!;
     expect(line.textContent).toBe("Admin is temporarily unavailable");

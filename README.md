@@ -1727,8 +1727,12 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks. The feed and the door's HTML are the calendar everyone shares: an open door there names no place and shows no photo until Christmas Day (Plan 2c-1). While December's doors are on, `/api/elf/me` also carries `known` (the open doors whose place the family can see) and `goes` (the doors it may still have a go at, newest first); with them off it is exactly `{ doors, photos }`. See **Catching up on missed doors** |
 | `GET /api/elf/me/door/:n`, `GET /api/elf/me/doors` | **implemented, switched off** | A signed in family's own drawing of an open door whose place it can see, with the place and the door's photos laid on: one door (`{ tile, detail }`, for a door that changed), or every such door at once (`{ doors: [{ door, tile, detail }] }`, the door rows read once and every door's photos in one query), which the calendar's script draws as the page loads. From Christmas Day until 1 January every open door. Always `Cache-Control: private, no-store`; signed out 401; the one door's route answers 404 for a shut door or one whose place the family cannot see, with nothing more read, and the batch leaves such doors out. Behind December's doors switch: 404 while that is off, the practice browser included. See **Catching up on missed doors** |
 | `GET /elf/hq/door/:n`, `POST /elf/hq/door/:n/go` | **implemented, switched off** | Having a go at a missed door: its own page in Detective HQ (clue 1, then `?clues=2` and `?clues=3` as plain links, then one guess on a plain form; once the family can see the place, how it went) and the one guess (JSON `{ text }` or the plain form: 200 `{ cracked, message }`, or `{ reason, message }` with 400 for empty or too long, 409 for closed, already or been there, 404 for a door with nothing to crack; the plain form goes back to the door's page, draws it again with the words, or goes to Detective HQ when there is nothing to crack). One go a family a door, kept by the database. `private, no-store`; it counts against the 60 guesses a family in 15 minutes (429). Behind December's doors switch; the practice door through the preview link. See **Catching up on missed doors** |
+| `GET /elf/hq/entry/:detective`, `POST /api/elf/entry/:detective`, `GET /elf/hq/entry/:detective/picture.jpg` | **implemented, switched off** | The grand prize entry (Plan 2c-2): a graduate's page for sending in one picture, from midnight as Christmas Eve begins until the entries close and saying they have closed after (404 before midnight, and for a detective who is not the signed in family's own or has not done all 24 doors; signed out goes to sign in); the picture as JSON `{ mime, dataBase64, mobile? }` from the page's script (the photo's 4 MB body parser, behind `elfPhotoBodyGuard`), made again on the server: 201 `{ ok, message }` for a new entry, 200 for one that replaces the picture before, 403 for a detective with doors still to do, 409 from the closing moment (nothing stored), 400 with `fields.mobile` for a family with no mobile that sends none, 429 after the photo's daily tries, and the photo post's answers for a picture it cannot use; and the family's own picture, to its own family only (`nosniff`). All `private, no-store`. 404 while December's doors are off, even through the preview link. See **Christmas Eve and the grand prize** |
+| `GET /elf/hq/certificate/:detective`, `GET /elf/hq/share/:id.png`, `GET /elf/hq/video` | **implemented, switched off** | A graduate's certificate (a sheet to print through the print shell, the name in full, dated the day it is printed; signed out it goes to sign in), share card (`:file`, `<id>.png`: a 1200 by 630 PNG drawn on the server from `shareCardSvg`, the name as the public sees it, `nosniff`, saved as `elf-detective-school-graduate.png`; signed out 404) and the graduates' video (303 to the https link a head elf saved, with `Referrer-Policy: no-referrer`; 404 with no link, signed out, or with no graduate in the family). The certificate and the share card are for the signed in family's own graduate only, else 404, and answer 503 with `Retry-After: 2` when the picture maker is busy. All `private, no-store`. 404 while December's doors are off, even through the preview link. See **Christmas Eve and the grand prize** |
+| `GET /elf/emails/:token`, `POST /elf/emails/:token` | **implemented** | Stop these emails: the page the small link at the end of a clue email, a promotion or a graduation opens, by the family's own token (404 for a token that is no family's), and its button (the plain form's `stopped=yes` or `stopped=no`, from our own page only, else 403; any other choice 400 with nothing changed): the page again, saying what it did. Following the link changes nothing. `private, no-store`, `noindex`. Answers while Elf Detective School is on, whatever December's doors say, so a family can always stop the emails it has had |
+| `POST /api/elf/emails` | **implemented, switched off** | Detective HQ's Your emails switch, for the signed in family: JSON `{ stopped: boolean }` or the plain form's `stopped=yes` or `stopped=no` (400 otherwise), from our own page only (403): `{ ok: true, stopped }`, or 303 back to Detective HQ; signed out 401 (the plain form goes to sign in). `private, no-store`. 404 while December's doors are off, even through the preview link |
 | `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings` | **implemented** | Head Elf HQ (Admin > Content > Elf Detective School): the switch and the prices (section `elf`: view to read, admin only to change) |
-| `GET /api/admin/elf/hq` | **implemented** | Head Elf HQ's front screen: the settings, who may switch, the numbers, what needs a head elf, the newest detectives and the days to the first clue, and how many photos are waiting (the Finds tile's count) (section `elf`: view) |
+| `GET /api/admin/elf/hq` | **implemented** | Head Elf HQ's front screen: the settings, who may switch, the numbers, what needs a head elf, the newest detectives and the days to the first clue, how many photos are waiting (the Finds tile's count) and how many grand prize pictures are in (`grandPrizeEntries`, the Grand prize tile's count; Plan 2c-2) (section `elf`: view) |
 | `GET /api/admin/elf/families`, `GET /api/admin/elf/families/:id` | **implemented** | Head Elf HQ's families: searched (`q`, a name, email or badge), filtered (`all`, `check`, `week`, `removed`) and paged 50 at a time, and one family's sheet with its detectives and payments (section `elf`: view) |
 | `PATCH /api/admin/elf/families/:id`, `POST /api/admin/elf/families/:id/sign-in-code` \| `remove` \| `restore`, `PATCH /api/admin/elf/detectives/:id` | **implemented** | Head Elf HQ's changes, each written to the audit log: a grown up's name or email, a sign in code sent for them, a family taken out or put back, a detective's name ticked, unticked or changed (section `elf`: edit) |
 | `GET /elf/preview/:code`, `POST /api/admin/elf/preview`, `DELETE /api/admin/elf/preview` | **implemented** | The private preview link: an admin makes it (any earlier one stops working; only its sha256 is kept), and a browser that opens it sees every `/elf` page while Elf Detective School is switched off, each marked Private preview, `noindex` and never cached publicly. Payments in the preview are real |
@@ -1738,13 +1742,15 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /elf/door/:n/elf/:visitId.png`, `GET /elf/hq/clue/:door/:n.jpg` | **implemented, switched off** | A family's elf standing on a door (one read a request; drawn from the look stored with the visit and kept drawn, the most recent 200), and a clue's picture (signed in families only, once that clue is out) |
 | `GET /api/admin/elf/practice`, `POST /api/admin/elf/practice`, `DELETE /api/admin/elf/practice` | **implemented** | The practice door (door 0): read, start (needs a preview link) and clear, from Head Elf HQ Settings; starting and clearing are audited (section `elf`: edit) |
 | `POST /api/admin/elf/families/:id/word-tries/clear` | **implemented** | A head elf clears a family's wrong words (section `elf`: edit; audited) |
-| `GET /api/admin/elf/doors`, `GET` \| `PATCH /api/admin/elf/doors/:door`, `POST /api/admin/elf/doors/:door/names`, `DELETE .../names/:id`, `POST .../word`, `POST` \| `DELETE .../dropped-off` \| `thanked`, `PUT /api/admin/elf/doors/:door/clues/:n`, `POST /api/admin/elf/clues/check` \| `save`, `GET .../poster` \| `staff-card` \| `tag`, `GET /api/admin/elf/places-list` | **implemented** | Head Elf HQ's Doors (see **Head Elf HQ**). A door's names that count are fixed from midnight at the end of its day: adding one after that is 409 |
+| `GET /api/admin/elf/doors`, `GET` \| `PATCH /api/admin/elf/doors/:door`, `POST /api/admin/elf/doors/:door/names`, `DELETE .../names/:id`, `POST .../word`, `POST` \| `DELETE .../dropped-off` \| `thanked`, `PUT /api/admin/elf/doors/:door/clues/:n`, `POST /api/admin/elf/clues/check` \| `save`, `GET .../poster` \| `staff-card` \| `tag`, `GET /api/admin/elf/places-list` | **implemented** | Head Elf HQ's Doors (see **Head Elf HQ**). A door's names that count are fixed from midnight at the end of its day: adding one after that is 409. Since Plan 2c-2 door 24's sheet carries the grand prize warning (`grandPrize`), and the dropped off and thank you ticks carry the head elf's name (`droppedOffName`, `thankedName`) |
 | `POST` \| `DELETE /api/admin/elf/doors/:door/snow-day`, `POST` \| `DELETE /api/admin/elf/doors/:door/gone-home` | **implemented** | A head elf calls a Snow day (only before the door's first clue) or marks a door Gone home (only after the door's day), and undoes either |
 | `PUT` \| `GET` \| `DELETE /api/admin/elf/doors/:door/clues/:n/picture` | **implemented** | A clue's picture (alt words required; refused once that clue is out). The 4 MB body parser on that path is reached only by a PUT with a bearer token |
 | `GET /api/admin/elf/alerts`, `PATCH /api/admin/elf/alerts/me`, `POST /api/admin/elf/alerts/test` | **implemented** | Settings > Alerts: every head elf with their email, mobile and alerts on or off, whether texts are switched on, the last photo alert with the names whose text did not go, and the text's and the email's words as the real builders write them. A head elf changes only their own mobile (a UK mobile, else 400) and tick, audited with the field names only. The test sends the caller the email and, with a mobile, the text when texts are tried as the photo alert tries them (`elfTextsOn`: switched on, or outside production through the stub); its answer's `text` is sent, stubbed, failed, no-mobile or off (production with texts off). One test a minute for each head elf: a second press inside the minute is 429 with nothing sent. Section `elf`: view. See **Photos, alerts, emails, the worker and Finds** |
 | `GET /api/admin/elf/photos`, `GET /api/admin/elf/photos/:id/picture`, `POST /api/admin/elf/photos/:id/approve` \| `decline` \| `take-down` | **implemented** | Finds: the photo check and the photo log (the photos waiting, oldest first; the log, newest first; the last alert; `canEdit`), one photo's picture (`no-store`, `nosniff`, `noindex`), and the decisions, each audited: approve, decline with a reason of 1 to 200 characters, take down with an optional one. A photo someone else got to first is 409 with that photo's newest step ("Approved by Alex Example at 6:13pm"); one no longer there is 404. Section `elf`: view to look, edit to decide |
 | `GET /api/admin/elf/finds` | **implemented** | Finds: Tonight and before. Each door whose first clue is out, today's first (the practice door before it while one runs): who found its elf and when (full names, head elves only), how many clues are out, and once its place is shown how many families visited and how many cracked it. Section `elf`: view |
 | `POST /api/admin/elf/worker/tick` | **implemented** | Runs the elf worker's tick once, at the moment given (`{ at }`), answering `{ ok: true }`: how the BDD plays a tick at midday. 404 in production, for anyone. Section `elf`: edit |
+| `GET` \| `PUT /api/admin/elf/grand-prize/settings` | **implemented** | Settings > The grand prize (Plan 2c-2): when the entries close on Christmas Eve and the graduates' video, `{ closesAt, time, isDefault, warning, videoUrl, canEdit }` (`warning` is door 24's, or null). The PUT (strict `{ time?, videoUrl? }`) changes only what is sent: a time that is not one is 400 "Type a time like 17:00.", one earlier than an hour after door 24's place closes is 409 with door 24's sentence, and once the entries have closed any time is 409; a link that is not https, cannot be followed or is over 300 letters is 400, and an empty one clears it. Each save is audited. Section `elf`: view to read, edit to change. See **Christmas Eve and the grand prize** |
+| `GET /api/admin/elf/grand-prize`, `GET .../:id/picture`, `POST .../:id/winner` | **implemented** | The Grand prize part (Plan 2c-2): every picture sent in, in the order they came in, `{ closesAt, closed, entries: [{ id, detective, grownUpName, mobile, sentAt, winner }], canEdit }`; one entry's picture (`nosniff`, `X-Robots-Tag: noindex, nofollow`; 404 "That picture is not there."); and marking the winner (409 while the entries are open, 404 for none, 409 "Someone has just marked a winner. Reload to see it." when two markings meet; marking another moves the mark; audited), answering as the GET does. An id that is not a whole number is 400. Answers that carry a picture or a mobile are `private, no-store`. Section `elf`: view to look, edit to mark |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
 | `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
@@ -12173,7 +12179,10 @@ line. The rules' **Keeping everyone safe** says "The mobile number you give when
 ringing the grand prize winner, and we delete it at the end of January." That
 is the only place the site says what is deleted when: the join form asks the grown up to agree to the
 rules. The end of January clear out, still to be built before 31 January 2027, must take
-`elf_families.mobile` with it.
+`elf_families.mobile` with it, and (Plan 2c-2) every grand prize entry and its picture
+(`elf_grand_prize_entries`, `elf_grand_prize_files`, whose pictures are never in the backups, so deleted
+means gone), and the families' `emails_token` and `emails_stopped_at` with the rest of their details (see
+**Christmas Eve and the grand prize**, January).
 
 **An email that has already paid (TASK-614).** Enrolling again without signing in, the server emails a
 sign in code and answers 200 `{ status: "check-email", message }`. The enrol page's script used to read
@@ -12238,7 +12247,8 @@ preview link stay admins only, whoever holds the section.
   (`canEdit`, read from their access as it is now).
 - **Doors**: where head elves set up the 24 doors before December. Each door's sheet holds the place
   (its name, town, address, who to ring there and when it closes), the prize, the elf's name and its tag
-  word, the three clues and the times they come out, and ticks for dropped off and thanked. Each door shows
+  word, the three clues and the times they come out, and ticks for dropped off and thanked (each saying
+  which head elf ticked it, by name since Plan 2c-2). Each door shows
   what it still needs; HQ's tile counts the doors not ready that are still to come, and Needs you names the next one and how
   much is left to do. **Every door has the same present (12 November 2026).** Jaimie: "just make a standard
   present on them". So a door is ready without a picture of its own: its place, its prize, its elf and tag, its
@@ -12258,7 +12268,9 @@ preview link stay admins only, whoever holds the section.
   10am at a weekend or on a weekday marked a holiday (`dayKind` and `defaultClueTime`,
   `src/elf/calendar.ts`), and door 24 is now a holiday whether or not anyone marked it, because places
   close early on Christmas Eve. Unless a head elf sets its own times, its clues come out at 10am,
-  10:30am and 11am and its place is shown at 11:30am. One rule feeds the calendar, the clue emails and
+  10:30am and 11am and its place is shown at 11:30am, and (Plan 2c-2) unless one types its closing time,
+  its place closes at 4pm, an hour before the grand prize entries close (see **Christmas Eve and the grand
+  prize**). One rule feeds the calendar, the clue emails and
   the worker as well as Doors. Door 24's evening says "In the morning on Christmas Eve, because places
   close early. Staff can change any of them." The rules end their clue times sentence "...and at
   10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve." The calendar's first step
@@ -12267,10 +12279,13 @@ preview link stay admins only, whoever holds the section.
   other is a shut door's line, under **Switched off means wave 1** below).
 - **Finds** (after Doors, its count the photos waiting): the photo check, the photo log, and Tonight and
   before, who found each door and when (see **Photos, alerts, emails, the worker and Finds** below).
+- **Grand prize** (after Finds, its count the pictures in; Plan 2c-2): every picture sent in for the grand
+  prize, and the one winner (see **Christmas Eve and the grand prize** below).
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every
   payment in Donations.
 - **Settings**: the pay what you can amounts as steppers, NBCC's phone number for places (it goes on
   every staff card; an admin changes it and other head elves see it as words), the private preview link,
+  The grand prize (when its entries close and the graduates' video, for anyone with elf edit; Plan 2c-2),
   the practice door, and Alerts.
 
 **Taking a family out.** `migrations/1791200000360_elf-families-removed.js` (additive) adds
@@ -12320,7 +12335,8 @@ word sets `found_at`, but the place stays hidden until its time. Detective HQ sa
 finds out whether it cracked the case: at the staff reveal time, or later if the elf is still hiding
 then, and once that has passed, as soon as the elf is found or at the closing time at the latest. On a
 door's own day it also says when the place closes, once a closing time is typed in Doors (Plan 2c-1,
-Jaimie's answer 5; it used to keep that back, as it tells how late a place is open).
+Jaimie's answer 5; it used to keep that back, as it tells how late a place is open), and on Christmas Eve
+door 24's 4pm even when none is typed (Plan 2c-2).
 
 **The word is both the claim and the stamp.** `decideWord` takes the family's typed word. The first
 family in wins the door under the row lock (`elf_doors.found_at` is set once, so two families in the
@@ -12337,9 +12353,10 @@ is found, whether or not Show it off is ticked.
 cannot run when its first clue falls due is snowed in automatically. The snow day is stored, and a
 snow day door counts as done for every detective, and shows done on the family's marks (Detective
 HQ and the calendar's holly). Gone home is allowed only after the door's day; a door whose elf has
-gone home takes no more photos. Doors says who called a snow day or ticked gone home, and on what day,
-naming the head elf by their `users.full_name` (the email only when it is blank) as the photo log does:
-the door's sheet carries the name beside the actor (`headElfNamesOf` in `src/db/elf-alerts.ts`).
+gone home takes no more photos. Doors says who called a snow day or ticked gone home (and, since Plan
+2c-2, who ticked dropped off and thank you sent), and on what day, naming the head elf by their
+`users.full_name` (the email only when it is blank) as the photo log does: the door's sheet carries the
+name beside the actor (`headElfNamesOf` in `src/db/elf-alerts.ts`).
 
 **Switched off means wave 1.** While December's doors are off, `runsFor` (the one loader every family
 route uses) gives exactly the wave 1 doors (`waveOneRuns`): shut, each door's default clue 1 time
@@ -12484,7 +12501,9 @@ examples (the pretend place is Pine Cone Café, Snowford):
   words, or the words describing its picture (a clue picture is never in an email or linked from one),
   the times of clues 2 and 3, when the family finds out whether it cracked the case and, with a closing
   time typed in Doors, when the place closes (since Plan 2c-1 it never says when the place is shown), that
-  a missed hunt can still be cracked in Detective HQ, and a fact for grown ups;
+  a missed hunt can still be cracked in Detective HQ, and a fact for grown ups; since Plan 2c-2 the week
+  before Christmas Eve's grand prize lines, door 23's line on Christmas Eve, and a small "Stop these
+  emails" link at the end (see **Christmas Eve and the grand prize**);
 - **Today is your Elf Detective School day**, to the place's contact at 9am on its day: "Tonight" only for a
   clue after midday, the staff card's three steps in short, its closing time, and NBCC's phone for places
   when Settings has one;
@@ -12498,7 +12517,8 @@ examples (the pretend place is Pine Cone Café, Snowford):
 - **A proud moment**, to the grown up: a prize won, a promotion or graduating, with a gentle "could"
   ask. A promotion's and a graduation's subject name the detective, so its Email audit row keeps "A proud
   moment from Elf Detective School" instead (`ELF_PROUD_LOG_SUBJECT`): no child's name goes in the email
-  log, which is kept for six tax years. No other elf email's subject names a detective.
+  log, which is kept for six tax years. No other elf email's subject names a detective. Since Plan 2c-2 a
+  promotion and a graduation end with the "Stop these emails" link; a prize won always goes and has none.
 
 The four that go to staff are staff kinds (`STAFF_ONLY_KINDS`), so their links are never tagged.
 
@@ -12531,7 +12551,8 @@ photo alert; last, the clear out.
   once bring one email, for the highest: the lower ones are claimed and marked without an email.
   Graduating has its own email, so nobody is also sent a promotion to Graduate. After a word that
   stamped someone, the same proud moments go once the word's answer has gone, best effort, by the same
-  claims.
+  claims. A family that has stopped the emails (Plan 2c-2) has its promotions and graduations claimed and
+  marked sent with no email, and gets no clue email at all; its won email still goes.
 - **The clear out** (`deleteExpiredPhotoFiles`, every tick): from 31 January, London time, of the year after
   each photo's December, its bytes row is deleted and its row reads deleted, so the log keeps its lines. A
   photo's December is its year; a practice photo belongs to the December it was sent in, one sent in
@@ -12673,7 +12694,8 @@ family still sees the ones it could see before. The practice door (year 0) has n
 closes and its place is never public.
 
 **The closing time with the clues** (Jaimie's answer 5; `closingShown`). Only for a door with a closing
-time typed in Doors (the 8pm a door falls back to is not the place's real time), only on the door's own
+time typed in Doors (the 8pm a door falls back to is not the place's real time), or door 24, whose place
+closes at 4pm when none is typed (Plan 2c-2: see **Christmas Eve and the grand prize**), only on the door's own
 day, from clue 1, until it has passed, and never once the elf has gone home. Detective HQ says "The hiding
 place closes at 8:30pm today." under the clue ladder, the go page says it too, and once the family can see
 the place "Corner Bakehouse closes at 8:30pm today." It replaces the old rule that a family is never told
@@ -12692,8 +12714,8 @@ visit. A calendar door whose elf has gone home reads out "Door 7. Nobody found B
 gone home."
 
 **The emails' new words.** The clue email no longer says when the place is shown: after the clue times it
-says "The hiding place closes at 8:30pm today." (with a closing time typed: `closesAt`, from
-`closingShown`), then when the family finds out (the long form whenever no closing time is typed), then "If
+says "The hiding place closes at 8:30pm today." (with a closing time typed, or on door 24 by default:
+`closesAt`, from `closingShown`), then when the family finds out (the long form whenever no closing time is typed), then "If
 you miss tonight's hunt, you can still crack this case later in Detective HQ, with one guess." ("today's"
 for a morning clue). Yesterday's post in the 8am email never names a place: who found the elf ("A
 detective" when no finder can be named), or that nobody has yet and the prize is still to be won (nobody
@@ -12726,6 +12748,208 @@ real door and every Christmas is still to come; the scenario played in last year
 Christmas Day and a 1 January that have always passed; the practice door's times are absolute; and no step
 compares the real clock with a date written in a feature (where an answer depends on the moment, the
 moment is the app's own, `christmasDay` and `newYearsDay`).
+
+### Christmas Eve and the grand prize (Plan 2c-2)
+
+Spec `docs/superpowers/specs/2026-11-12-elf-catch-up-and-grand-prize-design.md` (part 2, the items carried
+from the earlier builds, and Jaimie's answers 1, 3 and 4; approved 12 November 2026); plan
+`docs/superpowers/plans/2026-11-12-elf-grand-prize.md`. On Christmas Eve every detective who has done all 24
+doors can send in one picture for the grand prize from Detective HQ until the entries close (5pm by
+default); head elves judge the pictures in Head Elf HQ's new Grand prize part and mark one winner; in the
+week before, the clue email asks families who are up to date whether their picture is ready and tells the
+rest what they can still crack from home, and 23 December's email says Christmas Eve starts in the morning;
+graduates get their certificate, share card and the graduates' video; families can stop the emails that are
+not essential; and Doors names the head elf on its ticks. Everything a family sees ships behind December's
+doors, off: with them off every family page and email is byte for byte what it was, and every new family
+route answers 404, even through the preview link (the grand prize is never the practice door's). The one
+exception is the page a stop link opens, which answers while Elf Detective School is on, so a family can
+always stop the emails it has had. Every new or changed word is in part 11 of the words file
+(`docs/superpowers/specs/2026-11-10-elf-wave-2-words.md`), each with a tick box, with questions L to S for
+Jaimie. Its migration is `migrations/1791200000490_elf-grand-prize.js` (see **Data** below). The pure rules
+are in `src/elf/grand-prize.ts`, the store in `src/db/elf-grand-prize.ts`, Head Elf HQ's routes in
+`src/routes/admin-elf-prize.ts`.
+
+**Door 24 closes at 4pm** (Jaimie, 12 November 2026). Unless a head elf types door 24's closing time in
+Doors, its place closes at 4pm (`CHRISTMAS_EVE_CLOSING_TIME` in `src/elf/calendar.ts`), an hour before the
+entries; every other door still falls back to 8pm, and nothing on Christmas Eve is shown later than 8pm. A
+typed time wins, earlier or later: Doors never refuses one, and under door 24's closing time it says "4pm
+unless you type an earlier time." `closesTooSoon` takes the door, so it reads door 24's 4pm too.
+`closingShown` shows door 24's default with its clues, so Detective HQ, the go page and door 24's clue email
+say "The hiding place closes at 4pm today." from its first clue (the spec: once the clues are out, families
+can tell when the place closes).
+
+**The entries** (`GET /elf/hq/entry/:detective`, `src/elf/pages/entry.ts` and `assets/js/elf-entry.js`;
+`POST /api/elf/entry/:detective`, `postEntry`; `saveEntry`). One picture a detective a year
+(`elf_grand_prize_entries` is unique on year and detective): a drawing, or a photo of the family's naughtiest
+elf at home. A detective may send one from midnight as Christmas Eve begins (`entriesOpenAt`) once they have
+done all 24 doors, worked out on the server from the doors every family route reads, never taken from the
+page (`ownDetective`, the one check the entry page, its post, the certificate and the share card share),
+until the entries close (`entryOpen`, the one rule for the window: a picture sent at 4:59:59pm is kept, one
+at 5pm is refused 409 with nothing stored). A second picture replaces the first in place, never adding a
+second entry: the family row is locked first, and the bytes go in one `INSERT ... ON CONFLICT (entry_id) DO
+UPDATE` on both paths, so an entry restored without its picture still stores the new one. The page's script
+makes the picture smaller in the browser as the photo sheet does (at most 1600 pixels on its longest side, a
+JPEG under 2 MB, the size limit every picture has), and the server makes it again (`madePicture`, shared with
+the door's photo post), so nothing from the camera is kept: not where, not when, not the phone. It shares the
+photo post's 4 MB body parser (behind `elfPhotoBodyGuard`) and its daily tries (20 a family, 60 an address).
+The picture is never public: `GET /elf/hq/entry/:detective/picture.jpg` gives it to its own family only (the
+store matches both the detective and the family), and head elves see it in Head Elf HQ. A family with no
+mobile (it enrolled before we asked for one) is asked for one with its picture, with the join form's words
+and check (`normaliseUkMobile`, `MOBILE_WORDS`); it goes on the family only when the family has none, and one
+sent by a family that has a mobile is ignored. The entry never asks for an age and the site keeps none
+(Jaimie's answer 3: the pictures are judged without knowing ages). Its answers are `private, no-store` (a
+500 is `no-store`), and the audit row (`elf.grand_prize.entry`) carries only `{ year, familyId, replaced }`.
+
+**Detective HQ's grand prize section** (`HqView.grandPrize`, `prizeSectionShows`, the one rule both the view
+and the page ask): straight after today's case, from midnight as Christmas Eve begins until the later of the
+closing and 1 January (`newYearsDay`), while December's doors are on. While open it lists each graduate with
+**Send in your picture**, or "Detective Ruby Tinselfoot's picture is in." with **Change it**; once closed, only
+the graduates whose picture is in. Detective HQ reads, top to bottom: today's case, The grand prize, Doors you
+can still crack, Your detectives, Your marks and Your emails. The family's entries are read only while the
+section shows.
+
+**When the entries close** (Head Elf HQ > Settings > The grand prize; `GET` and `PUT
+/api/admin/elf/grand-prize/settings`). One moment, `elf_settings.grand_prize_closes_at`, set by any head elf
+with elf edit; empty means 5pm on 24 December of `elf_settings.year` (`GRAND_PRIZE_DEFAULT_TIME`,
+`grandPrizeClosesAt`). The PUT builds its change only from the keys sent, so saving the video link never
+resets the time, and each Save on the screen sends only its own box. Refused (409, nothing saved): a time
+earlier than an hour after the latest door 24's place can still be found, the later of its reveal and its
+closing (`closingRefusal`: "Door 24's hiding place closes at 4pm, so grand prize entries can close at 5pm at
+the earliest."), so with door 24 untyped the default 5pm saves and 4:30pm does not; and any time once the
+entries have closed ("The entries have closed, so their closing time cannot change."), so a picture never
+changes under the judge (a late picture can still come by email). A door 24 whose place closes later than an
+hour before the entries close shows a warning (`door24Warning`: "Grand prize entries close at 5pm, so door
+24's place must close by 4pm.") in Settings and on door 24's sheet in Doors (`DoorSheet.grandPrize`; every
+caller of `sheetOf` passes the closing moment). A snowed in door 24 still sets the earliest closing from its
+place's times; with its 4pm that refuses only a time before 5pm, so the default is never refused. Saves are
+audited by `setElfSettings` (a time and a link, never a child's name).
+
+**Head Elf HQ's Grand prize part** (the tile after Finds; `GET /api/admin/elf/grand-prize`, `.../:id/picture`,
+`POST .../:id/winner`; its classes are `.hq-gp`, as `.hq-prize` is Doors' prize part). Every picture sent in,
+in the order they came in (a picture sent again comes in again, so it is placed by its newest), each with the
+detective's full name, the grown up's name and mobile to ring, and when it came in. The pictures are fetched
+with the bearer token into Blob addresses, never a link, and kept across reads by entry and `sentAt`. The tile
+counts the pictures in (`grandPrizeEntries` in `/api/admin/elf/hq`, from `countEntries`; a screen reader hears
+"Grand prize, 3 pictures"). Anyone with the `elf` section can look; edit marks the winner. The winner can be
+marked only once the entries have closed (409 before), and marking another moves the mark: one winner a year
+(Jaimie's answer 4), kept by the partial unique index `elf_grand_prize_one_winner` and by `markWinner`, which
+locks the year's entries in id order, clears the old mark and then sets the new one in one transaction, so
+two head elves marking at the same moment end with the later marking; one that still meets the index is
+answered 409 "Someone has just marked a winner. Reload to see it." (`WinnerTaken`), never a 500. Each marking
+is audited (`elf.grand_prize.winner`, `{ year, entryId }`). Answers that carry a picture or a mobile are
+`private, no-store`, and the picture is `nosniff` and `noindex`. The website announces nothing: NBCC rings the
+winner's grown up on Christmas Eve, asks the age then, and takes the prize round on Christmas Day.
+
+**The week before, and 23 December** (`src/elf/emails.ts`, `src/elf/worker.ts`). The clue emails of doors 17
+to 23 (`catchUpOf`) end, before the Open Detective HQ button, with the grand prize lines for the family: up to
+date (it has done every door that is done for everyone by then), "Have you got your picture ready?" and until
+when it can send it in (`grandPrizeClosesAt`); behind, "Catching up for the grand prize", how many doors it can
+still crack from home (`doorsToCrack`) or, with none, to visit the places it has not done. Door 23's email
+says, before the clue 2 line, when door 24's first clue comes out (`christmasEveOf`), unless door 24 is a snow
+day; it goes to every family, one with no detective included, which gets no grand prize lines. The worker reads
+each family's doors inside its claimed send (`prizeLines`: `familyDoorsDone` and `familyKnowledge`, on doors 17
+to 23 only), so a family whose read fails is tried again on its own. The lines ride in the clue email, so a
+snowed in door sends neither, and a family that has stopped the emails gets neither. All emails gains four
+versions of the clue email: The week before, up to date; The week before, behind; The week before, behind,
+nothing left to crack from home; and The day before Christmas Eve.
+
+**The Graduate's certificate, share card and video** (the October design's decisions 8 and 16). A graduate's
+card in Detective HQ offers **Print the certificate**, **Save the share card** and, once a head elf has saved
+the link, **Watch the graduates' video**, only while December's doors are on.
+- `GET /elf/hq/certificate/:detective`: the signed in family's own graduate, else 404; signed out it goes to
+  sign in, as every Detective HQ page does. `renderElfCertificate`, a sheet to print on A4 on its side through
+  `src/fundraising/materials.ts`' print shell, as the other prints are (not a page of the site): the name in
+  full, the badge, the doors done and the gold seal from `progressOf`, the elf in the wardrobe it has earned
+  (`elfPng` at 340 wide, as a data address), dated the day it is printed, and without the fundraisers' note on
+  asking us for other sizes (`askUs: false`).
+- `GET /elf/hq/share/:id.png` (the route's `:file`, `<id>.png`): the same checks, 404 when signed out (it is a
+  picture). `shareCardSvg` drawn to a 1200 by 630 PNG by sharp on the server (the October plan's Stage B),
+  `image/png`, `nosniff`, saved as `elf-detective-school-graduate.png`. It names the detective as the public
+  sees them (`approved: nameApproved`): a first name staff have not ticked shows as its first letter. sharp is
+  loaded the first time a card is made, never as the app starts, and the card takes its turn with the elves'
+  pictures (`inTurn` in `src/elf/elf-png.ts`); a full queue, like `elfPng` busy on the certificate, is 503 with
+  `Retry-After: 2`.
+- **The image's fonts.** A picture drawn on the server can only use the fonts the server has, and the runtime
+  image had none, so the Dockerfile's first `apt-get install` gains `fontconfig` (how sharp finds a font) and
+  `fonts-dejavu-core` (DejaVu Sans and Serif). Two checks in `pr.yml`'s image job prove it in the built image:
+  `fc-match sans-serif` must answer DejaVu, and `src/scripts/check-share-card.ts` (run there as `node
+  dist/scripts/check-share-card.js`) draws the name line of three cards, the longest name the rules allow among
+  them, through the real `shareCardSvg` and sharp, and fails unless each name's ink ends before x 1173, inside
+  the card's frame. The card's `fit` allows 0.64 of the font size a letter, for DejaVu Serif Bold's wider
+  letters. The job keeps the cards it drew as the run's `share-cards` artifact.
+- `GET /elf/hq/video` (`GRADUATE_VIDEO_PATH`): Detective HQ links only to this site, so the video's button is
+  this address, which sends a signed in family with a graduate on (303) to the https link saved in Settings
+  (`elf_settings.graduate_video_url`, at most 300 letters, one a browser can follow), with `Referrer-Policy:
+  no-referrer`, and is 404 otherwise. With no link saved Detective HQ shows no video button. The link carries
+  over to the next year until a head elf changes or clears it.
+
+**Stop these emails** (`GET` and `POST /elf/emails/:token`, `src/elf/pages/emails.ts`; `POST /api/elf/emails`;
+Detective HQ's **Your emails**). It covers the emails that are not essential: the daily clue email, with the
+week before's lines and door 23's line, and the promotion and graduation emails (families get no reminder
+email, so the reminders are the lines in the clue email). The welcome (the family's receipt), sign in codes
+and the won email, to the family that found an elf first, always go; the won email carries no stop link. Each
+of the others ends with a small "Stop these emails" link to the family's own page, by its token
+(`elf_families.emails_token`, 32 lower case hex letters, made by the database for every family, the ones
+already there included). Following the link changes nothing (mail security software opens every link), so the
+page asks, and only its button stops or starts them; it shows nothing of the family, so a forwarded email
+gives nothing away, though anyone holding the link can press the button. The page answers while Elf Detective
+School is on, whatever December's doors say; Detective HQ's switch only while they are on. A stopped family
+(`emails_stopped_at`) gets no clue email (`familiesStillToEmail` leaves it out) and no promotion: its moments
+are claimed and marked sent with no email, so starting again never sends old news. One that starts again
+within six hours of a door's first clue still gets that clue's email, because none was claimed for it.
+Stopping and starting are audited (`elf.emails.stopped`, `elf.emails.started`, actor `family`,
+`{ familyId }`), only when the switch really changes. There is no List-Unsubscribe header: the page needs a
+press. Two things to know when a family asks: Head Elf HQ cannot see a family's switch, so "we never get the
+clue" may be a stopped switch; and All emails' descriptions do not say these emails can be stopped.
+
+**Doors names the head elf on its ticks.** The dropped off and thank you ticks say "Ticked by Alex Example on 9
+December" (`DoorSheet.droppedOffName`, `thankedName`, through `headElfNamesOf`), as snow days and gone home
+already did: the head elf's `users.full_name`, the email only when it is blank.
+
+**Data** (`migrations/1791200000490_elf-grand-prize.js`, additive only; it sorts after Plan 2c-1's
+`1791200000480_elf-catch-up.js`, and its test asserts that neighbour is there and that it sorts after it).
+`elf_settings` gains `grand_prize_closes_at` (empty: 5pm on Christmas Eve) and `graduate_video_url` (an
+https link of at most 300 letters, or empty); `elf_families` gains `emails_stopped_at` (empty: the emails go)
+and `emails_token` (NOT NULL UNIQUE, default `replace(gen_random_uuid()::text, '-', '')`, worked out for each
+row); `elf_grand_prize_entries` (the detective and family, the picture's type and size, when it came in, the
+winner's mark and who made it; unique on year and detective, and the partial unique index
+`elf_grand_prize_one_winner` on year where a winner is marked) and `elf_grand_prize_files` (the bytes). The
+pictures are kept apart so the nightly backup leaves them out, as photos are (`BACKUP_TABLE_DATA_LEFT_OUT` in
+`src/backup/plan.ts`: the table is dumped empty and recorded as 0 rows); the entries themselves are backed up,
+so a restored entry has no picture until its family sends one again.
+
+**January.** The end of January clear out, still to be built before 31 January 2027, must take every grand
+prize entry and its picture (`elf_grand_prize_entries`, `elf_grand_prize_files`), and the families'
+`emails_token` and `emails_stopped_at` with the rest of their details (see **The grown up's mobile** above).
+The entry page promises "it is deleted at the end of January". The pictures are never in the backups, so
+deleted means gone. No worker clear out for the entries is built here: in BDD last year's 31 January has
+always passed, so a ticking worker would delete a scenario's pictures between its steps. The year rollover
+needs nothing: a closing time is for its own Christmas Eve only, and when `elf_settings.year` moves on, a
+stored moment from before that year's Christmas Eve begins reads as 5pm on the new one, so last year's time
+never closes next year's entries before they open. The graduates' video link stays until a head elf changes
+it.
+
+**Tests.** `test/unit/elf-grand-prize.test.ts` (the rules: the window, door 24's 4pm, the refusal and the
+warning, the week before, the stale closing), `elf-db-grand-prize` (the store: one entry a detective, its bytes
+replaced, the year lock), `elf-grand-prize-migration`, `elf-routes-grand-prize` (every family route, at 10:30am,
+4:59:59pm and 5pm on Christmas Eve, and each with December's doors off, even through the preview link),
+`elf-page-entry`, `elf-js-entry` and `admin-elf-prize-js` (jsdom), `elf-page-emails`, `admin-elf-prize`,
+`dockerfile-share-card-fonts` and `check-share-card`, with `elf-calendar`, `elf-catch-up`, `elf-views`,
+`elf-page-hq`, `elf-print`, `elf-emails`, `elf-worker`, `elf-db-sends`, `elf-db-settings`, `backup-plan`,
+`admin-elf`, `admin-elf-doors`, `admin-elf-doors-js` and `admin-elf-hq-js`; the entry page and the emails page
+are in the house rules and site chrome tests. The BDD (`features/elf-grand-prize.feature`, CI only) is played in
+last year's December, whose 24 doors and Christmas are always over: the worker's tick snows in every door but
+door 7, a family that has been to door 7 has done all 24 doors, and the entries' closing moment is set by SQL
+from the database's own clock (an hour from now, then a minute ago), so every answer holds whenever it runs. It
+sends a picture and sends it again (one entry, its bytes replaced), fetches it as its family and as another
+(404), opens the certificate and the share card, gives a mobile with a picture, reads the entries, is refused a
+winner while they are open, saves the closing time (4:30pm refused, 5pm saved and checked by SQL from the year)
+and the video link, then marks one winner and another, and is refused a picture once they have closed. Of the
+two more scenarios, one stops the emails from the link's page and starts them again in Detective HQ, and the
+other runs the worker a minute after door 7's first clue (worked out from the year and door 7's own evening):
+one clue email to the family that never stopped, none to the one that did. No step compares the real clock
+with a date written in a feature, and none looks at Detective HQ's grand prize section, whose window runs on
+the real clock.
 
 ### The dress-up elf
 

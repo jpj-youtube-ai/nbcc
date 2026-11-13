@@ -272,4 +272,34 @@ describe("the closing time the clues show", () => {
     expect(closingAt(SEVEN_30, { foundAt: SIX_47, goneHomeAt: at("2026-12-07T19:20:00Z") })).toBeNull();
     expect(closingAt(SEVEN_30, { goneHomeAt: at("2026-12-07T19:20:00Z") })).toBeNull();
   });
+
+  // Plan 2c-2, ruling F4 (Jaimie: "Once the clues are out, they can tell when the place closes"). Door 24's
+  // place closes at 4pm unless a head elf types a time (src/elf/calendar.ts), so its clues say so; the 8pm
+  // every other door falls back to is still never said. Thursday 24 December 2026: clue 1 at 10am.
+  describe("on Christmas Eve, door 24", () => {
+    const TEN_05 = at("2026-12-24T10:05:00Z");
+    const FOUR_PM = "2026-12-24T16:00:00.000Z";
+    const eve = (now: Date, over: Partial<DoorSetup> = {}) => closingShown(run(24, now, over), now);
+
+    it("says 4pm when no closing time is typed, from clue 1 until 4pm", () => {
+      expect(eve(TEN_05)?.toISOString()).toBe(FOUR_PM);
+      expect(eve(at("2026-12-24T15:59:59Z"))?.toISOString()).toBe(FOUR_PM);
+      expect(eve(at("2026-12-24T16:00:00Z"))).toBeNull();
+      expect(eve(at("2026-12-24T09:59:00Z"))).toBeNull();
+    });
+
+    it("says the time a head elf typed instead", () => {
+      expect(eve(TEN_05, { closesAt: "15:00" })?.toISOString()).toBe("2026-12-24T15:00:00.000Z");
+    });
+
+    it("says nothing on its snow day, or once its elf has gone home", () => {
+      expect(eve(TEN_05, { snowDayAt: at("2026-12-24T10:00:00Z") })).toBeNull();
+      expect(eve(TEN_05, { goneHomeAt: at("2026-12-24T10:01:00Z") })).toBeNull();
+    });
+
+    it("leaves the day before Christmas Eve saying nothing with no closing time typed", () => {
+      const evening = at("2026-12-23T17:35:00Z");
+      expect(closingShown(run(23, evening), evening)).toBeNull();
+    });
+  });
 });

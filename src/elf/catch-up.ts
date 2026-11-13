@@ -1,6 +1,6 @@
 import type { DoorRun } from "../db/elf-game";
 import { londonToInstant } from "../tickets/model";
-import { isDoor, type Door } from "./calendar";
+import { CHRISTMAS_EVE, isDoor, type Door } from "./calendar";
 import { doorState, isOpen, type DoorState } from "./doors";
 import { GUESS_MAX, type SavedGuess } from "./guess";
 import { normalisePlaceName } from "./place-names";
@@ -123,11 +123,12 @@ export function decideGo(
 }
 
 /** The closing time the clues show: the place's own closing time, only when one is typed in Doors (the
- *  8pm a door falls back to is not the place's real time), only when it falls on the door's own day in
+ *  8pm a door falls back to is not the place's real time) or on Christmas Eve, whose door falls back to
+ *  4pm because places close early that day (Plan 2c-2), only when it falls on the door's own day in
  *  London, from clue 1 (never on a snow day) until it has passed, and never once the elf has gone home (a
  *  visit is refused then, so the place is no longer worth a trip). Otherwise null. */
 export function closingShown(run: DoorRun, now: Date): Date | null {
-  if (run.closesAt === null || run.facts.goneHome) return null;
+  if ((run.closesAt === null && run.door !== CHRISTMAS_EVE) || run.facts.goneHome) return null;
   const closes = run.facts.closesAt;
   if (!sameDay(closes, run.facts.clue1At)) return null;
   const state = doorState(run.facts, now);

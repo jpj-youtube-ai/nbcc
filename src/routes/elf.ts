@@ -31,6 +31,7 @@ import {
   familyDoorsDone,
   familyHasWon,
   familyKnowledge,
+  familyKnowsDoor,
   familyPhoto,
   familyVisits,
   finderParts,
@@ -878,11 +879,12 @@ export async function getMe(req: Request, res: Response): Promise<Response | voi
 
 /** The one rule (src/elf/catch-up.ts) at one door: can the family see its place? Never while the door is
  *  not open, whatever the family has done there: a detective who typed the tag word while the place was
- *  still hidden sees it once the door opens, as everyone who can does. */
+ *  still hidden sees it once the door opens, as everyone who can does. Only what the family has done at this
+ *  door is read (familyKnowsDoor), never its whole year: every photo in an open scrapbook asks this. */
 async function knowsDoorPlace(year: number, familyId: number, door: number, state: DoorState): Promise<boolean> {
   if (!isOpen(state)) return false;
-  const known = await familyKnowledge(year, familyId);
-  return knowsPlace({ state, guessed: known.guesses.has(door), typed: known.typed.has(door) });
+  const { guessed, typed } = await familyKnowsDoor(year, door, familyId);
+  return knowsPlace({ state, guessed, typed });
 }
 
 /** A family's own door (Plan 2c-1): the door the calendar everyone shares draws, with its place and its

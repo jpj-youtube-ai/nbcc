@@ -125,6 +125,13 @@ export async function doorsDoneFromRuns(_year: number, _familyId: number, runs: 
   return new Map(FAMILY.detectives.map((d) => [d.id, { cracked: [], visited: [], snow }]));
 }
 
+/** familyKnowsDoor as the database would answer it, for a family with a guess at each door in `guessed` and a
+ *  detective who typed the tag word at each door in `typed`: what the family has done at the one door asked
+ *  about (a photo, or the family's own door), never its whole year. With nothing given, nothing done. */
+export function knowsDoors(o: { guessed?: readonly number[]; typed?: readonly number[] } = {}) {
+  return async (_year: number, door: number) => ({ guessed: (o.guessed ?? []).includes(door), typed: (o.typed ?? []).includes(door) });
+}
+
 export interface Ask {
   json?: unknown;
   form?: Record<string, string | string[]>;

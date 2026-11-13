@@ -23,6 +23,7 @@ const practice = vi.hoisted(() => ({ getPractice: vi.fn() }));
 const game = vi.hoisted(() => ({
   markAutomaticSnowDays: vi.fn(),
   familyKnowledge: vi.fn(),
+  familyKnowsDoor: vi.fn(),
   familyDoorsDone: vi.fn(),
   familyPhoto: vi.fn(),
   finderParts: vi.fn(),
@@ -55,7 +56,7 @@ import { doorDetail, doorTile } from "../../src/elf/pages/door";
 import { normalisePlaceName } from "../../src/elf/place-names";
 import type { Scrapbook } from "../../src/elf/scrapbook";
 import { calendarViewFor, familyDoorView } from "../../src/elf/views";
-import { at, callerAt, door3, door6, door7, doorsDoneFromRuns, FAMILY, FIVE_47, OFF, ON, PRACTICE_PASS, practiceRow, SEVEN_05, SIX_10, snowedIn, TOKEN } from "./elf-routes-fixtures";
+import { at, callerAt, door3, door6, door7, doorsDoneFromRuns, FAMILY, FIVE_47, knowsDoors, OFF, ON, PRACTICE_PASS, practiceRow, SEVEN_05, SIX_10, snowedIn, TOKEN } from "./elf-routes-fixtures";
 
 /** Door 7, found at 5:47pm by another family: its place is shown at 7pm. */
 const foundDoor7 = (over: Parameters<typeof door7>[0] = {}) => door7({ foundAt: FIVE_47, foundFamilyId: 9, ...over });
@@ -111,6 +112,7 @@ beforeEach(() => {
   practice.getPractice.mockResolvedValue(null);
   game.markAutomaticSnowDays.mockResolvedValue([]);
   game.familyKnowledge.mockResolvedValue(knowledge());
+  game.familyKnowsDoor.mockImplementation(knowsDoors());
   game.familyDoorsDone.mockImplementation(doorsDoneFromRuns);
   game.familyPhoto.mockResolvedValue(null);
   game.finderParts.mockResolvedValue(FINDERS);
@@ -198,20 +200,20 @@ describe("a family's own door", () => {
   }
 
   it("comes to a family that can see door 7's place, with its place and its photos, and is never kept", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     const r = await call("GET", "/api/elf/me/door/7");
     expect(r.status).toBe(200);
     expect(r.headers.get("cache-control")).toBe("private, no-store");
     expect(String(r.data.detail)).toContain("The Example Bakehouse");
     expect(String(r.data.tile)).toContain("The Example Bakehouse");
     expect(String(r.data.detail)).toContain(PHOTO.url);
-    expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+    expect(game.familyKnowsDoor).toHaveBeenCalledWith(2026, 7, 3);
     expect(doors.getElfDoor).toHaveBeenCalledWith(2026, 7);
     expect(game.doorPhotos).toHaveBeenCalledWith(2026, 7);
   });
 
   it("is drawn as the calendar draws a door: the shared door, with the family's place and the door's photos laid on", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     const r = await call("GET", "/api/elf/me/door/7");
     const shared = await sharedDoor7();
     // The shared door names no place: the family's comes only from its own door.
@@ -222,14 +224,14 @@ describe("a family's own door", () => {
 
   it("takes an empty town for a place with none", async () => {
     doors.getElfDoor.mockResolvedValue(foundDoor7({ placeTown: null }));
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     const r = await call("GET", "/api/elf/me/door/7");
     const mine = familyDoorView(await sharedDoor7(), { place: { name: "The Example Bakehouse", town: "" }, photos: [PHOTO] });
     expect(r.data).toEqual({ tile: doorTile(mine, SEVEN_05), detail: doorDetail(mine, ctx) });
   });
 
   it("comes to a family whose detective typed door 7's tag word, though it never guessed", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ typed: [7] }));
     const r = await call("GET", "/api/elf/me/door/7");
     expect(r.status).toBe(200);
     expect(String(r.data.detail)).toContain("The Example Bakehouse");
@@ -241,6 +243,7 @@ describe("a family's own door", () => {
     expect(r.data).toEqual({ error: "Not found" });
     expect(r.headers.get("cache-control")).toBe("private, no-store");
     expect(r.text).not.toContain("Example Bakehouse");
+    expect(game.familyKnowsDoor).toHaveBeenCalledWith(2026, 7, 3);
     expect(doors.getElfDoor).not.toHaveBeenCalled();
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
@@ -252,6 +255,7 @@ describe("a family's own door", () => {
     expect(r.headers.get("cache-control")).toBe("private, no-store");
     db.findElfSession.mockResolvedValue(null);
     expect((await call("GET", "/api/elf/me/door/7")).status).toBe(401);
+    expect(game.familyKnowsDoor).not.toHaveBeenCalled();
     expect(game.familyKnowledge).not.toHaveBeenCalled();
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
@@ -260,7 +264,7 @@ describe("a family's own door", () => {
     const r = await call("GET", "/api/elf/me/door/8");
     expect(r.status).toBe(404);
     expect(r.data).toEqual({ error: "Not found" });
-    expect(game.familyKnowledge).not.toHaveBeenCalled();
+    expect(game.familyKnowsDoor).not.toHaveBeenCalled();
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
 
@@ -269,23 +273,23 @@ describe("a family's own door", () => {
   // shows a place).
   it("is not found while door 7's place is still hidden, at 6:10pm, even for the family that found its elf and guessed", async () => {
     vi.setSystemTime(SIX_10);
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7], typed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7], typed: [7] }));
     const r = await call("GET", "/api/elf/me/door/7");
     expect(r.status).toBe(404);
     expect(r.text).not.toContain("Example Bakehouse");
-    expect(game.familyKnowledge).not.toHaveBeenCalled();
+    expect(game.familyKnowsDoor).not.toHaveBeenCalled();
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
 
   it("is not found for an open door with no place", async () => {
     doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 3, 4, 5, 6]), foundDoor7({ placeName: null, placeTown: null })]);
     doors.getElfDoor.mockResolvedValue(foundDoor7({ placeName: null, placeTown: null }));
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     const r = await call("GET", "/api/elf/me/door/7");
     expect(r.status).toBe(404);
     expect(r.data).toEqual({ error: "Not found" });
     // It is the place that is missing: the family can see it, and the door was read.
-    expect(game.familyKnowledge).toHaveBeenCalled();
+    expect(game.familyKnowsDoor).toHaveBeenCalled();
     expect(doors.getElfDoor).toHaveBeenCalledWith(2026, 7);
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
@@ -293,7 +297,7 @@ describe("a family's own door", () => {
   // Rulings on Plan 2c-1, from Task 5's review: a place cleared to spaces is no place, as everywhere else.
   it("is not found for an open door whose place is only spaces", async () => {
     doors.getElfDoor.mockResolvedValue(foundDoor7({ placeName: "   ", placeTown: null }));
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     const r = await call("GET", "/api/elf/me/door/7");
     expect(r.status).toBe(404);
     expect(r.data).toEqual({ error: "Not found" });
@@ -302,27 +306,29 @@ describe("a family's own door", () => {
   });
 
   it("is not found for anything but a real door: never the practice door", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [0, 7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [0, 7] }));
     for (const bad of ["0", "25", "x", "7.5"]) expect((await call("GET", `/api/elf/me/door/${bad}`)).status, bad).toBe(404);
     practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
     expect((await call("GET", "/api/elf/me/door/0", { cookie: PRACTICE_PASS })).status).toBe(404);
+    expect(game.familyKnowsDoor).not.toHaveBeenCalled();
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
 
   it("is not found with December's doors off, even for a browser playing the practice door", async () => {
     db.getElfSettings.mockResolvedValue(OFF);
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     expect((await call("GET", "/api/elf/me/door/7")).status).toBe(404);
     practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
     const practising = await call("GET", "/api/elf/me/door/7", { cookie: PRACTICE_PASS });
     expect(practising.status).toBe(404);
     expect(practising.data).toEqual({ error: "Not found" });
+    expect(game.familyKnowsDoor).not.toHaveBeenCalled();
     expect(game.familyKnowledge).not.toHaveBeenCalled();
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
 
   it("is not found the moment December's doors go off, while the shared calendar's last build still has them on", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     expect((await call("GET", "/api/elf/me/door/7")).status).toBe(200);
     // Switched off a moment ago: the calendar built with the doors on is still shared, for up to 15 seconds.
     db.getElfSettings.mockResolvedValue(OFF);
@@ -351,7 +357,7 @@ describe("a family's own door", () => {
 
   it("answers 500 with the game's words when what the family has done cannot be read", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    game.familyKnowsDoor.mockRejectedValue(new Error("connection lost"));
     const r = await call("GET", "/api/elf/me/door/7");
     expect(r.status).toBe(500);
     expect(r.data).toEqual({ error: WORDS });
@@ -359,6 +365,50 @@ describe("a family's own door", () => {
     expect(lines).toContain("connection lost");
     expect(lines).not.toContain("Example Bakehouse");
     logged.mockRestore();
+  });
+});
+
+// ---- asking about one door (the whole-branch review, Important 2) --------------------------------
+//
+// A photo, and a family's own door, ask about one door, so they read only what the family has done at that
+// door (familyKnowsDoor), never its whole year (familyKnowledge, which the batch, /api/elf/me and Detective HQ
+// still read). The one rule is the same: the door open, and a guess or a visit there.
+
+describe("asking about one door", () => {
+  const photo = () => call("GET", `/elf/door/7/photo/${TOKEN}.jpg`);
+  const own = () => call("GET", "/api/elf/me/door/7");
+
+  it("reads only door 7's guess and visits for the family's own door, never the family's whole year", async () => {
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
+    const r = await own();
+    expect(r.status).toBe(200);
+    expect(game.familyKnowsDoor).toHaveBeenCalledTimes(1);
+    expect(game.familyKnowsDoor).toHaveBeenCalledWith(2026, 7, 3);
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+  });
+
+  it("reads only door 7's guess and visits for a photo, never the family's whole year", async () => {
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ typed: [7] }));
+    const r = await photo();
+    expect(r.status).toBe(200);
+    expect(game.familyKnowsDoor).toHaveBeenCalledTimes(1);
+    expect(game.familyKnowsDoor).toHaveBeenCalledWith(2026, 7, 3);
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+  });
+
+  it("keeps the one rule: a guess or a visit at door 7 shows it, a guess or a visit at another door does not", async () => {
+    for (const [done, status] of [
+      [{ guessed: [7] }, 200],
+      [{ typed: [7] }, 200],
+      [{ guessed: [7], typed: [7] }, 200],
+      [{ guessed: [3], typed: [6] }, 404],
+      [{}, 404],
+    ] as const) {
+      game.familyKnowsDoor.mockImplementation(knowsDoors(done));
+      expect((await own()).status, JSON.stringify(done)).toBe(status);
+      expect((await photo()).status, JSON.stringify(done)).toBe(status);
+    }
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
   });
 });
 
@@ -376,7 +426,9 @@ describe("a family's own doors, all in one answer", () => {
   it("come in door order, each drawn exactly as the family's own door is, with every door's photos read in one query, never kept", async () => {
     withDoors3And6();
     // A guess on the night at door 7, and a detective's visit to door 3: the family cannot see door 6's place.
+    // The batch reads the family's year; the one door's route below reads that door alone.
     game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7], typed: [3] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7], typed: [3] }));
     const r = await mine();
     expect(r.status).toBe(200);
     expect(r.headers.get("cache-control")).toBe("private, no-store");
@@ -388,6 +440,7 @@ describe("a family's own doors, all in one answer", () => {
     expect(r.text).not.toContain("The Example Mill");
     expect(game.familyKnowledge).toHaveBeenCalledTimes(1);
     expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+    expect(game.familyKnowsDoor).not.toHaveBeenCalled();
     expect(game.doorsPhotos).toHaveBeenCalledTimes(1);
     expect(game.doorsPhotos).toHaveBeenCalledWith(2026, [3, 7]);
     // Nothing is read a door at a time.
@@ -505,7 +558,7 @@ describe("the calendar everyone shares", () => {
   });
 
   it("still names no place on door 7 after a family that can see it has had its own door: nothing of it goes into the shared calendar", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     expect(String((await call("GET", "/api/elf/me/door/7")).data.detail)).toContain("The Example Bakehouse");
     const r = await call("GET", "/api/elf/door/7", { cookie: null });
     expect(r.status).toBe(200);
@@ -522,18 +575,18 @@ describe("a photo on a door", () => {
   const photo = (cookie?: string | null) => call("GET", `/elf/door/7/photo/${TOKEN}.jpg`, { cookie });
 
   it("is served to a family that can see the door's place, and kept by no cache", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
     const r = await photo();
     expect(r.status).toBe(200);
     expect(r.bytes).toEqual(Buffer.from("the photo"));
     expect(r.headers.get("content-type")).toBe("image/jpeg");
     expect(r.headers.get("cache-control")).toBe("private, no-store");
-    expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+    expect(game.familyKnowsDoor).toHaveBeenCalledWith(2026, 7, 3);
     expect(game.approvedPhoto).toHaveBeenCalledWith(2026, 7, TOKEN);
   });
 
   it("is served to a family whose detective typed the door's tag word, though it never guessed", async () => {
-    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ typed: [7] }));
     expect((await photo()).status).toBe(200);
   });
 
@@ -546,8 +599,9 @@ describe("a photo on a door", () => {
 
   it("is not found while the place is still hidden, at 6:10pm, even for the family that found the elf and guessed", async () => {
     vi.setSystemTime(SIX_10);
-    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7], typed: [7] }));
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7], typed: [7] }));
     expect((await photo()).status).toBe(404);
+    expect(game.familyKnowsDoor).not.toHaveBeenCalled();
     expect(game.approvedPhoto).not.toHaveBeenCalled();
   });
 
@@ -571,7 +625,7 @@ describe("a photo on a door", () => {
 
   it("answers 500 with the game's words when what the family has done cannot be read", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    game.familyKnowsDoor.mockRejectedValue(new Error("connection lost"));
     const r = await photo();
     expect(r.status).toBe(500);
     expect(r.text).toBe(WORDS);

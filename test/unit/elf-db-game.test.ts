@@ -27,6 +27,7 @@ import {
   familyGuesses,
   familyHasWon,
   familyKnowledge,
+  familyKnowsDoor,
   familyPhoto,
   familyVisits,
   familyWordTries,
@@ -575,6 +576,34 @@ describe("familyKnowledge", () => {
     const reading = familyKnowledge(2026, 3);
     expect(query).toHaveBeenCalledTimes(2);
     await reading;
+  });
+});
+
+// The whole-branch review, Important 2: a photo and a family's own door ask about one door, so they read only
+// that door's guess and visits, by the keys the two tables are indexed on (year, door, ...), in one query.
+describe("familyKnowsDoor", () => {
+  it("asks about the one door alone, by year, door and family, in one read", async () => {
+    query.mockResolvedValueOnce({ rows: [{ guessed: true, typed: false }] });
+    expect(await familyKnowsDoor(2026, 7, 3)).toEqual({ guessed: true, typed: false });
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, params] = query.mock.calls[0];
+    const s = String(sql).replace(/\s+/g, " ");
+    expect(s).toContain("EXISTS (SELECT 1 FROM elf_guesses WHERE year = $1 AND door = $2 AND family_id = $3) AS guessed");
+    expect(s).toContain("EXISTS (SELECT 1 FROM elf_visits WHERE year = $1 AND door = $2 AND family_id = $3) AS typed");
+    expect(params).toEqual([2026, 7, 3]);
+  });
+
+  it("answers what a detective typed, and the practice door's under door 0 of year 0", async () => {
+    query.mockResolvedValueOnce({ rows: [{ guessed: false, typed: true }] });
+    expect(await familyKnowsDoor(0, 0, 3)).toEqual({ guessed: false, typed: true });
+    expect(query.mock.calls[0][1]).toEqual([0, 0, 3]);
+  });
+
+  it("answers neither for a row that is not there, or a value that is not true", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await familyKnowsDoor(2026, 7, 3)).toEqual({ guessed: false, typed: false });
+    query.mockResolvedValueOnce({ rows: [{ guessed: null, typed: "t" }] });
+    expect(await familyKnowsDoor(2026, 7, 3)).toEqual({ guessed: false, typed: false });
   });
 });
 

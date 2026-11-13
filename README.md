@@ -12582,9 +12582,12 @@ night; it sorts after main's `1791200000470_admin-push.js`). The pure rules are 
 **The one rule** (`knowsPlace`). A family can see a door's place once the door is open (found or
 revealed) and the family has a guess at it, from the night or from having a go, or once one of its
 detectives has typed the door's tag word (the find, or a visit). It is asked only of an open door
-(`doorsKnown` waits for that). Nobody else learns a place in December from the calendar or its feed, the
-door feed, a fingerprint (`doorVersion`), a screen reader label, a page title, a refusal, an email, a post,
-a log or a shared cache, and every answer that is a family's own is `Cache-Control: private, no-store`.
+(`doorsKnown` waits for that). A photo and a family's own door ask it of their one door, reading only that
+door's guess and visits (`familyKnowsDoor`, one query by the keys both tables are indexed on); the batch,
+`/api/elf/me` and Detective HQ read the family's year (`familyKnowledge`). Nobody else learns a place in
+December from the calendar or its feed, the door feed, a fingerprint (`doorVersion`), a screen reader
+label, a page title, a refusal, an email, a post, a log or a shared cache, and every answer that is a
+family's own is `Cache-Control: private, no-store`.
 The poster page and the gold and visit cards still name the place, because the family is standing there,
 and Head Elf HQ still shows every place.
 

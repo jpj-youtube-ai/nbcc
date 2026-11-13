@@ -433,6 +433,20 @@ export async function familyKnowledge(year: number, familyId: number): Promise<F
   return { guesses, typed: new Set(visits.rows.map((row) => row.door)) };
 }
 
+/** What a family has done at one door, for an answer about that door alone (a photo, the family's own door):
+ *  whether it has a guess there, from the night or a go, and whether one of its detectives has typed the tag's
+ *  word there (the find or a visit), whether or not it counts yet. One query, by the keys both tables are
+ *  indexed on (year, door, ...), never the family's whole year as familyKnowledge reads it. */
+export async function familyKnowsDoor(year: number, door: number, familyId: number): Promise<{ guessed: boolean; typed: boolean }> {
+  const r = await pool.query<{ guessed: boolean; typed: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM elf_guesses WHERE year = $1 AND door = $2 AND family_id = $3) AS guessed,
+            EXISTS (SELECT 1 FROM elf_visits WHERE year = $1 AND door = $2 AND family_id = $3) AS typed`,
+    [year, door, familyId],
+  );
+  const row = r.rows[0];
+  return { guessed: row?.guessed === true, typed: row?.typed === true };
+}
+
 /** The name parts of the detectives who found the door's elf, leaving a removed family out. */
 export async function finderParts(year: number, door: number): Promise<DetectiveNameParts[]> {
   const r = await pool.query<{ first_name: string; surname: string; name_approved: boolean }>(

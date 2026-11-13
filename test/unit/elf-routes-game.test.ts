@@ -35,9 +35,11 @@ const game = vi.hoisted(() => ({
   approvedPhoto: vi.fn(),
   visitElf: vi.fn(),
   cluePicture: vi.fn(),
-  // Catching up on missed doors (Plan 2c-1): what the family has done, a door's photos for a family that
-  // can see its place, and a go. Mocked here so no route runs the real ones against the pool's mock.
+  // Catching up on missed doors (Plan 2c-1): what the family has done (its year, or one door), a door's photos
+  // for a family that can see its place, and a go. Mocked here so no route runs the real ones against the
+  // pool's mock.
   familyKnowledge: vi.fn(),
+  familyKnowsDoor: vi.fn(),
   doorPhotos: vi.fn(),
   doorsPhotos: vi.fn(),
   saveLateGuess: vi.fn(),
@@ -129,6 +131,7 @@ import {
   doorsDoneFromRuns,
   FAMILY,
   FIVE_47,
+  knowsDoors,
   OFF,
   ON,
   PRACTICE_CODE,
@@ -157,6 +160,7 @@ const gameCalls = () =>
     game.cluePicture,
     game.familyVisits,
     game.familyKnowledge,
+    game.familyKnowsDoor,
     game.doorPhotos,
     game.doorsPhotos,
   ].reduce((n, f) => n + f.mock.calls.length, 0);
@@ -221,6 +225,7 @@ beforeEach(() => {
   game.cluePicture.mockResolvedValue({ mime: "image/png", bytes: Buffer.from("the clue picture") });
   // A family that has neither guessed nor been anywhere, unless a test says otherwise.
   game.familyKnowledge.mockResolvedValue({ guesses: new Map(), typed: new Set() });
+  game.familyKnowsDoor.mockImplementation(knowsDoors());
   game.doorPhotos.mockResolvedValue([]);
   game.saveLateGuess.mockResolvedValue("saved");
   png.elfPng.mockResolvedValue(Buffer.from("png"));
@@ -431,23 +436,23 @@ describe("a practice browser with December's doors switched off, at 6:10pm", () 
   it("serves the practice door's approved photo once its place is shown, privately, to a family that can see it, reading only the practice door", async () => {
     // Found at 6:10pm, so the place is shown at the reveal, 6:20pm.
     practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
-    // The family's practice guess is in: the practice door's, year 0.
-    const practiceGuess = { text: "the example office", norm: "exampleoffice", at: at("2026-12-07T18:06:00.000Z"), late: false };
-    game.familyKnowledge.mockImplementation(async (year: number) => ({ guesses: new Map(year === 0 ? [[0, practiceGuess]] : []), typed: new Set() }));
+    // The family's practice guess is in: the practice door's, door 0 of year 0.
+    game.familyKnowsDoor.mockImplementation(async (year: number, door: number) => ({ guessed: year === 0 && door === 0, typed: false }));
     vi.setSystemTime(at("2026-12-07T18:15:00.000Z"));
     expect((await call("GET", `/elf/door/0/photo/${TOKEN}.jpg`, { cookie: PRACTICE_PASS })).status).toBe(404);
     expect(game.approvedPhoto).not.toHaveBeenCalled();
     vi.setSystemTime(at("2026-12-07T18:25:00.000Z"));
     const r = await call("GET", `/elf/door/0/photo/${TOKEN}.jpg`, { cookie: PRACTICE_PASS });
     expect(r.status).toBe(200);
-    expect(game.familyKnowledge).toHaveBeenCalledWith(0, 3);
+    expect(game.familyKnowsDoor).toHaveBeenCalledWith(0, 0, 3);
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
     expect(game.approvedPhoto).toHaveBeenCalledWith(0, 0, TOKEN);
     expect(r.headers.get("cache-control")).toBe("private, no-store");
     expect(doors.listElfDoors).not.toHaveBeenCalled();
     expect(doors.getElfDoor).not.toHaveBeenCalled();
     // A family that has neither guessed nor been there is not handed it: the practice door is never
     // shown to everyone.
-    game.familyKnowledge.mockResolvedValue({ guesses: new Map(), typed: new Set() });
+    game.familyKnowsDoor.mockImplementation(knowsDoors());
     expect((await call("GET", `/elf/door/0/photo/${TOKEN}.jpg`, { cookie: PRACTICE_PASS })).status).toBe(404);
   });
 });
@@ -1246,7 +1251,7 @@ describe("a photo on a door", () => {
     // The family guessed door 7 on the night, so once its place is shown the family can see it (Plan
     // 2c-1: the photos go only to a family that can see the place; test/unit/elf-routes-catch-up.test.ts
     // has the rest of that rule).
-    game.familyKnowledge.mockResolvedValue({ guesses: new Map([[7, { text: "Example Bakes", norm: "examplebakes", at: FIVE_47, late: false }]]), typed: new Set() });
+    game.familyKnowsDoor.mockImplementation(knowsDoors({ guessed: [7] }));
   });
 
   it("is not served while the place is still hidden, at 6:10pm, and that answer is never kept", async () => {

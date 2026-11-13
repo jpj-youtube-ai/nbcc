@@ -161,6 +161,13 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     And the family "first.game.elf.bdd@example.com" guessed "The Example Bakehouse" for door 7 before its evening
     When the family "first.game.elf.bdd@example.com" guesses "The Example Bakehouse" for door 7
     Then the game answers 409 with the reason "locked-in"
+    # The family's own door asks the database about door 7 alone (the whole-branch review, Important 2): the
+    # guess by itself shows the place, and a family that has neither guessed nor been there is not found.
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me/door/7"
+    Then the game answers 200
+    And the family's own door says "The Example Bakehouse"
+    When the family "second.game.elf.bdd@example.com" opens "/api/elf/me/door/7"
+    Then the game answers 404
     When the family "first.game.elf.bdd@example.com" types the word "snowball 999" at door 7
     Then the game answers 400 with the reason "wrong-word"
     And the family has 5 tries left at that door

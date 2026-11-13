@@ -379,8 +379,10 @@ export function shareCardSvg(s: ShareCardPrint, elfPicture: string): string {
   const publicName = detectiveName(s.detective);
   const elf = PNG_DATA.test(elfPicture) ? `<image href="${elfPicture}" x="0" y="0" width="340" height="510"/>` : "";
   // A picture cannot wrap its words, so a long name or rank is set smaller until it fits the
-  // 620 units beside the elf. A bold serif letter is a little over half as wide as it is tall.
-  const fit = (words: string, biggest: number): number => Math.max(24, Math.min(biggest, Math.floor(620 / (Math.max(1, words.length) * 0.56))));
+  // 620 units beside the elf. The card is drawn on the server in the fonts it has, DejaVu Serif Bold
+  // here, not Georgia, and its letters run wider: up to about 0.64 of their size across, so each
+  // letter is allowed that. src/scripts/check-share-card.ts proves it in the image (pr.yml).
+  const fit = (words: string, biggest: number): number => Math.max(24, Math.min(biggest, Math.floor(620 / (Math.max(1, words.length) * 0.64))));
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeHtml(`${SCHOOL_NAME}: ${publicName}, ${s.rank}`)}">` +
     `<rect width="1200" height="630" fill="#F8F5EE"/>` +

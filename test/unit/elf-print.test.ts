@@ -256,14 +256,21 @@ describe("the share card", () => {
     expect(doc.documentElement.getAttribute("aria-label")).toBe("NBCC Elf Detective School: Detective R. Tinselfoot, Junior Detective");
   });
 
-  it("sets a long name smaller so that it stays on the card", () => {
+  // The card is drawn on the server, in DejaVu Serif Bold (the image's fonts), whose letters run wider than the
+  // Georgia the card asks for: a name is sized for 0.64 of its size a letter (Plan 2c-2, Task 6's review), and
+  // src/scripts/check-share-card.ts proves, in the image, that the widest names end clear of the frame.
+  it("sets a long name smaller so that it stays on the card, sized for the server's wider letters", () => {
     const size = (svg: string) => Number(/font-size="(\d+)" fill="#800000"/.exec(svg)![1]);
     expect(size(svg)).toBeGreaterThan(40);
     const name = "Detective Christopher Tinselfoot";
     const card = shareCardSvg({ ...SHARE, detective: { firstName: "Christopher", surname: "Tinselfoot", approved: true } });
     expect(card).toContain(name);
     expect(size(card)).toBeLessThan(40);
-    expect(size(card) * 0.56 * name.length).toBeLessThanOrEqual(620);
+    expect(size(card) * 0.64 * name.length).toBeLessThanOrEqual(620);
+    // A short name with wide letters is set biggest, so it is the one most likely to reach the frame.
+    const short = shareCardSvg({ ...SHARE, detective: { firstName: "Willow", surname: "Snowpaw", approved: false } });
+    expect(short).toContain("Detective W. Snowpaw");
+    expect(size(short) * 0.64 * "Detective W. Snowpaw".length).toBeLessThanOrEqual(620);
   });
 
   it("shows the elf, never a photo", () => {

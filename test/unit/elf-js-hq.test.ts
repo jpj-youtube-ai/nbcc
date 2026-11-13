@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { renderHqPage } from "../../src/elf/pages/hq";
@@ -147,6 +148,16 @@ describe("locking in a guess", () => {
       expect(words($(".elf-guess__status")), String(goUrl)).toBe("The hiding place is shown now, so this is your one go at this door.");
       expect($(".elf-guess__status").classList.contains("is-error")).toBe(true);
     }
+  });
+
+  // Task 9, from Task 7's review: the script reads an address on this site by sitePath's own rule
+  // (src/elf/pages/shell.ts), character for character, with no needless escape inside its brackets.
+  it("reads an address on this site by the page's own rule, character for character", () => {
+    const shell = readFileSync(resolve(ROOT, "src/elf/pages/shell.ts"), "utf8");
+    const script = readFileSync(resolve(ROOT, "assets/js/elf-hq.js"), "utf8");
+    const rule = /typeof value === "string" && (\/\^.+?\$\/)\.test\(value\)/.exec(shell)?.[1];
+    expect(rule).toBe("/^\\/(?!\\/)[A-Za-z0-9/_.~%?=&-]*$/");
+    expect(script).toContain(`var SITE_PATH = ${rule};`);
   });
 
   // Ruling F15: the page's own way to go is a function wrapper, as reload is. A bare win.location.assign, called

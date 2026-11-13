@@ -25,7 +25,7 @@
   var RELOAD_SPREAD_MS = 5000;
   // An address on this site: one slash, then only what the site's own paths hold (sitePath in
   // src/elf/pages/shell.ts), so never another site, nor a slash and a backslash.
-  var SITE_PATH = /^\/(?!\/)[A-Za-z0-9\/_.~%?=&-]*$/;
+  var SITE_PATH = /^\/(?!\/)[A-Za-z0-9/_.~%?=&-]*$/;
 
   /** How long is left: "2:14:09", "14:09", "0:05", and "0:00" once the time has come. The same
    *  words as countdownWords in src/elf/words.ts. */

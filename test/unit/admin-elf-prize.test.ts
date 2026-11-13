@@ -276,7 +276,20 @@ describe("the graduates' video", () => {
     expect(settingsDb.setElfSettings).toHaveBeenCalledWith({ graduateVideoUrl: longest }, ACTOR);
   });
 
-  it.each([["http://example.org/v"], ["example.org/graduates"], ["HTTPS://example.org/graduates"], ["https://example.org/" + "g".repeat(281)], [5]])(
+  it.each([
+    ["http://example.org/v"],
+    ["example.org/graduates"],
+    ["HTTPS://example.org/graduates"],
+    ["https://example.org/" + "g".repeat(281)],
+    [5],
+    // Links that start right but go nowhere: a link a browser cannot read, a host with no dot, a space or a
+    // control character inside (Task 4's review, Minor 1).
+    ["https://"],
+    ["https://exa mple.org/v"],
+    ["https:///graduates"],
+    ["https://example.org/a\tb"],
+    ["https://example.org/a\u0000b"],
+  ])(
     "refuses the link %j with the sentence, and saves nothing",
     async (videoUrl) => {
       const res = await put({ videoUrl });

@@ -35,11 +35,23 @@ const VIDEO_MAX = 300;
 /** Blank words are no link. */
 const blankIsNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 
+/** A link a browser can follow, so graduates never meet a dead "Watch the graduates' video": one that URL
+ *  reads, https, with a host that has a dot, and no space or control character anywhere in it. */
+function followable(link: string): boolean {
+  if (/[\s\p{Cc}]/u.test(link)) return false;
+  try {
+    const url = new URL(link);
+    return url.protocol === "https:" && url.hostname.includes(".");
+  } catch {
+    return false;
+  }
+}
+
 const putSchema = z
   .object({
     time: z.string().refine(isClockTime).optional(),
     // As the table's CHECK has it: https:// first, exactly so (the CHECK reads capitals as different).
-    videoUrl: z.preprocess(blankIsNull, z.string().trim().max(VIDEO_MAX).startsWith("https://").nullable().optional()),
+    videoUrl: z.preprocess(blankIsNull, z.string().trim().max(VIDEO_MAX).startsWith("https://").refine(followable).nullable().optional()),
   })
   .strict();
 

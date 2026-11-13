@@ -423,7 +423,10 @@ function scrapbook(d: DoorView, kind: DoorKind): string {
   const where = placeWords(d);
   // The elf can still be found only at a revealed door whose elf has not gone home.
   const stillHiding = kind === "revealed" && !d.goneHome;
-  const title = where !== null ? escapeHtml(where) : kind === "found" ? `${elf} was found!` : `Nobody found ${elf} in time`;
+  // While the elf can still be found the title says "yet", as the news above it does ("Nobody has found today's elf
+  // yet"); "in time" is for an elf that has gone home, which can no longer be found.
+  const title =
+    where !== null ? escapeHtml(where) : kind === "found" ? `${elf} was found!` : stillHiding ? `Nobody has found ${elf} yet` : `Nobody found ${elf} in time`;
   // A revealed door whose elf has gone home has nothing left to win: its end line says it has gone home.
   const lead =
     kind === "found"

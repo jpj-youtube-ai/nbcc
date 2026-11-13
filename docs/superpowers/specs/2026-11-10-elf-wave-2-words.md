@@ -721,8 +721,10 @@ A door's note, found and the place not shown yet:
 The scrapbook behind an open door:
 
 - [ ] Found, the title in place of the place: ***Bauble* was found!**
-- [ ] Nobody found it, the title in place of the place: **Nobody found *Bauble* in time**
-- [ ] Under that title, while nobody has found it and its elf has not gone home: *Bauble* is still hiding, and the first detective to type the word on its tag wins the prize.
+- ~~Nobody found it, the title in place of the place: **Nobody found *Bauble* in time**~~ Replaced: see the next two lines, and question K below.
+- [ ] Nobody found it, while its elf has not gone home, the title in place of the place: **Nobody has found *Bauble* yet**
+- [ ] Nobody found it, and its elf has gone home, the title in place of the place: **Nobody found *Bauble* in time**
+- [ ] Under the title, while nobody has found it and its elf has not gone home: *Bauble* is still hiding, and the first detective to type the word on its tag wins the prize.
 - [ ] At the end, in place of "The elf is still at *Corner Bakehouse*. Visit to add your picture.": Where was *Bauble* hiding? Crack the case in Detective HQ to find out. Then the button: Have a go
 - [ ] The same, while nobody has found it and its elf has not gone home: Where is *Bauble* hiding? Crack the case in Detective HQ to find out.
 
@@ -890,9 +892,10 @@ Noticed while gathering these words:
 - **H.** Having a go on the door's own evening, the page says "The clues came out on Monday 7 December.", which is that same day: should it say "today" then?
 - **I.** Doors you can still crack leaves out today's door, because today's case already offers its go: would you like it on the list as well?
 
-From the whole-branch review (13 November 2026):
+From the whole-branch review and its pictures (13 November 2026):
 
 - **J.** The go page said "Spelling does not have to be perfect.", as Detective HQ does on the night. But a go is one final guess, and a guess is matched with only capitals, spaces, accents, marks and a leading "the" taken off, so a go with a spelling slip is simply not right and cannot be put right: the old words promised more than is true. The go page now says "Capitals and spaces do not matter. Check your spelling: you get one guess." Detective HQ keeps its words, because a guess on the night can be changed until the place is shown. Are these the words you want? The line just under the box still says "You get one guess at this door.", so the one guess is said twice: would you rather drop one of them?
+- **K.** On the calendar everyone shares, a door shown with nobody having found its elf was headed "Nobody found Bauble in time", while the news above it says "Bauble is still waiting" and "Nobody has found today's elf yet, and the first detective to find it still wins the prize." Everywhere else "in time" is said only once an elf has gone home and can no longer be found, so the heading read as though the hunt was over. While the elf still waits the heading now says "Nobody has found Bauble yet", as the news, yesterday's post and the go page do; once it has gone home it still says "Nobody found Bauble in time". Are these the words you want, or would you rather it said, for example, "Nobody found Bauble on the evening"?
 
 ## Questions for Jaimie
 

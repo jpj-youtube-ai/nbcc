@@ -12593,8 +12593,9 @@ and Head Elf HQ still shows every place.
 
 **The calendar everyone shares** (still built at most once every 15 seconds and kept in public for 15)
 carries no place and no photo for an open door until Christmas Day. Its scrapbook's title says "Bauble was
-found!" or "Nobody found Bauble in time" where the place was, the news at the top never names a place, the
-photo row is left out and the count is the elves only. An open door carries `DoorView.goUrl`
+found!", "Nobody has found Bauble yet" while its elf still waits, or "Nobody found Bauble in time" once it
+has gone home, where the place was, the news at the top never names a place, the photo row is left out
+and the count is the elves only. An open door carries `DoorView.goUrl`
 (`/elf/hq/door/:n`) until Christmas Day, the same for every visitor, and its last line asks "Where was
 Bauble hiding? Crack the case in Detective HQ to find out." with **Have a go** (a signed out visitor is
 sent to sign in). `doorVersion` hashes `goUrl` only on an open door that has one, so every other door, and

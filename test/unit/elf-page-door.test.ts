@@ -833,9 +833,13 @@ describe("an open door on the calendar everyone shares, before Christmas Day", (
     expect(doorLabel(REVEALED7, EIGHT_05)).toBe("Door 7, not found yet.");
   });
 
-  it("heads its scrapbook with the find, or with nobody finding the elf in time", () => {
+  // From the pictures of the whole-branch review: above a revealed door whose elf still waits, the news says "Bauble is
+  // still waiting" and "Nobody has found today's elf yet", so its title agrees, as the posts and the go page do. "In
+  // time" is kept for an elf that has gone home, which can no longer be found.
+  it("heads its scrapbook with the find, with nobody having found the elf yet while it waits, or with nobody in time once it has gone home", () => {
     expect(words(dom(doorDetail(FOUND7, atTime(SEVEN_05))).querySelector("h3"))).toBe("Bauble was found!");
-    expect(words(dom(doorDetail(REVEALED7, atTime(EIGHT_05))).querySelector("h3"))).toBe("Nobody found Bauble in time");
+    expect(words(dom(doorDetail(REVEALED7, atTime(EIGHT_05))).querySelector("h3"))).toBe("Nobody has found Bauble yet");
+    expect(words(dom(doorDetail({ ...REVEALED7, goneHome: true }, atTime(EIGHT_05))).querySelector("h3"))).toBe("Nobody found Bauble in time");
   });
 
   it("says who found the elf and what they won, as it does today", () => {

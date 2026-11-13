@@ -4,7 +4,9 @@
  * chosen picture is made smaller in the browser (at most 1600 pixels on its longest side, a fresh JPEG under
  * 2 MB, as the photo sheet makes a photo), sent as JSON { mime, dataBase64 } with the mobile number when the
  * page asks for one, and the server's answer is shown in the form's status line: its thank you, or why not.
- * The button stays off while a picture is on its way.
+ * The button stays off while a picture is on its way. Once a picture is in, the page shows it as the server
+ * draws it then, with no reload: the picture, fetched fresh from its own address, and the button that sends a
+ * new one.
  *
  * Nothing here decides anything. The server says whether the picture is taken, makes it again so nothing from
  * the camera is kept, and writes the words: this only shows them.
@@ -21,6 +23,12 @@
   var PICTURE_TYPE = "That picture is not one we can use. Try a JPG, PNG or WebP photo.";
   var PICTURE_SIZE = "That picture is too big. Try a smaller one.";
   var PICTURE_READ = "That picture could not be opened. Please try another.";
+  // The button's words once a picture is in, as the page draws them (src/elf/pages/entry.ts).
+  var SEND_NEW = "Send a new picture";
+
+  // An address on this site: one slash, then only what the site's own paths hold (sitePath in
+  // src/elf/pages/shell.ts), so never another site, nor a slash and a backslash.
+  var SITE_PATH = /^\/(?!\/)[A-Za-z0-9/_.~%?=&-]*$/;
 
   var TYPES = ["image/jpeg", "image/png", "image/webp"];
   var MAX_BYTES = 2 * 1024 * 1024;
@@ -100,6 +108,7 @@
   }
 
   function initEntry(doc, win, opts) {
+    var clock = opts && opts.now ? opts.now : function () { return Date.now(); };
     var read = (opts && opts.read) || browserRead(win);
     var make = (opts && opts.make) || browserMake(doc);
     var form = doc.querySelector("form.elf-entry");
@@ -120,6 +129,30 @@
     function hold(on) {
       sending = on;
       if (send) send.disabled = on;
+    }
+
+    /** Once a picture is in, the page shows it as the server draws it then, with no reload: the button that sends
+     *  a new one, and the picture from its own address (the form's data-picture), fetched fresh so the new one
+     *  shows. After a first send there is no picture yet, so one is made, first in the note under its tape, as the
+     *  page draws it. Only an address on this site is shown. */
+    function showPicture() {
+      if (send) send.textContent = SEND_NEW;
+      var src = form.getAttribute("data-picture") || "";
+      if (!SITE_PATH.test(src)) return;
+      var img = doc.querySelector("img.elf-entry__pic");
+      if (!img) {
+        var note = form.closest ? form.closest(".elf-entry-note") : null;
+        if (!note) return;
+        img = doc.createElement("img");
+        img.className = "elf-entry__pic";
+        img.setAttribute("alt", form.getAttribute("data-picture-alt") || "");
+        img.setAttribute("width", "800");
+        img.setAttribute("height", "600");
+        img.setAttribute("decoding", "async");
+        var tape = note.querySelector(".elf-tape");
+        note.insertBefore(img, tape ? tape.nextSibling : note.firstChild);
+      }
+      img.setAttribute("src", src + (src.indexOf("?") === -1 ? "?" : "&") + "v=" + clock());
     }
 
     /** Why a picture was not taken: the sentence for the picture when the server names one, else its error. */
@@ -200,8 +233,9 @@
         })
         .then(function (done) {
           hold(false);
-          if (typeof done.thanks === "string") say(done.thanks, false);
-          else say(done.words, true);
+          if (typeof done.thanks !== "string") return say(done.words, true);
+          showPicture();
+          say(done.thanks, false);
         });
     });
 

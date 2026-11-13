@@ -246,6 +246,9 @@ export interface EntryView {
   askMobile: boolean;
   /** Where the picture is sent: `/api/elf/entry/${id}`. */
   postUrl: string;
+  /** Where the family's own picture shows once one is in (`/elf/hq/entry/${id}/picture.jpg`, as `sent` has it), so
+   *  the page's script can show a new picture as soon as it has been sent, a first one included. */
+  pictureUrl: string;
   hqUrl: string;
 }
 

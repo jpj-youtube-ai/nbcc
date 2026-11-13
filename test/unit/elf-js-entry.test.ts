@@ -190,6 +190,79 @@ describe("sending in a picture", () => {
   });
 });
 
+// Fix round 1 (the review's Minor 2): once a picture is in, the page shows it as the server draws it then, with no
+// reload: the picture from its own address, fetched fresh, and the button that sends a new one. The thank you stays.
+describe("once a picture is in", () => {
+  const SENT = { at: new Date("2026-12-24T10:45:00.000Z"), pictureUrl: "/elf/hq/entry/11/picture.jpg" };
+  const pictures = () => [...document.querySelectorAll<HTMLImageElement>("img.elf-entry__pic")];
+
+  it("shows the new picture after a first send, from its own address fetched fresh, and offers a new one", async () => {
+    load(entryView(), { now: () => 1111 });
+    expect(pictures()).toEqual([]);
+    await pick(await jpegFile());
+    await send();
+    const [img] = pictures();
+    expect(pictures().length).toBe(1);
+    expect(img.getAttribute("src")).toBe("/elf/hq/entry/11/picture.jpg?v=1111");
+    expect(img.getAttribute("alt")).toBe("Detective Ruby Tinselfoot's picture");
+    expect([img.getAttribute("width"), img.getAttribute("height")]).toEqual(["800", "600"]);
+    // Where the page draws a picture that is in: first in the note, under its tape.
+    expect(img.parentElement!.classList.contains("elf-entry-note")).toBe(true);
+    expect(img.previousElementSibling!.classList.contains("elf-tape")).toBe(true);
+    expect(words(button())).toBe("Send a new picture");
+    expect(words(status())).toBe(THANKS);
+  });
+
+  it("shows a picture sent in place of the one before, fetched fresh each time, and never a second picture", async () => {
+    let t = 2000;
+    answer = { status: 200, body: { ok: true, message: THANKS } };
+    load(entryView({ sent: SENT }), { now: () => t });
+    expect(pictures().map((p) => p.getAttribute("src"))).toEqual(["/elf/hq/entry/11/picture.jpg"]);
+    await pick(await jpegFile());
+    await send();
+    expect(pictures().map((p) => p.getAttribute("src"))).toEqual(["/elf/hq/entry/11/picture.jpg?v=2000"]);
+    t = 3000;
+    await send();
+    expect(pictures().map((p) => p.getAttribute("src"))).toEqual(["/elf/hq/entry/11/picture.jpg?v=3000"]);
+    expect(words(button())).toBe("Send a new picture");
+    expect(words(status())).toBe(THANKS);
+  });
+
+  it("leaves the page as it was when the picture is refused", async () => {
+    answer = { status: 400, body: { error: MOBILE_WORDS, fields: { mobile: MOBILE_WORDS } } };
+    load(entryView({ askMobile: true }));
+    await pick(await jpegFile());
+    await send();
+    expect(pictures()).toEqual([]);
+    expect(words(button())).toBe("Send it to the head elves");
+  });
+
+  it("offers a new picture in the page's own words for a picture that is in", async () => {
+    const drawn = new DOMParser().parseFromString(renderEntryPage(entryView({ sent: SENT })), "text/html");
+    load();
+    await pick(await jpegFile());
+    await send();
+    expect(words(button())).toBe(words(drawn.querySelector('form.elf-entry button[type="submit"]')));
+  });
+
+  it("shows no picture from an address that is not on this site, whatever the form says", async () => {
+    load();
+    $("form.elf-entry").setAttribute("data-picture", "//elsewhere.example/p.jpg");
+    await pick(await jpegFile());
+    await send();
+    expect(pictures()).toEqual([]);
+    expect(words(status())).toBe(THANKS);
+  });
+
+  it("reads an address on this site by the page's own rule, character for character", () => {
+    const shell = readFileSync(resolve(ROOT, "src/elf/pages/shell.ts"), "utf8");
+    const script = readFileSync(resolve(ROOT, "assets/js/elf-entry.js"), "utf8");
+    const rule = /typeof value === "string" && (\/\^.+?\$\/)\.test\(value\)/.exec(shell)?.[1];
+    expect(rule).toBe("/^\\/(?!\\/)[A-Za-z0-9/_.~%?=&-]*$/");
+    expect(script).toContain(`var SITE_PATH = ${rule};`);
+  });
+});
+
 describe("making the picture smaller in the browser", () => {
   const BIG = () => new File([new Uint8Array([1, 2, 3])], "big.jpg", { type: "image/jpeg" });
   const read = () => Promise.resolve({ src: "blob:x", width: 4000, height: 3000, img: {} });

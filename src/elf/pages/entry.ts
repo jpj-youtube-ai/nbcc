@@ -13,7 +13,8 @@ import type { EntryView } from "./types";
 // never asks for an age.
 //
 // Sending needs the page's script (assets/js/elf-entry.js), as a door's photo does: it makes the picture
-// smaller in the browser and sends it as JSON. The form still posts to this site like any form.
+// smaller in the browser and sends it as JSON, then shows the picture that is in, as this page draws one. The form
+// still posts to this site like any form.
 //
 // Pure: no pool, no config, no clock (the time is in the view). Unit tested in
 // test/unit/elf-page-entry.test.ts.
@@ -26,15 +27,18 @@ function pictureHtml(view: EntryView, name: string): string {
 }
 
 /** The form: the picture, the family's mobile when it has none (the join form's words and check), the status
- *  line the script answers in, and the button. */
-function formHtml(view: EntryView, post: string): string {
+ *  line the script answers in, and the button. It tells the script where the picture shows once one is in, and in
+ *  what words, so a picture just sent shows at once: only an address on this site. */
+function formHtml(view: EntryView, post: string, name: string): string {
+  const shows = sitePath(view.pictureUrl);
+  const picture = shows ? ` data-picture="${shows}" data-picture-alt="${name}'s picture"` : "";
   const mobile = view.askMobile === true
     ? `<div class="elf-field"><label for="elf-entry-mobile">Mobile number</label>` +
       `<p class="elf-hint" id="elf-entry-mobile-hint">So we can ring you straight away if one of your detectives wins the grand prize on Christmas Eve. We only use it for that.</p>` +
       `<input id="elf-entry-mobile" name="mobile" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" required aria-describedby="elf-entry-mobile-hint" /></div>`
     : "";
   return (
-    `<form class="elf-entry" method="post" action="${post}" enctype="multipart/form-data" data-api="${post}">` +
+    `<form class="elf-entry" method="post" action="${post}" enctype="multipart/form-data" data-api="${post}"${picture}>` +
     `<div class="elf-field"><label for="elf-entry-picture">Your picture</label>` +
     `<input id="elf-entry-picture" name="picture" type="file" accept="image/*" required /></div>` +
     mobile +
@@ -58,7 +62,7 @@ export function renderEntryPage(view: EntryView): string {
     ? line(`${name}'s picture is in.${open && time ? ` You can change it until ${time} on Christmas Eve.` : ""}`, "elf-entry__in")
     : "";
   const when = open ? (sent || !time ? "" : line(`Entries close at ${time} on Christmas Eve.`, "elf-entry__closes")) : time ? line(`Grand prize entries closed at ${time} on Christmas Eve.`, "elf-entry__closes") : "";
-  const form = open && post ? formHtml(view, post) : "";
+  const form = open && post ? formHtml(view, post, name) : "";
   const promise =
     form || sent
       ? line(

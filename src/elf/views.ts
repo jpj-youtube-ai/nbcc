@@ -268,14 +268,16 @@ export function hqViewFor(o: {
  *  `sentAt` is when its picture came in, or null before one has; `hasMobile` whether the family has a mobile. */
 export function entryViewFor(o: { detective: DetectiveRow; hasMobile: boolean; closesAt: Date; now: Date; sentAt: Date | null }): EntryView {
   const id = String(o.detective.id);
+  const pictureUrl = `/elf/hq/entry/${id}/picture.jpg`;
   return {
     // A family always sees its own detectives' names in full.
     detective: { id, name: familyDetectiveName({ firstName: o.detective.firstName, surname: o.detective.surname, approved: true }) },
     closesAt: o.closesAt,
     open: o.now.getTime() < o.closesAt.getTime(),
-    sent: o.sentAt ? { at: o.sentAt, pictureUrl: `/elf/hq/entry/${id}/picture.jpg` } : null,
+    sent: o.sentAt ? { at: o.sentAt, pictureUrl } : null,
     askMobile: !o.hasMobile,
     postUrl: `/api/elf/entry/${id}`,
+    pictureUrl,
     hqUrl: "/elf/hq",
   };
 }

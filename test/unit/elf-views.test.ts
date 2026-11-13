@@ -875,6 +875,8 @@ describe("the grand prize entry page's view", () => {
       sent: null,
       askMobile: false,
       postUrl: "/api/elf/entry/100",
+      // Where the picture shows once one is in, so the page's script can show a new one as soon as it is sent.
+      pictureUrl: "/elf/hq/entry/100/picture.jpg",
       hqUrl: "/elf/hq",
     });
   });

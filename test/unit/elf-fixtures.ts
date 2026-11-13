@@ -269,6 +269,7 @@ export function entryView(over: Partial<EntryView> = {}): EntryView {
     sent: null,
     askMobile: false,
     postUrl: "/api/elf/entry/11",
+    pictureUrl: "/elf/hq/entry/11/picture.jpg",
     hqUrl: "/elf/hq",
     ...over,
   };

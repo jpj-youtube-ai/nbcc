@@ -103,6 +103,13 @@ describe("the entry page while the entries are open", () => {
   it("says the time a head elf set", () => {
     expect(said(entryView({ closesAt: at("2026-12-24T18:30:00.000Z") }))).toContain("Entries close at 6:30pm on Christmas Eve.");
   });
+
+  // Fix round 1 (the review's Minor 2): the script shows the new picture as soon as it is sent.
+  it("tells its script where the picture shows once one is in, and its words", () => {
+    const form = page().querySelector("form.elf-entry")!;
+    expect(form.getAttribute("data-picture")).toBe("/elf/hq/entry/11/picture.jpg");
+    expect(form.getAttribute("data-picture-alt")).toBe("Detective Ruby Tinselfoot's picture");
+  });
 });
 
 describe("the entry page once the entries have closed", () => {
@@ -127,6 +134,12 @@ describe("the entry page once the entries have closed", () => {
 });
 
 describe("what comes from data", () => {
+  it("tells its script of no picture whose address is not on this site", () => {
+    const form = page(entryView({ pictureUrl: "https://elsewhere.example/p.jpg" })).querySelector("form.elf-entry")!;
+    expect(form.hasAttribute("data-picture")).toBe(false);
+    expect(form.hasAttribute("data-picture-alt")).toBe(false);
+  });
+
   it("draws no form when its address is not on this site, and no picture whose address is not", () => {
     const doc = page(entryView({ postUrl: "https://elsewhere.example/entry", sent: { ...SENT, pictureUrl: "https://elsewhere.example/p.jpg" } }));
     expect(doc.querySelector("form")).toBeNull();

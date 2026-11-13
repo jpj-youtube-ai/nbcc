@@ -1,8 +1,8 @@
 import { DOOR_COUNT } from "../calendar";
 import { christmasDay, newYearsDay } from "../catch-up";
 import { SCHOOL_NAME, schoolLogo } from "../logo";
-import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
-import { GUESS_LINE, doorDetail, doorTile, findOutLine } from "./door";
+import { clockWords, countdownWords, dayWords, findOutWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
+import { GUESS_LINE, doorDetail, doorTile } from "./door";
 import { elfFilm } from "./film";
 import { candyCane, icon } from "./icons";
 import { headingStrip, rosette } from "./paper";
@@ -71,7 +71,7 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
     return {
       kind: "found-hidden",
       title: `${escapeHtml(today.elfName)} has been found!`,
-      html: `<p>${escapeHtml(today.found.by)} found today's elf${at ? ` at ${at}` : ""}.${reveal ? ` ${findOutLine(reveal)}` : ""}</p>`,
+      html: `<p>${escapeHtml(today.found.by)} found today's elf${at ? ` at ${at}` : ""}.${reveal ? ` ${findOutWords(reveal, false)}` : ""}</p>`,
     };
   }
   if (today && today.state === "snow") {

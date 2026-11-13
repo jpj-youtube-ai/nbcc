@@ -6,7 +6,7 @@ import type { ElfFact } from "./facts";
 import { detectiveNames, type DetectiveNameParts } from "./names";
 import type { Rank } from "./progress";
 import { whenWords } from "./posts";
-import { clockWords, listWords, longDayWords, things } from "./words";
+import { clockWords, findOutWords, listWords, longDayWords, things } from "./words";
 
 // NBCC Elf Detective School: the emails of wave 1 (docs/superpowers/plans/2026-11-03-elf-detective-
 // wave1-sign-up.md, Tasks 5 and 6). Pure builders: the senders are in src/clients/email.ts
@@ -145,11 +145,7 @@ export function buildElfClueEmail(o: {
       : null
     : `Clue 1 is a picture: ${o.clue.pictureAlt ?? ""}. See it in Detective HQ.`;
   const closesAt = o.closesAt instanceof Date && Number.isFinite(o.closesAt.getTime()) ? o.closesAt : null;
-  const reveal = clockWords(o.revealAt);
-  const findOut =
-    closesAt !== null && closesAt.getTime() <= o.revealAt.getTime()
-      ? `You find out whether you cracked it at ${reveal}.`
-      : `You find out whether you cracked it at ${reveal}, or later if the elf is still hiding then.`;
+  const findOut = findOutWords(clockWords(o.revealAt), !(closesAt !== null && closesAt.getTime() <= o.revealAt.getTime()));
   const later = [
     `Clue 2 comes out at ${clockWords(o.clue2At)} and clue 3 at ${clockWords(o.clue3At)}, in Detective HQ.`,
     ...(closesAt ? [`The hiding place closes at ${clockWords(closesAt)} today.`] : []),

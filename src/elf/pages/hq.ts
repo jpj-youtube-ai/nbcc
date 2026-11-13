@@ -1,6 +1,6 @@
 import { DOOR_COUNT } from "../calendar";
 import { FRAMES } from "../wardrobe";
-import { clockWords, countdownWords, dayWords, longDayWords, sleepsUntil, things } from "../words";
+import { clockWords, countdownWords, dayWords, findOutWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
 import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
@@ -48,10 +48,18 @@ export function clueNote(c: TodayView["clues"][number]): string {
   );
 }
 
+/** May the family find out later than the reveal? While the elf is still hiding, unless the place closes by the
+ *  reveal: the clue email's rule. Once the elf is found the place is shown at the reveal (the view's revealAt). */
+function mayFindOutLater(today: TodayView): boolean {
+  if (today.state !== "hunting") return false;
+  return !(real(today.closesAt) && real(today.revealAt) && today.closesAt.getTime() <= today.revealAt.getTime());
+}
+
 /** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),
- *  or, once all three are out, when the hiding place is shown (as soon as the elf is found, once the
- *  reveal time has passed with the elf still hiding). Only a clue whose time has come is written,
- *  whatever the view holds; with no real clock, no clue at all. */
+ *  or, once all three are out, when the family finds out whether it cracked the case (the place is shown
+ *  then only to a family that has had its guess), in the words the clue email and the calendar use; and, once
+ *  the reveal time has passed with the elf still hiding, that the place is shown as soon as it is found. Only a
+ *  clue whose time has come is written, whatever the view holds; with no real clock, no clue at all. */
 function clueLadder(today: TodayView, now: Date): string {
   if (!real(now)) return "";
   const out = today.clues.filter((c) => real(c.at) && c.at.getTime() <= now.getTime());
@@ -66,7 +74,7 @@ function clueLadder(today: TodayView, now: Date): string {
     );
   }
   if (next === null && real(today.revealAt)) {
-    return notes + line(`The hiding place is shown at ${clockWords(today.revealAt)}`, "elf-ladder__next");
+    return notes + line(findOutWords(clockWords(today.revealAt), mayFindOutLater(today)), "elf-ladder__next");
   }
   if (next === null && today.state === "hunting") {
     return notes + line("The hiding place is shown as soon as the elf is found.", "elf-ladder__next");

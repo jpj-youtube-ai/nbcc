@@ -2,7 +2,7 @@ import { DOOR_COUNT } from "../calendar";
 import { isOpen } from "../doors";
 import { detectiveName } from "../names";
 import { COLLAGE_MAX, type ScrapElf, type ScrapPhoto } from "../scrapbook";
-import { clockWords, countdownWords, dayWords, longDayWords, sleepsUntil, things } from "../words";
+import { clockWords, countdownWords, dayWords, findOutWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { rosette } from "./paper";
 import { count, escapeHtml, line, sitePath } from "./shell";
@@ -51,11 +51,6 @@ export const GUESS_LINE = "Type in your guess at Detective HQ before the hiding 
 /** Who wins what (decision 1): the finder wins the prize, and the elf stays at its place. */
 const PRIZE_LINE = "The first detective to find the elf and type the word on its tag wins the prize.";
 
-/** When an elf found while its place is still hidden is told, in the clue email's words (Plan 2c-1, Task 9):
- *  the place is shown then only to a family that has had its guess, so nothing the calendar shares says the
- *  place "is shown". The door's words for a screen reader, its detail and the calendar's news all say it. */
-export const findOutLine = (reveal: string): string => `You find out whether you cracked it at ${reveal}.`;
-
 /** Today's door's two lines on the race and the guess while December's doors are off: wave 1's, word
  *  for word, so no new words go live before the doors do. */
 const WAVE_ONE_TODAY = [
@@ -98,8 +93,9 @@ export function doorLabel(d: DoorView, now: Date): string {
     return `Door ${d.door}, found.${place ? ` ${place}.` : ""}${d.found ? ` Found by ${d.found.by}.` : ""}`;
   }
   if (kind === "found-hidden") {
+    // The place is shown at the reveal only to a family that has had its guess (Plan 2c-1, Task 9).
     const reveal = d.revealAt ? clockWords(d.revealAt) : "";
-    return `Door ${d.door}, found.${d.found ? ` Found by ${d.found.by}.` : ""}${reveal ? ` ${findOutLine(reveal)}` : ""}`;
+    return `Door ${d.door}, found.${d.found ? ` Found by ${d.found.by}.` : ""}${reveal ? ` ${findOutWords(reveal, false)}` : ""}`;
   }
   if (kind === "snow") return `Door ${d.door}, snow day. ${d.elfName} got snowed in.`;
   if (kind === "revealed") return `Door ${d.door}, not found yet.${place ? ` ${d.elfName} is waiting at ${place}.` : ""}`;
@@ -293,7 +289,7 @@ function detailParts(d: DoorView, kind: DoorKind, ctx: DoorContext): { meta: str
 
   if (kind === "found-hidden") {
     const reveal = d.revealAt ? clockWords(d.revealAt) : "";
-    const said = [d.found ? `${foundSentence(d.found)}.` : "", reveal ? findOutLine(reveal) : ""].filter((s) => s !== "").join(" ");
+    const said = [d.found ? `${foundSentence(d.found)}.` : "", reveal ? findOutWords(reveal, false) : ""].filter((s) => s !== "").join(" ");
     return {
       meta: `Door ${d.door} &middot; ${day}`,
       title: `${elf} has been found!`,

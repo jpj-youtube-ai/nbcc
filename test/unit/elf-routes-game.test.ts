@@ -1550,13 +1550,16 @@ describe("Detective HQ with the doors on", () => {
 
   // Final review, Important 2: door 7's place closes at 8:30pm. HQ says the staff reveal time, 7pm, until
   // it passes, then that the place is shown as soon as the elf is found; never the closing time as when the
-  // place is shown. The spec's answer 5 (Plan 2c-1) says when the place closes, on a line of its own.
+  // place is shown. The spec's answer 5 (Plan 2c-1) says when the place closes, on a line of its own. Since
+  // Plan 2c-1, Task 9, the reveal's line says when the family finds out whether it cracked it, as the clue
+  // email does: the place is shown then only to a family that has had its guess.
   it("never prints the place's closing time as when the place is shown, either side of the reveal time, and says it on its own", async () => {
     vi.setSystemTime(at("2026-12-07T18:45:00.000Z"));
     const before = await call("GET", "/elf/hq");
     expect(before.status).toBe(200);
-    expect(before.text).toContain("The hiding place is shown at 7pm");
-    expect(before.text).not.toContain("shown at 8:30pm");
+    expect(before.text).toContain("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+    expect(before.text).not.toContain("is shown at");
+    expect(before.text).not.toContain("cracked it at 8:30pm");
     expect(before.text).toContain("The hiding place closes at 8:30pm today.");
     vi.setSystemTime(at("2026-12-07T19:15:00.000Z"));
     const after = await call("GET", "/elf/hq");
@@ -1570,7 +1573,7 @@ describe("Detective HQ with the doors on", () => {
     practice.getPractice.mockResolvedValue(practiceRow());
     vi.setSystemTime(SIX_10);
     const before = await call("GET", "/elf/hq", { cookie: PRACTICE_PASS });
-    expect(before.text).toContain("The hiding place is shown at 6:20pm");
+    expect(before.text).toContain("You find out whether you cracked it at 6:20pm, or later if the elf is still hiding then.");
     expect(before.text).not.toContain("7:20pm");
     vi.setSystemTime(at("2026-12-07T18:30:00.000Z"));
     const after = await call("GET", "/elf/hq", { cookie: PRACTICE_PASS });

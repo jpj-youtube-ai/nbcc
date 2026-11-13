@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clockWords, countdownWords, dayWords, listWords, longDayWords, sameDay, sleepsUntil, things } from "../../src/elf/words";
+import { clockWords, countdownWords, dayWords, findOutWords, listWords, longDayWords, sameDay, sleepsUntil, things } from "../../src/elf/words";
 
 // NBCC Elf Detective School: times, dates and lists as people read them. December is winter time in
 // London, so a time on the clock there is the same as in UTC; one summer case checks the clocks.
@@ -114,5 +114,14 @@ describe("a count of things", () => {
     expect(things(0, "door")).toBe("0 doors");
     expect(things(2, "elf", "elves")).toBe("2 elves");
     expect(things(1, "elf", "elves")).toBe("1 elf");
+  });
+});
+
+// Plan 2c-1, Task 9: a place is shown only to a family that has had its guess, so the clue email, the calendar
+// and Detective HQ say when a family finds out whether it cracked the case, all in these words.
+describe("when a family finds out", () => {
+  it("says the time, and that it may be later while the elf could still be hiding then", () => {
+    expect(findOutWords("7pm", false)).toBe("You find out whether you cracked it at 7pm.");
+    expect(findOutWords("7pm", true)).toBe("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
   });
 });

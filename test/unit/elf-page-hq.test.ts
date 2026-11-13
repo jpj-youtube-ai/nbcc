@@ -106,12 +106,29 @@ describe("the clue ladder", () => {
     expect(cd.textContent).toBe("20:00");
   });
 
-  it("says when the hiding place is shown once all three clues are out", () => {
+  // Task 9 (the coordinator, after the report): under the one rule the place is shown only to a family that has
+  // had its guess, so once all three clues are out the ladder says when a family finds out whether it cracked
+  // the case, in the clue email's words while the elf is still hiding (perhaps later than the reveal).
+  it("says when a family finds out whether it cracked it once all three clues are out", () => {
     const doc = page(ALL_OUT);
     expect(doc.querySelectorAll(".elf-clue").length).toBe(3);
-    expect(words(doc.querySelector(".elf-ladder__next"))).toBe("The hiding place is shown at 7pm");
+    expect(words(doc.querySelector(".elf-ladder__next"))).toBe("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
     expect(doc.querySelector(".elf-case .elf-cd")).toBeNull();
     expect(words(doc.querySelector(".elf-case"))).not.toContain("comes out at");
+    expect(words(doc.querySelector(".elf-case"))).not.toContain("is shown at");
+  });
+
+  // As the calendar says it once the elf is found, and as the clue email says it when the place closes by the
+  // reveal: the family finds out at the reveal, never later.
+  it("says only the reveal's time once the elf is found, or when the place closes by then", () => {
+    const found = page(today({ ...ALL_OUT.today!, state: "found-hidden" }, { now: SIX_40 }));
+    expect(words(found.querySelector(".elf-ladder__next"))).toBe("You find out whether you cracked it at 7pm.");
+    for (const closes of ["2026-12-07T19:00:00.000Z", "2026-12-07T18:50:00.000Z"]) {
+      const closing = page(today({ ...ALL_OUT.today!, closesAt: at(closes) }, { now: SIX_40 }));
+      expect(words(closing.querySelector(".elf-ladder__next")), closes).toBe("You find out whether you cracked it at 7pm.");
+    }
+    const later = page(today({ ...ALL_OUT.today!, closesAt: at("2026-12-07T20:00:00.000Z") }, { now: SIX_40 }));
+    expect(words(later.querySelector(".elf-ladder__next"))).toBe("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
   });
 
   // Final review, Important 2: once the reveal time has passed with the elf still hiding, the place is

@@ -135,6 +135,44 @@ export interface TodayView {
   outcome: { place: string; by: string | null; at: Date | null; cracked: boolean } | null;
 }
 
+/** A door's page in Detective HQ for having a go (Plan 2c-1): a family that missed a door's evening
+ *  cracks it later, from home, with the same clues and one guess. The family's own: it is private. */
+export interface GoView {
+  /** 1 to 24, or 0 for the practice door. */
+  door: Door | 0;
+  practice: boolean;
+  elfName: string;
+  /** When the door's clues came out: the calendar's clue 1 time (DoorRun.calendarAt). */
+  day: Date;
+  /** Who found the elf, and when, once it is found; else null. `by` names ANOTHER family's detectives,
+   *  so it is public: it MUST come from detectiveNames, like DoorView.found.by. */
+  found: { at: Date; by: string } | null;
+  /** "done" once the family can see the place (the one rule: it has had its guess, or been there);
+   *  "go" while it may have its go; "closed" otherwise (from Christmas Day, having a go is closed). */
+  stage: "go" | "done" | "closed";
+  /** Is the elf still waiting at its place with nobody having found it: shown unfound, and not gone home?
+   *  Then the form asks where it is hiding, not where it was (ruling F8). */
+  stillHiding: boolean;
+  /** In "go" only: the clues the family has asked to see, clue 1 first, as Detective HQ's case draws
+   *  them. Empty in the other stages. */
+  clues: TodayView["clues"];
+  /** In "go" only: where Show me the next clue leads, while another clue is still to show; else null. */
+  nextUrl: string | null;
+  /** Where the guess form posts. */
+  formUrl: string;
+  /** Why the go sent with no script was not taken (the server's words), drawn in the form's status line;
+   *  null otherwise. */
+  guessError: string | null;
+  /** On the door's own day, when its hiding place closes, until then (closingShown in
+   *  src/elf/catch-up.ts); null otherwise. */
+  closesAt: Date | null;
+  /** How it went, once the family can see the place ("done"), and in "closed" while every place is shown
+   *  to everyone (Christmas Day until 1 January), with no verdict. Null otherwise: the place is never in
+   *  the view before then. `visited` is whether a detective of the family has typed the tag word. */
+  outcome: { verdict: "cracked" | "wrong" | "none"; place: { name: string; town: string }; stillHiding: boolean; goneHome: boolean; visited: boolean } | null;
+  hqUrl: string;
+}
+
 export interface HqView {
   now: Date;
   /** The grown up's first name, for the greeting. */

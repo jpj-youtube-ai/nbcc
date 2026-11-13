@@ -1,6 +1,6 @@
 import type { DoorRun, FamilyRuns } from "../db/elf-game";
 import { DEFAULT_MORNING_CLUE_TIME, DEFAULT_SCHOOL_CLUE_TIME, DOOR_COUNT, clueTimeFor, doorDate, doorInstant, isDoor, type Door } from "./calendar";
-import { goesOpen, placesPublic } from "./catch-up";
+import { closingShown, goesOpen, knowsPlace, mayHaveAGo, placesPublic } from "./catch-up";
 import { canGuess, cluesOut, doorState, isClaimable, isOpen, nextClueAt, openedAt, shownAt, type DoorFacts, type DoorState } from "./doors";
 import { badgeWords } from "./emails";
 import { factFor } from "./facts";
@@ -12,13 +12,14 @@ import { collageOf, orderScrapbook, type ScrapPhoto, type Scrapbook } from "./sc
 import type { ElfSettings } from "./settings";
 import { sameDay } from "./words";
 import { normaliseFavourites, normaliseLook, wardrobeState } from "./wardrobe";
-import type { CalendarView, DetectiveView, DoorView, FamilyMarks, HqView, PosterView, TodayView, WardrobeView } from "./pages/types";
+import type { CalendarView, DetectiveView, DoorView, FamilyMarks, GoView, HqView, PosterView, TodayView, WardrobeView } from "./pages/types";
 
 // NBCC Elf Detective School: what the database holds, turned into what the screens show. Pure: the
 // rows and the doors' runs come in, the views go out. Nothing is shown before its time: a place, a
 // scrapbook, the counts and the prize come only once a door is open (and on the calendar everyone
-// shares, a place and the photos only from Christmas Day until 1 January), a clue only once it is out,
-// and a child is named only through detectiveName or detectiveNames.
+// shares, a place and the photos only from Christmas Day until 1 January; on the go page, only once the
+// family may know it), a clue only once it is out, and a child is named only through detectiveName or
+// detectiveNames.
 // Unit tested in test/unit/elf-views.test.ts.
 
 export interface DetectiveRow {
@@ -92,9 +93,24 @@ function revealFor(facts: DoorFacts, state: DoorState, now: Date): Date | null {
   return null;
 }
 
+/** The clues that are out at `now`, in order, as a family's screens draw them: Detective HQ's case and the
+ *  go page share it. None on a snow day. */
+function cluesOutOf(run: DoorRun, now: Date): TodayView["clues"] {
+  const out = cluesOut(run.facts, now);
+  return run.clues
+    .filter((c) => c.n <= out)
+    .map((c) => ({
+      n: c.n,
+      at: c.at,
+      words: c.words,
+      // The practice door has no pictures; a real door's picture is served only once its clue is out.
+      pictureUrl: c.hasPicture && run.door !== 0 ? `/elf/hq/clue/${run.door}/${c.n}.jpg` : null,
+      pictureAlt: c.hasPicture && run.door !== 0 ? c.pictureAlt : null,
+    }));
+}
+
 function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>; finders: Map<Door, DetectiveNameParts[]> }): TodayView {
   const state = doorState(run.facts, o.now);
-  const out = cluesOut(run.facts, o.now);
   const guess = o.guesses.get(run.door) ?? null;
   let outcome: TodayView["outcome"] = null;
   if (isOpen(state) && run.placeName !== null) {
@@ -112,16 +128,7 @@ function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>;
     practice: run.door === 0,
     state,
     elfName: run.elfName,
-    clues: run.clues
-      .filter((c) => c.n <= out)
-      .map((c) => ({
-        n: c.n,
-        at: c.at,
-        words: c.words,
-        // The practice door has no pictures; a real door's picture is served only once its clue is out.
-        pictureUrl: c.hasPicture && run.door !== 0 ? `/elf/hq/clue/${run.door}/${c.n}.jpg` : null,
-        pictureAlt: c.hasPicture && run.door !== 0 ? c.pictureAlt : null,
-      })),
+    clues: cluesOutOf(run, o.now),
     nextClueAt: nextClueAt(run.facts, o.now),
     revealAt: revealFor(run.facts, state, o.now),
     guess: guess ? { text: guess.text, at: guess.at } : null,
@@ -192,6 +199,81 @@ export function hqViewFor(o: {
     calendarUrl: "/elf",
     guessUrl: "/api/elf/guess",
     addDetectiveUrl: "/elf/join",
+  };
+}
+
+/** A door's place, when it has one: its name, and its town (empty when none was typed). */
+function placeOf(run: DoorRun): { name: string; town: string } | null {
+  return filled(run.placeName) ? { name: run.placeName, town: run.placeTown ?? "" } : null;
+}
+
+/** Is the elf still waiting at its place with nobody having found it? Shown unfound, and not gone home:
+ *  a door whose elf has gone home never says it can still be found (ruling F8). */
+const stillHidingAt = (run: DoorRun, state: DoorState): boolean => state === "revealed" && !run.facts.goneHome;
+
+/** How a door turned out for a family that may know its place (the caller decides): the verdict on its
+ *  guess (cracked by cracked(), wrong for any other guess, none without one), where the elf was, and what
+ *  is left to do there. `place` is the door's own (placeOf). */
+export function goOutcomeOf(o: { run: DoorRun; now: Date; place: { name: string; town: string }; guess: SavedGuess | null; typed: boolean }): NonNullable<GoView["outcome"]> {
+  const state = doorState(o.run.facts, o.now);
+  const right = cracked({ state, openedAt: openedAt(o.run.facts, o.now), names: o.run.names }, o.guess);
+  return {
+    verdict: o.guess === null ? "none" : right ? "cracked" : "wrong",
+    place: { name: o.place.name, town: o.place.town },
+    stillHiding: stillHidingAt(o.run, state),
+    goneHome: o.run.facts.goneHome,
+    visited: o.typed,
+  };
+}
+
+/** How many clues the go page shows: as asked, held to 1 to 3. */
+const heldClues = (n: number): number => (Number.isFinite(n) ? Math.min(3, Math.max(1, Math.floor(n))) : 1);
+
+/**
+ * A door's page in Detective HQ for having a go (Plan 2c-1). "done" once the family can see the place
+ * (the one rule, asked only of an open door: rulings on Plan 2c-1), "go" while it may have its go, and
+ * "closed" otherwise. Only in "go": the first `cluesShown` of the clues that are out (held to 1 to 3) and
+ * the link to the next while another is out. How it went: in "done", and in "closed" while every place is
+ * shown to everyone; never for a door that is not open or has no place. The practice door names no finder,
+ * as Detective HQ's case does not.
+ */
+export function goViewFor(o: {
+  run: DoorRun;
+  now: Date;
+  guess: SavedGuess | null;
+  typed: boolean;
+  finders: DetectiveNameParts[];
+  cluesShown: number;
+  guessError?: string | null;
+}): GoView {
+  const { run, now } = o;
+  const state = doorState(run.facts, now);
+  const open = isOpen(state);
+  const guessed = o.guess !== null;
+  const stage: GoView["stage"] =
+    open && knowsPlace({ state, guessed, typed: o.typed }) ? "done" : mayHaveAGo({ year: run.year, state, guessed, typed: o.typed, now }) ? "go" : "closed";
+  const out = stage === "go" ? cluesOutOf(run, now) : [];
+  const clues = out.slice(0, heldClues(o.cluesShown));
+  const place = placeOf(run);
+  const told = open && (stage === "done" || (stage === "closed" && placesPublic(run.year, now)));
+  const foundAt = run.facts.foundAt;
+  const finders = run.door === 0 ? [] : o.finders;
+  return {
+    door: run.door,
+    practice: run.door === 0,
+    elfName: run.elfName,
+    day: run.calendarAt,
+    found: foundAt !== null && foundAt.getTime() <= now.getTime() ? { at: foundAt, by: detectiveNames(finders) || "A detective" } : null,
+    stage,
+    stillHiding: stillHidingAt(run, state),
+    clues,
+    nextUrl: clues.length < out.length ? `/elf/hq/door/${run.door}?clues=${clues.length + 1}` : null,
+    formUrl: `/elf/hq/door/${run.door}/go`,
+    guessError: o.guessError ?? null,
+    closesAt: closingShown(run, now),
+    // In "closed" the family has neither guessed nor been there, so it has no verdict.
+    outcome: told && place ? goOutcomeOf({ run, now, place, guess: o.guess, typed: o.typed }) : null,
+    hqUrl: "/elf/hq",
   };
 }
 

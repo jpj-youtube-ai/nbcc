@@ -10,7 +10,8 @@ import type { SavedGuess } from "../../src/elf/guess";
 import type { DetectiveNameParts } from "../../src/elf/names";
 import type { DoorsDone } from "../../src/elf/progress";
 import type { Scrapbook } from "../../src/elf/scrapbook";
-import { calendarViewFor, familyDoorView, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
+import { calendarViewFor, familyDoorView, goViewFor, hqViewFor, lookFromForm, posterViewFor, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
+import { normalisePlaceName } from "../../src/elf/place-names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { defaultLook } from "../../src/elf/wardrobe";
 
@@ -410,6 +411,139 @@ describe("a family's own door", () => {
     const hidden = shared7(SIX_45, { ...CORNER, foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 });
     expect(hidden.state).toBe("found-hidden");
     expect(familyDoorView(hidden, mine)).toBe(hidden);
+  });
+});
+
+// Plan 2c-1, Task 6: having a go at a missed door, on its own page in Detective HQ. Door 7 is found at 5:47pm
+// on Monday 7 December and its place shown at 7pm; the place closes at 8pm (typed as "20:00"). Its run holds
+// the place every time, so each test that says the place is not in the view fails if it leaks.
+describe("the go page's view", () => {
+  const CLOSING: Partial<DoorSetup> = { ...FOUND_AT_547, closesAt: "20:00" };
+  const PLACE = { name: "Corner Bakehouse", town: "Snowford" };
+  const go7 = (now: Date, o: { guess?: SavedGuess | null; typed?: boolean; cluesShown?: number; finders?: DetectiveNameParts[]; over?: Partial<DoorSetup> } = {}) =>
+    goViewFor({ run: run(7, now, { ...CLOSING, ...o.over }), now, guess: o.guess ?? null, typed: o.typed ?? false, finders: o.finders ?? [RUBY], cluesShown: o.cluesShown ?? 1 });
+  /** A go, made at 7:05pm unless told otherwise: one guess, once the place was shown. */
+  const go = (text: string, made = SEVEN_05): SavedGuess => ({ text, norm: normalisePlaceName(text), at: made, late: true });
+  /** The practice door (year 0, door 0) on door 7's evening. */
+  const practice = (now: Date): DoorRun => ({ ...run(7, now, CLOSING), year: 0, door: 0, closesAt: null });
+
+  it("offers a family that missed the evening its go: clue 1, the link to the next, and the closing time", () => {
+    const v = go7(SEVEN_05);
+    expect(v.stage).toBe("go");
+    expect(v).toMatchObject({ door: 7, practice: false, elfName: "Bauble", formUrl: "/elf/hq/door/7/go", hqUrl: "/elf/hq", guessError: null, outcome: null });
+    expect(v.clues.map((c) => c.n)).toEqual([1]);
+    expect(v.clues[0].words).toBe("Practice clue 1: it lives where the kettle lives");
+    expect(v.nextUrl).toBe("/elf/hq/door/7?clues=2");
+    expect(v.closesAt?.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+    expect(v.day.toISOString()).toBe("2026-12-07T17:30:00.000Z");
+    expect(v.found).toEqual({ at: at("2026-12-07T17:47:00Z"), by: "Detective R. Tinselfoot" });
+    expect(v.stillHiding).toBe(false);
+    const text = JSON.stringify(v);
+    for (const secret of ["Corner Bakehouse", "Snowford", "The Bakehouse"]) expect(text).not.toContain(secret);
+  });
+
+  it("shows the clues asked for, held to 1 to 3, with the next clue's link until all three show", () => {
+    const three = go7(SEVEN_05, { cluesShown: 3 });
+    expect(three.clues.map((c) => c.n)).toEqual([1, 2, 3]);
+    expect(three.nextUrl).toBeNull();
+    expect(go7(SEVEN_05, { cluesShown: 2 })).toMatchObject({ nextUrl: "/elf/hq/door/7?clues=3" });
+    expect(go7(SEVEN_05, { cluesShown: 2 }).clues.map((c) => c.n)).toEqual([1, 2]);
+    expect(go7(SEVEN_05, { cluesShown: 9 }).clues.map((c) => c.n)).toEqual([1, 2, 3]);
+    for (const odd of [0, -2, 1.5, Number.NaN]) expect(go7(SEVEN_05, { cluesShown: odd }).clues.map((c) => c.n), String(odd)).toEqual([1]);
+  });
+
+  // Ruling F11: one clue mapper, the one Detective HQ's case uses, so a picture is served by its own address.
+  it("draws each clue as Detective HQ's case does, its picture and all", () => {
+    const three = go7(SEVEN_05, { cluesShown: 3 });
+    expect(three.clues[1]).toMatchObject({ n: 2, pictureUrl: "/elf/hq/clue/7/2.jpg", pictureAlt: "A pretend picture" });
+    const today = hq({ now: SEVEN_05, runs: { runs: withDoor7(SEVEN_05, CLOSING), practice: null } }).today!;
+    expect(three.clues).toEqual(today.clues);
+  });
+
+  it("offers no next clue that is not there: a door with clue 1 only shows it alone", () => {
+    const one = go7(SEVEN_05, { cluesShown: 1, over: { clues: [setup(7).clues[0]] } });
+    expect(one.clues.map((c) => c.n)).toEqual([1]);
+    expect(one.nextUrl).toBeNull();
+  });
+
+  it("says when the hiding place closes only on the door's own day", () => {
+    expect(go7(at("2026-12-08T10:00:00Z")).closesAt).toBeNull();
+    expect(go7(SEVEN_05, { over: { closesAt: null } }).closesAt).toBeNull();
+  });
+
+  it("is done once the family has had its go: cracked, with no clues and no next link", () => {
+    const v = go7(SEVEN_05, { guess: go("the bakehouse") });
+    expect(v.stage).toBe("done");
+    expect(v.clues).toEqual([]);
+    expect(v.nextUrl).toBeNull();
+    expect(v.outcome).toEqual({ verdict: "cracked", place: PLACE, stillHiding: false, goneHome: false, visited: false });
+  });
+
+  it("says wrong for any other guess, and cracked for a right guess saved on the night", () => {
+    expect(go7(SEVEN_05, { guess: go("the toy shop") })).toMatchObject({ stage: "done", outcome: { verdict: "wrong", place: PLACE } });
+    const night: SavedGuess = { text: "Corner Bakehouse", norm: normalisePlaceName("Corner Bakehouse"), at: at("2026-12-07T18:40:00Z"), late: false };
+    expect(go7(SEVEN_05, { guess: night })).toMatchObject({ stage: "done", outcome: { verdict: "cracked" } });
+  });
+
+  it("is done for a family whose detective typed the tag word: no verdict, and visited", () => {
+    const v = go7(SEVEN_05, { typed: true });
+    expect(v.stage).toBe("done");
+    expect(v.outcome).toEqual({ verdict: "none", place: PLACE, stillHiding: false, goneHome: false, visited: true });
+  });
+
+  it("is closed from midnight as Christmas Day begins, with the place for everyone until 1 January", () => {
+    const christmas = go7(at("2026-12-25T00:00:00Z"));
+    expect(christmas.stage).toBe("closed");
+    expect(christmas.clues).toEqual([]);
+    expect(christmas.outcome).toEqual({ verdict: "none", place: PLACE, stillHiding: false, goneHome: false, visited: false });
+    const newYear = go7(at("2027-01-01T00:00:00Z"));
+    expect(newYear.stage).toBe("closed");
+    expect(newYear.outcome).toBeNull();
+    expect(JSON.stringify(newYear)).not.toContain("Corner Bakehouse");
+    // A family that has had its guess still sees how it went.
+    expect(go7(at("2027-01-01T00:00:00Z"), { guess: go("the bakehouse") })).toMatchObject({ stage: "done", outcome: { verdict: "cracked" } });
+  });
+
+  // Ruling F8: the elf is still hiding only at a door shown with nobody found, and only until it goes home.
+  it("knows the elf is still hiding at a door shown with nobody found, until it has gone home", () => {
+    const unfound = { foundAt: null, foundFamilyId: null };
+    const hiding = go7(at("2026-12-07T20:05:00Z"), { over: unfound });
+    expect(hiding).toMatchObject({ stage: "go", stillHiding: true, found: null });
+    expect(go7(at("2026-12-07T20:05:00Z"), { over: unfound, typed: true }).outcome).toMatchObject({ stillHiding: true, goneHome: false });
+    const home = { ...unfound, goneHomeAt: at("2026-12-07T20:01:00Z") };
+    expect(go7(at("2026-12-07T20:05:00Z"), { over: home })).toMatchObject({ stage: "go", stillHiding: false });
+    expect(go7(at("2026-12-07T20:05:00Z"), { over: home, typed: true }).outcome).toMatchObject({ stillHiding: false, goneHome: true });
+  });
+
+  it("says A detective when a found elf has no finder rows, never a name", () => {
+    expect(go7(SEVEN_05, { finders: [] }).found?.by).toBe("A detective");
+  });
+
+  // Rulings on Plan 2c-1, the notes for every task that shows a place: the one rule is asked only of an open door.
+  it("never gives the place before the door opens, even to the family whose detective typed the tag word", () => {
+    const v = go7(SIX_45, { typed: true, guess: go("the bakehouse", SIX_10) });
+    expect(v.stage).toBe("closed");
+    expect(v.outcome).toBeNull();
+    expect(v.clues).toEqual([]);
+    expect(JSON.stringify(v)).not.toContain("Corner Bakehouse");
+  });
+
+  it("gives an open door with no place no outcome", () => {
+    expect(go7(SEVEN_05, { typed: true, over: { placeName: null, placeTown: null } }).outcome).toBeNull();
+  });
+
+  it("carries the words of a go refused from the form with no script", () => {
+    const v = goViewFor({ run: run(7, SEVEN_05, CLOSING), now: SEVEN_05, guess: null, typed: false, finders: [], cluesShown: 2, guessError: "That is a bit long." });
+    expect(v.guessError).toBe("That is a bit long.");
+  });
+
+  it("plays the practice door as door 0, whose go never closes, with no pictures and no closing time", () => {
+    const v = goViewFor({ run: practice(SEVEN_05), now: SEVEN_05, guess: null, typed: false, finders: [], cluesShown: 3 });
+    expect(v).toMatchObject({ door: 0, practice: true, stage: "go", formUrl: "/elf/hq/door/0/go", closesAt: null });
+    expect(v.clues.map((c) => c.pictureUrl)).toEqual([null, null, null]);
+    expect(goViewFor({ run: practice(SEVEN_05), now: SEVEN_05, guess: null, typed: false, finders: [], cluesShown: 1 }).nextUrl).toBe("/elf/hq/door/0?clues=2");
+    const christmas = at("2026-12-25T00:00:00Z");
+    expect(goViewFor({ run: practice(christmas), now: christmas, guess: null, typed: false, finders: [], cluesShown: 1 }).stage).toBe("go");
   });
 });
 

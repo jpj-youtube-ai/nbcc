@@ -542,14 +542,16 @@
    aloud to children. A picture fits the note's width. Then when the next clue comes out (counting
    down on the candy cane strip), or when the hiding place is shown. */
 .elf-ladder { list-style: none; margin: 6px 0 clamp(16px, 3vw, 22px); padding: 0; display: grid; gap: 24px; }
-.elf-clue { position: relative; isolation: isolate; margin: 0; padding: clamp(22px, 3vw, 28px) clamp(16px, 3vw, 24px) clamp(16px, 2.5vw, 22px); color: var(--elf-ink-on-tan); filter: var(--elf-drop-small); transform: rotate(-0.4deg); }
+/* A clue is an item of the ladder's grid: min-width 0 lets it be narrower than its longest word, and its words break
+   anywhere they must, so a very long word wraps inside the note at 390 and 360 instead of pushing every note out. */
+.elf-clue { position: relative; isolation: isolate; min-width: 0; margin: 0; padding: clamp(22px, 3vw, 28px) clamp(16px, 3vw, 24px) clamp(16px, 2.5vw, 22px); color: var(--elf-ink-on-tan); filter: var(--elf-drop-small); transform: rotate(-0.4deg); }
 .elf-clue:nth-child(even) { transform: rotate(0.5deg); }
 .elf-clue::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain) 0 0 / 384px, color-mix(in srgb, var(--tan) 45%, var(--card)); background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-tile-a); mask: var(--elf-tear-tile-a); }
 .elf-clue:nth-child(even)::before { -webkit-mask: var(--elf-tear-tile-b); mask: var(--elf-tear-tile-b); }
 .elf-clue .elf-clue__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 0 6px; }
 .elf-clue__n { color: var(--crimson); font-family: var(--elf-hand); font-weight: 700; font-size: 1.55rem; line-height: 1; }
 .elf-clue__at { font-size: 0.86rem; font-weight: 600; }
-.elf-clue .elf-clue__words { margin: 0; font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem); line-height: 1.55; overflow-wrap: break-word; }
+.elf-clue .elf-clue__words { margin: 0; font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem); line-height: 1.55; overflow-wrap: anywhere; }
 .elf-clue__pic { display: block; max-width: 100%; height: auto; margin: 12px 0 0; border-radius: 3px; box-shadow: 0 2px 3px rgba(58, 0, 0, 0.25); }
 .elf-case .elf-ladder__next { margin: 0 0 4px; color: var(--holly-dark); font-weight: 600; }
 /* When the hiding place closes, on the door's own day (Plan 2c-1): under the clues, before the guess. */

@@ -651,6 +651,13 @@ describe("Detective HQ, in paper", () => {
     expect(css).toMatch(/\.elf-clue__pic \{[^}]*max-width:\s*100%/);
   });
 
+  // From the pictures of the go page at 390 and 360: a very long unbroken word in a clue ran out of its note. Its words
+  // break anywhere they must, and the note, an item of the ladder's grid, may be narrower than its longest word.
+  it("breaks a very long word in a clue inside its note, at any width", () => {
+    expect(css).toMatch(/\.elf-clue \.elf-clue__words \{[^}]*overflow-wrap:\s*anywhere/);
+    expect(css).toMatch(/\.elf-clue \{[^}]*min-width:\s*0/);
+  });
+
   it("sets each detective on a card sheet, with their elf in its chosen frame or a plain paper mount", () => {
     const view = hqView();
     view.detectives[0] = { ...view.detectives[0], frame: "candy" };

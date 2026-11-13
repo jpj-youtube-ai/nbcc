@@ -214,8 +214,25 @@
   if (window.navigator && window.navigator.serviceWorker) {
     window.navigator.serviceWorker.addEventListener("message", function (event) {
       var area = event.data && event.data.nbccGoTo;
-      if (area) selectView(area);
+      if (area) goToNotificationArea(area);
     });
+  }
+
+  // Where a tapped notification lands. An Elf Detective School one is about a photo to check, which
+  // lives on the Finds tab of Head Elf HQ, so it opens there rather than wherever the last visit left off.
+  function goToNotificationArea(area) {
+    // On a load with a live session this runs before elf-hq.js has set AdminElfHq, and that file then
+    // opens the tab it remembers: so leave "finds" where it reads (the same hand-over as the family
+    // key further down). The show() below covers elf-hq.js already being loaded.
+    if (area === "elf") {
+      try {
+        sessionStorage.setItem("nbcc_elf_hq_tab", "finds");
+      } catch (err) {
+        // Storage refused: Head Elf HQ still opens, on HQ.
+      }
+    }
+    selectView(area);
+    if (area === "elf" && window.AdminElfHq && window.AdminElfHq.show) window.AdminElfHq.show("finds");
   }
 
   function showApp(claims) {
@@ -236,7 +253,7 @@
     if (pendingArea) {
       var area = pendingArea;
       pendingArea = null;
-      selectView(area);
+      goToNotificationArea(area);
     }
     registerPushWorker();
   }
@@ -799,7 +816,7 @@
   var PUSH_AREAS = [
     ["donations", "Donations"], ["monthly", "Monthly givers"], ["fundraising", "Get involved"],
     ["contact", "Contact form"], ["ball", "Festive Ball"], ["fulfilments", "Business supporters"],
-    ["stories", "Stories"], ["newsletter", "Newsletter"],
+    ["stories", "Stories"], ["newsletter", "Newsletter"], ["elf", "Elf Detective School"],
   ];
 
   function pushSupported() {

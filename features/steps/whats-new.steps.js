@@ -12,6 +12,7 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const PASSWORD = "whatsnew-pw-123";
 const SIGNUP = "pat.whatsnew.bdd@example.com";
+const ELF_FAMILY = "family.whatsnew.bdd@example.com";
 
 async function login(email) {
   const res = await fetch(`${BASE_URL}/api/admin/login`, {
@@ -49,6 +50,8 @@ async function areasFor(world, email) {
 
 async function reset() {
   await pool.query("DELETE FROM list_subscribers WHERE email = $1", [SIGNUP]);
+  // The family goes and its photos with it (elf_photos.family_id cascades).
+  await pool.query("DELETE FROM elf_families WHERE email = $1", [ELF_FAMILY]);
 }
 
 Before({ tags: "@whats-new" }, reset);
@@ -62,6 +65,19 @@ When("someone signs up for the newsletter on the website", async function () {
     `INSERT INTO list_subscribers (list_id, name, email, consent_source)
      SELECT id, 'Pat Test', $1, 'footer' FROM subscriber_lists WHERE slug = 'newsletter'`,
     [SIGNUP],
+  );
+});
+
+// A photo sent to the practice door (year 0, door 0), waiting for a head elf: the same row the
+// family's upload writes, made directly for the same reason as the sign-up above.
+When("a family sends a photo to Elf Detective School to be checked", async function () {
+  const family = await pool.query(
+    "INSERT INTO elf_families (email, grown_up_name) VALUES ($1, 'Alex Example') RETURNING id",
+    [ELF_FAMILY],
+  );
+  await pool.query(
+    "INSERT INTO elf_photos (token, year, door, family_id) VALUES ('whatsnew-bdd-photo-token', 0, 0, $1)",
+    [family.rows[0].id],
   );
 });
 
@@ -82,7 +98,8 @@ Then("{string} is new to {string}", async function (area, email) {
     // run failed on an account and a sign-up made within one millisecond of each other.
     const times = await pool.query(
       `SELECT (SELECT created_at::text FROM users WHERE email = $1) AS account_made,
-              (SELECT max(consented_at)::text FROM list_subscribers WHERE email = $2) AS signed_up`,
+              (SELECT max(consented_at)::text FROM list_subscribers WHERE email = $2) AS signed_up,
+              (SELECT max(sent_at)::text FROM elf_photos) AS latest_elf_photo_sent`,
       [email, SIGNUP],
     );
     assert.fail(`${area} should be new to ${email}: answered ${JSON.stringify(found)}, ${JSON.stringify(times.rows[0])}`);

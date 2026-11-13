@@ -70,6 +70,14 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag" | "
   },
   // TASK-493: a new sign up at /fundraise, when it was made.
   fundraising: { db: "main", sql: "SELECT max(created_at) AS at FROM fundraisers WHERE created_at > $1" },
+  // Elf Detective School: a photo a family sent that is still waiting for a head elf, when it was
+  // sent. The same condition as the photo check (src/db/elf-photos.ts photosWaiting): waiting, and
+  // the family not removed. The practice door's photos (door 0) count too.
+  elf: {
+    db: "main",
+    sql: `SELECT max(p.sent_at) AS at FROM elf_photos p JOIN elf_families f ON f.id = p.family_id
+           WHERE p.status = 'waiting' AND f.removed_at IS NULL AND p.sent_at > $1`,
+  },
 };
 
 // ---- The same arrivals, itemised, for phone notifications (TASK-619) ----
@@ -79,7 +87,7 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag" | "
 // conditions, same databases as LATEST above — deliberately, so the phone and the screen can
 // never disagree about what counts as new. When one is changed, change its twin.
 //
-// Only the eight areas that have a LATEST entry appear here. The others carry a pill when the
+// Only the nine areas that have a LATEST entry appear here. The others carry a pill when the
 // SCREEN is new and have no arrivals at all.
 const DETAILS: Record<keyof typeof LATEST, { db: "main" | "contact" | "stories"; sql: string }> = {
   contact: {
@@ -145,6 +153,22 @@ const DETAILS: Record<keyof typeof LATEST, { db: "main" | "contact" | "stories";
     db: "main",
     sql: `SELECT created_at AS at, count(*) OVER () AS total FROM fundraisers
             WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
+  },
+  // Only the time: nothing that names a family, a child, a detective or a place is selected.
+  //
+  // BOTH ends of the window are shifted back two minutes. The upload stamps sent_at at the start of
+  // the request, before the slow work (a phone upload, then the picture's encode passes) and the
+  // commit, so a sweep can run while a photo's row is not yet visible. Looking two minutes behind
+  // the sweep covers that; shifting both ends keeps the windows tiling exactly, so nothing is sent
+  // twice. (The New mark's twin above needs no shift: it has no window.)
+  elf: {
+    db: "main",
+    sql: `SELECT p.sent_at AS at, count(*) OVER () AS total
+            FROM elf_photos p JOIN elf_families f ON f.id = p.family_id
+           WHERE p.status = 'waiting' AND f.removed_at IS NULL
+             AND p.sent_at > $1::timestamptz - interval '2 minutes'
+             AND p.sent_at <= $2::timestamptz - interval '2 minutes'
+           ORDER BY p.sent_at LIMIT $3`,
   },
 };
 

@@ -6850,6 +6850,7 @@ your previous visit carry the same pill for as long as you stay.
 | Newsletter | somebody signed up on the website (not imports or staff additions) | on "Added", for website sign-ups |
 | Events | only when there is a new feature (below) | none |
 | Analytics (TASK-482) | only when there is a new feature (below): page views are not news | none |
+| Elf Detective School | a photo is waiting to be checked. The mark can clear without you opening it: once a colleague checks the photo it stops counting for everyone | none |
 
 **The rules** are in `src/admin/whats-new.ts`, tested in `test/unit/whats-new.test.ts`:
 - **You only see pills on sections you can open.** Each section uses the same permission as its
@@ -6916,7 +6917,11 @@ Each person and each phone is separate.
 **What buzzes.** Everything that would raise a New pill, with one deliberate exception noted
 below: donations, monthly givers, Get involved
 sign-ups, contact messages, Festive Ball bookings, business supporters, stories and newsletter
-sign-ups. Nothing a staff member does in the admin ever buzzes anyone — which costs one
+sign-ups, and Elf Detective School's photos waiting to be checked (the `elf` area, for whoever can
+open Head Elf HQ: "A photo is waiting to be checked", never a family, a child, a detective or a place;
+tapping it opens Head Elf HQ at Finds; it has its own switch under Monitor > Notifications and a New
+mark beside Elf Detective School in the menu, cleared by opening Head Elf HQ; photos from the practice
+door count too). Nothing a staff member does in the admin ever buzzes anyone — which costs one
 divergence from the pills: a Festive Ball bank transfer that staff tick as received sets `paid_at`
 like any payment, so the notification query alone also requires `marked_paid_by IS NULL`. The pill
 still appears; only the interruption is suppressed. It is the single place where the phone and the
@@ -12394,6 +12399,12 @@ only, never the number). The rules (`photoAlertDue`):
 - a find is told by email only, to the same people (C7);
 - neither alert shows the photo or the family's name, and following a link changes nothing;
 - a text that Amazon refuses never stops the email, and Settings > Alerts names whose text did not go.
+
+Head elves with the NBCC Admin app also get the app's own notification for each waiting photo, on top of
+the text and the email. It is separate and free, and it follows none of the rules above: it sends one for
+every photo, at any hour unless that person has set quiet hours, and each person can switch it off in
+Monitor > Notifications. It changes nothing about the text or the email (see **What buzzes** under the
+admin phone app).
 
 **Send me a test alert** sends the caller the test email and, when they have a mobile and texts are
 tried, the test text, and says which went. Texts go only once they are switched on in production

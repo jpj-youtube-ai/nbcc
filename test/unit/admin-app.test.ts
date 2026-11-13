@@ -1818,6 +1818,35 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(seenPosts()).toEqual(["contact"]);
     });
 
+    // Elf Detective School: a photo waiting lights the menu entry, and opening Head Elf HQ clears it.
+    it("marks Elf Detective School when a photo is waiting, and clears it when Head Elf HQ is opened", async () => {
+      whatsNew = [{ area: "elf", new: true, since: "2026-12-01T00:00:00.000Z" }];
+      storedPermissions = { ...roleToPermissions("viewer"), elf: "view" };
+      await signIn();
+      await settle();
+      expect(link("elf").hidden).toBe(false);
+      expect(pill(link("elf"))).not.toBeNull();
+      link("elf").click();
+      await settle();
+      expect(pill(link("elf"))).toBeNull();
+      expect(seenPosts()).toEqual(["elf"]);
+    });
+
+    // A tap that loads the admin with a live session runs before elf-hq.js has set AdminElfHq, which
+    // then opens the tab it remembers: so the tap leaves "finds" in the key it reads.
+    it("opens Head Elf HQ at Finds when a notification tap loads the admin with a live session", async () => {
+      storedPermissions = { ...roleToPermissions("viewer"), elf: "view" };
+      window.sessionStorage.setItem("nbcc_admin_token", loginToken);
+      window.sessionStorage.setItem("nbcc_elf_hq_tab", "hq");
+      document.body.innerHTML = bodyHtml;
+      window.history.replaceState({}, "", "/admin?area=elf");
+      // eslint-disable-next-line no-eval
+      (0, eval)(appSrc);
+      await settle();
+      expect(window.sessionStorage.getItem("nbcc_elf_hq_tab")).toBe("finds");
+      window.history.replaceState({}, "", "/");
+    });
+
     // An answer already on its way when the visit was recorded must not bring the pill back.
     it("keeps it cleared when a slower answer still says it is new", async () => {
       whatsNew = [{ area: "contact", new: true, since: "2026-10-01T00:00:00.000Z" }];

@@ -23,3 +23,11 @@ Feature: New pills in the admin are per person (TASK-478)
     Then "fulfilments" is not listed for "cat.whatsnew.admin.bdd@example.com"
     When "cat.whatsnew.admin.bdd@example.com" opens "fulfilments"
     Then the answer is 403
+
+  Scenario: A photo waiting to be checked in Elf Detective School is new to a head elf
+    Given an admin user "cat.whatsnew.admin.bdd@example.com" with role "viewer" and password "whatsnew-pw-123"
+    When a family sends a photo to Elf Detective School to be checked
+    Then "elf" is new to "ann.whatsnew.admin.bdd@example.com"
+    When "ann.whatsnew.admin.bdd@example.com" opens "elf"
+    Then "elf" is not new to "ann.whatsnew.admin.bdd@example.com"
+    And "elf" is not listed for "cat.whatsnew.admin.bdd@example.com"

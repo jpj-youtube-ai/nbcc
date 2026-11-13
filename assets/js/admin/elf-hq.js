@@ -907,7 +907,8 @@
     }
 
     // ---- Doors: the 24 doors as a level select, and the open door's sheet beside it ----
-    var READY_WORDS = { place: "The place", prize: "The prize", picture: "The door picture", elf: "The elf and its tag", clues: "The three clues", droppedOff: "Dropped off" };
+    // The server's own words (src/elf/door-setup.ts). No door picture: every door has the same present.
+    var READY_WORDS = { place: "The place", prize: "The prize", elf: "The elf and its tag", clues: "The three clues", droppedOff: "Dropped off" };
     var doors = { list: null, counts: null, canEdit: false, open: null, sheet: null, known: {}, asking: false, asked: 0 };
     var doorsGrid, doorsChips, doorsTools, doorsSheet, doorTiles = {}, sheetHead, sheetReady;
 
@@ -1749,7 +1750,7 @@
         copy.disabled = true;
         var copied = function () {
           slot.textContent = "";
-          say(line, "Copied. Send it to Claude for the door pictures.", true);
+          say(line, "Copied.", true);
         };
         var byHand = function (text) {
           say(line, "Your browser would not copy it. Copy it from the box.", false);
@@ -1822,7 +1823,7 @@
       doorsTools.appendChild(el("div", { class: "hq-actions" }, kids));
       doorsTools.appendChild(line);
       doorsTools.appendChild(slot);
-      doorsTools.appendChild(el("p", { class: "hq-hint", text: "The prize list is the one you send to Claude for the door pictures. The list of places is for staff only: it names every place and its day." }));
+      doorsTools.appendChild(el("p", { class: "hq-hint", text: "The prize list is every door's prize, to copy. The list of places is for staff only: it names every place and its day." }));
     }
 
     function pastePanel() {
@@ -2062,9 +2063,12 @@
       var prize = doorInput("prize", d.prize, 200, "area");
       var showOff = el("input", { type: "checkbox", id: "hqDoor-prizeShowOff", name: "prizeShowOff", disabled: !doors.canEdit });
       showOff.checked = !!d.prizeShowOff;
+      // Every door has the same present (Jaimie, 12 November 2026), cut out of card on the doors' maroon the
+      // way the calendar draws it (.elf-carve), with no picture file.
+      var present = el("span", { class: "hq-present" }, [el("span", { class: "hq-present__hi" }), el("span", { class: "hq-present__lo" })]);
       var pic = d.picture
         ? el("div", { class: "hq-door-pic" }, [el("img", { src: d.picture, alt: "The picture for door " + d.door, width: 112, height: 140 })])
-        : el("div", { class: "hq-door-pic" }, [el("span", { class: "hq-door-pic__frame", "aria-hidden": "true", text: String(d.door) }), el("p", { class: "hq-soft", text: "Not made yet. It is made from the prize list." })]);
+        : el("div", { class: "hq-door-pic" }, [el("span", { class: "hq-door-pic__door", "aria-hidden": "true" }, [present]), el("p", { class: "hq-soft", text: "Every door has the same present." })]);
       return makePart(
         "prize",
         "The prize",

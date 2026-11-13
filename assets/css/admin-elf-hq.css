@@ -32,6 +32,10 @@
   --hq-pop-lg: 5px 6px 0 var(--hq-ink);
   --hq-pressed: 1px 1px 0 var(--hq-ink);
   --hq-grain: url(/assets/img/elf/paper/ui/grain-light.webp);
+  /* The present every door has: the calendar's own shape, --elf-present in assets/css/elf.css (a test keeps
+     the two the same), and the calendar's cut edge. */
+  --hq-present: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M6.9 19.4H17.6A0.9 0.9 0 0 1 18.5 20.3V25.5A0.9 0.9 0 0 1 17.6 26.4H6.9A0.9 0.9 0 0 1 6 25.5V20.3A0.9 0.9 0 0 1 6.9 19.4ZM21.7 19.4H26.3A0.5 0.5 0 0 1 26.8 19.9V25.9A0.5 0.5 0 0 1 26.3 26.4H21.7A0.5 0.5 0 0 1 21.2 25.9V19.9A0.5 0.5 0 0 1 21.7 19.4ZM30.4 19.4H41.1A0.9 0.9 0 0 1 42 20.3V25.5A0.9 0.9 0 0 1 41.1 26.4H30.4A0.9 0.9 0 0 1 29.5 25.5V20.3A0.9 0.9 0 0 1 30.4 19.4ZM9.9 29.8H17.6A0.9 0.9 0 0 1 18.5 30.7V44.9A0.9 0.9 0 0 1 17.6 45.8H9.9A0.9 0.9 0 0 1 9 44.9V30.7A0.9 0.9 0 0 1 9.9 29.8ZM21.7 29.8H26.3A0.5 0.5 0 0 1 26.8 30.3V45.3A0.5 0.5 0 0 1 26.3 45.8H21.7A0.5 0.5 0 0 1 21.2 45.3V30.3A0.5 0.5 0 0 1 21.7 29.8ZM30.4 29.8H38.1A0.9 0.9 0 0 1 39 30.7V44.9A0.9 0.9 0 0 1 38.1 45.8H30.4A0.9 0.9 0 0 1 29.5 44.9V30.7A0.9 0.9 0 0 1 30.4 29.8Z'/%3E%3Cpath fill-rule='evenodd' d='M22.2 17L17.38 7.92A5.3 5.3 0 1 0 12.01 15.65ZM18.21 14.23L15 8.99A2.7 2.7 0 1 0 12.18 13.05Z'/%3E%3Cpath fill-rule='evenodd' d='M25.8 17L35.99 15.65A5.3 5.3 0 1 0 30.62 7.92ZM29.79 14.23L35.82 13.05A2.7 2.7 0 1 0 33 8.99Z'/%3E%3Cpath d='M22.5 14H25.5A1.8 1.8 0 0 1 27.3 15.8V18.2A1.8 1.8 0 0 1 25.5 20H22.5A1.8 1.8 0 0 1 20.7 18.2V15.8A1.8 1.8 0 0 1 22.5 14Z'/%3E%3C/svg%3E");
+  --hq-present-edge: color-mix(in srgb, #D29C8A 58%, var(--hq-cream));
   --hq-hand: "Caveat", "Segoe Print", cursive;
   --hq-head: "Playfair Display", Georgia, serif;
   --hq-space-xs: 4px;
@@ -317,7 +321,13 @@
 .hq-tickbox input { flex: none; width: 22px; height: 22px; accent-color: var(--hq-holly); }
 .hq-door-pic { display: grid; justify-items: center; gap: 6px; width: 150px; max-width: 100%; }
 .hq-door-pic img { width: 112px; height: 140px; object-fit: cover; border: 2.5px solid var(--hq-ink); border-radius: 12px 12px 8px 8px; }
-.hq-door-pic__frame { display: grid; place-items: center; width: 112px; height: 140px; border: 2.5px dashed var(--hq-maroon); border-radius: 12px 12px 8px 8px; background: repeating-linear-gradient(135deg, #F7EFE3 0 10px, #FBF6EE 10px 20px); font-family: var(--hq-head); font-weight: 800; font-size: 2.6rem; line-height: 1; color: rgba(128, 0, 0, 0.35); }
+/* The present every door has, as the calendar cuts it out of a door (.elf-carve in assets/css/elf.css): the
+ * card, its darker cut edge and a soft shadow, on a door of the board's maroon. No picture file. */
+.hq-door-pic__door { display: grid; place-items: center; width: 112px; height: 126px; border-radius: 3px; background-color: var(--hq-maroon); background-image: url(/assets/img/elf/paper/ui/grain.webp); background-size: 384px; background-blend-mode: soft-light; box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.7), inset 1.5px 1.5px 0 1px rgba(255, 248, 239, 0.24), 0 2px 4px rgba(20, 0, 0, 0.55); }
+.hq-present { position: relative; display: block; width: 64px; height: 64px; filter: drop-shadow(0 2px 2px rgba(20, 0, 0, 0.5)); }
+.hq-present__hi, .hq-present__lo { position: absolute; inset: 0; -webkit-mask: var(--hq-present) center / contain no-repeat; mask: var(--hq-present) center / contain no-repeat; }
+.hq-present__lo { background: var(--hq-present-edge); transform: translate(0.8px, 1.6px); }
+.hq-present__hi { background-color: var(--hq-card); background-image: var(--hq-grain); background-size: 384px; background-blend-mode: multiply; }
 .hq-door-pic p { margin: 0; font-size: 0.8rem; line-height: 1.35; text-align: center; }
 .hq-delf { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--hq-space-md) var(--hq-space-lg); align-items: end; }
 .hq-tagword { position: relative; display: grid; gap: 2px; justify-items: start; min-width: 0; min-height: 64px; padding: 10px 16px 10px 34px; border: 2px solid var(--hq-ink); border-radius: 8px 20px 20px 8px; background: var(--hq-cream); filter: drop-shadow(2px 3px 0 rgba(58, 11, 11, 0.35)); }

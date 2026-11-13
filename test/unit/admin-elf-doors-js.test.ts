@@ -3,11 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
+import { READY_WORDS } from "../../src/elf/door-setup";
 
 // Head Elf HQ > Doors (assets/js/admin/elf-hq.js): the 24 doors and a door's sheet, against a pretend
 // server. Every place, person and prize here is invented.
 const require = createRequire(import.meta.url);
 const { initElfHq } = require(resolve(__dirname, "../../assets/js/admin/elf-hq.js"));
+const HQ_JS = readFileSync(resolve(__dirname, "../../assets/js/admin/elf-hq.js"), "utf8");
 
 const flush = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve();
@@ -30,7 +32,7 @@ const WEEKDAYS = ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
 function tiles() {
   return Array.from({ length: 24 }, (_, i) => {
     const door = i + 1;
-    const base = { door, weekday: WEEKDAYS[i % 7], placeName: null as string | null, ready: false, toDo: 6 };
+    const base = { door, weekday: WEEKDAYS[i % 7], placeName: null as string | null, ready: false, toDo: 5 };
     if (door === 3) return { ...base, placeName: "Pine Cone Café", ready: true, toDo: 0 };
     if (door === 7) return { ...base, placeName: "Corner Bakehouse", toDo: 3 };
     if (door === 9) return { ...base, placeName: LONG_NAME, toDo: 4 };
@@ -40,10 +42,10 @@ function tiles() {
 
 const LIST = { year: 2026, doors: tiles(), counts: { placesAgreed: 3, prizesChosen: 2, ready: 1 }, prizeList: "Door 1: No prize yet", canEdit: true };
 
+// What the server says a door needs: no door picture, as every door has the same present.
 const ITEMS = [
   ["place", true],
   ["prize", true],
-  ["picture", false],
   ["elf", true],
   ["clues", false],
   ["droppedOff", false],
@@ -85,7 +87,7 @@ function sheet(over: Record<string, unknown> = {}) {
       { n: 3, words: null },
     ],
     day: "Monday 7 December",
-    readiness: { items: ITEMS.map(([key, done]) => ({ key, done })), toDo: 3, ready: false },
+    readiness: { items: ITEMS.map(([key, done]) => ({ key, done })), toDo: 2, ready: false },
     evening: { clue1: "17:30", clue2: "18:00", clue3: "18:30", reveal: "19:00", problems: [] },
     closesTooSoon: false,
     picture: null,
@@ -215,7 +217,7 @@ describe("the 24 doors", () => {
 });
 
 describe("a door's sheet", () => {
-  it("opens door 7 from its tile, with its heading and the six ready items", async () => {
+  it("opens door 7 from its tile, with its heading and the five ready items", async () => {
     const { calls } = await openDoors();
     tile(7).click();
     await flush();
@@ -228,12 +230,19 @@ describe("a door's sheet", () => {
     expect(items.map((li) => li.textContent!.replace(/\s*(done|to do)$/, ""))).toEqual([
       "The place",
       "The prize",
-      "The door picture",
       "The elf and its tag",
       "The three clues",
       "Dropped off",
     ]);
-    expect(items.map((li) => li.classList.contains("is-done"))).toEqual([true, true, false, true, false, false]);
+    expect(items.map((li) => li.classList.contains("is-done"))).toEqual([true, true, true, false, false]);
+  });
+
+  // The screen keeps its own copy of the words for what a door needs (it cannot import the server's), so
+  // the two must agree: a door picture is in neither.
+  it("names what a door needs in the server's own words, with no door picture", () => {
+    const own = /var READY_WORDS = (\{[^}]*\});/.exec(HQ_JS)?.[1];
+    expect(own, "the screen's READY_WORDS").toBeTruthy();
+    expect(JSON.parse(own!.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":'))).toEqual(READY_WORDS);
   });
 
   // TASK-613: Christmas Eve's door is a morning door unless a head elf sets its own times, and the sheet
@@ -268,10 +277,26 @@ describe("a door's sheet", () => {
     expect(partOf("evening").textContent).toContain("The place gets its reminder email at 9am.");
     expect(partOf("evening").textContent).toContain("On a school holiday, set clue 1 to the morning.");
     expect(partOf("prize").textContent).toContain("A prize must not point at the place giving it.");
-    expect(partOf("prize").textContent).toContain("Not made yet. It is made from the prize list.");
+    expect(partOf("prize").textContent).toContain("Every door has the same present.");
     expect(partOf("elf").textContent).toContain("SNOWBALL 472");
     expect(sheetEl().querySelector('[data-part="clues"] h3')!.textContent).toBe("The three clues");
     expect(sheetEl().querySelector('[data-part="prints"] h3')!.textContent).toBe("Print and drop off");
+  });
+
+  // Jaimie, 12 November 2026: every door has the same present, so nothing is made from the prize list. The
+  // sheet shows the present as the calendar cuts it out of the door, with no picture file.
+  it("shows the present every door has beside the prize, drawn as the calendar draws it", async () => {
+    await openDoors();
+    tile(7).click();
+    await flush();
+    const pic = partOf("prize").querySelector<HTMLElement>(".hq-door-pic")!;
+    expect(pic.querySelector("img")).toBeNull();
+    const present = pic.querySelector(".hq-door-pic__door .hq-present")!;
+    expect(present).not.toBeNull();
+    expect(present.closest("[aria-hidden='true']")).not.toBeNull();
+    expect([...present.children].map((c) => c.className)).toEqual(["hq-present__hi", "hq-present__lo"]);
+    expect(pic.querySelector("p")!.textContent).toBe("Every door has the same present.");
+    expect(partOf("prize").textContent).not.toContain("Not made yet");
   });
 
   it("warns, as an error, when the place closes too soon", async () => {

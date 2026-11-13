@@ -364,6 +364,87 @@ describe("the proud emails", () => {
   });
 });
 
+// Plan 2c-2, Task 7 (rulings F16 and F17): the emails a family can stop end with a small link to its own page for
+// them, as the body's last line: after the give link and before the sign off, in the html and in the text. The won
+// email never has it, and nor does an email built with none.
+describe("the link to stop the emails", () => {
+  const STOP = "https://nbcc.scot/elf/emails/0123456789abcdef0123456789abcdef";
+  /** The words of a piece of an email's html, its tags left out. */
+  const wordsOf = (html: string) => htmlWords(html.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+  /** The html from the give link to the sign off: the give link's words, then the stop link's, then nothing else. */
+  function htmlEnd(e: BuiltEmail, signOffLine: string) {
+    const give = e.html.indexOf('href="https://nbcc.scot/donate"');
+    const stop = e.html.indexOf(`href="${STOP}"`);
+    const sign = e.html.indexOf(signOffLine);
+    expect(give, "the give link").toBeGreaterThan(-1);
+    expect(stop, "the stop link comes after the give link").toBeGreaterThan(give);
+    expect(sign, "the sign off comes after the stop link").toBeGreaterThan(stop);
+    return { give: wordsOf(e.html.slice(e.html.indexOf(">", give) + 1, e.html.lastIndexOf("<a", stop))), stop: wordsOf(e.html.slice(e.html.indexOf(">", stop) + 1, sign)) };
+  }
+  /** The text's lines with words, from the give line on: the give line, then the stop line, then the sign off. */
+  function textEnd(e: BuiltEmail, giveLine: string) {
+    const lines = e.text.split("\n").filter((l) => l.trim() !== "");
+    const from = lines.indexOf(giveLine);
+    expect(from, giveLine).toBeGreaterThan(-1);
+    return lines.slice(from, from + 3);
+  }
+  const noLink = (e: BuiltEmail) => {
+    for (const part of [e.html, e.text]) {
+      expect(part).not.toContain("Stop these emails");
+      expect(part).not.toContain("/elf/emails/");
+    }
+  };
+
+  it("ends the clue email's body with the small link to stop them, after the give link and before the sign off", () => {
+    const e = clue({ stopUrl: STOP });
+    expect(htmlEnd(e, "Happy hunting!")).toEqual({ give: "Every pound could help a child wake up to a Red Bag Full of Joy.", stop: "Stop these emails" });
+    expect(textEnd(e, "Every pound could help a child wake up to a Red Bag Full of Joy. https://nbcc.scot/donate")).toEqual([
+      "Every pound could help a child wake up to a Red Bag Full of Joy. https://nbcc.scot/donate",
+      `Stop these emails: ${STOP}`,
+      "Happy hunting!",
+    ]);
+    // Small, as the give link is: never a button.
+    expect(e.html).toContain(`<p style="font-size:12px;line-height:1.5;margin:14px 0 0"><a href="${STOP}" style="color:#6F6A66">Stop these emails</a></p>`);
+  });
+
+  it("leaves the clue email without one when it is given none", () => {
+    noLink(clue({ stopUrl: null }));
+    // An email built before the link existed reads as given none.
+    noLink(clue());
+  });
+
+  it("ends a promotion's and a graduation's body with it, after Give a little more and before the sign off", () => {
+    for (const e of [proud({ kind: "promoted", rank: "Junior Detective", stopUrl: STOP }), proud({ kind: "graduated", stopUrl: STOP })]) {
+      expect(htmlEnd(e, "Well done from all of us!")).toEqual({ give: "Give a little more", stop: "Stop these emails" });
+      expect(textEnd(e, "Give a little more: https://nbcc.scot/donate")).toEqual(["Give a little more: https://nbcc.scot/donate", `Stop these emails: ${STOP}`, "Well done from all of us!"]);
+    }
+  });
+
+  // The won email always goes, so it has nothing to stop.
+  it("never puts it in the won email, which is built with none", () => {
+    noLink(proud({ kind: "won", elfName: "Pip", door: 7, stopUrl: null }));
+    noLink(proud({ kind: "promoted", rank: "Junior Detective", stopUrl: null }));
+  });
+
+  it("writes the link's address as words, never as markup", () => {
+    const e = clue({ stopUrl: `${STOP}"><b>x` });
+    expect(e.html).not.toContain("<b>x");
+    expect(e.html).toContain("&quot;&gt;&lt;b&gt;x");
+  });
+
+  it("is shown to staff in All emails: in every clue email and in the promotion and graduation, never in the won email", () => {
+    const link = 'href="https://nbcc.scot/elf/emails/0123456789abcdef0123456789abcdef"';
+    for (const version of findEmail("elf-clue")!.versions) {
+      const built = version.render("https://nbcc.scot");
+      expect(built.html, version.id).toContain(link);
+      expect(built.text, version.id).toContain("Stop these emails: https://nbcc.scot/elf/emails/0123456789abcdef0123456789abcdef");
+    }
+    const proudOf = (id: string) => findEmail("elf-proud")!.versions.find((v) => v.id === id)!.render("https://nbcc.scot");
+    for (const id of ["promoted", "graduated"]) expect(proudOf(id).html, id).toContain(link);
+    noLink(proudOf("won"));
+  });
+});
+
 describe("typed names are escaped in every wave 2 email", () => {
   it("never lets an elf name with & and < through raw", () => {
     const elf = "Pip & <b>Co";

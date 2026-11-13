@@ -113,12 +113,32 @@ const hello = (typed: string | null): string => {
 const small = (url: string, words: string): string =>
   `<p style="font-size:12px;line-height:1.5;margin:14px 0 0"><a href="${escapeHtml(url)}" style="color:#6F6A66">${escapeHtml(words)}</a></p>`;
 
+// ---- Plan 2c-2: the emails a family can stop (docs/superpowers/plans/2026-11-12-elf-grand-prize.md, Task 7) -----
+// The clue email, and the promoted and graduated emails, end with a small link to the family's own page for them,
+// which asks before it changes anything (GET /elf/emails/:token in src/routes/elf.ts). The won email, the sign in
+// code and the welcome, which is the family's receipt, always go, so they have no such link.
+
+/** A family's own token in its link to stop or start the emails (elf_families.emails_token, made by the database):
+ *  32 lower case hex letters. Anything else is not one, so nothing is read for it and no link is made from it. */
+export const EMAILS_TOKEN = /^[0-9a-f]{32}$/;
+
+/** The words of the small link to stop the emails. */
+const STOP_WORDS = "Stop these emails";
+
+/** The link to stop the emails, when there is one to give: the body's last line, after the give link and before
+ *  the sign off (ruling F17). A missing address, as from a caller from before the link, is none. */
+function stopLine(stopUrl: string | null | undefined): { html: string; text: string[] } {
+  if (typeof stopUrl !== "string" || stopUrl === "") return { html: "", text: [] };
+  return { html: small(stopUrl, STOP_WORDS), text: ["", `${STOP_WORDS}: ${stopUrl}`] };
+}
+
 /** The email to a grown up when a door's first clue comes out. It never says when the place is shown: a family
  *  sees a door's place only once it has had its guess or been there (Plan 2c-1). It says when the family finds
  *  out whether it cracked the case: at the reveal, or later if the elf is still hiding then, unless the place
  *  closes by the reveal. A closing time not given, or not a real time, is none (ruling F13): such a place still
  *  closes, at the time a door falls back to, so the family may find out later. And a family that misses the hunt
- *  can still crack the case in Detective HQ, with one guess. */
+ *  can still crack the case in Detective HQ, with one guess. With `stopUrl` it ends with the link to stop the
+ *  emails (Plan 2c-2). */
 export function buildElfClueEmail(o: {
   grownUpName: string;
   door: Door;
@@ -134,6 +154,8 @@ export function buildElfClueEmail(o: {
   hqUrl: string;
   fact: ElfFact | null;
   giveUrl: string;
+  /** The family's own page for stopping the emails (`${siteOrigin}/elf/emails/${token}`), or null for none. */
+  stopUrl: string | null;
 }): BuiltEmail {
   const hi = hello(o.grownUpName);
   const intro = `Here is the first clue to find ${o.elfName}, the elf behind door ${o.door}.`;
@@ -154,6 +176,7 @@ export function buildElfClueEmail(o: {
   const missed = `If you miss ${whenWords(o.clue1At) === "tonight" ? "tonight's" : "today's"} hunt, you can still crack this case later in Detective HQ, with one guess.`;
   const lateNote = `If you are reading this a little late, the clue has been in Detective HQ since ${clockWords(o.clue1At)}.`;
   const give = "Every pound could help a child wake up to a Red Bag Full of Joy.";
+  const stop = stopLine(o.stopUrl);
 
   const body =
     heading(`Door ${o.door}: the first clue is out`) +
@@ -166,7 +189,8 @@ export function buildElfClueEmail(o: {
     button(o.hqUrl, "Open Detective HQ") +
     note(escapeHtml(lateNote)) +
     (o.fact ? subheading("Did you know?") + bodyP(escapeHtml(o.fact.grownUp)) : "") +
-    small(o.giveUrl, give);
+    small(o.giveUrl, give) +
+    stop.html;
   const text = [
     hi,
     "",
@@ -184,6 +208,7 @@ export function buildElfClueEmail(o: {
     ...(o.fact ? ["", "Did you know?", o.fact.grownUp] : []),
     "",
     `${give} ${o.giveUrl}`,
+    ...stop.text,
   ];
   return finish(`Door ${o.door}: the first clue is out`, body, text, "Happy hunting!");
 }
@@ -340,7 +365,8 @@ export const ELF_TEST_TEXT = "Elf Detective School: this is your test alert. nbc
 export const ELF_PROUD_LOG_SUBJECT = "A proud moment from Elf Detective School";
 
 /** To a grown up when their detective wins an elf, is promoted or graduates. A win may name every detective
- *  who was there (a list), and then says "were" and "have". */
+ *  who was there (a list), and then says "were" and "have". With `stopUrl` it ends with the link to stop the
+ *  emails (Plan 2c-2): the worker gives one to a promotion and a graduation, and none to a win, which always goes. */
 export function buildElfProudEmail(o: {
   kind: "won" | "promoted" | "graduated";
   grownUpName: string;
@@ -350,6 +376,8 @@ export function buildElfProudEmail(o: {
   rank?: Rank;
   hqUrl: string;
   giveUrl: string;
+  /** The family's own page for stopping the emails (`${siteOrigin}/elf/emails/${token}`), or null for none. */
+  stopUrl: string | null;
 }): BuiltEmail {
   const hi = hello(o.grownUpName);
   const elf = o.elfName ?? "the elf";
@@ -365,6 +393,7 @@ export function buildElfProudEmail(o: {
         : [`${who} has graduated!`, "A graduate!", `${who} has done every door and has graduated from Elf Detective School. Well done!`];
   const thanks = "Thank you for playing along. It means a great deal to everyone at NBCC.";
   const ask = "If Elf Detective School has given your family a smile, a little more could help another family this Christmas.";
+  const stop = stopLine(o.stopUrl);
   const body =
     heading(escapeHtml(headline)) +
     bodyP(escapeHtml(hi)) +
@@ -372,7 +401,8 @@ export function buildElfProudEmail(o: {
     bodyP(escapeHtml(thanks)) +
     button(o.hqUrl, "Open Detective HQ") +
     bodyP(escapeHtml(ask)) +
-    button(o.giveUrl, "Give a little more");
-  const text = [hi, "", news, "", thanks, "", `Detective HQ: ${o.hqUrl}`, "", ask, `Give a little more: ${o.giveUrl}`];
+    button(o.giveUrl, "Give a little more") +
+    stop.html;
+  const text = [hi, "", news, "", thanks, "", `Detective HQ: ${o.hqUrl}`, "", ask, `Give a little more: ${o.giveUrl}`, ...stop.text];
   return finish(subject, body, text, "Well done from all of us!");
 }

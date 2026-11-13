@@ -1211,6 +1211,8 @@ const ELF_CLUE_3 = new Date("2026-12-07T19:30:00.000Z");
 const ELF_REVEAL = new Date("2026-12-07T20:30:00.000Z");
 /** The pretend place's closing time, as typed in Doors. */
 const ELF_CLOSES = new Date("2026-12-07T21:00:00.000Z");
+/** A pretend family's own page for stopping the emails that are not essential (Plan 2c-2): its token is made up. */
+const ELF_STOP = (b: string) => `${b}/elf/emails/0123456789abcdef0123456789abcdef`;
 const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (b: string) =>
   buildElfClueEmail({
     grownUpName: "Sam Example",
@@ -1225,6 +1227,7 @@ const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (
     hqUrl: `${b}/elf/hq`,
     fact: factFor(7),
     giveUrl: `${b}/donate`,
+    stopUrl: ELF_STOP(b),
   });
 const elfReminder = (clue1At: Date) => () =>
   buildElfPlaceReminderEmail({ contactName: "Alex Example", placeName: ELF_PLACE, elfName: "Pip", door: 7, clue1At, closesAt: "5pm", phone: "01632 960 123" });
@@ -1265,8 +1268,17 @@ const elfMorning = (door: { ready: boolean; toDo: string[]; canRun: boolean }, s
     pictures: { today: null, yesterday: null },
     adminUrl: `${b}/admin`,
   });
+/** A proud email as the worker builds it: a promotion and a graduation end with the link to stop the emails; a win,
+ *  which always goes, has none. */
 const elfProud = (o: { kind: "won" | "promoted" | "graduated"; elfName?: string; door?: 7; rank?: "Junior Detective" }) => (b: string) =>
-  buildElfProudEmail({ ...o, grownUpName: "Sam Example", detectiveName: "Detective Ruby Tinselfoot", hqUrl: `${b}/elf/hq`, giveUrl: `${b}/donate` });
+  buildElfProudEmail({
+    ...o,
+    grownUpName: "Sam Example",
+    detectiveName: "Detective Ruby Tinselfoot",
+    hqUrl: `${b}/elf/hq`,
+    giveUrl: `${b}/donate`,
+    stopUrl: o.kind === "won" ? null : ELF_STOP(b),
+  });
 const ELF: CatalogueEmail[] = [
   {
     id: "elf-welcome",

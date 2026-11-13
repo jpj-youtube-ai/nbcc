@@ -289,6 +289,7 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
         hqUrl: `${t.deps.siteOrigin}/elf/hq`,
         fact: factFor(door),
         giveUrl: `${t.deps.siteOrigin}/donate`,
+        stopUrl: null,
       });
       await t.deps.send.clue(f.grownUpName, messageFor(f.email, mail, t.deps.from));
     });
@@ -433,6 +434,7 @@ async function sendMoments(
       ...(top.rank ? { rank: top.rank } : {}),
       hqUrl: `${deps.siteOrigin}/elf/hq`,
       giveUrl: `${deps.siteOrigin}/donate`,
+      stopUrl: null,
     });
     await deps.send.proud(family.grownUpName, messageFor(family.email, mail, deps.from));
   });
@@ -454,6 +456,8 @@ async function sendWon(
       door: o.door,
       hqUrl: `${deps.siteOrigin}/elf/hq`,
       giveUrl: `${deps.siteOrigin}/donate`,
+      // The won email always goes, whether or not the family has stopped the others, so it has no link to stop them.
+      stopUrl: null,
     });
     await deps.send.proud(o.family.grownUpName, messageFor(o.family.email, mail, deps.from));
   });

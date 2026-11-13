@@ -85,7 +85,8 @@ function runForToday(runs: readonly DoorRun[], now: Date): DoorRun | null {
 
 /** When Detective HQ says the place is shown: the real time once the elf is found before its reveal,
  *  the staff reveal time while the hunt is on before it, and none once that has passed with the elf
- *  still hiding (the place is then shown as soon as the elf is found). Never the place's closing time,
+ *  still hiding (the place is then shown as soon as the elf is found, or at its closing at the latest:
+ *  TodayView.shownBy says that, on the door's own day). Never the place's closing time,
  *  when an unfound elf's place is shown: that would be wrong the moment the elf is found. When the place
  *  closes is said on its own, on the door's own day (the spec's answer 5, through TodayView.closesAt and
  *  closingShown in catch-up.ts). */
@@ -152,8 +153,16 @@ function todayOf(
     // An unfound elf's place is shown at the reveal or the closing, whichever is later (shownAt), so only a
     // closing after the reveal can make it later; the 8pm a door falls back to counts.
     mayShowLater: state === "hunting" && run.facts.closesAt.getTime() > run.facts.revealAt.getTime(),
-    shownBy: state === "hunting" ? shownAt({ ...run.facts, foundAt: null }) : null,
+    shownBy: state === "hunting" ? latestShownToday(run) : null,
   };
+}
+
+/** The latest an unfound elf's place is shown, when that falls on the door's own day in London; else null. A
+ *  closing typed at or before clue 1 is read as that time on the next day (closingInstant in calendar.ts), so it
+ *  is never the latest a family finds out today. */
+function latestShownToday(run: DoorRun): Date | null {
+  const latest = shownAt({ ...run.facts, foundAt: null });
+  return sameDay(latest, run.facts.clue1At) ? latest : null;
 }
 
 /** Detective HQ's case today: the practice run while one runs for this browser, else, only while

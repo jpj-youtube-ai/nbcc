@@ -801,7 +801,7 @@ The clues, once all three are out (the same words as the clue email and the cale
 
 - [ ] While the elf is still hiding: You find out whether you cracked it at *7pm*, or later if the elf is still hiding then. (It said "The hiding place is shown at 7pm".)
 - [ ] The same when the place closes at or before then, and once the elf is found: You find out whether you cracked it at *7pm*.
-- [ ] Once that time has passed and nobody has found the elf: You find out whether you cracked it as soon as the elf is found, or at *8:30pm* at the latest. (It said "The hiding place is shown as soon as the elf is found.") The time is the closing time typed in Doors, or 8pm when none is typed; with no time at all, which cannot happen in play, the sentence ends at "found".
+- [ ] Once that time has passed and nobody has found the elf: You find out whether you cracked it as soon as the elf is found, or at *8:30pm* at the latest. (It said "The hiding place is shown as soon as the elf is found.") The time is the closing time typed in Doors, or 8pm when none is typed. When the closing typed is at or before the first clue (Head Elf HQ flags that as closing too soon, and it counts as the next day's), or with no time at all, which cannot happen in play, the sentence ends at "found".
 
 Once its elf has gone home with nobody finding it (a safety net: Head Elf HQ allows gone home only after
 a door's day, so families should not meet this on today's case):

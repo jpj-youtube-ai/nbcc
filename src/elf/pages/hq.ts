@@ -58,8 +58,9 @@ function mayFindOutLater(today: TodayView): boolean {
 /** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),
  *  or, once all three are out, when the family finds out whether it cracked the case (the place is shown
  *  then only to a family that has had its guess), in the words the clue email and the calendar use; and, once
- *  the reveal time has passed with the elf still hiding, that the place is shown as soon as it is found. Only a
- *  clue whose time has come is written, whatever the view holds; with no real clock, no clue at all. */
+ *  the reveal time has passed with the elf still hiding, that the place is shown as soon as it is found, or at
+ *  its closing at the latest when that falls today (TodayView.shownBy). Only a clue whose time has come is
+ *  written, whatever the view holds; with no real clock, no clue at all. */
 function clueLadder(today: TodayView, now: Date): string {
   if (!real(now)) return "";
   const out = today.clues.filter((c) => real(c.at) && c.at.getTime() <= now.getTime());

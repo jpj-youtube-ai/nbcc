@@ -119,7 +119,8 @@ export interface TodayView {
   nextClueAt: Date | null;
   /** When the place is shown, when that can be said: the staff reveal time while the hunt is on before
    *  it, and the real time once the elf is found before it. Null once the reveal time has passed with
-   *  the elf still hiding (the place is then shown as soon as it is found), and once the door is open.
+   *  the elf still hiding (the place is then shown as soon as it is found, or at its closing at the latest:
+   *  shownBy below), and once the door is open.
    *  Never the place's closing time as when the place is shown: when the place closes is said on its own,
    *  through closesAt. */
   revealAt: Date | null;
@@ -154,7 +155,9 @@ export interface TodayView {
   mayShowLater: boolean;
   /** While the elf is still hunted, the latest its place is shown: when it would be with the elf never found, at
    *  the reveal or at the place's closing (typed in Doors, or the 8pm a door falls back to), whichever is later.
-   *  Null otherwise. Once the reveal time has passed, Detective HQ says it as the latest a family finds out. */
+   *  Only when that falls on the door's own day: a closing typed at or before clue 1 counts as the next day's, so
+   *  it is null then, as it is otherwise. Once the reveal time has passed, Detective HQ says it as the latest a
+   *  family finds out. */
   shownBy: Date | null;
 }
 

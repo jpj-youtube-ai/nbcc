@@ -678,6 +678,17 @@ describe("Detective HQ catching up", () => {
     expect(page).toContain("You find out whether you cracked it as soon as the elf is found, or at 8pm at the latest.");
   });
 
+  // The whole-branch review, Important 1: a closing typed at or before clue 1 is read as that time the next day
+  // (closingInstant), so it is never the latest a family finds out today. HQ names a latest only when it falls on
+  // the door's own day; otherwise the sentence ends at "found".
+  it("names no latest when the closing typed falls on the next day, a 5pm closing with a 5:30pm clue", () => {
+    const view = hq7({ now: at("2026-12-07T19:15:00Z"), seven: { ...CORNER, closesAt: "17:00" } });
+    expect(view.today).toMatchObject({ state: "hunting", shownBy: null });
+    const page = renderHqPage(view);
+    expect(page).toContain("You find out whether you cracked it as soon as the elf is found.");
+    expect(page).not.toContain("at the latest");
+  });
+
   it("says only the reveal's time between a closing typed before the reveal and the reveal", () => {
     const view = hq7({ now: at("2026-12-07T18:50:00Z"), seven: { ...CORNER, closesAt: "18:45" } });
     expect(view.today).toMatchObject({ state: "hunting", closesAt: null });

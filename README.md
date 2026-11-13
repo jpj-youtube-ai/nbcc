@@ -12675,7 +12675,9 @@ how late a place is open.
 (`findOutWords` and `findOutWhenFoundWords` in `src/elf/words.ts`): "You find out whether you cracked it
 at 7pm, or later if the elf is still hiding then.", the short form once the elf is found or when the place
 closes by then (`TodayView.mayShowLater`), and, past the reveal with the elf still hiding, "You find out
-whether you cracked it as soon as the elf is found, or at 8:30pm at the latest." (`TodayView.shownBy`).
+whether you cracked it as soon as the elf is found, or at 8:30pm at the latest." (`TodayView.shownBy`, only
+when that time falls on the door's own day: a closing typed at or before clue 1 counts as the next day's, so
+the sentence then ends at "found").
 Today's case shows how it ended only to a family that can see the place; once an
 unfound elf has gone home it says only where it was hiding, under "Bauble has gone home", with no prize or
 visit. A calendar door whose elf has gone home reads out "Door 7. Nobody found Bauble in time, and it has

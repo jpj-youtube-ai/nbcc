@@ -71,6 +71,7 @@ import { claimWinHtml, renderPosterPage, visitWinHtml, wordRefusalWords } from "
 import { renderRulesPage } from "../elf/pages/rules";
 import type { CalendarView, ClaimWin, DoorView, FamilyMarks, GoView, HqView, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
+import { renderElfCertificate, shareCardSvg } from "../elf/print";
 import { progressOf, promotionsBetween, type DoorsDone, type Rank } from "../elf/progress";
 import { makePublicCalendar } from "../elf/public-calendar";
 import type { ScrapPhoto, Scrapbook } from "../elf/scrapbook";
@@ -80,8 +81,10 @@ import {
   doorPlaceOf,
   entryViewFor,
   familyDoorView,
+  GRADUATE_VIDEO_PATH,
   goOutcomeOf,
   goViewFor,
+  graduateVideoOf,
   hqViewFor,
   lookFromForm,
   marksOf,
@@ -93,7 +96,7 @@ import {
 } from "../elf/views";
 import { realElfDeps, sendProudMoments, type WordMoment } from "../elf/worker";
 import { clockWords } from "../elf/words";
-import { elfPng, elfPngKey } from "../elf/elf-png";
+import { elfPng, elfPngKey, inTurn } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, MOBILE_WORDS, parseJoin } from "../elf/join";
 import { FESTIVE_SURNAMES, familyDetectiveName, type DetectiveNameParts } from "../elf/names";
@@ -1806,16 +1809,21 @@ export async function getCluePicture(req: Request, res: Response): Promise<Respo
 // browser holding the preview link: the grand prize is never the practice door's. Each is the family's own,
 // so no browser or shared cache keeps any of them, and an entry's picture goes to its own family only.
 
-/** The signed in family's own detective named in an address, and whether it has graduated: all 24 doors done,
- *  worked out here from the doors every family route reads (familyRuns), never taken from the page. Null when
- *  the detective is not one of the family's own. The entry page and its post use it, and so will a graduate's
- *  certificate and share card (ruling F9). */
-async function ownDetective(res: Response, family: FamilyRow, raw: unknown, now: Date): Promise<{ detective: DetectiveRow; graduate: boolean } | null> {
+/** The signed in family's own detective named in an address, the doors it has done and whether it has graduated:
+ *  all 24 doors done, worked out here from the doors every family route reads (familyRuns), never taken from the
+ *  page. Null when the detective is not one of the family's own. The entry page and its post use it, and so do a
+ *  graduate's certificate and share card (ruling F9). */
+async function ownDetective(
+  res: Response,
+  family: FamilyRow,
+  raw: unknown,
+  now: Date,
+): Promise<{ detective: DetectiveRow; doors: DoorsDone; graduate: boolean } | null> {
   const id = detectiveIdOf(raw);
   const detective = family.detectives.find((d) => d.id === id);
   if (!detective) return null;
-  const doors = (await familyDoorsDone(settingsOf(res).year, family.id, (await familyRuns(res, now)).runs, now)).get(detective.id);
-  return { detective, graduate: progressOf(doors ?? NO_DOORS).graduate };
+  const doors = (await familyDoorsDone(settingsOf(res).year, family.id, (await familyRuns(res, now)).runs, now)).get(detective.id) ?? NO_DOORS;
+  return { detective, doors, graduate: progressOf(doors).graduate };
 }
 
 /** A detective's name as its own family sees it, in full: "Detective Ruby Tinselfoot". */
@@ -1907,6 +1915,130 @@ export async function getEntryPicture(req: Request, res: Response): Promise<Resp
   }
 }
 
+// --- a graduate's certificate, share card and the graduates' video (Plan 2c-2) -----------------------------------
+//
+//   GET /elf/hq/certificate/:detective  the certificate, a sheet to print (src/fundraising/materials.ts' print shell,
+//                                       as Elf Detective School's other prints are), not a page of the site
+//   GET /elf/hq/share/:detective.png    the share card, a PNG drawn here from its SVG
+//   GET /elf/hq/video                   303 to the graduates' video that a head elf saved in Head Elf HQ > Settings
+//
+// The first two are for one of the signed in family's own detectives who has done all 24 doors (ownDetective), and
+// not found otherwise; the video is for a signed in family with a graduate, and not found otherwise. All three sit
+// behind schoolOn and doorsOn, and each answers 404 while December's doors are off even to a browser holding the
+// preview link. Each is the family's own, so no browser or shared cache keeps any of them. The certificate names the
+// detective in full, as their own family sees them; the share card is made to be shared, so it names them as the
+// public sees them (ruling F11): a first name staff have not ticked shows as its first letter.
+
+/** The elf on its stage for a print, as a PNG data address: a print or a picture made on the server cannot fetch
+ *  the elf's address. */
+const pngData = (png: Buffer): string => `data:image/png;base64,${png.toString("base64")}`;
+
+/** Too many pictures are being made just now: ask again in a moment, as the elves' pictures say. */
+function picturesBusy(res: Response): Response {
+  res.setHeader("Retry-After", "2");
+  return res.status(503).type("text/plain").send("Busy. Please try again in a moment.");
+}
+
+/** The share card as a PNG, drawn by sharp from its SVG (the October plan's Stage B), or null when too many pictures
+ *  are already waiting. It takes its turn with the elves' pictures (inTurn, src/elf/elf-png.ts), so the one small
+ *  task never makes two at once. sharp is loaded the first time, never as the app starts, and by then elfPng has made
+ *  the card's elf, which set sharp up its way (no cache, one thread). The image needs fonts for the card's words: the
+ *  Dockerfile's fontconfig and fonts-dejavu-core, which pr.yml's image check proves are there. */
+function shareCardPng(svg: string): Promise<Buffer | null> {
+  return inTurn<Buffer | null>(async () => {
+    const m = await import("sharp");
+    const sharp = ((m as unknown as { default?: typeof m.default }).default ?? m) as typeof m.default;
+    return sharp(Buffer.from(svg)).png().toBuffer();
+  }, null);
+}
+
+export async function getCertificate(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    // Only while December's doors are on, whatever the preview link says.
+    if (!settings.doorsOn) return notFound(res);
+    const family = await familyOr(req, res);
+    if (!family) return;
+    const own = await ownDetective(res, family, req.params.detective, now);
+    if (!own || !own.graduate) return notFound(res);
+    const { detective, doors } = own;
+    const progress = progressOf(doors);
+    // Drawn in the wardrobe the detective has earned, worked out here, never taken from the browser.
+    const elf = await elfPng(detective.look, wardrobeState(doors), 340);
+    if (!elf) return picturesBusy(res);
+    const page = renderElfCertificate({
+      name: familyNameOf(detective),
+      badgeNumber: detective.badgeNumber === null ? "" : badgeWords(detective.badgeNumber),
+      year: settings.year,
+      doorsDone: progress.doorsDone,
+      goldSeal: progress.goldSeal,
+      elfPicture: pngData(elf),
+      // Dated the day it is printed (planner's call 10): a detective can only graduate from Christmas Eve.
+      awardedOn: now,
+    });
+    // A sheet to print, sent as it is: it is not a page of the site, so it wears no banner.
+    return res.type("html").send(page);
+  } catch (err) {
+    return gameFailed(res, "certificate", err, false);
+  }
+}
+
+export async function getShareCard(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const file = /^(\d{1,10})\.png$/.exec(String(req.params.file));
+  const now = new Date();
+  try {
+    // Only while December's doors are on, whatever the preview link says.
+    if (!settings.doorsOn || !file) return notFound(res);
+    const s = await signedInFamily(req);
+    const family = s ? await familyWithDetectives(s.familyId) : null;
+    if (!family) return notFound(res);
+    const own = await ownDetective(res, family, file[1], now);
+    if (!own || !own.graduate) return notFound(res);
+    const { detective, doors } = own;
+    const progress = progressOf(doors);
+    const elf = await elfPng(detective.look, wardrobeState(doors), 340);
+    if (!elf) return picturesBusy(res);
+    // The name in its parts, with staff's tick, never familyDetectiveName's: the card works out the public form itself.
+    const svg = shareCardSvg(
+      { detective: { firstName: detective.firstName, surname: detective.surname, approved: detective.nameApproved }, rank: progress.rank, doorsDone: progress.doorsDone, year: settings.year },
+      pngData(elf),
+    );
+    const card = await shareCardPng(svg);
+    if (!card) return picturesBusy(res);
+    res.setHeader("Content-Disposition", 'inline; filename="elf-detective-school-graduate.png"');
+    return sendPicture(res, { mime: "image/png", bytes: card }, "private, no-store");
+  } catch (err) {
+    return gameFailed(res, "share card", err, false);
+  }
+}
+
+/** The graduates' video (ruling F10): Detective HQ links only to this site, so its link is this address, which sends a
+ *  signed in family with a graduate on to the https link a head elf saved (graduateVideoOf), telling the video's site
+ *  nothing of where the family came from. */
+export async function getGraduateVideo(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    const link = graduateVideoOf(settings);
+    // Only while December's doors are on, whatever the preview link says, and only with a link set.
+    if (!settings.doorsOn || !link) return notFound(res);
+    const s = await signedInFamily(req);
+    const family = s ? await familyWithDetectives(s.familyId) : null;
+    if (!family) return notFound(res);
+    const doorsDone = await familyDoorsDone(settings.year, family.id, (await familyRuns(res, now)).runs, now);
+    if (!family.detectives.some((d) => progressOf(doorsDone.get(d.id) ?? NO_DOORS).graduate)) return notFound(res);
+    return res.redirect(303, link);
+  } catch (err) {
+    return gameFailed(res, "graduates' video", err, false);
+  }
+}
+
 elfRouter.get("/elf/p/:code", schoolOn, doorsOn, getPoster);
 elfRouter.post("/elf/p/:code/word", forms, schoolOn, doorsOn, postWord);
 elfRouter.post("/api/elf/word", forms, schoolOn, doorsOn, postWord);
@@ -1922,3 +2054,6 @@ elfRouter.get("/elf/hq/clue/:door/:n.jpg", schoolOn, doorsOn, getCluePicture);
 elfRouter.get("/elf/hq/entry/:detective", schoolOn, doorsOn, getEntry);
 elfRouter.post(ELF_ENTRY_POST_PATH, schoolOn, doorsOn, postEntry);
 elfRouter.get("/elf/hq/entry/:detective/picture.jpg", schoolOn, doorsOn, getEntryPicture);
+elfRouter.get("/elf/hq/certificate/:detective", schoolOn, doorsOn, getCertificate);
+elfRouter.get("/elf/hq/share/:file", schoolOn, doorsOn, getShareCard);
+elfRouter.get(GRADUATE_VIDEO_PATH, schoolOn, doorsOn, getGraduateVideo);

@@ -17,6 +17,10 @@ import { resolve } from "node:path";
 // was snowed in, and a snowed in door 24 counts as done from its first clue at 10am, so Ruby (detective 100) and
 // Leo (101) of family 3 have both done all 24 doors. The entries close at 5pm. Every family, place and picture
 // here is invented.
+//
+// Task 6 adds a graduate's certificate (GET /elf/hq/certificate/:detective), share card
+// (GET /elf/hq/share/:detective.png) and the graduates' video (GET /elf/hq/video), at 6pm on Christmas Eve, with
+// the elf's picture (elfPng) answering a small PNG and the share card drawn by the real sharp.
 
 const db = vi.hoisted(() => ({ getElfSettings: vi.fn(), findElfSession: vi.fn(), familyWithDetectives: vi.fn() }));
 const doors = vi.hoisted(() => ({ listElfDoors: vi.fn(), getElfDoor: vi.fn(), findElfDoorByPosterCode: vi.fn(), ensureElfDoors: vi.fn() }));
@@ -32,14 +36,23 @@ const game = vi.hoisted(() => ({
   sendElfPhoto: vi.fn(),
 }));
 const prize = vi.hoisted(() => ({ saveEntry: vi.fn(), familyHasMobile: vi.fn(), familyEntries: vi.fn(), entryPicture: vi.fn() }));
-// The real picture processing, watched.
-const spies = vi.hoisted(() => ({}) as { processPicture: Mock });
+// The elf on its stage, for the certificate and the share card: answering a small PNG. The rest of the module is the
+// real one, its queue (inTurn) among it, which the share card takes its turn in.
+const png = vi.hoisted(() => ({ elfPng: vi.fn() }));
+// The real picture processing and the real share card, watched.
+const spies = vi.hoisted(() => ({}) as { processPicture: Mock; shareCardSvg: Mock });
 
 vi.mock("../../src/db/elf", () => db);
 vi.mock("../../src/db/elf-doors", () => doors);
 vi.mock("../../src/db/elf-practice", () => practice);
 vi.mock("../../src/db/elf-game", async (orig) => ({ ...(await orig<typeof import("../../src/db/elf-game")>()), ...game }));
 vi.mock("../../src/db/elf-grand-prize", async (orig) => ({ ...(await orig<typeof import("../../src/db/elf-grand-prize")>()), ...prize }));
+vi.mock("../../src/elf/elf-png", async (orig) => ({ ...(await orig<typeof import("../../src/elf/elf-png")>()), ...png }));
+vi.mock("../../src/elf/print", async (orig) => {
+  const real = await orig<typeof import("../../src/elf/print")>();
+  spies.shareCardSvg = vi.fn(real.shareCardSvg);
+  return { ...real, shareCardSvg: spies.shareCardSvg };
+});
 vi.mock("../../src/fundraising/picture-process", async (orig) => {
   const real = await orig<typeof import("../../src/fundraising/picture-process")>();
   spies.processPicture = vi.fn(real.processPicture);
@@ -52,26 +65,39 @@ vi.mock("../../src/routes/site", () => ({ decorateSitePage: async (html: string)
 vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentBp: 120, fixedPence: 20 }) }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
+import sharp from "sharp";
 import { elfPhotoBodyGuard, elfRouter, ELF_ENTRY_POST_PATH, ELF_PHOTO_POST_PATH, PHOTO_TRIES, resetElfLimits, resetPublicCalendar } from "../../src/routes/elf";
 import { PICTURE_JSON_BODY_LIMIT } from "../../src/routes/fundraiser-pictures";
+import { ELF_PNG_QUEUE_MAX, inTurn } from "../../src/elf/elf-png";
 import { MOBILE_WORDS } from "../../src/elf/join";
 import { tinyJpeg } from "./fixtures/tiny-jpeg";
 import { at, callerAt, CODE, door7, doorsDoneFromRuns, EVE_10_30, EVERY_DOOR, FAMILY, OFF, ON, PRACTICE_PASS, practiceRow, snowedIn, type Ask } from "./elf-routes-fixtures";
 
 const FOUR_59_59 = at("2026-12-24T16:59:59.000Z");
 const FIVE_PM = at("2026-12-24T17:00:00.000Z");
+/** 6pm on Christmas Eve: the entries have closed, and every detective of family 3 has graduated. */
+const SIX_PM = at("2026-12-24T18:00:00.000Z");
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const BUSY = "Busy. Please try again in a moment.";
+/** The graduates' video a head elf set: a pretend one. */
+const VIDEO = "https://example.org/graduates";
+/** The elf on its stage, as elfPng answers it here: a small real PNG, made before the tests. */
+let ELF = Buffer.alloc(0);
+const elfData = () => `data:image/png;base64,${ELF.toString("base64")}`;
 /** A minute before midnight as Christmas Eve begins, when the entries are not open yet. */
 const EVE_EVE = at("2026-12-23T23:59:00.000Z");
 const WORDS = "Something went wrong just now. Please try again in a few minutes.";
 const THANKS = "Thank you! Detective Ruby Tinselfoot's picture is in. You can change it until 5pm on Christmas Eve.";
 const CLOSED = "Grand prize entries closed at 5pm on Christmas Eve.";
-/** Family 3's detectives: Ruby and Leo. Detective 999 is another family's. */
+/** Family 3's detectives: Ruby and Leo, whose first name staff have not ticked yet. Detective 999 is another family's. */
 const RUBY = 100;
+const LEO = 101;
 const OTHER = 999;
 
 let server: Server;
 let base = "";
 beforeAll(async () => {
+  ELF = await sharp({ create: { width: 34, height: 51, channels: 3, background: { r: 26, g: 83, b: 26 } } }).png().toBuffer();
   // Mounted as src/app.ts mounts them: the photo's and the entry's bigger body parsers first, each on its own
   // path behind the cookie guard, then the usual one.
   const app = express();
@@ -89,8 +115,10 @@ afterAll(() => server.close());
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(EVE_10_30);
-  for (const group of [db, doors, practice, game, prize]) for (const f of Object.values(group)) f.mockReset();
+  for (const group of [db, doors, practice, game, prize, png]) for (const f of Object.values(group)) f.mockReset();
   spies.processPicture.mockClear();
+  // Made the first time the router's prints are loaded.
+  spies.shareCardSvg?.mockClear();
   resetPublicCalendar();
   resetElfLimits();
   db.getElfSettings.mockResolvedValue(ON);
@@ -107,6 +135,7 @@ beforeEach(() => {
   prize.familyEntries.mockResolvedValue(new Map());
   prize.saveEntry.mockResolvedValue({ id: 21, replaced: false });
   prize.entryPicture.mockResolvedValue({ mime: "image/jpeg", bytes: Buffer.from("the picture") });
+  png.elfPng.mockResolvedValue(ELF);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -459,24 +488,272 @@ describe("Detective HQ's grand prize", () => {
   });
 });
 
+// ---- a graduate's certificate (Task 6) ---------------------------------------------------------------------
+
+describe("a graduate's certificate", () => {
+  beforeEach(() => vi.setSystemTime(SIX_PM));
+
+  it("is the family's own graduate's, by name in full, dated the day it is printed, private and never kept", async () => {
+    const r = await call("GET", `/elf/hq/certificate/${RUBY}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toMatch(/^text\/html/);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.text).toContain("Graduate Elf Detective");
+    expect(r.text).toContain("Detective Ruby Tinselfoot");
+    expect(r.text).toContain("Class of 2026");
+    expect(r.text).toContain("Badge EDS 0427");
+    expect(r.text).toContain("Thursday 24 December 2026");
+    expect(game.familyDoorsDone).toHaveBeenCalledWith(2026, 3, expect.any(Array), SIX_PM);
+  });
+
+  it("is a sheet to print, as Elf Detective School's other prints are", async () => {
+    const r = await call("GET", `/elf/hq/certificate/${RUBY}`);
+    expect(r.text).toContain("Print or save as PDF");
+    expect(r.text).toContain("@page{size:A4 landscape;margin:0}");
+  });
+
+  it("shows the graduate's own elf, made on the server in the wardrobe that all 24 doors have earned", async () => {
+    const r = await call("GET", `/elf/hq/certificate/${RUBY}`);
+    expect(png.elfPng).toHaveBeenCalledWith(null, { doors: [...EVERY_DOOR] }, 340);
+    expect(r.text).toContain(`<img src="${elfData()}" alt="Detective Ruby Tinselfoot's elf" width="340" height="510">`);
+  });
+
+  it("names a detective in full to their own family, one whose first name staff have not ticked included", async () => {
+    const r = await call("GET", `/elf/hq/certificate/${LEO}`);
+    expect(r.status).toBe(200);
+    expect(r.text).toContain("Detective Leo Frostwhistle");
+  });
+
+  it("is not found for a detective who has done 23 doors, for another family's, or for no detective at all, and no elf is made", async () => {
+    doors.listElfDoors.mockResolvedValue(snowedIn(EVERY_DOOR.slice(0, 23)));
+    const notYet = await call("GET", `/elf/hq/certificate/${RUBY}`);
+    expect(notYet.status).toBe(404);
+    expect(notYet.headers.get("cache-control")).toBe("private, no-store");
+    doors.listElfDoors.mockResolvedValue(snowedIn(EVERY_DOOR));
+    for (const id of [String(OTHER), "0", "abc", "100.5", "12345678901"]) expect((await call("GET", `/elf/hq/certificate/${id}`)).status, id).toBe(404);
+    expect(png.elfPng).not.toHaveBeenCalled();
+  });
+
+  it("sends someone signed out to sign in, as Detective HQ's other pages do", async () => {
+    const r = await call("GET", `/elf/hq/certificate/${RUBY}`, { cookie: null });
+    expect(r.status).toBe(303);
+    expect(r.headers.get("location")).toBe("/elf/sign-in");
+  });
+
+  it("answers busy, to try again in a moment, when the elf's picture cannot be made just now", async () => {
+    png.elfPng.mockResolvedValue(null);
+    const r = await call("GET", `/elf/hq/certificate/${RUBY}`);
+    expect(r.status).toBe(503);
+    expect(r.headers.get("retry-after")).toBe("2");
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.text).toBe(BUSY);
+  });
+
+  it("answers 500 with the game's words when the family's doors cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyDoorsDone.mockRejectedValue(new Error("connection lost"));
+    const r = await call("GET", `/elf/hq/certificate/${RUBY}`);
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    logged.mockRestore();
+  });
+});
+
+// ---- a graduate's share card (Task 6) ----------------------------------------------------------------------
+
+describe("a graduate's share card", () => {
+  beforeEach(() => vi.setSystemTime(SIX_PM));
+
+  it("is a PNG made on the server for the family's own graduate, private, never kept, and saved by its own name", async () => {
+    const r = await call("GET", `/elf/hq/share/${RUBY}.png`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toBe("image/png");
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.headers.get("content-disposition")).toBe('inline; filename="elf-detective-school-graduate.png"');
+    expect(r.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(r.bytes.subarray(0, 8).equals(PNG_SIGNATURE)).toBe(true);
+    const meta = await sharp(r.bytes).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["png", 1200, 630]);
+  });
+
+  it("draws the graduate's rank, doors done and class, with their own elf", async () => {
+    await call("GET", `/elf/hq/share/${RUBY}.png`);
+    expect(png.elfPng).toHaveBeenCalledWith(null, { doors: [...EVERY_DOOR] }, 340);
+    expect(spies.shareCardSvg).toHaveBeenCalledWith({ detective: { firstName: "Ruby", surname: "Tinselfoot", approved: true }, rank: "Graduate", doorsDone: 24, year: 2026 }, elfData());
+  });
+
+  // Ruling F11: the card is made to be shared, so it names a detective only as the public sees them.
+  it("names a detective whose first name staff have not ticked by its first letter only", async () => {
+    const r = await call("GET", `/elf/hq/share/${LEO}.png`);
+    expect(r.status).toBe(200);
+    expect(spies.shareCardSvg.mock.calls[0][0].detective).toEqual({ firstName: "Leo", surname: "Frostwhistle", approved: false });
+    const svg = String(spies.shareCardSvg.mock.results[0].value);
+    expect(svg).toContain('aria-label="NBCC Elf Detective School: Detective L. Frostwhistle, Graduate"');
+    // Its words, without the pictures' data, whose letters are anything at all.
+    expect(svg.replace(/href="[^"]*"/g, "")).not.toContain("Leo");
+  });
+
+  it("is not found for a detective who has done 23 doors, for another family's, or for an address that is not a card's", async () => {
+    doors.listElfDoors.mockResolvedValue(snowedIn(EVERY_DOOR.slice(0, 23)));
+    expect((await call("GET", `/elf/hq/share/${RUBY}.png`)).status).toBe(404);
+    doors.listElfDoors.mockResolvedValue(snowedIn(EVERY_DOOR));
+    for (const file of [`${OTHER}.png`, `${RUBY}.jpg`, String(RUBY), "abc.png", `${RUBY}.png.png`, "0.png", "12345678901.png"]) {
+      const r = await call("GET", `/elf/hq/share/${file}`);
+      expect(r.status, file).toBe(404);
+      expect(r.headers.get("cache-control"), file).toBe("private, no-store");
+    }
+    expect(png.elfPng).not.toHaveBeenCalled();
+    expect(spies.shareCardSvg).not.toHaveBeenCalled();
+  });
+
+  it("is not found for someone signed out, and makes nothing", async () => {
+    expect((await call("GET", `/elf/hq/share/${RUBY}.png`, { cookie: null })).status).toBe(404);
+    expect(png.elfPng).not.toHaveBeenCalled();
+  });
+
+  it("answers busy, to try again in a moment, when the elf's picture cannot be made just now", async () => {
+    png.elfPng.mockResolvedValue(null);
+    const r = await call("GET", `/elf/hq/share/${RUBY}.png`);
+    expect(r.status).toBe(503);
+    expect(r.headers.get("retry-after")).toBe("2");
+    expect(r.text).toBe(BUSY);
+    expect(spies.shareCardSvg).not.toHaveBeenCalled();
+  });
+
+  // The card is made in turn with the elves' pictures (inTurn, src/elf/elf-png.ts), so the one small task never
+  // makes two at once, and it is told busy at once while too many are already waiting.
+  it("takes its turn with the other pictures, and answers busy while too many are already waiting", async () => {
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((go) => (open = go));
+    const waiting = Array.from({ length: ELF_PNG_QUEUE_MAX + 1 }, () => inTurn(() => gate, undefined));
+    try {
+      const r = await call("GET", `/elf/hq/share/${RUBY}.png`);
+      expect(r.status).toBe(503);
+      expect(r.headers.get("retry-after")).toBe("2");
+      expect(r.text).toBe(BUSY);
+    } finally {
+      open();
+      await Promise.all(waiting);
+    }
+    expect((await call("GET", `/elf/hq/share/${RUBY}.png`)).status).toBe(200);
+  });
+
+  it("answers 500 with the game's words when the family's doors cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyDoorsDone.mockRejectedValue(new Error("connection lost"));
+    const r = await call("GET", `/elf/hq/share/${RUBY}.png`);
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    logged.mockRestore();
+  });
+});
+
+// ---- the graduates' video (Task 6, ruling F10) -------------------------------------------------------------
+
+describe("the graduates' video", () => {
+  beforeEach(() => {
+    vi.setSystemTime(SIX_PM);
+    db.getElfSettings.mockResolvedValue({ ...ON, graduateVideoUrl: VIDEO });
+  });
+
+  // Detective HQ links only to this site, so the video's link goes through Detective HQ's own address.
+  it("sends a signed in family with a graduate on to the video, telling the video's site nothing of where it came from", async () => {
+    const r = await call("GET", "/elf/hq/video");
+    expect(r.status).toBe(303);
+    expect(r.headers.get("location")).toBe(VIDEO);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("is not found while no video link is set", async () => {
+    db.getElfSettings.mockResolvedValue({ ...ON, graduateVideoUrl: null });
+    const r = await call("GET", "/elf/hq/video");
+    expect(r.status).toBe(404);
+    expect(r.headers.get("location")).toBeNull();
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("is not found for a family none of whose detectives has done all 24 doors", async () => {
+    doors.listElfDoors.mockResolvedValue(snowedIn(EVERY_DOOR.slice(0, 23)));
+    const r = await call("GET", "/elf/hq/video");
+    expect(r.status).toBe(404);
+    expect(r.headers.get("location")).toBeNull();
+  });
+
+  it("is not found for someone signed out, or for a family that is no longer in, and reads none of their doors", async () => {
+    expect((await call("GET", "/elf/hq/video", { cookie: null })).status).toBe(404);
+    db.findElfSession.mockResolvedValue({ familyId: 4 });
+    expect((await call("GET", "/elf/hq/video")).status).toBe(404);
+    expect(game.familyDoorsDone).not.toHaveBeenCalled();
+  });
+
+  it("never sends anyone to a stored link that is not an https one", async () => {
+    for (const stored of ["http://example.org/graduates", "javascript:alert(1)", "//example.org/graduates", " "]) {
+      db.getElfSettings.mockResolvedValue({ ...ON, graduateVideoUrl: stored });
+      const r = await call("GET", "/elf/hq/video");
+      expect(r.status, stored).toBe(404);
+      expect(r.headers.get("location"), stored).toBeNull();
+    }
+  });
+
+  it("answers 500 with the game's words when the family's doors cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyDoorsDone.mockRejectedValue(new Error("connection lost"));
+    const r = await call("GET", "/elf/hq/video");
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    logged.mockRestore();
+  });
+});
+
+// ---- Detective HQ's graduates (Task 6) ---------------------------------------------------------------------
+
+describe("Detective HQ's graduates", () => {
+  beforeEach(() => vi.setSystemTime(SIX_PM));
+
+  it("gives each graduate their certificate and share card, and the graduates' video once a head elf has set it", async () => {
+    db.getElfSettings.mockResolvedValue({ ...ON, graduateVideoUrl: VIDEO });
+    const r = await call("GET", "/elf/hq");
+    expect(r.status).toBe(200);
+    for (const id of [RUBY, LEO]) {
+      expect(r.text).toContain(`href="/elf/hq/certificate/${id}"`);
+      expect(r.text).toContain(`href="/elf/hq/share/${id}.png" download`);
+    }
+    expect(r.text).toContain('href="/elf/hq/video"');
+    // Only Detective HQ's own address for the video goes on the page, never the video's link itself.
+    expect(r.text).not.toContain(VIDEO);
+  });
+
+  it("has no video link while none is set", async () => {
+    const r = await call("GET", "/elf/hq");
+    expect(r.text).toContain(`href="/elf/hq/certificate/${RUBY}"`);
+    expect(r.text).not.toContain("/elf/hq/video");
+  });
+});
+
 // ---- with December's doors off (Review Focus 5) ------------------------------------------------------------
 
 describe("with December's doors off", () => {
-  beforeEach(() => db.getElfSettings.mockResolvedValue(OFF));
+  // A video link set, so the switch alone keeps the video shut.
+  beforeEach(() => db.getElfSettings.mockResolvedValue({ ...OFF, graduateVideoUrl: VIDEO }));
 
   const asks = (cookie?: string): [string, string, Ask][] => [
     ["GET", `/elf/hq/entry/${RUBY}`, { cookie }],
     ["POST", `/api/elf/entry/${RUBY}`, { cookie }],
     ["GET", `/elf/hq/entry/${RUBY}/picture.jpg`, { cookie }],
+    ["GET", `/elf/hq/certificate/${RUBY}`, { cookie }],
+    ["GET", `/elf/hq/share/${RUBY}.png`, { cookie }],
+    ["GET", "/elf/hq/video", { cookie }],
   ];
 
-  it("has no entry page, takes no picture and serves none, and reads nothing of the family's entries", async () => {
+  it("has no entry page, takes no picture and serves none, gives no certificate, share card or video, and reads nothing of the family's entries", async () => {
     for (const [method, path, ask] of asks()) {
       const r = await call(method, path, method === "POST" ? { ...ask, json: await entryBody() } : ask);
       expect(r.status, `${method} ${path}`).toBe(404);
     }
     for (const f of Object.values(prize)) expect(f).not.toHaveBeenCalled();
     expect(spies.processPicture).not.toHaveBeenCalled();
+    expect(png.elfPng).not.toHaveBeenCalled();
   });
 
   it("lets no browser through with the preview link either: its pass opens the practice door only", async () => {
@@ -489,6 +766,7 @@ describe("with December's doors off", () => {
     }
     for (const f of Object.values(prize)) expect(f).not.toHaveBeenCalled();
     expect(spies.processPicture).not.toHaveBeenCalled();
+    expect(png.elfPng).not.toHaveBeenCalled();
   });
 
   it("shows no grand prize in Detective HQ, and reads no entries", async () => {
@@ -497,6 +775,14 @@ describe("with December's doors off", () => {
     expect(r.text).not.toContain("elf-hq-prize");
     expect(r.text).not.toContain("grand prize");
     expect(prize.familyEntries).not.toHaveBeenCalled();
+  });
+
+  it("gives a detective with every door done no certificate, share card or video in Detective HQ", async () => {
+    everyDoorDone();
+    const r = await call("GET", "/elf/hq");
+    expect(r.status).toBe(200);
+    expect(r.text).toContain("All 24 doors done");
+    for (const gone of ["/elf/hq/certificate/", "/elf/hq/share/", "/elf/hq/video", "elf-detective__graduate"]) expect(r.text, gone).not.toContain(gone);
   });
 });
 

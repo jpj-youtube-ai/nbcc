@@ -1,7 +1,7 @@
 /* NBCC Elf Detective School: Head Elf HQ, its own admin section (Admin > Content > Elf Detective School,
  * #view-elf in admin.html). Design: docs/superpowers/specs/2026-11-05-elf-admin-design.md.
  *
- * The school runs itself; this is where head elves (Jodie, the Head Elf, and whoever is given the "elf"
+ * Elf Detective School runs itself; this is where head elves (the Head Elf, and whoever is given the "elf"
  * section in the Team matrix) see that it is going right and step in. A game's menu screen: big tiles
  * for HQ, Families, Doors, Finds, Grand prize, Money and Settings, each opening its part below. The open
  * part is remembered for the browser tab, as the admin remembers its open section.
@@ -2203,7 +2203,7 @@
       fitFields();
     }
 
-    // ---- Money: what the school has made, and the way to every payment in Donations ----
+    // ---- Money: what Elf Detective School has made, and the way to every payment in Donations ----
     function drawMoneyPart() {
       var part = parts.money;
       part.textContent = "";
@@ -2213,7 +2213,7 @@
       box.appendChild(el("p", { class: "hq-words", text: "Entries are a payment to take part, so they are never claimed for Gift Aid. A gift on top can be, when the grown up says yes." }));
       var go = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Every payment, in Donations" });
       go.addEventListener("click", function () {
-        // Donations, showing only the school's payments: its own filter (Admin > Donations) is ticked
+        // Donations, showing only Elf Detective School's payments: its own filter (Admin > Donations) is ticked
         // the way a person would tick it, so app.js reads the list for it as it always does.
         var filter = doc.getElementById("donationsElfFilter");
         if (filter && !filter.checked) {

@@ -310,7 +310,7 @@
 .elf-door--double .elf-door__flap--right { inset: 0 0 0 50%; transform-origin: right center; }
 .elf-door--double .elf-door__num { font-size: 2.6rem; }
 .elf-door--double .elf-carve { width: 84px; height: 84px; }
-/* Its two tabs meet at the middle, above the prize's shape. */
+/* Its two tabs meet at the middle, above the present. */
 .elf-door--double .elf-door__tab { top: 30%; border-radius: 8px; }
 .elf-door--double .elf-door__flap--left .elf-door__tab { right: 5px; }
 .elf-door--double .elf-door__flap--right .elf-door__tab { right: auto; left: 5px; }

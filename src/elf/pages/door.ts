@@ -112,7 +112,7 @@ function carving(d: DoorView): string {
   return `<span class="elf-carve"${style} aria-hidden="true"><span class="elf-carve__hi"></span><span class="elf-carve__lo"></span></span>`;
 }
 
-/** A snow day's face: a paper snowflake, cut out of card the way a prize's shape is (the stylesheet
+/** A snow day's face: a paper snowflake, cut out of card the way the present is (the stylesheet
  *  supplies its shape: no picture). */
 const snowflake = (): string =>
   `<span class="elf-carve elf-snowflake" aria-hidden="true"><span class="elf-carve__hi"></span><span class="elf-carve__lo"></span></span>`;
@@ -161,8 +161,8 @@ function foot(kind: DoorKind, d: DoorView, now: Date): string {
 const MARKS = `<span class="elf-door__marks" aria-hidden="true"></span>`;
 
 /** The room behind an open door: its number, up to three of the elves that found it (elves only,
- *  never a photo), its place, and how many pictures the scrapbook holds. With no elf yet, the prize's
- *  shape in gold. */
+ *  never a photo), its place, and how many pictures the scrapbook holds. With no elf yet, the present
+ *  in gold. */
 function room(d: DoorView): string {
   const elves = d.collage
     .map((url) => sitePath(url))

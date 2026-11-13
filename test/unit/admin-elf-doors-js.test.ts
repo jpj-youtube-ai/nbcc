@@ -299,6 +299,17 @@ describe("a door's sheet", () => {
     expect(partOf("prize").textContent).not.toContain("Not made yet");
   });
 
+  it("shows a door's own picture in place of the present, if one is ever set", async () => {
+    page({ "GET /api/admin/elf/doors/7": { body: { door: sheet({ picture: "/assets/img/elf/pretend-door-7.webp" }), canEdit: true } } });
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    tile(7).click();
+    await flush();
+    const pic = partOf("prize").querySelector<HTMLElement>(".hq-door-pic")!;
+    expect(pic.querySelector("img")!.getAttribute("src")).toBe("/assets/img/elf/pretend-door-7.webp");
+    expect(pic.querySelector(".hq-present")).toBeNull();
+  });
+
   it("warns, as an error, when the place closes too soon", async () => {
     page({ "GET /api/admin/elf/doors/7": { body: { door: sheet({ closesTooSoon: true }), canEdit: true } } });
     document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();

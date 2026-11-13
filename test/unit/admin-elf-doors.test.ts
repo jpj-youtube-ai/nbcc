@@ -138,7 +138,7 @@ describe("the doors list", () => {
   it("counts a door with everything in as ready, on its tile, in the counts and on its sheet, with no door picture", async () => {
     const full = doorOf(7, {
       placeName: "Pine Cone Café",
-      placeTown: "Ayr",
+      placeTown: "Exampleton",
       placeAddress: "1 Example Street",
       prize: "A cake",
       elfName: "Pip",

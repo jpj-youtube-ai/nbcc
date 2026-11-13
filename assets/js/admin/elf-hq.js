@@ -2065,10 +2065,12 @@
       showOff.checked = !!d.prizeShowOff;
       // Every door has the same present (Jaimie, 12 November 2026), cut out of card on the doors' maroon the
       // way the calendar draws it (.elf-carve), with no picture file.
-      var present = el("span", { class: "hq-present" }, [el("span", { class: "hq-present__hi" }), el("span", { class: "hq-present__lo" })]);
       var pic = d.picture
         ? el("div", { class: "hq-door-pic" }, [el("img", { src: d.picture, alt: "The picture for door " + d.door, width: 112, height: 140 })])
-        : el("div", { class: "hq-door-pic" }, [el("span", { class: "hq-door-pic__door", "aria-hidden": "true" }, [present]), el("p", { class: "hq-soft", text: "Every door has the same present." })]);
+        : el("div", { class: "hq-door-pic" }, [
+            el("span", { class: "hq-door-pic__door", "aria-hidden": "true" }, [el("span", { class: "hq-present" }, [el("span", { class: "hq-present__hi" }), el("span", { class: "hq-present__lo" })])]),
+            el("p", { class: "hq-soft", text: "Every door has the same present." }),
+          ]);
       return makePart(
         "prize",
         "The prize",

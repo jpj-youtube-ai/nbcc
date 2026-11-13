@@ -438,7 +438,7 @@ describe("the advent calendar at every width", () => {
     expect(css).toMatch(/\.elf-room__foot \{[^}]*flex-wrap:\s*wrap/);
   });
 
-  it("draws a snow day's face as a paper snowflake cut out like the prize's shape, with no new picture", () => {
+  it("draws a snow day's face as a paper snowflake cut out like the present, with no new picture", () => {
     expect(css).toMatch(/\.elf-snowflake \{[^}]*--shape:\s*var\(--elf-flake\)/);
     expect(css).toMatch(/--elf-flake:\s*url\("data:image\/svg\+xml,/);
   });
@@ -457,6 +457,8 @@ describe("the advent calendar at every width", () => {
     expect(present.querySelector("parsererror")).toBeNull();
     expect(present.querySelectorAll("path").length).toBeGreaterThan(0);
     expect(present.documentElement.getAttribute("viewBox")).toBe(shape("flake").documentElement.getAttribute("viewBox"));
+    // Each of the bow's two loops has its hole cut out even-odd; drawn any other way, both fill in solid.
+    expect(present.querySelectorAll("path[fill-rule='evenodd']").length).toBe(2);
   });
 
   // Seen on the pictures: with 3 or more doors to a row, door 24 alone in the middle left bare maroon

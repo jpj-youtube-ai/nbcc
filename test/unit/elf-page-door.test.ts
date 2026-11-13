@@ -378,7 +378,7 @@ describe("an open door on the board", () => {
     expect(tile.querySelector(".elf-carve")).toBeNull();
   });
 
-  it("shows the prize's shape behind a revealed door with no elves yet, and that the elf is still here", () => {
+  it("shows the present behind a revealed door with no elves yet, and that the elf is still here", () => {
     const tile = dom(doorTile(REVEALED, NOW));
     expect(tile.querySelector("a")!.classList.contains("is-open")).toBe(true);
     expect(tile.querySelector(".elf-room .elf-carve")).not.toBeNull();

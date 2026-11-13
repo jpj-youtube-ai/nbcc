@@ -78,7 +78,10 @@ describe("having a go", () => {
     expect(form).not.toBeNull();
     expect(form!.querySelector('input[name="text"][maxlength="80"]')).not.toBeNull();
     expect(words(form!.querySelector("legend"))).toBe("Where was Twinkle hiding?");
-    expect(words(form!.querySelector('label[for="go-text"]'))).toBe("Type the name of the place. Spelling does not have to be perfect.");
+    // The whole-branch review, Important 3: a go is one final guess, and only capitals, spaces, accents, marks and
+    // a leading "the" are taken off when it is matched, so the hint never says spelling does not matter.
+    expect(words(form!.querySelector('label[for="go-text"]'))).toBe("Type the name of the place. Capitals and spaces do not matter. Check your spelling: you get one guess.");
+    expect(said(going)).not.toContain("Spelling does not have to be perfect.");
     expect(words(form!.querySelector(".elf-go__one"))).toBe("You get one guess at this door.");
     expect(words(form!.querySelector('button[type="submit"]'))).toBe("Lock in my guess");
     expect(said(going)).toContain("The hiding place closes at 8pm today.");

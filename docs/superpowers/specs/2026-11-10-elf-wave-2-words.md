@@ -756,7 +756,8 @@ Having a go, for a family that has not guessed this door or been there:
 - [ ] On the door's own day, with a closing time typed in Doors: The hiding place closes at *8:30pm* today.
 - [ ] Then clue 1 on its note, as in Detective HQ, and while another clue is out, the button: Show me the next clue
 - [ ] The question: Where was *Bauble* hiding? (While nobody has found it and its elf has not gone home: Where is *Bauble* hiding?)
-- [ ] Under the question, as in Detective HQ: Type the name of the place. Spelling does not have to be perfect.
+- ~~Under the question, as in Detective HQ: Type the name of the place. Spelling does not have to be perfect.~~ Replaced: see the next line, and question J below.
+- [ ] Under the question: Type the name of the place. Capitals and spaces do not matter. Check your spelling: you get one guess. (Detective HQ's guess on the night keeps "Spelling does not have to be perfect.", in part 2.)
 - [ ] You get one guess at this door.
 - [ ] The button: Lock in my guess
 
@@ -888,6 +889,10 @@ Noticed while gathering these words:
 - **G.** Today's case says **Case closed** above "You did not lock in a guess in time, but you can still crack this case, with one guess.": should the heading say something else while a go is still to be had?
 - **H.** Having a go on the door's own evening, the page says "The clues came out on Monday 7 December.", which is that same day: should it say "today" then?
 - **I.** Doors you can still crack leaves out today's door, because today's case already offers its go: would you like it on the list as well?
+
+From the whole-branch review (13 November 2026):
+
+- **J.** The go page said "Spelling does not have to be perfect.", as Detective HQ does on the night. But a go is one final guess, and a guess is matched with only capitals, spaces, accents, marks and a leading "the" taken off, so a go with a spelling slip is simply not right and cannot be put right: the old words promised more than is true. The go page now says "Capitals and spaces do not matter. Check your spelling: you get one guess." Detective HQ keeps its words, because a guess on the night can be changed until the place is shown. Are these the words you want? The line just under the box still says "You get one guess at this door.", so the one guess is said twice: would you rather drop one of them?
 
 ## Questions for Jaimie
 

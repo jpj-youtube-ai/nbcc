@@ -72,7 +72,10 @@ function goStage(view: GoView): string {
     `<input type="hidden" name="clues" value="${count(view.clues.length)}" />` +
     // Ruling F8: "Where is" only while the elf is still out there with nobody having found it.
     `<fieldset><legend>${view.stillHiding ? `Where is ${elf} hiding?` : `Where was ${elf} hiding?`}</legend>` +
-    `<label class="elf-guess__hint" for="go-text">Type the name of the place. Spelling does not have to be perfect.</label>` +
+    // A go is one final guess, matched once capitals, spaces, accents, marks and a leading "the" are taken off
+    // (src/elf/place-names.ts), so the hint promises no more than that. Detective HQ's night guess says spelling
+    // does not have to be perfect: it can be changed until the place is shown.
+    `<label class="elf-guess__hint" for="go-text">Type the name of the place. Capitals and spaces do not matter. Check your spelling: you get one guess.</label>` +
     `<input class="elf-guess__text" id="go-text" name="text" type="text" required maxlength="80" autocomplete="off" autocapitalize="words" enterkeyhint="done" />` +
     `</fieldset>` +
     line("You get one guess at this door.", "elf-go__one") +

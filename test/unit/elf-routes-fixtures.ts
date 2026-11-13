@@ -5,12 +5,12 @@ import { emptyDoor, type DoorClue, type DoorSetup } from "../../src/elf/door-set
 import { doorState } from "../../src/elf/doors";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 
-// NBCC Elf Detective School: what the family's route tests share (test/unit/elf-routes-game.test.ts and
-// test/unit/elf-routes-catch-up.test.ts): the pretend settings, cookies, family and doors, and the helper
-// that asks the real router over HTTP. Each test file keeps its own vi.mock calls and its own server, as
-// Vitest hoists the mocks file by file. Door 7's clues come out at 5:30pm, 6pm and 6:30pm on Monday
-// 7 December 2026, and its place is shown at 7pm. Every family, place, clue and word here is invented:
-// the repository is public.
+// NBCC Elf Detective School: what the family's route tests share (test/unit/elf-routes-game.test.ts,
+// test/unit/elf-routes-catch-up.test.ts and test/unit/elf-routes-grand-prize.test.ts): the pretend settings,
+// cookies, family and doors, and the helper that asks the real router over HTTP. Each test file keeps its own
+// vi.mock calls and its own server, as Vitest hoists the mocks file by file. Door 7's clues come out at 5:30pm,
+// 6pm and 6:30pm on Monday 7 December 2026, and its place is shown at 7pm. Every family, place, clue and word
+// here is invented: the repository is public.
 
 export const at = (iso: string) => new Date(iso);
 export const THREE = at("2026-12-07T15:00:00.000Z");
@@ -87,6 +87,14 @@ export const door3 = (): DoorSetup => ({
   foundAt: at("2026-12-03T17:50:00.000Z"),
   foundFamilyId: 9,
 });
+
+/** Christmas Eve, 24 December 2026, at 10:30am (Plan 2c-2): door 24's first clue came out at 10am, so a snowed in
+ *  door 24 counts as done from then (ruling F8), and the grand prize entries are open until 5pm. */
+export const EVE_10_30 = at("2026-12-24T10:30:00.000Z");
+
+/** Every door, 1 to 24: snowedIn(EVERY_DOOR) is a December whose doors were all snowed in, so by door 24's first
+ *  clue on Christmas Eve every detective has done all 24 doors. */
+export const EVERY_DOOR: readonly Door[] = Array.from({ length: 24 }, (_, i) => (i + 1) as Door);
 
 /** One letter of the poster alphabet for each door, 1 to 24, repeated to make a snowed in door's poster code. */
 const SNOW_CODES = "bcdfghjkmnpqrstvwxyz2345";

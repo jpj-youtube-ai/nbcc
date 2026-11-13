@@ -24,7 +24,65 @@ beforeEach(() => {
 describe("the school's settings", () => {
   it("reads the row", async () => {
     query.mockResolvedValueOnce({ rows: [ROW] });
-    expect(await getElfSettings()).toEqual({ schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null, doorsOn: false });
+    expect(await getElfSettings()).toEqual({
+      schoolOn: true,
+      year: 2026,
+      entryFromPence: 100,
+      entrySuggestedPence: 500,
+      previewHash: null,
+      placePhone: null,
+      doorsOn: false,
+      grandPrizeClosesAt: null,
+      graduateVideoUrl: null,
+    });
+  });
+
+  // Elf Detective School's grand prize (Plan 2c-2): when the entries close on Christmas Eve, a moment,
+  // and the graduates' video, an https link. Empty is the default 5pm, and no video link.
+  it("reads when the grand prize entries close, and the graduates' video", async () => {
+    const at = new Date("2026-12-24T16:30:00.000Z");
+    query.mockResolvedValueOnce({ rows: [{ ...ROW, grand_prize_closes_at: at, graduate_video_url: "https://example.org/graduates" }] });
+    const settings = await getElfSettings();
+    expect(settings.grandPrizeClosesAt).toBeInstanceOf(Date);
+    expect(settings.grandPrizeClosesAt).toEqual(at);
+    expect(settings.graduateVideoUrl).toBe("https://example.org/graduates");
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("grand_prize_closes_at");
+    expect(sql).toContain("graduate_video_url");
+  });
+
+  it("reads both as none when they are empty, and when the columns are missing", async () => {
+    query.mockResolvedValueOnce({ rows: [{ ...ROW, grand_prize_closes_at: null, graduate_video_url: null }] });
+    const empty = await getElfSettings();
+    expect(empty.grandPrizeClosesAt).toBeNull();
+    expect(empty.graduateVideoUrl).toBeNull();
+    query.mockResolvedValueOnce({ rows: [ROW] });
+    const missing = await getElfSettings();
+    expect(missing.grandPrizeClosesAt).toBeNull();
+    expect(missing.graduateVideoUrl).toBeNull();
+    expect(ELF_DEFAULTS.grandPrizeClosesAt).toBeNull();
+    expect(ELF_DEFAULTS.graduateVideoUrl).toBeNull();
+  });
+
+  it("writes when the grand prize entries close through the same map", async () => {
+    const at = new Date("2026-12-24T17:00:00.000Z");
+    clientQuery.mockImplementation(async () => ({ rows: [ROW] }));
+    await setElfSettings({ grandPrizeClosesAt: at }, "staff@example.org");
+    const update = clientQuery.mock.calls.find((c) => /UPDATE elf_settings/.test(String(c[0])));
+    expect(String(update?.[0])).toContain("grand_prize_closes_at = $1");
+    expect(update?.[1]).toEqual([at, "staff@example.org"]);
+  });
+
+  it("writes the graduates' video through the same map, and clears it with nothing", async () => {
+    clientQuery.mockImplementation(async () => ({ rows: [ROW] }));
+    await setElfSettings({ graduateVideoUrl: "https://example.org/graduates" }, "staff@example.org");
+    await setElfSettings({ graduateVideoUrl: null }, "staff@example.org");
+    const updates = clientQuery.mock.calls.filter((c) => /UPDATE elf_settings/.test(String(c[0])));
+    expect(updates).toHaveLength(2);
+    expect(String(updates[0][0])).toContain("graduate_video_url = $1");
+    expect(updates[0][1]).toEqual(["https://example.org/graduates", "staff@example.org"]);
+    expect(String(updates[1][0])).toContain("graduate_video_url = $1");
+    expect(updates[1][1]).toEqual([null, "staff@example.org"]);
   });
 
   it("reads the doors switch, off when the column is missing", async () => {
@@ -61,7 +119,17 @@ describe("the school's settings", () => {
   it("reads as switched off, at £1 and £5, when anything goes wrong", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     query.mockRejectedValueOnce(new Error("no database"));
-    expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null, doorsOn: false });
+    expect(await getElfSettings()).toEqual({
+      schoolOn: false,
+      year: 2026,
+      entryFromPence: 100,
+      entrySuggestedPence: 500,
+      previewHash: null,
+      placePhone: null,
+      doorsOn: false,
+      grandPrizeClosesAt: null,
+      graduateVideoUrl: null,
+    });
     query.mockResolvedValueOnce({ rows: [] });
     expect(await getElfSettings()).toEqual(ELF_DEFAULTS);
     expect(ELF_DEFAULTS.schoolOn).toBe(false);

@@ -1,6 +1,7 @@
 import { DOOR_COUNT } from "../calendar";
 import { FRAMES } from "../wardrobe";
 import { clockWords, countdownWords, dayWords, findOutWhenFoundWords, findOutWords, longDayWords, sleepsUntil, things } from "../words";
+import { ALWAYS_COME_WORDS } from "./emails";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
 import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
@@ -15,7 +16,10 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // sheet: their elf in its frame, rank and progress), and the marks they have collected. It is private,
 // so it shows first names in full and is never listed by search engines. While December's doors are on
 // (Plan 2c-1), a family that missed today's evening is offered its one go once the place is shown, and the
-// other missed doors it can still crack are listed under today's case.
+// other missed doors it can still crack are listed under today's case. From Christmas Eve (Plan 2c-2) the
+// grand prize comes between the two: each graduate's picture to send in, until the entries close. A graduate's
+// card then offers their certificate to print, their share card to save and the graduates' video. Last, while
+// December's doors are on, the family's switch for the emails that are not essential.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
 // script only saves the guess without leaving the page, and fetches the page again when the next
@@ -252,6 +256,82 @@ function crackSection(view: HqView): string {
   </section>`;
 }
 
+/** The grand prize (Plan 2c-2), straight after today's case from midnight as Christmas Eve begins. While the
+ *  entries are open: what to send and when they close, then each graduate with the button to send their picture,
+ *  or, once it is in, that it is in with a link to change it. Once they have closed: that they have, and each
+ *  graduate whose picture is in. Only an entry page on this site is drawn. With no grand prize in the view (or no
+ *  real closing time to say) the section is not on the page at all, so with December's doors off Detective HQ is
+ *  exactly what it was. */
+function prizeSection(view: HqView): string {
+  const prize = view.grandPrize;
+  if (!prize || typeof prize !== "object" || !real(prize.closesAt)) return "";
+  const time = clockWords(prize.closesAt);
+  const open = prize.open === true;
+  const graduates = (Array.isArray(prize.detectives) ? prize.detectives : []).flatMap((d) => {
+    const url = sitePath(d.url);
+    return url ? [{ name: escapeHtml(d.name), url, sent: d.sent === true }] : [];
+  });
+  const shown = open ? graduates : graduates.filter((d) => d.sent);
+  const items = shown
+    .map((d, i) => {
+      const card = `<li class="elf-prize__detective elf-card elf-card--${SHEETS[i % SHEETS.length]}">`;
+      // Several graduates can each have a button or a link, so each says whose it is to a screen reader alone.
+      if (d.sent) {
+        const said = line(`${icon("tick", 16)} ${d.name}'s picture is in.`, "elf-prize__in");
+        const change = open ? `<a class="elf-btn elf-btn--s" href="${d.url}">Change it<span class="sr-only">: ${d.name}'s picture</span></a>` : "";
+        return card + said + change + `</li>`;
+      }
+      return (
+        card +
+        line(d.name, "elf-prize__name") +
+        `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${d.url}">Send in your picture<span class="sr-only"> for ${d.name}</span></a>` +
+        `</li>`
+      );
+    })
+    .join("");
+  const lede = open
+    ? `Every detective who has done all 24 doors can send in a drawing, or a photo of their naughtiest elf at home. Entries close at ${time} on Christmas Eve.`
+    : `Grand prize entries closed at ${time} on Christmas Eve. Thank you for every picture.`;
+  const none = open && !graduates.length ? `\n      <p>Once a detective has done all 24 doors, you can send in their picture here.</p>` : "";
+  return `
+
+  <section class="section elf-hq-prize" aria-labelledby="elf-prize-heading">
+    <div class="wrap">
+      ${headingStrip({ text: "The grand prize", tag: "h2", back: "crimson", id: "elf-prize-heading" })}
+      <p class="lede">${lede}</p>${none}${items ? `\n      <ul class="elf-prize">${items}</ul>` : ""}
+    </div>
+  </section>`;
+}
+
+/** The family's switch for the emails that are not essential (Plan 2c-2), last on the page (ruling F15): what is
+ *  emailed and the button to stop it, or that the emails are stopped and the button to start them again, and under
+ *  both what always comes. A plain form that posts to this site, so it works with no script. With no switch in the
+ *  view (December's doors off), or one whose address is not on this site, the section is not on the page at all, so
+ *  Detective HQ is exactly what it was. */
+function emailsSection(view: HqView): string {
+  const emails = view.emails;
+  if (!emails || typeof emails !== "object") return "";
+  const post = sitePath(emails.url);
+  if (!post) return "";
+  const stopped = emails.stopped === true;
+  const lede = stopped
+    ? "You have stopped these emails. Everything is still here in Detective HQ."
+    : "We email you when each door's first clue comes out, and when a detective is promoted or graduates.";
+  return `
+
+  <section class="section elf-hq-emails" aria-labelledby="elf-hq-emails-heading">
+    <div class="wrap">
+      ${headingStrip({ text: "Your emails", tag: "h2", back: "tan", id: "elf-hq-emails-heading" })}
+      <p class="lede">${lede}</p>
+      <form class="elf-emails" method="post" action="${post}">
+        <input type="hidden" name="stopped" value="${stopped ? "no" : "yes"}" />
+        <button class="elf-btn" type="submit">${stopped ? "Start them again" : "Stop these emails"}</button>
+      </form>
+      ${line(ALWAYS_COME_WORDS, "elf-hint elf-emails__always")}
+    </div>
+  </section>`;
+}
+
 /** The costumes waiting in the wardrobe, as presents (draft words for Jaimie). */
 function presentsWords(n: number): string {
   return n === 1 ? "A present to open" : n === 2 ? "Two presents to open" : `${n} presents to open`;
@@ -260,7 +340,25 @@ function presentsWords(n: number): string {
 /** The card sheets' backing colours, in turn down the family. */
 const SHEETS = ["crimson", "holly", "gold", "tan"] as const;
 
-function detectiveCard(d: DetectiveView, i: number): string {
+/** A graduate's certificate to print, share card to save and, once a head elf has set it, the graduates' video (Plan
+ *  2c-2), across the foot of their card. Only on a graduate's card, and only addresses on this site: the video's own
+ *  link is reached through Detective HQ's address for it (ruling F10). Several graduates can each have a certificate
+ *  and a card, so those two say whose they are to a screen reader alone. Nothing at all when there is no link to draw,
+ *  so with December's doors off (when the view holds no address) a graduate's card is exactly what it was. */
+function graduateLinks(d: DetectiveView, name: string, videoUrl: string | null | undefined): string {
+  if (d.graduate !== true) return "";
+  const certificate = sitePath(d.certificateUrl);
+  const share = sitePath(d.shareUrl);
+  const video = sitePath(videoUrl);
+  const links = [
+    certificate ? `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${certificate}">Print the certificate<span class="sr-only"> for ${name}</span></a>` : "",
+    share ? `<a class="elf-btn elf-btn--s" href="${share}" download>Save the share card<span class="sr-only"> for ${name}</span></a>` : "",
+    video ? `<a class="elf-btn elf-btn--s" href="${video}">Watch the graduates' video</a>` : "",
+  ].filter((link) => link !== "");
+  return links.length ? `<p class="elf-detective__graduate">${links.join(" ")}</p>` : "";
+}
+
+function detectiveCard(d: DetectiveView, i: number, videoUrl?: string | null): string {
   const name = escapeHtml(d.name);
   const elf = sitePath(d.elfUrl);
   const wardrobe = sitePath(d.wardrobeUrl) ?? "/";
@@ -288,7 +386,7 @@ function detectiveCard(d: DetectiveView, i: number): string {
       : line("On the public calendar this name shows as its first letter until our team has checked it.", "elf-detective__note")) +
     `<p class="elf-detective__actions"><a class="elf-btn elf-btn--holly elf-btn--s" href="${wardrobe}">Dress the elf</a>` +
     `${presents > 0 ? ` <span class="elf-chip elf-chip--new elf-new">${presentsWords(presents)}</span>` : ""}</p>` +
-    `</div></article>`
+    `</div>${graduateLinks(d, name, videoUrl)}</article>`
   );
 }
 
@@ -346,12 +444,12 @@ export function renderHqPage(view: HqView): string {
         ${caseCard(view)}
       </div>
     </div>
-  </section>${crackSection(view)}
+  </section>${prizeSection(view)}${crackSection(view)}
 
   <section class="section elf-hq-team" aria-labelledby="elf-team-heading">
     <div class="wrap">
       ${headingStrip({ text: "Your detectives", tag: "h2", back: "holly", id: "elf-team-heading" })}
-      <div class="elf-detectives">${view.detectives.map(detectiveCard).join("")}</div>
+      <div class="elf-detectives">${view.detectives.map((d, i) => detectiveCard(d, i, view.videoUrl)).join("")}</div>
       ${sitePath(view.addDetectiveUrl) ? `<p class="elf-add-detective"><a class="elf-btn" href="${sitePath(view.addDetectiveUrl)}">Add a detective</a></p>` : ""}
     </div>
   </section>
@@ -363,7 +461,7 @@ export function renderHqPage(view: HqView): string {
       ${marksBoard(view.marks)}
       <p><a class="elf-btn" href="${calendar}">See the calendar</a></p>
     </div>
-  </section>`;
+  </section>${emailsSection(view)}`;
 
   return elfPage({
     title: "Detective HQ",

@@ -103,7 +103,8 @@ export function findOutWords(at: string, orLater: boolean): string {
 
 /** The same, once the reveal time has passed with the elf still hiding: its place is shown as soon as it is
  *  found, or at the place's closing time at the latest (`latest`, as clockWords says it: the typed closing or
- *  the 8pm a door falls back to). With no time to say, the find alone. */
+ *  the time a door falls back to with none typed, 4pm on Christmas Eve and 8pm otherwise). With no time to
+ *  say, the find alone. */
 export function findOutWhenFoundWords(latest: string): string {
   return `${FIND_OUT} as soon as the elf is found${latest ? `, or at ${latest} at the latest` : ""}.`;
 }

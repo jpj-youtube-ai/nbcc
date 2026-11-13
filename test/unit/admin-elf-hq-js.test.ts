@@ -48,6 +48,8 @@ function page(o: { answers?: Record<string, unknown>; status?: number; shown?: b
 }
 
 const tabs = () => [...document.querySelectorAll<HTMLButtonElement>("#elfHq [role=tab]")];
+/** A tile by its id, never by its place in the menu, which a new tile moves (Plan 2c-2 adds one after Finds). */
+const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#hqTab-${id}`)!;
 const panel = (id: string) => document.querySelector<HTMLElement>(`#elfHq [role=tabpanel][data-tab="${id}"]`)!;
 
 beforeEach(() => {
@@ -55,12 +57,12 @@ beforeEach(() => {
 });
 
 describe("Head Elf HQ's menu", () => {
-  it("draws six tiles, with HQ open", () => {
+  it("draws seven tiles, with HQ open", () => {
     page();
-    expect(tabs().map((t) => t.textContent!.trim())).toEqual(["HQ", "Families", "Doors", "Finds", "Money", "Settings"]);
+    expect(tabs().map((t) => t.textContent!.trim())).toEqual(["HQ", "Families", "Doors", "Finds", "Grand prize", "Money", "Settings"]);
     expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
     expect(panel("hq").hidden).toBe(false);
-    for (const id of ["families", "doors", "finds", "money", "settings"]) expect(panel(id).hidden, id).toBe(true);
+    for (const id of ["families", "doors", "finds", "prize", "money", "settings"]) expect(panel(id).hidden, id).toBe(true);
     expect(document.querySelector("#elfHq h1")!.textContent).toBe("Elf Detective School");
   });
 
@@ -504,7 +506,7 @@ describe("the Money screen", () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     document.body.insertAdjacentHTML("beforeend", '<button class="admin-nav-link" data-view="donations">Donations</button><input type="checkbox" id="donationsElfFilter">');
     await hq.open();
-    tabs()[4].click();
+    tab("money").click();
     expect(moneyPart().textContent).toContain("£1,486");
     expect(moneyPart().textContent).toContain("from 128 families");
     expect(moneyPart().textContent).toContain("Entries are a payment to take part, so they are never claimed for Gift Aid.");
@@ -523,7 +525,7 @@ describe("the Money screen", () => {
   it("says when there is no money yet", async () => {
     const { hq } = page();
     await hq.open();
-    tabs()[4].click();
+    tab("money").click();
     expect(moneyPart().textContent).toContain("No payments yet.");
   });
 });
@@ -532,7 +534,7 @@ describe("the Settings screen", () => {
   it("steps the prices in pounds within their limits, and saves both in pence", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, entryFromPence: 200, entrySuggestedPence: 600 } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     const [least, suggested] = [...settingsPart().querySelectorAll<HTMLElement>(".hq-stepper")];
     const out = (s: HTMLElement) => s.querySelector("output")!.textContent;
     const press = (s: HTMLElement, which: "less" | "more", times = 1) => {
@@ -560,7 +562,7 @@ describe("the Settings screen", () => {
   it("shows the server's refusal as an error", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "The suggested amount cannot be less than the least a family pays." }) }));
     inPart(settingsPart(), "Save the prices")!.click();
@@ -574,7 +576,7 @@ describe("the Settings screen", () => {
     const url = "https://nbcc.scot/elf/preview/" + "a".repeat(64);
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/preview": { url } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().textContent).toContain("There is no preview link.");
     inPart(settingsPart(), "Make a preview link")!.click();
     await flush();
@@ -590,7 +592,7 @@ describe("the Settings screen", () => {
   it("ends the preview link", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, settings: { ...BUSY.settings, previewOn: true } }, "/api/admin/elf/preview": { ok: true } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     inPart(settingsPart(), "End the link")!.click();
     await flush();
     expect(calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/admin/elf/preview"]);
@@ -601,7 +603,7 @@ describe("the Settings screen", () => {
   it("shows someone who is not an admin the prices and the link as words, with nothing to press", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, previewOn: true } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().textContent).toContain("The least anyone pays is £1 for each detective, and we suggest £5.");
     expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
     expect(settingsPart().textContent).toContain("Only an admin can change these.");
@@ -636,7 +638,7 @@ describe("the place phone in Settings", () => {
   it("lets an admin save it", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().querySelector('label[for="hqPlacePhone"]')!.textContent).toBe("NBCC's phone number for places");
     expect(settingsPart().textContent).toContain("It goes on every staff card.");
     const box = settingsPart().querySelector<HTMLInputElement>("#hqPlacePhone")!;
@@ -650,7 +652,7 @@ describe("the place phone in Settings", () => {
   it("shows a head elf who is not an admin the number as words", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
     await hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     expect(settingsPart().textContent).toContain("NBCC's phone number for places: 01632 960 123");
     expect(settingsPart().querySelector("#hqPlacePhone")).toBeNull();
   });
@@ -680,7 +682,7 @@ describe("the practice door in Settings", () => {
   async function openSettings(answers: Record<string, unknown>) {
     const env = page({ answers });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     return env;
   }
@@ -800,7 +802,7 @@ describe("the practice door in Settings", () => {
       return Promise.resolve(answer({ practice: RUNNING, previewOn: true }));
     });
     tabs()[0].click();
-    tabs()[5].click(); // a fresh reading, held back
+    tab("settings").click(); // a fresh reading, held back
     field("placeName").value = "The Example Office";
     field("placeTown").value = "Snowford";
     inPart(panelNow(), "Start a practice evening")!.click();
@@ -820,7 +822,7 @@ describe("the practice door in Settings", () => {
   it("reads the practice afresh each time Settings is opened, and when HQ opens on Settings", async () => {
     const { calls } = await openSettings({ "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": NONE });
     tabs()[0].click();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     expect(urls(calls).filter((u) => u === "GET /api/admin/elf/practice")).toHaveLength(2);
     // Settings was the open tile: the next visit reads the practice with HQ.
@@ -1000,7 +1002,7 @@ describe("the practice door's own mutations", () => {
   it("applies a start's answer even when Settings was left and entered again while it was on its way", async () => {
     const env = page({ answers: { "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: null, previewOn: true } } });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     let answerPost: () => void = () => {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1012,7 +1014,7 @@ describe("the practice door's own mutations", () => {
     panelNow().querySelector<HTMLInputElement>('input[name="placeTown"]')!.value = "Snowford";
     inPart(panelNow(), "Start a practice evening")!.click();
     tabs()[0].click(); // away while the start is on its way
-    tabs()[5].click(); // and back: a fresh reading goes out
+    tab("settings").click(); // and back: a fresh reading goes out
     await flush();
     answerPost();
     await flush();
@@ -1023,7 +1025,7 @@ describe("the practice door's own mutations", () => {
   it("applies a clear's answer in the same way", async () => {
     const env = page({ answers: { "/api/admin/elf/hq": LINKED, "GET /api/admin/elf/practice": { practice: RUN, previewOn: true } } });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     let answerClear: () => void = () => {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1033,7 +1035,7 @@ describe("the practice door's own mutations", () => {
     });
     inPart(panelNow(), "Clear the practice")!.click();
     tabs()[0].click();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     answerClear();
     await flush();
@@ -1053,7 +1055,7 @@ describe("Alerts in Settings", () => {
   async function openSettings(answers: Record<string, unknown>) {
     const env = page({ answers: { "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false }, "GET /api/admin/elf/alerts": ALERTS, ...answers } });
     await env.hq.open();
-    tabs()[5].click();
+    tab("settings").click();
     await flush();
     return env;
   }
@@ -1173,5 +1175,216 @@ describe("Alerts in Settings", () => {
   it("says when texts are not switched on", async () => {
     await openSettings({ "GET /api/admin/elf/alerts": { ...ALERTS, textsOn: false } });
     expect(alertsNow().textContent).toContain("Texts are not switched on yet, so alerts go by email only.");
+  });
+});
+
+// ---- Settings > The grand prize (Plan 2c-2, Task 4): when the entries close, and the graduates' video ----
+
+describe("The grand prize in Settings", () => {
+  const PRIZE = { closesAt: "2026-12-24T17:00:00.000Z", time: "17:00", isDefault: true, warning: null as string | null, videoUrl: null as string | null, canEdit: true };
+  // Door 24's place typed to close at 4:30pm, with the entries at 5pm (ruling F3).
+  const WARNING = "Grand prize entries close at 5pm, so door 24's place must close by 4pm.";
+  const REFUSAL = "Door 24's hiding place closes at 4pm, so grand prize entries can close at 5pm at the earliest.";
+  const PATH = "/api/admin/elf/grand-prize/settings";
+  const prizeNow = () => settingsPart().querySelector<HTMLElement>(".hq-prize-settings")!;
+  const timeBox = () => prizeNow().querySelector<HTMLInputElement>("#hqPrizeTime")!;
+  const videoBox = () => prizeNow().querySelector<HTMLInputElement>("#hqPrizeVideo")!;
+  const said = (which: "time" | "video") => prizeNow().querySelector<HTMLElement>(`.hq-prize-settings__${which} > .hq-status`)!;
+  async function openSettings(answers: Record<string, unknown>) {
+    const env = page({ answers: { "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false }, [`GET ${PATH}`]: PRIZE, ...answers } });
+    await env.hq.open();
+    tab("settings").click();
+    await flush();
+    return env;
+  }
+  /** A browser takes the focus off a button while it is disabled (the focus fixup rule), and jsdom does not
+   *  (its blur() ignores a disabled button), so this puts the focus nowhere by hand: on a box that then goes. */
+  function dropFocus() {
+    const spare = document.createElement("input");
+    document.body.appendChild(spare);
+    spare.focus();
+    spare.remove();
+    expect(document.activeElement).toBe(document.body);
+  }
+  /** The pretend server refuses every PUT with this answer; everything else is answered as before. */
+  function refusePuts(status: number, error: string) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const before = w.fetch;
+    w.fetch = vi.fn((url: string, init: RequestInit = {}) =>
+      init.method === "PUT" ? Promise.resolve({ ok: false, status, json: () => Promise.resolve({ error }) }) : before(url, init),
+    );
+  }
+
+  it("reads it when Settings opens, in its own panel, with the time, the link and what each means", async () => {
+    const { calls } = await openSettings({});
+    expect(urls(calls)).toContain(`GET ${PATH}`);
+    // Any head elf who may edit can change it, so it is not with the admin only panels.
+    expect(settingsPart().querySelector(".hq-settings .hq-prize-settings")).toBeNull();
+    expect(prizeNow().querySelector("h2")!.textContent).toBe("The grand prize");
+    expect(prizeNow().querySelector('label[for="hqPrizeTime"]')!.textContent).toBe("Grand prize entries close on Christmas Eve at");
+    expect(timeBox().type).toBe("time");
+    expect(timeBox().value).toBe("17:00");
+    expect(prizeNow().textContent).toContain("5pm unless you change it. It must be at least an hour after door 24's hiding place closes.");
+    expect(prizeNow().querySelector('label[for="hqPrizeVideo"]')!.textContent).toBe("The graduates' video");
+    expect(videoBox().type).toBe("url");
+    expect(videoBox().value).toBe("");
+    expect(prizeNow().textContent).toContain("A link to the video every graduate can watch, starting https://. Leave it empty for none.");
+    expect(inPart(prizeNow(), "Save the time")).toBeTruthy();
+    expect(inPart(prizeNow(), "Save the link")).toBeTruthy();
+    expect(prizeNow().querySelector(".is-error")).toBeNull();
+  });
+
+  it("Save the time sends the time typed, then shows Saved. and the time from the answer", async () => {
+    const { calls } = await openSettings({ [`PUT ${PATH}`]: { ...PRIZE, closesAt: "2026-12-24T17:30:00.000Z", time: "17:30", isDefault: false } });
+    timeBox().value = "17:30";
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PUT")).toEqual([{ method: "PUT", url: PATH, body: { time: "17:30" } }]);
+    expect(said("time").textContent).toBe("Saved.");
+    expect(said("time").classList.contains("is-ok")).toBe(true);
+    expect(timeBox().value).toBe("17:30");
+  });
+
+  it("shows a refusal's sentence as an error, keeps what was typed, and lets the head elf try again", async () => {
+    await openSettings({});
+    refusePuts(409, REFUSAL);
+    timeBox().value = "16:30";
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect(said("time").textContent).toBe(REFUSAL);
+    expect(said("time").classList.contains("is-error")).toBe(true);
+    expect(timeBox().value).toBe("16:30");
+    expect(inPart(prizeNow(), "Save the time")!.disabled).toBe(false);
+  });
+
+  it("shows door 24's warning as an error", async () => {
+    await openSettings({ [`GET ${PATH}`]: { ...PRIZE, warning: WARNING } });
+    const errors = [...prizeNow().querySelectorAll<HTMLElement>(".is-error")].map((n) => n.textContent);
+    expect(errors).toEqual([WARNING]);
+  });
+
+  it("Save the link sends the link typed, then shows Saved.", async () => {
+    const { calls } = await openSettings({ [`PUT ${PATH}`]: { ...PRIZE, videoUrl: "https://example.org/graduates" } });
+    videoBox().value = "https://example.org/graduates";
+    inPart(prizeNow(), "Save the link")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PUT")).toEqual([{ method: "PUT", url: PATH, body: { videoUrl: "https://example.org/graduates" } }]);
+    expect(said("video").textContent).toBe("Saved.");
+    expect(said("video").classList.contains("is-ok")).toBe(true);
+    expect(videoBox().value).toBe("https://example.org/graduates");
+  });
+
+  // A save changes only its own setting (ruling F6), so it must never undo what is typed in the other box.
+  it("keeps a time typed but not saved when the link is saved, keeps focus on Save the link, and saves that time next", async () => {
+    const { calls } = await openSettings({ [`PUT ${PATH}`]: { ...PRIZE, videoUrl: "https://example.org/graduates" } });
+    timeBox().value = "17:30";
+    videoBox().value = "https://example.org/graduates";
+    const saveLink = inPart(prizeNow(), "Save the link")!;
+    const line = said("video");
+    saveLink.focus();
+    saveLink.click();
+    dropFocus();
+    await flush();
+    // "Saved." lands in the status line that was already on the page, so a screen reader hears it.
+    expect(said("video")).toBe(line);
+    expect(said("video").textContent).toBe("Saved.");
+    expect(timeBox().value).toBe("17:30");
+    expect(videoBox().value).toBe("https://example.org/graduates");
+    expect(document.activeElement).toBe(inPart(prizeNow(), "Save the link"));
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PUT").map((c) => c.body)).toEqual([{ videoUrl: "https://example.org/graduates" }, { time: "17:30" }]);
+  });
+
+  it("keeps a link typed but not saved when the time is saved", async () => {
+    await openSettings({ [`PUT ${PATH}`]: { ...PRIZE, closesAt: "2026-12-24T17:30:00.000Z", time: "17:30", isDefault: false } });
+    timeBox().value = "17:30";
+    videoBox().value = "https://example.org/graduates";
+    const saveTime = inPart(prizeNow(), "Save the time")!;
+    saveTime.focus();
+    saveTime.click();
+    dropFocus();
+    await flush();
+    expect(said("time").textContent).toBe("Saved.");
+    expect(videoBox().value).toBe("https://example.org/graduates");
+    expect(document.activeElement).toBe(inPart(prizeNow(), "Save the time"));
+  });
+
+  it("gives the focus back to the button after a refusal too, but never takes it from where the head elf has gone", async () => {
+    await openSettings({});
+    refusePuts(409, REFUSAL);
+    const saveTime = inPart(prizeNow(), "Save the time")!;
+    saveTime.focus();
+    saveTime.click();
+    dropFocus();
+    await flush();
+    expect(document.activeElement).toBe(saveTime);
+    saveTime.click();
+    videoBox().focus(); // typing the link while the time is on its way
+    await flush();
+    expect(document.activeElement).toBe(videoBox());
+  });
+
+  it("shows door 24's warning as the answer to a save has it, gone or new", async () => {
+    const LATER = { ...PRIZE, closesAt: "2026-12-24T17:30:00.000Z", time: "17:30", isDefault: false };
+    await openSettings({ [`GET ${PATH}`]: { ...PRIZE, warning: WARNING }, [`PUT ${PATH}`]: { ...LATER, warning: null } });
+    timeBox().value = "17:30";
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect(prizeNow().querySelector(".is-error")).toBeNull();
+    expect(prizeNow().textContent).not.toContain(WARNING);
+    await openSettings({ [`PUT ${PATH}`]: { ...LATER, warning: WARNING } });
+    inPart(prizeNow(), "Save the time")!.click();
+    await flush();
+    expect([...prizeNow().querySelectorAll<HTMLElement>(".is-error")].map((n) => n.textContent)).toEqual([WARNING]);
+  });
+
+  it("shows a refused link's sentence as an error, under the link", async () => {
+    const words = "The video link must start with https:// and be no longer than 300 letters.";
+    await openSettings({});
+    refusePuts(400, words);
+    videoBox().value = "https://example.org/" + "g".repeat(300);
+    inPart(prizeNow(), "Save the link")!.click();
+    await flush();
+    expect(said("video").textContent).toBe(words);
+    expect(said("video").classList.contains("is-error")).toBe(true);
+    expect(said("time").textContent).toBe("");
+  });
+
+  it("shows the time and the link as words, with nothing to change, to a head elf who may only look", async () => {
+    const LOOK = { ...PRIZE, closesAt: "2026-12-24T17:30:00.000Z", time: "17:30", isDefault: false, videoUrl: "https://example.org/graduates", warning: WARNING, canEdit: false };
+    await openSettings({ [`GET ${PATH}`]: LOOK });
+    expect(prizeNow().textContent).toContain("Grand prize entries close on Christmas Eve at 5:30pm.");
+    expect(prizeNow().textContent).toContain("The graduates' video: https://example.org/graduates");
+    expect([...prizeNow().querySelectorAll(".is-error")].map((n) => n.textContent)).toEqual([WARNING]);
+    expect(prizeNow().querySelectorAll("input, button")).toHaveLength(0);
+    await openSettings({ [`GET ${PATH}`]: { ...LOOK, videoUrl: null } });
+    expect(prizeNow().textContent).toContain("The graduates' video: not set yet");
+  });
+
+  it("says the server's words, as an error, when it cannot be read", async () => {
+    const env = page({ answers: { "/api/admin/elf/hq": BUSY, "GET /api/admin/elf/practice": { practice: null, previewOn: false } } });
+    await env.hq.open();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const before = w.fetch;
+    w.fetch = vi.fn((url: string, init: RequestInit = {}) =>
+      url === PATH ? Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "Admin is temporarily unavailable" }) }) : before(url, init),
+    );
+    tab("settings").click();
+    await flush();
+    const line = prizeNow().querySelector<HTMLElement>(".hq-status")!;
+    expect(line.textContent).toBe("Admin is temporarily unavailable");
+    expect(line.classList.contains("is-error")).toBe(true);
+    expect(prizeNow().querySelector("input")).toBeNull();
+  });
+
+  it("draws nothing to change from an answer it cannot use, and says so", async () => {
+    await openSettings({ [`GET ${PATH}`]: { canEdit: true } });
+    const line = prizeNow().querySelector<HTMLElement>(".hq-status")!;
+    expect(line.textContent).toBe("That did not work. Please try again.");
+    expect(line.classList.contains("is-error")).toBe(true);
+    expect(prizeNow().querySelector("input")).toBeNull();
   });
 });

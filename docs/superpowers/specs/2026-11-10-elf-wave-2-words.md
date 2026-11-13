@@ -5,13 +5,22 @@
 This is every sentence a family, a place or a head elf reads that wave 2 added or changed: Plan 2a (the
 game and the family screens, merged switched off) and Plan 2b (the photo check, alerts, the emails, the
 worker and Finds), and the prints as Plan 1 (the Doors page) changed them. Every sentence is taken from
-the code as it is on 11 November 2026 (parts 1 to 9) and 13 November 2026 (part 10), so what you tick is
-what goes live.
+the code as it is on 11 November 2026 (parts 1 to 9) and 13 November 2026 (parts 10 and 11), so what you
+tick is what goes live.
 
 Part 10 adds catching up on missed doors (Plan 2c-1): a family that missed a door's evening can crack it
 later from home, so a door's place is shown only to a family that has had its guess at that door or been
 there. Its sentences are taken from the code as it is on 13 November 2026. Where part 10 replaces a
 sentence in parts 1 to 9, that sentence is struck through, has no box, and says where its new words are.
+
+Part 11 adds Christmas Eve and the grand prize (Plan 2c-2): the picture each graduate can send in on
+Christmas Eve, the Grand prize part of Head Elf HQ where head elves mark the winner, the week before's
+lines in the clue email, a graduate's certificate, share card and video, and a way for a family to stop
+the emails that are not essential. Its sentences are taken from the code as it is on 13 November 2026.
+Part 11 replaces one line in parts 1 to 9, All emails' line for the first clue email in part 7, which is
+struck through there in the same way. It strikes nothing in part 10: where it changes what one of part 10's
+sentences says on door 24 (its latest time, now 4pm), part 11 gives that sentence again with the change in
+brackets after it.
 
 How to read it:
 
@@ -23,16 +32,18 @@ How to read it:
   6pm and 6:30pm, the answer shown at 7pm), whose elf is Bauble.
 - *(doors on)* after a heading means everything under it shows only once December's doors are switched
   on; after one sentence, it means that sentence does. Head elves also see these on the practice door,
-  through the preview link. Everything else can be seen now by whoever it is for.
+  through the preview link, all but the grand prize, which is Christmas Eve's alone (part 11).
+  Everything else can be seen now by whoever it is for.
 - A detective has two names. In public (the calendar, the posts) a first name nobody has ticked shows as
   its first letter: Detective R. Tinselfoot. On a family's own screens and in their emails it is in full:
   Detective Ruby Tinselfoot.
 - A few sentences were written for wave 1 but can only be seen in December, so you have never seen them
   on the site. They are here too, marked *(wave 1's words)*, so nothing reaches families unseen.
 - A sentence struck through, ~~like this~~, no longer shows anywhere: it has no box to tick, and part 10
-  (or, for the door pictures, the note on the same present just below) has the words that replaced it.
-- The questions that are still open are at the end: part 10's own at the end of part 10, and the rest
-  under Questions for Jaimie.
+  or part 11 (or, for the door pictures, the note on the same present just below) has the words that
+  replaced it.
+- The questions that are still open are at the end: part 10's and part 11's own at the end of each part,
+  and the rest under Questions for Jaimie.
 
 ## Every door has the same present (approved, and already live)
 
@@ -451,7 +462,7 @@ Graduating has its own email, so nobody is also sent a promotion to Graduate.
 
 ### Their names and lines in All emails (for staff)
 
-- [ ] **The first clue is out**: Goes to each grown up with detectives enrolled, when a door's first clue comes out in December. (Its note: The clue words and the picture words are typed in Doors. A clue picture is never in the email.) Versions: Words, A picture only, Words and a picture
+- ~~**The first clue is out**: Goes to each grown up with detectives enrolled, when a door's first clue comes out in December. (Its note: The clue words and the picture words are typed in Doors. A clue picture is never in the email.) Versions: Words, A picture only, Words and a picture~~ Replaced: it has seven versions now; see part 11, All emails.
 - [ ] **Today is your Elf Detective School day**: Goes to the place's contact at 9am on its day, with what to do and when. Versions: An evening clue, A morning clue
 - ~~**Elf HQ: the 8am email**: Goes to head elves at 8am each day in December, with the day's door, yesterday's find and the two posts. Versions: A door ready, yesterday found, and A door not ready, yesterday a snow day~~ Replaced: it has three versions now; see part 10, the 8am email.
 - [ ] **A door's elf has been found**: Goes to head elves whose alerts are on, as soon as an elf is found.
@@ -804,7 +815,7 @@ The clues, once all three are out (the same words as the clue email and the cale
 
 - [ ] While the elf is still hiding: You find out whether you cracked it at *7pm*, or later if the elf is still hiding then. (It said "The hiding place is shown at 7pm".)
 - [ ] The same when the place closes at or before then, and once the elf is found: You find out whether you cracked it at *7pm*.
-- [ ] Once that time has passed and nobody has found the elf: You find out whether you cracked it as soon as the elf is found, or at *8:30pm* at the latest. (It said "The hiding place is shown as soon as the elf is found.") The time is the closing time typed in Doors, or 8pm when none is typed. When the closing typed is at or before the first clue (Head Elf HQ flags that as closing too soon, and it counts as the next day's), or with no time at all, which cannot happen in play, the sentence ends at "found".
+- [ ] Once that time has passed and nobody has found the elf: You find out whether you cracked it as soon as the elf is found, or at *8:30pm* at the latest. (It said "The hiding place is shown as soon as the elf is found.") The time is the closing time typed in Doors, or 8pm when none is typed (4pm on door 24: see part 11). When the closing typed is at or before the first clue (Head Elf HQ flags that as closing too soon, and it counts as the next day's), or with no time at all, which cannot happen in play, the sentence ends at "found".
 
 Once its elf has gone home with nobody finding it (a safety net: Head Elf HQ allows gone home only after
 a door's day, so families should not meet this on today's case):
@@ -896,6 +907,324 @@ From the whole-branch review and its pictures (13 November 2026):
 
 - **J.** The go page said "Spelling does not have to be perfect.", as Detective HQ does on the night. But a go is one final guess, and a guess is matched with only capitals, spaces, accents, marks and a leading "the" taken off, so a go with a spelling slip is simply not right and cannot be put right: the old words promised more than is true. The go page now says "Capitals and spaces do not matter. Check your spelling: you get one guess." Detective HQ keeps its words, because a guess on the night can be changed until the place is shown. Are these the words you want? The line just under the box still says "You get one guess at this door.", so the one guess is said twice: would you rather drop one of them?
 - **K.** On the calendar everyone shares, a door shown with nobody having found its elf was headed "Nobody found Bauble in time", while the news above it says "Bauble is still waiting" and "Nobody has found today's elf yet, and the first detective to find it still wins the prize." Everywhere else "in time" is said only once an elf has gone home and can no longer be found, so the heading read as though the hunt was over. While the elf still waits the heading now says "Nobody has found Bauble yet", as the news, yesterday's post and the go page do; once it has gone home it still says "Nobody found Bauble in time". Are these the words you want, or would you rather it said, for example, "Nobody found Bauble on the evening"?
+
+## 11. Christmas Eve and the grand prize (Plan 2c-2)
+
+On Christmas Eve every detective who has done all 24 doors can send in one picture for the grand prize
+from Detective HQ, until the entries close. Head elves see every picture in a new Grand prize part of Head
+Elf HQ and, once the entries have closed, mark the one winner. In the week before, the clue email asks a
+family that is up to date whether its picture is ready, and tells a family that is behind what it can
+still crack from home; 23 December's email says Christmas Eve starts in the morning. A detective who
+graduates gets a certificate to print, a share card to save and the graduates' video. A family can stop
+the emails that are not essential. And Doors names the head elf on its dropped off and thank you ticks.
+
+- Everything a family sees in this part shows only once December's doors are switched on, but for one
+  page: the page a Stop these emails link opens works whenever Elf Detective School is switched on, so a
+  family can always stop the emails it has had. Head Elf HQ's new words show to head elves as soon as
+  this part goes live.
+- The grand prize cannot be tried on the practice door: it is Christmas Eve's alone. The pages for it,
+  and Head Elf HQ's Grand prize part, come to you as pictures drawn on pretend data.
+- In these examples *Detective Ruby Tinselfoot* has done all 24 doors, the grown up is *Sam Example*, the
+  head elf is *Alex Example*, door 24's elf is *Twinkle*, and the entries close at *5pm*, the time they
+  close unless a head elf changes it.
+- Nothing here asks for an age, or says one.
+
+### Already decided (no boxes)
+
+Your decisions, written down here so that nobody asks again:
+
+- Door 24's hiding place closes at 4pm on Christmas Eve, unless a head elf types an earlier time in Doors
+  (12 November 2026). A later time can still be typed, and then Doors and Settings warn about it.
+- Every door carries one standard present, cut out of card (12 November 2026, live since 13 November: see
+  Every door has the same present, before part 1).
+- The grand prize entries close at 5pm on Christmas Eve, unless a head elf changes the time in the
+  Settings of Head Elf HQ (12 November 2026).
+- There is just one winner, and the pictures are judged without knowing ages: the entry never asks for
+  one, the site never keeps one, and NBCC asks the age when it rings. NBCC phones the winner's grown up on
+  Christmas Eve, and the website announces nothing (12 November 2026).
+
+### Christmas Eve: door 24's hiding place closes at 4pm *(doors on)*
+
+Unless a head elf types door 24's closing time in Doors, its place now closes at 4pm, an hour before the
+entries close (every other door still falls back to 8pm). So from door 24's first clue its clues say when
+the place closes, as part 10's do for a door with a closing time typed:
+
+- [ ] Under the clues in Detective HQ, on the go page, and in door 24's clue email: The hiding place closes at *4pm* today.
+- [ ] Once the family can see the place, in Detective HQ and on the go page: *Corner Bakehouse* closes at *4pm* today.
+- [ ] Once *11:30am* has passed and nobody has found *Twinkle*, part 10's sentence: You find out whether you cracked it as soon as the elf is found, or at *4pm* at the latest. (On door 24 the time is now 4pm when no closing time is typed, where it was 8pm.)
+
+So, unless a head elf changes door 24's times, its clue email says "Clue 2 comes out at 10:30am and clue 3
+at 11am, in Detective HQ. The hiding place closes at 4pm today. You find out whether you cracked it at
+11:30am, or later if the elf is still hiding then." and then "If you miss today's hunt, you can still crack
+this case later in Detective HQ, with one guess." (see question M below).
+
+### Detective HQ: the grand prize *(doors on)*
+
+Straight after today's case, from midnight as Christmas Eve begins until 1 January, or the closing if later. Detective HQ now reads,
+top to bottom: today's case, The grand prize, Doors you can still crack, Your detectives, Your marks and
+Your emails.
+
+- [ ] The heading, on a crimson strip: **The grand prize**
+- [ ] While the entries are open: Every detective who has done all 24 doors can send in a drawing, or a photo of their naughtiest elf at home. Entries close at *5pm* on Christmas Eve.
+- [ ] Each detective who has done all 24 doors: *Detective Ruby Tinselfoot*, with the button Send in your picture
+- [ ] What a screen reader says for that button: Send in your picture for *Detective Ruby Tinselfoot*
+- [ ] Once their picture is in, with a tick: *Detective Ruby Tinselfoot*'s picture is in. Then, while the entries are open, the button Change it
+- [ ] What a screen reader says for that button: Change it: *Detective Ruby Tinselfoot*'s picture
+- [ ] While the entries are open and nobody in the family has done all 24 doors yet: Once a detective has done all 24 doors, you can send in their picture here.
+- [ ] Once the entries have closed: Grand prize entries closed at *5pm* on Christmas Eve. Thank you for every picture. Then each detective whose picture is in, with *Detective Ruby Tinselfoot*'s picture is in. (A detective whose picture is not in is not listed then.)
+
+### Sending in a picture *(doors on)*
+
+The page Send in your picture and Change it open, for a detective who has done all 24 doors, from midnight
+as Christmas Eve begins. It needs the page's script, as a door's photo does. Search engines are asked not
+to list it.
+
+- [ ] At the top: Detective HQ, then **Send in your picture** (the browser's tab says Send in your picture too)
+- [ ] Under it: For *Detective Ruby Tinselfoot*, for the grand prize: a drawing, or a photo of your naughtiest elf at home.
+- [ ] The page's description, shown when its link is shared: Your family's picture for the NBCC Elf Detective School grand prize: a drawing, or a photo of your naughtiest elf at home.
+- [ ] The buttons: Detective HQ (on the strip at the top), and Back to Detective HQ (at the foot)
+- [ ] Until a picture is in: Entries close at *5pm* on Christmas Eve.
+- [ ] The file box: Your picture
+- [ ] For a family with no mobile number (it enrolled before we asked for one), the box Mobile number, with the join form's line under it: So we can ring you straight away if one of your detectives wins the grand prize on Christmas Eve. We only use it for that.
+- [ ] The button: Send it to the head elves (the photo's words), and once a picture is in: Send a new picture
+- [ ] Under the form: We make the picture again, so nothing from the camera is kept: not where, not when, not the phone. Only the head elves see it, and it is deleted at the end of January.
+- [ ] Once a picture is in, the picture, and under it: *Detective Ruby Tinselfoot*'s picture is in. You can change it until *5pm* on Christmas Eve.
+- [ ] What a screen reader says for the picture: *Detective Ruby Tinselfoot*'s picture
+- [ ] Once the entries have closed, with no form: Grand prize entries closed at *5pm* on Christmas Eve. (With a picture in, the picture and "*Detective Ruby Tinselfoot*'s picture is in." stay above it, and the line on making the picture again stays under it.)
+
+In the line above the button:
+
+- [ ] With no picture chosen: Choose a picture first. (Most browsers first ask in their own words, as they do for an empty mobile number box.)
+- [ ] While it goes: Sending your picture
+- [ ] Once it is in: Thank you! *Detective Ruby Tinselfoot*'s picture is in. You can change it until *5pm* on Christmas Eve. (The picture shows straight away, and the button then says Send a new picture.)
+
+### Sending in a picture: the refusals *(doors on)*
+
+In the same line, as an error:
+
+- [ ] A mobile number that is not a UK mobile, in the join form's words: Please type a UK mobile number, like 07700 900 123.
+- [ ] Sent once the entries have closed, from a page opened before then: Grand prize entries closed at *5pm* on Christmas Eve.
+- [ ] Sent for a detective who has not done all 24 doors (the page is never offered then, so only a picture sent some other way meets this): *Detective Ruby Tinselfoot* has not done all 24 doors yet.
+- [ ] Sent too often (20 tries a family a day, shared with a door's photos): You have tried to send a lot of pictures today. Please try again tomorrow.
+- [ ] A picture the phone or computer cannot open: That picture could not be opened. Please try another.
+- [ ] As for a door's photo (part 4): That picture is not one we can use. Try a JPG, PNG or WebP photo.
+- [ ] As for a door's photo: That picture is too big. Try a smaller one.
+- [ ] As for a door's photo, a picture the website cannot open: We could not open that picture. Please try a different photo.
+- [ ] As for a door's photo, when too many pictures are arriving at once: Lots of photos arriving just now. Please try again in a minute. (It says photos for a grand prize picture too: tick it, or write the words you would like for a picture. The page first sends the picture again by itself, up to four more times, 2 to 3 seconds apart, still saying Sending your picture, so a family sees this only if all five are turned away; and a picture turned away like this does not count towards the family's 20 tries.)
+- [ ] With no signal: We could not reach NBCC. Check your signal and try again.
+- [ ] Anything else that goes wrong on the way: Something went wrong. Refresh the page and try again.
+- [ ] Signed out meanwhile, as in part 4: Please sign in again.
+- [ ] When the website cannot answer, as in part 4: Something went wrong just now. Please try again in a few minutes.
+
+Two more answers come only from a picture sent some other way, or a press after December's doors were
+switched off, as for every form in Elf Detective School: "Please use the form on our website." (a picture
+that did not come from the page) and a plain "Not found" (a detective who is not the family's own, or the
+doors switched off).
+
+### A graduate's card in Detective HQ *(doors on)*
+
+Across the foot of each graduate's card, under Your detectives:
+
+- [ ] The buttons: Print the certificate, and Save the share card
+- [ ] What a screen reader says for them: Print the certificate for *Detective Ruby Tinselfoot*, and Save the share card for *Detective Ruby Tinselfoot*
+- [ ] Once a head elf has saved the graduates' video in Head Elf HQ, a third button: Watch the graduates' video (it opens the video's link, and the video's site is not told where the family came from; with no link saved there is no button)
+- [ ] When too many pictures are being made at once, the certificate says, on a page of its own: Busy. Please try again in a moment. (The share card answers the same, but a browser saving a picture does not show those words; pressing again tries again.)
+
+### The Graduate's certificate *(doors on)*
+
+The sheet Print the certificate opens, to print or save as a PDF, on A4 on its side. The name is in full,
+as on the family's own screens, and it is dated the day it is printed. Someone signed out is asked to sign
+in first, as on every Detective HQ page.
+
+- [ ] The browser's tab: Elf Detective School certificate for *Detective Ruby Tinselfoot* | NBCC
+- [ ] On screen above the sheet, never printed: Certificate for *Detective Ruby Tinselfoot*, the button Print or save as PDF, and In the print window, choose A4 and switch off headers and footers.
+- [ ] Beside Elf Detective School's logo: Class of *2026*
+- [ ] The heading: **Graduate Elf Detective**
+- [ ] This is to say that *Detective Ruby Tinselfoot* has done all 24 doors and graduates from NBCC Elf Detective School.
+- [ ] Badge *EDS 0427* · *Thursday 24 December 2026*
+- [ ] With thanks from everyone at the Elves' Workshop, then the name of its village, as the rules page names it (the village is left out here, because every place in this file is invented)
+- [ ] Beside the words, the detective's elf in its costume. What a screen reader says for it: *Detective Ruby Tinselfoot*'s elf
+- [ ] For a detective who visited all 24 hiding places, under the elf: **Gold seal** Visited all 24 hiding places
+
+At the foot is the charity's statement, as on every print. The note written for fundraisers ("Need
+something else, like a banner or a different size?" and how to ask us) is not shown above a family's
+certificate: it stays on the fundraisers' own prints. A snowed in door counts as visited for the gold seal,
+so that nobody loses an honour to the weather: after a snowy December a detective who visited fewer places
+can still have "Visited all 24 hiding places".
+
+### The share card *(doors on)*
+
+The picture Save the share card saves, made to be shared: Elf Detective School's logo and the detective's
+elf, never a photo, and the detective's name as the public sees it. The website draws it itself, in the
+fonts the website has; cards drawn that way come to you as pictures with the rest.
+
+- [ ] Beside Elf Detective School's logo: Class of *2026*
+- [ ] The name: *Detective R. Tinselfoot* (once our team has ticked the first name: *Detective Ruby Tinselfoot*)
+- [ ] Under it: Graduate
+- [ ] Then: 24 of 24 doors done
+- [ ] The picture's name when it is saved: elf-detective-school-graduate.png
+
+### Your emails, in Detective HQ *(doors on)*
+
+Last on Detective HQ. It works with no script.
+
+- [ ] The heading, on a tan strip: **Your emails**
+- [ ] While the emails go: We email you when each door's first clue comes out, and when a detective is promoted or graduates. Then the button: Stop these emails
+- [ ] Once they are stopped: You have stopped these emails. Everything is still here in Detective HQ. Then the button: Start them again
+- [ ] Under both: Sign in codes, payment receipts and the email when your family finds an elf first always come.
+- [ ] Only for a press the page itself did not send: Please use the form on our website.
+
+### The page a Stop these emails link opens
+
+Opened from the small link at the end of a clue email, a promotion or a graduation. It works whenever Elf
+Detective School is switched on, whatever December's doors say, and needs no sign in: the link is the
+family's own. It shows nothing of the family, neither its name nor its email, so a forwarded email gives
+nothing away. Opening the link changes nothing: only the button does. Search engines are asked not to list
+it.
+
+- [ ] At the top: Elf Detective School, then **Your emails** (the browser's tab says Your emails too), and the button on the strip at the top: Detective HQ
+- [ ] The page's description, shown when its link is shared: Stop the emails from NBCC Elf Detective School, or start them again.
+- [ ] While the emails go: Stop the emails from Elf Detective School? You will not get each door's first clue, or the emails when a detective is promoted or graduates. Everything stays in Detective HQ. Then the button: Stop these emails
+- [ ] Once they are stopped: You have stopped the emails from Elf Detective School. Everything is still in Detective HQ. Then the button: Start them again
+- [ ] After pressing Stop these emails, in place of the sentence above the button: Done. We will not send you these emails any more. The button then turns round to Start them again, so a press by mistake can be put back.
+- [ ] After pressing Start them again, in its place: Done. They will start again with the next clue. The button then turns round to Stop these emails.
+- [ ] Under all of them: Sign in codes, payment receipts and the email when your family finds an elf first always come.
+
+A family that starts them again within six hours of a door's first clue still gets that clue's email,
+because none was sent while they were stopped, so "with the next clue" is near enough. A promotion or a
+graduation that came while they were stopped is let go, not saved up: starting again never sends old news.
+
+### The clue email's new lines (to each grown up, at clue 1) *(doors on)*
+
+Door 23's email (23 December), in its own paragraph after the clue and before "Clue 2 comes out at":
+
+- [ ] Tomorrow is Christmas Eve, so door 24's first clue comes out at *10am*, and hiding places close early. (The time is door 24's own first clue, 10am unless a head elf sets another. It goes to every family that gets door 23's email, and not when door 24 is a snow day. See question L.)
+
+The week before Christmas Eve (the emails of doors 17 to 23), after the line on missing the hunt and before
+the button Open Detective HQ, a subheading and two lines. A family whose detectives have done every door so
+far (a snow day is done for everyone):
+
+- [ ] The subheading: **Have you got your picture ready?**
+- [ ] Every detective who does all 24 doors can send in a drawing, or a photo of their naughtiest elf at home, for the grand prize.
+- [ ] You can send it in Detective HQ from the morning of Christmas Eve until *5pm* that day. (The time is when the entries close, as a head elf set it.)
+
+A family that is behind:
+
+- [ ] The subheading: **Catching up for the grand prize**
+- [ ] You can still crack *3 doors* from home, with one guess each. They are in Detective HQ, under Doors you can still crack. (With one door: You can still crack 1 door from home, with one guess each. See question S.)
+- [ ] With no door left to crack from home, in its place: To catch up, visit the hiding places of the doors you have not done yet, and type the word on each elf's tag. (See question R.)
+- [ ] Then: Every detective who does all 24 doors can send in a picture for the grand prize on Christmas Eve. (See question Q.)
+
+A family with no detective gets neither of these (it still gets door 23's line), and no other door's email
+has them.
+
+At the very end of the email, after "Every pound could help a child wake up to a Red Bag Full of Joy." and
+before Happy hunting!:
+
+- [ ] The small link: Stop these emails (in the plain text version of the email: Stop these emails: then the link)
+
+### The proud emails (to the grown up) *(doors on)*
+
+- [ ] A promotion and a graduation now end, after the button Give a little more, with the same small link: Stop these emails
+
+A prize won has no such link: that email always goes, even to a family that has stopped the emails (see
+question P).
+
+### All emails (for staff)
+
+- [ ] **The first clue is out**: Goes to each grown up with detectives enrolled, when a door's first clue comes out in December. (Its note: The clue words and the picture words are typed in Doors. A clue picture is never in the email.) Versions: Words, A picture only, Words and a picture, The week before, up to date, The week before, behind, The week before, behind, nothing left to crack from home, and The day before Christmas Eve
+
+The day before Christmas Eve shows door 23's email as a family that is up to date gets it, with the
+Christmas Eve line and the picture lines together. Every clue email shown there, and the promotion and the
+graduation, now end with Stop these emails; the prize won does not. The lines under each email's name do
+not say that a family can stop it.
+
+### Head Elf HQ > Settings: The grand prize
+
+Its own panel, after the settings only admins change and before The practice door, for anyone who may
+change Head Elf HQ. Each Save changes only its own box, so a time typed and not saved is kept when the link
+is saved, and the other way round.
+
+- [ ] The heading: **The grand prize**
+- [ ] The time box: Grand prize entries close on Christmas Eve at, showing *17:00* until a head elf changes it, with the button Save the time
+- [ ] Under it: 5pm unless you change it. It must be at least an hour after door 24's hiding place closes.
+- [ ] Under that, in red, only while door 24's place closes later than an hour before the entries (for example a door 24 closing time of *4:30pm* typed in Doors): Grand prize entries close at *5pm*, so door 24's place must close by *4pm*.
+- [ ] The link box: The graduates' video, with the button Save the link
+- [ ] Under it: A link to the video every graduate can watch, starting https://. Leave it empty for none.
+- [ ] After either Save: Saved.
+- [ ] Refused, a time too soon after door 24's place closes (for example *4:30pm* while door 24 closes at 4pm): Door 24's hiding place closes at *4pm*, so grand prize entries can close at *5pm* at the earliest.
+- [ ] Refused, any time saved once the entries have closed, even the same one: The entries have closed, so their closing time cannot change. (See question O.)
+- [ ] Refused, a time that has already passed while the entries are still open (for example *5:30pm* typed at *5:45pm* on Christmas Eve, after a later closing was saved), which would close them at once and for good: That time has already passed, so the entries would close straight away. Please choose a later time.
+- [ ] Refused, a link that is not https, that goes nowhere, or that is longer than 300 letters: The video link must start with https:// and be no longer than 300 letters.
+- [ ] Refused, with no time in the box: Type a time like 17:00.
+- [ ] For a head elf who may only look: Grand prize entries close on Christmas Eve at *5:30pm*. and The graduates' video: *https://example.org/graduates* (or, with none: The graduates' video: not set yet)
+
+With door 24 at its 4pm, the 5pm needs nothing typed and shows no warning. The time in the refusal is the
+latest door 24's place can still be found: the later of when its place is shown and when it closes. Even
+when door 24 is a snow day, its place's times still set the earliest the entries can close; with door
+24's 4pm that refuses only a time before 5pm, so the 5pm is never refused. A time saved is for that
+Christmas Eve only: when Elf Detective School moves on to the next year, the entries close at 5pm again
+until someone saves a time. The video's link stays from one year to the next until a head elf changes it
+or empties it. Head Elf HQ's usual words show here too: Loading… while the panel is read, and That did not
+work. Please try again. (or Admin is temporarily unavailable) if it cannot be.
+
+### Doors: door 24, and who ticked
+
+On door 24's sheet, in The place part, under its closing time:
+
+- [ ] 4pm unless you type an earlier time.
+- [ ] In red under it, while door 24's place closes later than an hour before the entries close: Grand prize entries close at *5pm*, so door 24's place must close by *4pm*.
+
+Doors still takes any time typed, earlier or later: only Settings refuses a closing of the entries too soon
+after door 24's. The 4pm line shows beside a typed time too.
+
+On every door's sheet, in Print and drop off:
+
+- [ ] Under Elf, poster, prize and staff card dropped off, and under Thank you sent, once ticked: Ticked by *Alex Example* on *9 December* (by their email only when their name in Team is blank). It said the head elf's sign in, as "Ticked by admin:alex@example.org on 9 December".
+
+### Head Elf HQ: the Grand prize part
+
+A tile after Finds. Everyone with Elf Detective School in the Team matrix sees it; only someone who may
+change Head Elf HQ can mark the winner.
+
+- [ ] The tile: Grand prize, with how many pictures are in
+- [ ] What a screen reader says for the tile: Grand prize, *3* pictures (or: Grand prize, 1 picture)
+- [ ] The heading: **Grand prize**
+- [ ] Under it: Every picture sent in for the grand prize, in the order they came in. Only head elves see them.
+- [ ] While the entries are open: Entries close at *5pm* on Christmas Eve. You can mark the winner after that. (With the part open at the close, it reads itself again a moment after, so the buttons appear by themselves.)
+- [ ] Once they have closed: Entries closed at *5pm* on Christmas Eve.
+- [ ] Each picture's card: the picture, then the detective's full name, *Ruby Tinselfoot*; Grown up: *Sam Example*; Mobile *07700 900123* (a link to ring), or No mobile number; and Came in *Thursday 24 December* at *10:45am*
+- [ ] What a screen reader says for a picture: The picture sent in for *Ruby Tinselfoot*
+- [ ] While a picture loads: Loading the picture… (and if it cannot be fetched: The picture could not be loaded.) The pictures load three at a time, from the top, so further down they say this a little longer.
+- [ ] The winner's card is gold, with the chip: The winner
+- [ ] Once the entries have closed, on every other card: the button Mark as the winner
+- [ ] Then, on the new winner's card: Marked as the winner.
+- [ ] With none yet: No pictures have come in yet.
+- [ ] At the end: The website announces nothing. NBCC rings the winner's grown up on Christmas Eve and takes the prize round on Christmas Day.
+
+Refused, on the card that was pressed:
+
+- [ ] When two head elves mark a winner at the same moment, to the second one: Someone has just marked a winner. Reload to see it.
+- [ ] A picture that is no longer there (its family has been taken out): That picture is not there.
+- [ ] Marking while the entries are open (the part shows no button then, so head elves should not meet this): The entries are still open, so the winner can be marked once they close.
+
+A picture sent again in place of the first comes in again: its place in the order, and its Came in, are
+the newest picture's. Marking another picture moves the mark, so there is only ever one winner. No card
+shows an age. As in the rest of Head Elf HQ, the part says Loading… while it is read, and That did not work.
+Please try again. (or Admin is temporarily unavailable) if it cannot be.
+
+### Questions for Jaimie on this part
+
+- **L.** Door 23's email says "Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early." Door 24's place now closes at 4pm unless a head elf types an earlier time: should the line name the time, for example "and hiding places close at 4pm"?
+- **M.** On Christmas Eve, door 24's own clue email says "If you miss today's hunt, you can still crack this case later in Detective HQ, with one guess." A door cracked after the entries close at 5pm still makes a graduate (the certificate, the proud email), but that detective can no longer send in a picture: should door 24's email say that the entries close at 5pm that day? (This is close to part 10's question B.)
+- **N.** The behind line counts only the doors a family can still crack from home. A door it guessed wrong on the night is not one of them: only a visit to that door's place can still do it, and the email does not say so (the visit line comes only when nothing is left to crack from home). Should the behind line tell a family that a door it guessed wrong needs a visit?
+- **O.** Once the grand prize entries have closed, Head Elf HQ will not let anyone change their closing time ("The entries have closed, so their closing time cannot change."), so a picture can never change while it is being judged. A late picture can still be accepted by email. Is that right? (The panel still shows Save the time then; pressing it says that sentence.)
+- **P.** The won email always goes, even to a family that has stopped the emails, and it ends with the button "Give a little more". Keep that button there, or drop it on the won email?
+- **Q.** The behind lines end "Every detective who does all 24 doors can send in a picture for the grand prize on Christmas Eve." Having a go stays open until Christmas Day, but only doors done before the entries close count for the grand prize: should they say "by 5pm on Christmas Eve"?
+- **R.** The line for a family with nothing left to crack from home tells it to visit the hiding places, but a visit no longer counts once a door's elf has gone home. Should that line be dropped, or said another way, when every door left has gone home?
+- **S.** With one door left, the line reads "You can still crack 1 door from home, with one guess each." Should "each" go when there is only one door, so that it reads "with one guess"?
+- **T.** In the week before, the clue email to a family that is up to date says "You can send it in Detective HQ from the morning of Christmas Eve until 5pm that day." But a detective can send in a picture only once they have done door 24, and door 24 counts only once its hiding place is shown: at 11:30am if its elf has been found by then (or as soon as it is found after that), and otherwise at 4pm, when its place closes. So a family that does door 24 from home may have only from 4pm to 5pm. Keep the line as it is, say "once you have done door 24" instead, or give the real times? Unless you say otherwise, we will say "once you have done door 24", so that it reads "You can send it in Detective HQ once you have done door 24, until 5pm that day."
+- **U.** The page a Stop these emails link opens says "Everything stays in Detective HQ.", and once the emails are stopped it and Detective HQ say "Everything is still in Detective HQ." and "Everything is still here in Detective HQ." Each door's clues and the grand prize are all in Detective HQ, but a few lines are only in the emails: in the week before Christmas Eve, "Have you got your picture ready?" (or, for a family that is behind, "Catching up for the grand prize" and how many doors it can still crack from home, though Detective HQ lists those doors under Doors you can still crack), and, on 23 December, the line saying when door 24's first clue comes out. So a family that has stopped the emails first sees the grand prize in Detective HQ on Christmas Eve. Soften the sentence, or show those lines in Detective HQ from 17 December? Unless you say otherwise, we will soften it, to say that the clues and the grand prize are all in Detective HQ, for example "Every door's clues and the grand prize are all in Detective HQ."
 
 ## Questions for Jaimie
 

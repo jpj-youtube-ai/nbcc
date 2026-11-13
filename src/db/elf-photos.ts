@@ -3,7 +3,7 @@ import { insertAudit } from "./donations";
 import { inTransaction } from "./elf-practice";
 import { loadDoorRun, loadPractice, type DoorRun } from "./elf-game";
 import { headElfNamesOf } from "./elf-alerts";
-import { isDoor, type Door } from "../elf/calendar";
+import { clearOutFrom, decemberOf, isDoor, type Door } from "../elf/calendar";
 import { openedAt, shownAt } from "../elf/doors";
 import { approvedFamiliesSql } from "./elf-photo-sql";
 
@@ -285,30 +285,23 @@ export async function photoStep(id: number): Promise<string | null> {
 
 // ---- the end of the season ----------------------------------------------------------------------------
 
-const londonParts = (d: Date): { year: number; month: number } => {
-  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "numeric" }).formatToParts(d).map((x) => [x.type, x.value]));
-  return { year: Number(p.year), month: Number(p.month) };
-};
-
 /** The December a photo belongs to: its year, or for a practice photo (year 0) the December it was
- *  sent in. One sent in January before the 31st belongs to the December before; one sent on or after
- *  31 January belongs to the coming December, so no practice photo is past its clear out the moment it
- *  is sent. January in London is on GMT, so its midnight is midnight UTC. */
+ *  sent in (decemberOf, src/elf/calendar.ts, the rule the grand prize entries' clear out shares): one
+ *  sent in January before the 31st belongs to the December before, and one sent on or after 31 January
+ *  to the coming December, so no practice photo is past its clear out the moment it is sent. */
 function seasonOf(year: number, sentAt: Date): number {
-  if (year > 0) return year;
-  const { year: y, month } = londonParts(sentAt);
-  return month === 1 && sentAt.getTime() < Date.UTC(y, 0, 31) ? y - 1 : y;
+  return year > 0 ? year : decemberOf(sentAt);
 }
 
 /** From 31 January of the year after its December, every photo is deleted: its bytes row goes and its
- *  row reads 'deleted'. 31 January starts at midnight, which in London in January is midnight UTC.
- *  Answers how many were deleted. Idempotent: it runs on every worker tick. */
+ *  row reads 'deleted'. 31 January starts at midnight, which in London in January is midnight UTC
+ *  (clearOutFrom). Answers how many were deleted. Idempotent: it runs on every worker tick. */
 export async function deleteExpiredPhotoFiles(now: Date): Promise<number> {
   return inTransaction(async (client) => {
     const found = await client.query<{ id: number; year: number; sent_at: Date }>(
       "SELECT id, year, sent_at FROM elf_photos WHERE status <> 'deleted' AND deleted_at IS NULL",
     );
-    const ids = found.rows.filter((r) => Date.UTC(seasonOf(r.year, r.sent_at) + 1, 0, 31) <= now.getTime()).map((r) => r.id);
+    const ids = found.rows.filter((r) => clearOutFrom(seasonOf(r.year, r.sent_at)).getTime() <= now.getTime()).map((r) => r.id);
     if (ids.length === 0) return 0;
     // The photo rows first and then their bytes, the order every other photo writer takes.
     const up = await client.query<{ id: number }>(

@@ -104,6 +104,10 @@ export interface DetectiveView {
   /** How many costumes are waiting in the wardrobe as presents to open. */
   newThings: number;
   wardrobeUrl: string;
+  /** A graduate's certificate to print, `/elf/hq/certificate/${id}`, and share card to save, `/elf/hq/share/${id}.png`
+   *  (Plan 2c-2): while December's doors are on, for a detective who has done all 24 doors only; null otherwise. */
+  certificateUrl: string | null;
+  shareUrl: string | null;
 }
 
 /** Today's case, for a family. Built from the door's state at the moment the page is drawn. */
@@ -150,11 +154,13 @@ export interface TodayView {
    *  there. */
   goneHome: boolean;
   /** May the place be shown later than the reveal time? Only while the elf is still hunted and the place closes
-   *  after the reveal: the run's own closing, the one typed in Doors or the 8pm a door falls back to (shownAt in
+   *  after the reveal: the run's own closing, the one typed in Doors or the time a door falls back to with none
+   *  typed, 4pm on Christmas Eve and 8pm on every other door (closingInstant in src/elf/calendar.ts; shownAt in
    *  src/elf/doors.ts). Never worked out from closesAt above, which is gone once a typed closing has passed. */
   mayShowLater: boolean;
   /** While the elf is still hunted, the latest its place is shown: when it would be with the elf never found, at
-   *  the reveal or at the place's closing (typed in Doors, or the 8pm a door falls back to), whichever is later.
+   *  the reveal or at the place's closing (typed in Doors, or the time a door falls back to with none typed: 4pm
+   *  on Christmas Eve, 8pm otherwise), whichever is later.
    *  Only when that falls on the door's own day: a closing typed at or before clue 1 counts as the next day's, so
    *  it is null then, as it is otherwise. Once the reveal time has passed, Detective HQ says it as the latest a
    *  family finds out. */
@@ -220,6 +226,42 @@ export interface HqView {
   guessUrl: string;
   /** Where a signed in family adds another detective (wave 1). Left out, no link is shown. */
   addDetectiveUrl?: string;
+  /** The grand prize (Plan 2c-2): while December's doors are on, from midnight as Christmas Eve begins until the
+   *  later of the entries closing and 1 January (prizeSectionShows in src/elf/grand-prize.ts); null otherwise,
+   *  and then Detective HQ has no grand prize section. `closesAt` is when the entries close (grandPrizeClosesAt),
+   *  and `open` whether they still are. `detectives` are the family's graduates only (all 24 doors done), each by
+   *  name as the family sees it, with its entry page (`/elf/hq/entry/${id}`) and whether its picture is in. */
+  grandPrize: { closesAt: Date; open: boolean; detectives: { name: string; url: string; sent: boolean }[] } | null;
+  /** The graduates' video (Plan 2c-2): while December's doors are on and a head elf has set its link, Detective HQ's
+   *  own address for it, `/elf/hq/video`, which sends a graduate's family on to the link (ruling F10: every link on a
+   *  family's page is on this site); null otherwise. Drawn on a graduate's card only. */
+  videoUrl: string | null;
+  /** The family's switch for the emails that are not essential (Plan 2c-2): whether it has stopped them, and where
+   *  the switch posts (`/api/elf/emails`, signed in). Null while December's doors are off, and then Detective HQ has
+   *  no emails section. Drawn last on the page. */
+  emails: { stopped: boolean; url: string } | null;
+}
+
+/** The page where a family sends in a graduate's picture for the grand prize (Plan 2c-2), from Detective HQ. The
+ *  family's own, so it is private: a picture is seen only by its own family and by head elves. */
+export interface EntryView {
+  /** The graduate: its id, and its name as the family sees it (familyDetectiveName): "Detective Ruby Tinselfoot". */
+  detective: { id: string; name: string };
+  /** When the entries close (grandPrizeClosesAt in src/elf/grand-prize.ts). */
+  closesAt: Date;
+  /** Can a picture still be sent or changed? Until `closesAt`. */
+  open: boolean;
+  /** The picture that is in, once one is: when it came in, and where its own family sees it
+   *  (`/elf/hq/entry/${id}/picture.jpg`, private); null before. */
+  sent: { at: Date; pictureUrl: string } | null;
+  /** Does the family have no mobile number (it enrolled before one was asked for)? Then the form asks for one. */
+  askMobile: boolean;
+  /** Where the picture is sent: `/api/elf/entry/${id}`. */
+  postUrl: string;
+  /** Where the family's own picture shows once one is in (`/elf/hq/entry/${id}/picture.jpg`, as `sent` has it), so
+   *  the page's script can show a new picture as soon as it has been sent, a first one included. */
+  pictureUrl: string;
+  hqUrl: string;
 }
 
 export interface WardrobeView {

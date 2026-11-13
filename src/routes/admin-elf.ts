@@ -32,6 +32,7 @@ import { elfTextsOn } from "../elf/texts-on";
 import { createRateLimiter } from "../portal/request-limiter";
 import { lastAlert, listHeadElves, recordAlert, setMyAlerts } from "../db/elf-alerts";
 import { countPhotosWaiting } from "../db/elf-photos";
+import { countEntries } from "../db/elf-grand-prize";
 import { sendText, smsConfigured } from "../clients/sms";
 import { sendElfTestAlert } from "../clients/email";
 import { realElfDeps, runElfTick } from "../elf/worker";
@@ -53,8 +54,8 @@ function forAdmin(s: ElfSettings) {
 //   GET   /api/admin/elf/settings   the switch and the pay what you can amounts (elf: view)
 //   PATCH /api/admin/elf/settings   change them (admins only: switching the school on puts it live, and
 //                                   so does December's doors, which needs door 1 to be ready)
-//   GET   /api/admin/elf/hq         HQ: the settings, the numbers, Needs you, the newest recruits and
-//                                   the days to the first clue (elf: view)
+//   GET   /api/admin/elf/hq         HQ: the settings, the numbers, Needs you, the newest recruits, the
+//                                   days to the first clue and the tiles' counts (elf: view)
 //   GET    /api/admin/elf/practice  the practice door, with its tag word so a head elf can type it, and
 //                                   whether there is a preview link (elf: view)
 //   POST   /api/admin/elf/families/:id/word-tries/clear  let a family type words at a door again (elf: edit)
@@ -196,7 +197,7 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       countPhotosWaiting(),
     ]);
     const clue = firstClueAt(settings.year);
-    const { notReady, soon } = await doorsNotReadyAt(settings.year, now);
+    const [{ notReady, soon }, grandPrizeEntries] = await Promise.all([doorsNotReadyAt(settings.year, now), countEntries(settings.year)]);
     return res.status(200).json({
       settings: forAdmin(settings),
       // Whether the lever is drawn to be pulled. The token's role is enough for that: the switch
@@ -210,6 +211,8 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       doorsNotReady: notReady.length,
       // The count on the Finds tile: photos waiting for a head elf to check.
       photosWaiting,
+      // The count on the Grand prize tile: the pictures sent in for this year's grand prize (Plan 2c-2).
+      grandPrizeEntries,
       doorsOn: settings.doorsOn === true,
       doorsSoonNotReady: soon,
       recruits: recruits.map((d) => ({

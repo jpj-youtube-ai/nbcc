@@ -1,23 +1,36 @@
 import { config } from "../config";
 import { familyWithDetectives, getElfSettings } from "../db/elf";
-import { canRun, familyDoorsDone, finderOf, finderParts, loadDoorRuns, markAutomaticSnowDays, type DoorRun, type Finder } from "../db/elf-game";
+import { canRun, familyDoorsDone, familyKnowledge, finderOf, finderParts, loadDoorRuns, markAutomaticSnowDays, type DoorRun, type Finder } from "../db/elf-game";
 import { listElfDoors } from "../db/elf-doors";
 import { claimSend, familiesStillToEmail, familiesToSweep, markSendFailed, markSent, type ClueFamily } from "../db/elf-sends";
 import { lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert } from "../db/elf-alerts";
 import { countPhotosWaiting, deleteExpiredPhotoFiles, oldestWaitingPhotoDoor } from "../db/elf-photos";
+import { deleteExpiredGrandPrizeEntries } from "../db/elf-grand-prize";
 import { sendElfClue, sendElfFindAlert, sendElfMorning, sendElfPhotoAlert, sendElfPlaceReminder, sendElfProud, type FundraiseEmailMessage } from "../clients/email";
 import { sendText, type SmsMessage } from "../clients/sms";
 import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
-import { closingShown, goesOpen } from "./catch-up";
+import { closingShown, doorsToCrack, goesOpen, type FamilyKnowledge } from "./catch-up";
+import { catchUpOf, christmasEveOf, grandPrizeClosesAt } from "./grand-prize";
 import { elfTextsOn } from "./texts-on";
 import { doorInstant, doorOn, type Door } from "./calendar";
 import { doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
 import { doorState, isOpen } from "./doors";
-import { buildElfClueEmail, buildElfFindAlertEmail, buildElfMorningEmail, buildElfPhotoAlertEmail, buildElfPlaceReminderEmail, buildElfProudEmail, ELF_PHOTO_TEXT, type BuiltEmail } from "./emails";
+import {
+  buildElfClueEmail,
+  buildElfFindAlertEmail,
+  buildElfMorningEmail,
+  buildElfPhotoAlertEmail,
+  buildElfPlaceReminderEmail,
+  buildElfProudEmail,
+  ELF_PHOTO_TEXT,
+  EMAILS_TOKEN,
+  type BuiltEmail,
+  type ClueCatchUp,
+} from "./emails";
 import { factFor } from "./facts";
 import { familyDetectiveName, type DetectiveNameParts } from "./names";
 import { doorPost, postPicture, yesterdayPost } from "./posts";
-import { progressOf, type DoorsDone } from "./progress";
+import { doneDoorsOf, progressOf, type DoorsDone } from "./progress";
 import { CLUE_EMAILS_A_TICK, dueNow, londonDateAndHour, proudMomentsOf, type Due, type ProudMoment } from "./schedule";
 import { ELF_DEFAULTS, type ElfSettings } from "./settings";
 import type { FamilyRow } from "./views";
@@ -26,7 +39,8 @@ import { clockWords } from "./words";
 // NBCC Elf Detective School wave 2: the elf worker. Everything that goes on time in December without a
 // developer: the clue email to every family at clue 1, the reminder to each place at 9am, the 8am Elf HQ
 // email and the find alert to head elves, the photo alerts by email and text, the proud moments a
-// detective earns any way, and the clear out of every photo from 31 January. Design:
+// detective earns any way, and the clear out of every photo and every grand prize entry from 31 January
+// after its December. Design:
 // docs/superpowers/specs/2026-11-10-elf-detective-wave-2-design.md ("Emails in wave 2", "Alerts").
 //
 // It ticks every 30 seconds in the app, on the newsletter sender's pattern (src/newsletter/send-worker.ts),
@@ -70,6 +84,9 @@ export interface ElfWorkerDeps {
   familiesToSweep: () => Promise<number[]>;
   familyWithDetectives: (familyId: number) => Promise<FamilyRow | null>;
   familyDoorsDone: (year: number, familyId: number, runs: DoorRun[], now: Date) => Promise<Map<number, DoorsDone>>;
+  /** What a family has done, door by door (its guesses, and the doors where it typed a tag's word): for the doors it
+   *  can still crack from home, in the clue emails of the week before Christmas Eve (Plan 2c-2). */
+  familyKnowledge: (year: number, familyId: number) => Promise<FamilyKnowledge>;
   finderOf: (year: number, door: number) => Promise<Finder | null>;
   finderParts: (year: number, door: number) => Promise<DetectiveNameParts[]>;
   countPhotosWaiting: () => Promise<number>;
@@ -84,6 +101,8 @@ export interface ElfWorkerDeps {
   markSendFailed: (kind: string, key: string, error: string) => Promise<void>;
   sendText: (msg: SmsMessage) => Promise<"sent" | "stubbed">;
   deleteExpiredPhotoFiles: (now: Date) => Promise<number>;
+  /** The grand prize entries and their pictures, from 31 January after their December (Plan 2c-2). */
+  deleteExpiredGrandPrizeEntries: (now: Date) => Promise<number>;
   send: { clue: Sender; reminder: Sender; morning: Sender; findAlert: Sender; photoAlert: Sender; proud: Sender };
 }
 
@@ -103,6 +122,7 @@ export function realElfDeps(): ElfWorkerDeps {
     familiesToSweep,
     familyWithDetectives,
     familyDoorsDone,
+    familyKnowledge,
     finderOf,
     finderParts,
     countPhotosWaiting,
@@ -116,6 +136,7 @@ export function realElfDeps(): ElfWorkerDeps {
     markSendFailed,
     sendText: (msg) => sendText(msg),
     deleteExpiredPhotoFiles,
+    deleteExpiredGrandPrizeEntries,
     send: {
       clue: sendElfClue,
       reminder: sendElfPlaceReminder,
@@ -162,6 +183,13 @@ const messageFor = (to: string, mail: BuiltEmail, from: string): FundraiseEmailM
 });
 
 const sendId = (kind: string, key: string): string => `${kind} ${key}`;
+
+/** The address that ends a family's clue email and its promotions and graduations (Plan 2c-2): its own page for
+ *  stopping the emails, GET /elf/emails/:token. Null for a token that is not one, and the email then goes without
+ *  the link. */
+function stopUrlOf(deps: ElfWorkerDeps, token: string | null | undefined): string | null {
+  return typeof token === "string" && EMAILS_TOKEN.test(token) ? `${deps.siteOrigin}/elf/emails/${token}` : null;
+}
 
 /** Claims a send for this task: true only when this task should send it. A send this task has already sent
  *  but not yet marked is never claimed again from here. Never throws. */
@@ -267,6 +295,53 @@ interface Tick {
 
 // ---- the clue email, the reminder, the morning email and the find alert --------------------------------
 
+/** The week before Christmas Eve's lines in one family's clue email (Plan 2c-2). */
+interface PrizeLines {
+  christmasEve: { clue1At: Date } | null;
+  catchUp: ClueCatchUp | null;
+}
+
+const NO_PRIZE_LINES: PrizeLines = { christmasEve: null, catchUp: null };
+
+/** Is a door's clue email one of the week before Christmas Eve's (doors 17 to 23)? catchUpOf answers null for every
+ *  other door, whatever it is given, so it is asked with nothing: the rule stays in src/elf/grand-prize.ts. */
+const weekBefore = (door: Door, at: Date): boolean => catchUpOf({ door, runs: [], done: [], fromHome: 0, now: at }) !== null;
+
+/** The lines the week before Christmas Eve adds to one family's clue email (Plan 2c-2). For doors 17 to 23: whether the
+ *  family has done every door so far (catchUpOf), from any one detective's doors done (every detective in a family has
+ *  the same) and the doors it can still crack from home; up to date, with when the entries close (a head elf's time,
+ *  or 5pm). A family with no detective gets no such line. Door 23's also says, to every family, when door 24's first
+ *  clue comes out (christmasEveOf: nothing when door 24 is snowed in). Every other door's email gets neither, and
+ *  reads nothing. Called inside the family's claimed send (ruling F17). The clue is the essential part of the email,
+ *  so a family whose doors cannot be read is logged by its id alone and gets its clue without the grand prize lines;
+ *  door 23's line, which needs nothing of the family's, still goes. Never throws. */
+async function prizeLines(door: Door, familyId: number, t: Tick): Promise<PrizeLines> {
+  if (!weekBefore(door, t.at)) return NO_PRIZE_LINES;
+  // The spec puts no condition on door 23's line, so it goes to a family with no detective too.
+  const christmasEve = christmasEveOf({ door, runs: t.runs });
+  let doorsDone: Map<number, DoorsDone>;
+  let knowledge: FamilyKnowledge;
+  try {
+    [doorsDone, knowledge] = await Promise.all([t.deps.familyDoorsDone(t.year, familyId, t.runs, t.at), t.deps.familyKnowledge(t.year, familyId)]);
+  } catch (err) {
+    failed(`grand prize lines for family ${familyId}`, err);
+    return { christmasEve, catchUp: null };
+  }
+  const [anyDetective] = doorsDone.values();
+  if (!anyDetective) return { christmasEve, catchUp: null };
+  const catchUp = catchUpOf({
+    door,
+    runs: t.runs,
+    done: doneDoorsOf(anyDetective),
+    fromHome: doorsToCrack({ runs: t.runs, knowledge, now: t.at }).length,
+    now: t.at,
+  });
+  return {
+    christmasEve,
+    catchUp: catchUp === null ? null : catchUp.ready ? { ready: true, closesAt: grandPrizeClosesAt(t.settings) } : catchUp,
+  };
+}
+
 async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<void> {
   const first = run.clues.find((c) => c.n === 1);
   // A first clue with neither words nor a picture is never sent: such a door is snowed in instead.
@@ -274,6 +349,9 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
   const families = await t.deps.familiesStillToEmail(t.year, door, CLUE_EMAILS_A_TICK);
   for (const f of families) {
     await claimed(t.deps, "clue", `${due.key}:${f.familyId}`, async () => {
+      // Read once this family's send is claimed (ruling F17): one whose doors cannot be read still gets its clue, without
+      // the grand prize lines.
+      const prize = await prizeLines(door, f.familyId, t);
       const mail = buildElfClueEmail({
         grownUpName: f.grownUpName,
         door,
@@ -284,11 +362,16 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
         clue2At: run.facts.clue2At,
         clue3At: run.facts.clue3At,
         revealAt: run.facts.revealAt,
-        // Only a closing time typed in Doors, on the door's own day, while it is still to come.
+        // A closing time typed in Doors, or door 24's 4pm when none is typed, on the door's own day, while it is still
+        // to come (closingShown).
         closesAt: closingShown(run, t.at),
         hqUrl: `${t.deps.siteOrigin}/elf/hq`,
         fact: factFor(door),
         giveUrl: `${t.deps.siteOrigin}/donate`,
+        christmasEve: prize.christmasEve,
+        catchUp: prize.catchUp,
+        // A family that has stopped the emails is never listed (familiesStillToEmail): each listed one gets its link.
+        stopUrl: stopUrlOf(t.deps, f.emailsToken),
       });
       await t.deps.send.clue(f.grownUpName, messageFor(f.email, mail, t.deps.from));
     });
@@ -412,11 +495,13 @@ async function findAlert(due: Due, door: Door, run: DoorRun, t: Tick): Promise<v
 /** A detective's proud moments not yet claimed, each claimed as ("proud", `${year}:${key}`). Only the highest
  *  new one is emailed to the family: a run of snow days can bring several ranks at once, and the family hears
  *  once, about the newest (graduating above every rank); the lower ones are claimed and marked without an
- *  email. If the email fails, its own claim is tried again ten minutes on. */
+ *  email. If the email fails, its own claim is tried again ten minutes on. A family that has stopped the emails
+ *  (Plan 2c-2) has every new moment claimed and marked with no email at all, so starting them again never sends
+ *  one it missed; the email to any other family ends with the link to its own page for stopping them. */
 async function sendMoments(
   deps: ElfWorkerDeps,
   year: number,
-  family: { grownUpName: string; email: string },
+  family: { grownUpName: string; email: string; emailsStopped?: boolean; emailsToken?: string | null },
   detectiveName: string,
   moments: ProudMoment[],
 ): Promise<void> {
@@ -424,7 +509,9 @@ async function sendMoments(
   for (const m of moments) if (await claim(deps, "proud", `${year}:${m.key}`)) fresh.push(m);
   const top = fresh[fresh.length - 1];
   if (!top) return;
-  for (const m of fresh) if (m !== top) await noteSent(deps, "proud", `${year}:${m.key}`);
+  const quiet = family.emailsStopped === true;
+  for (const m of fresh) if (m !== top || quiet) await noteSent(deps, "proud", `${year}:${m.key}`);
+  if (quiet) return;
   await sendClaimed(deps, "proud", `${year}:${top.key}`, async () => {
     const mail = buildElfProudEmail({
       kind: top.kind,
@@ -433,6 +520,7 @@ async function sendMoments(
       ...(top.rank ? { rank: top.rank } : {}),
       hqUrl: `${deps.siteOrigin}/elf/hq`,
       giveUrl: `${deps.siteOrigin}/donate`,
+      stopUrl: stopUrlOf(deps, family.emailsToken),
     });
     await deps.send.proud(family.grownUpName, messageFor(family.email, mail, deps.from));
   });
@@ -454,6 +542,8 @@ async function sendWon(
       door: o.door,
       hqUrl: `${deps.siteOrigin}/elf/hq`,
       giveUrl: `${deps.siteOrigin}/donate`,
+      // The won email always goes, whether or not the family has stopped the others, so it has no link to stop them.
+      stopUrl: null,
     });
     await deps.send.proud(o.family.grownUpName, messageFor(o.family.email, mail, deps.from));
   });
@@ -502,12 +592,14 @@ async function sweep(due: Due, t: Tick): Promise<void> {
   });
 }
 
-/** A word that counted (src/routes/elf.ts, after recordWord): what it gave, for the proud moments. */
+/** A word that counted (src/routes/elf.ts, after recordWord): what it gave, for the proud moments. The family's
+ *  switch for the emails and its token come from its FamilyRow (Plan 2c-2): a family that has stopped the emails
+ *  still gets the won email, and nothing else. */
 export interface WordMoment {
   year: number;
   door: Door | 0;
   elfName: string;
-  family: { id: number; grownUpName: string; email: string };
+  family: { id: number; grownUpName: string; email: string; emailsStopped: boolean; emailsToken: string | null };
   /** Did this word win the door's elf? */
   won: boolean;
   /** The detectives the word stamped, each with their doors done once the word counts: without this door
@@ -606,7 +698,7 @@ async function sendDue(due: Due, t: Tick): Promise<void> {
  * One tick at `at`, in order, each part on its own: first the sends this task sent but could not mark;
  * then snow in what cannot run (December's doors on only); then whatever is due (the clue emails, the
  * reminders, the morning email, the find alerts, the sweep); then the photo alert; last, the clear out of
- * every photo past its 31 January.
+ * every photo past its 31 January, and then of every grand prize entry past its own, its picture with it.
  */
 export async function runElfTick(at: Date, deps: ElfWorkerDeps): Promise<void> {
   await markUnmarked(deps);
@@ -651,6 +743,7 @@ export async function runElfTick(at: Date, deps: ElfWorkerDeps): Promise<void> {
   }
   await part("photo alert", () => photoAlert(at, settings.year, deps));
   await part("clear out", () => deps.deleteExpiredPhotoFiles(at));
+  await part("grand prize clear out", () => deps.deleteExpiredGrandPrizeEntries(at));
 }
 
 // ---- the timer ------------------------------------------------------------------------------------------------

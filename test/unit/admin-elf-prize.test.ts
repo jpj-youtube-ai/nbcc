@@ -500,18 +500,19 @@ describe("marking the winner", () => {
 
   it("marks the entry as the caller once they have closed, and answers as the read does", async () => {
     vi.setSystemTime(SIX_PM);
-    const res = await markAs("13");
+    prizeDb.listEntries.mockResolvedValue([{ ...RUBY, winner: true }, LEO]);
+    const res = await markAs("12");
     expect(res.statusCode).toBe(200);
     expect(prizeDb.markWinner).toHaveBeenCalledTimes(1);
-    expect(prizeDb.markWinner).toHaveBeenCalledWith(2026, 13, ACTOR);
-    expect(body(res)).toEqual({ closesAt: "2026-12-24T17:00:00.000Z", closed: true, entries: [RUBY_SENT, { ...LEO_SENT, winner: true }], canEdit: true });
+    expect(prizeDb.markWinner).toHaveBeenCalledWith(2026, 12, ACTOR);
+    expect(body(res)).toEqual({ closesAt: "2026-12-24T17:00:00.000Z", closed: true, entries: [{ ...RUBY_SENT, winner: true }, LEO_SENT], canEdit: true });
     expect(res.headers["Cache-Control"]).toBe("private, no-store");
   });
 
   it("marks from the very moment they close", async () => {
     vi.setSystemTime(FIVE_PM);
-    expect((await markAs("12")).statusCode).toBe(200);
-    expect(prizeDb.markWinner).toHaveBeenCalledWith(2026, 12, ACTOR);
+    expect((await markAs("13")).statusCode).toBe(200);
+    expect(prizeDb.markWinner).toHaveBeenCalledWith(2026, 13, ACTOR);
   });
 
   it("goes by the closing a head elf saved", async () => {

@@ -1227,6 +1227,8 @@ const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (
     hqUrl: `${b}/elf/hq`,
     fact: factFor(7),
     giveUrl: `${b}/donate`,
+    christmasEve: null,
+    catchUp: null,
     stopUrl: ELF_STOP(b),
   });
 const elfReminder = (clue1At: Date) => () =>

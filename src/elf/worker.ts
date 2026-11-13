@@ -306,6 +306,8 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
         hqUrl: `${t.deps.siteOrigin}/elf/hq`,
         fact: factFor(door),
         giveUrl: `${t.deps.siteOrigin}/donate`,
+        christmasEve: null,
+        catchUp: null,
         // A family that has stopped the emails is never listed (familiesStillToEmail): each listed one gets its link.
         stopUrl: stopUrlOf(t.deps, f.emailsToken),
       });

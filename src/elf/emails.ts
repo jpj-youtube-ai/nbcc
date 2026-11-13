@@ -132,12 +132,46 @@ function stopLine(stopUrl: string | null | undefined): { html: string; text: str
   return { html: small(stopUrl, STOP_WORDS), text: ["", `${STOP_WORDS}: ${stopUrl}`] };
 }
 
+const realDate = (d: unknown): d is Date => d instanceof Date && Number.isFinite(d.getTime());
+
+/** What the clue email of the week before Christmas Eve says to one family about the grand prize (Plan 2c-2): up
+ *  to date, when the entries close on Christmas Eve; behind, how many doors it can still crack from home. */
+export type ClueCatchUp = { ready: true; closesAt: Date } | { ready: false; fromHome: number };
+
+/** The grand prize lines of the week before Christmas Eve: a subheading, then its paragraphs. A family that is up
+ *  to date is asked whether its picture is ready, and told until when it can send it in; one that is behind is told
+ *  how many doors it can still crack from home or, with none left to crack from home, to visit the places it has
+ *  not done. A closing time that is not a real time is not said. None for none. */
+function grandPrizeLines(c: ClueCatchUp | null | undefined): { heading: string; lines: string[] } | null {
+  if (!c) return null;
+  if (c.ready) {
+    return {
+      heading: "Have you got your picture ready?",
+      lines: [
+        "Every detective who does all 24 doors can send in a drawing, or a photo of their naughtiest elf at home, for the grand prize.",
+        ...(realDate(c.closesAt) ? [`You can send it in Detective HQ from the morning of Christmas Eve until ${clockWords(c.closesAt)} that day.`] : []),
+      ],
+    };
+  }
+  return {
+    heading: "Catching up for the grand prize",
+    lines: [
+      c.fromHome > 0
+        ? `You can still crack ${things(c.fromHome, "door")} from home, with one guess each. They are in Detective HQ, under Doors you can still crack.`
+        : "To catch up, visit the hiding places of the doors you have not done yet, and type the word on each elf's tag.",
+      "Every detective who does all 24 doors can send in a picture for the grand prize on Christmas Eve.",
+    ],
+  };
+}
+
 /** The email to a grown up when a door's first clue comes out. It never says when the place is shown: a family
  *  sees a door's place only once it has had its guess or been there (Plan 2c-1). It says when the family finds
  *  out whether it cracked the case: at the reveal, or later if the elf is still hiding then, unless the place
  *  closes by the reveal. A closing time not given, or not a real time, is none (ruling F13): such a place still
  *  closes, at the time a door falls back to, so the family may find out later. And a family that misses the hunt
- *  can still crack the case in Detective HQ, with one guess. With `stopUrl` it ends with the link to stop the
+ *  can still crack the case in Detective HQ, with one guess. In the week before Christmas Eve (Plan 2c-2) it ends,
+ *  before the button, with the grand prize lines for the family (`catchUp`), and door 23's says, before the clue
+ *  2 line, when door 24's first clue comes out (`christmasEve`). With `stopUrl` it ends with the link to stop the
  *  emails (Plan 2c-2). */
 export function buildElfClueEmail(o: {
   grownUpName: string;
@@ -148,12 +182,20 @@ export function buildElfClueEmail(o: {
   clue2At: Date;
   clue3At: Date;
   revealAt: Date;
-  /** When the place closes, on the door's own day, when a closing time is typed in Doors (closingShown in
-   *  src/elf/catch-up.ts); null otherwise. */
+  /** When the place closes, on the door's own day, when a closing time is typed in Doors, or on Christmas Eve,
+   *  whose door 24 closes at 4pm unless a head elf types a time (closingShown in src/elf/catch-up.ts); null
+   *  otherwise. */
   closesAt: Date | null;
   hqUrl: string;
   fact: ElfFact | null;
   giveUrl: string;
+  /** Door 23's email (christmasEveOf in src/elf/grand-prize.ts): when door 24's first clue comes out, so families
+   *  know Christmas Eve starts in the morning; null on every other door. A time that is not a real time is none. */
+  christmasEve: { clue1At: Date } | null;
+  /** The emails of doors 17 to 23 (catchUpOf in src/elf/grand-prize.ts): whether the family has done every door
+   *  so far, with when the entries close or how many doors it can still crack from home; null on every other door,
+   *  and for a family with no detective. Not given is none. */
+  catchUp: ClueCatchUp | null;
   /** The family's own page for stopping the emails (`${siteOrigin}/elf/emails/${token}`), or null for none. */
   stopUrl: string | null;
 }): BuiltEmail {
@@ -166,8 +208,13 @@ export function buildElfClueEmail(o: {
       ? "See the picture in Detective HQ."
       : null
     : `Clue 1 is a picture: ${o.clue.pictureAlt ?? ""}. See it in Detective HQ.`;
-  const closesAt = o.closesAt instanceof Date && Number.isFinite(o.closesAt.getTime()) ? o.closesAt : null;
+  const closesAt = realDate(o.closesAt) ? o.closesAt : null;
   const findOut = findOutWords(clockWords(o.revealAt), !(closesAt !== null && closesAt.getTime() <= o.revealAt.getTime()));
+  const eve =
+    o.christmasEve && realDate(o.christmasEve.clue1At)
+      ? `Tomorrow is Christmas Eve, so door 24's first clue comes out at ${clockWords(o.christmasEve.clue1At)}, and hiding places close early.`
+      : null;
+  const prize = grandPrizeLines(o.catchUp);
   const later = [
     `Clue 2 comes out at ${clockWords(o.clue2At)} and clue 3 at ${clockWords(o.clue3At)}, in Detective HQ.`,
     ...(closesAt ? [`The hiding place closes at ${clockWords(closesAt)} today.`] : []),
@@ -184,8 +231,10 @@ export function buildElfClueEmail(o: {
     bodyP(escapeHtml(intro)) +
     (hasWords ? quoteBox(o.clue.words ?? "") : "") +
     (pictureLine ? bodyP(escapeHtml(pictureLine)) : "") +
+    (eve ? bodyP(escapeHtml(eve)) : "") +
     bodyP(escapeHtml(later)) +
     bodyP(escapeHtml(missed)) +
+    (prize ? subheading(escapeHtml(prize.heading)) + prize.lines.map((line) => bodyP(escapeHtml(line))).join("") : "") +
     button(o.hqUrl, "Open Detective HQ") +
     note(escapeHtml(lateNote)) +
     (o.fact ? subheading("Did you know?") + bodyP(escapeHtml(o.fact.grownUp)) : "") +
@@ -198,10 +247,12 @@ export function buildElfClueEmail(o: {
     "",
     ...(hasWords ? [`"${o.clue.words}"`, ""] : []),
     ...(pictureLine ? [pictureLine, ""] : []),
+    ...(eve ? [eve, ""] : []),
     later,
     "",
     missed,
     "",
+    ...(prize ? [prize.heading, ...prize.lines.flatMap((line) => [line, ""])] : []),
     `Open Detective HQ: ${o.hqUrl}`,
     "",
     lateNote,

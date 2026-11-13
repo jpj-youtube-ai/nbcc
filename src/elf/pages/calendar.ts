@@ -1,4 +1,5 @@
 import { DOOR_COUNT } from "../calendar";
+import { christmasDay, newYearsDay } from "../catch-up";
 import { SCHOOL_NAME, schoolLogo } from "../logo";
 import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
 import { GUESS_LINE, doorDetail, doorTile } from "./door";
@@ -15,7 +16,8 @@ import type { CalendarView } from "./types";
 // An advent calendar: one torn card board in NBCC's solid rich maroon (Jaimie, 5 November 2026) and
 // the 24 doors cut into it, in order, two to a row on a phone. Everything on this page is the same for every
 // visitor, so it can be kept and served again without asking the database: a family's own marks are
-// laid over it afterwards by the page's script, from a small private answer.
+// laid over it afterwards by the page's script, from a small private answer, and so, while December's doors
+// are on, are the doors whose places the family can see (Plan 2c-1).
 //
 // Each door is followed in the page by its own detail. With no script, a door is a link to its
 // detail and the stylesheet shows the one that was asked for. The script only makes that nicer.
@@ -163,6 +165,22 @@ const STEPS: readonly { title: string; words: string }[] = [
   },
 ];
 
+/** What the board tells the script about a family's own doors (Plan 2c-1), only while December's doors are
+ *  on: where to ask for one door and for all of them at once, and when the calendar everyone shares carries
+ *  every place and photo itself (from Christmas Day until 1 January), so the script asks for none of the
+ *  family's then. With the doors off the board is exactly as it was (ruling F4). */
+function ownDoorsAttributes(view: CalendarView): string {
+  if (!view.doorsOn) return "";
+  const from = christmasDay(view.year);
+  const until = newYearsDay(view.year);
+  // A year with no Christmas Day (christmasDay answers an Invalid Date) has no window, rather than no page.
+  const shown =
+    Number.isFinite(from.getTime()) && Number.isFinite(until.getTime())
+      ? ` data-places-from="${from.toISOString()}" data-places-until="${until.toISOString()}"`
+      : "";
+  return ` data-me-door="/api/elf/me/door/" data-me-doors="/api/elf/me/doors"${shown}`;
+}
+
 /** The whole public calendar page. `servedAt` is the moment the page is sent: the view is built once
  *  every 15 seconds and shared, so the script sets its clock by this, while the doors are drawn at the
  *  view's own time. */
@@ -217,7 +235,7 @@ export function renderCalendarPage(view: CalendarView, servedAt: Date = view.now
       </div>
       <div class="elf-advent">
         <span class="elf-advent__card" aria-hidden="true"></span>
-        <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-now="${servedAt.toISOString()}" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me">
+        <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-now="${servedAt.toISOString()}" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me"${ownDoorsAttributes(view)}>
 ${board}
         </div>
       </div>

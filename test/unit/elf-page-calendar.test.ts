@@ -154,6 +154,30 @@ describe("the calendar page", () => {
     expect(board.getAttribute("data-me")).toBe("/api/elf/me");
   });
 
+  // Plan 2c-1, Task 8: the calendar everyone shares carries no place before Christmas Day, so the script draws the
+  // doors a signed in family can see from the family's own answers: one door, or all of them at once. From
+  // Christmas Day until 1 January the shared calendar carries every place itself, so the script asks for none.
+  it("tells the script where a family's own doors are, and when the calendar everyone shares carries every place", () => {
+    const board = page(view(AFTERNOON)).querySelector("#elf-board")!;
+    expect(board.getAttribute("data-me-door")).toBe("/api/elf/me/door/");
+    expect(board.getAttribute("data-me-doors")).toBe("/api/elf/me/doors");
+    expect(board.getAttribute("data-places-from")).toBe("2026-12-25T00:00:00.000Z");
+    expect(board.getAttribute("data-places-until")).toBe("2027-01-01T00:00:00.000Z");
+  });
+
+  it("still draws, with no Christmas window, for a year that has no Christmas Day", () => {
+    const board = page(view(AFTERNOON, {}, { year: 0 })).querySelector("#elf-board")!;
+    expect(board.getAttribute("data-me-door")).toBe("/api/elf/me/door/");
+    expect(board.hasAttribute("data-places-from")).toBe(false);
+    expect(board.hasAttribute("data-places-until")).toBe(false);
+  });
+
+  // Ruling F4 on Plan 2c-1: with December's doors off the calendar is exactly today's.
+  it("tells the script nothing more while December's doors are off", () => {
+    const board = page(view(at("2026-11-20T10:00:00.000Z"), {}, { doorsOn: false })).querySelector("#elf-board")!;
+    expect(board.getAttributeNames()).toEqual(["class", "id", "role", "aria-label", "data-now", "data-feed", "data-door-api", "data-me"]);
+  });
+
   it("tells the script the time on the server, so a countdown is right even if the phone's clock is wrong", () => {
     expect(page(view(AFTERNOON)).querySelector("#elf-board")!.getAttribute("data-now")).toBe("2026-12-07T15:00:00.000Z");
   });

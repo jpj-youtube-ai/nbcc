@@ -4,7 +4,8 @@ const { Pool } = require("pg");
 const sharp = require("sharp");
 
 // Steps for features/elf-game.feature: December's doors switched off, a real door shut until its day, and
-// a whole practice evening played through the preview link. The families come from the elf join steps
+// a whole practice evening played through the preview link; and for features/elf-grand-prize.feature, a
+// graduate's picture sent in for the grand prize on Christmas Eve. The families come from the elf join steps
 // (features/steps/elf-join.steps.js, whose @elf-school hooks clear them, play every scenario in next
 // year's December with December's doors off, and clear the practice door); the staff from "an admin user
 // {string} with role {string} and password {string}" (features/steps/admin-api.steps.js, whose @admin
@@ -36,13 +37,16 @@ Before({ tags: "@elf-game" }, async function () {
 After({ tags: "@elf-game" }, async function () {
   await pool.query("DELETE FROM elf_doors WHERE year = $1", [nextYear()]);
   if (this.gamePastYear) {
-    for (const table of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos"]) {
+    // A grand prize entry's picture goes with its entry.
+    for (const table of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos", "elf_grand_prize_entries"]) {
       await pool.query(`DELETE FROM ${table} WHERE year = $1`, [this.gamePastYear]);
     }
     // The door's names and clues go with it.
     await pool.query("DELETE FROM elf_doors WHERE year = $1", [this.gamePastYear]);
   }
   if (this.gamePreviewBefore) await pool.query("UPDATE elf_settings SET preview_hash = $1 WHERE id = 1", [this.gamePreviewBefore.hash]);
+  // The grand prize entries' closing, as it was before a step moved it (features/elf-grand-prize.feature).
+  if (this.prizeClosesBefore) await pool.query("UPDATE elf_settings SET grand_prize_closes_at = $1 WHERE id = 1", [this.prizeClosesBefore.at]);
 });
 AfterAll(async () => {
   await pool.end();
@@ -786,4 +790,70 @@ Then("nothing of the practice door is left", async function () {
     const files = await pool.query("SELECT count(*)::int AS n FROM elf_photo_files WHERE photo_id = $1", [this.gamePhotoId]);
     assert.equal(files.rows[0].n, 0, "the photo's bytes are still there");
   }
+});
+
+// ---- the grand prize (Plan 2c-2, features/elf-grand-prize.feature) ----------------------------------------
+//
+// Played in last year's December, whose 24 doors and Christmas are always over. The entries' closing is a moment
+// set by SQL from the database's own clock, never a date written here, so every answer holds whenever this runs.
+// The closing as it was is kept in the world the first time a step moves it, and the @elf-game After hook puts
+// it back.
+
+async function keepPrizeClosing(world) {
+  if (world.prizeClosesBefore) return;
+  const r = await pool.query("SELECT grand_prize_closes_at FROM elf_settings WHERE id = 1");
+  world.prizeClosesBefore = { at: r.rows[0] ? r.rows[0].grand_prize_closes_at : null };
+}
+
+Given("the grand prize entries close an hour from now", async function () {
+  await keepPrizeClosing(this);
+  await pool.query("UPDATE elf_settings SET grand_prize_closes_at = now() + interval '1 hour' WHERE id = 1");
+});
+
+Given("the grand prize entries closed a minute ago", async function () {
+  await keepPrizeClosing(this);
+  await pool.query("UPDATE elf_settings SET grand_prize_closes_at = now() - interval '1 minute' WHERE id = 1");
+});
+
+When("the family {string} opens its detective's entry page", async function (email) {
+  await asFamily(this, familyOf(this, email), "GET", `/elf/hq/entry/${await detectiveIdOf(email)}`);
+});
+
+/** A graduate's picture for the grand prize, as the entry page's script sends it: a real JPEG in base64, with
+ *  the mobile when one is given. */
+async function sendEntry(world, email, mobile) {
+  const jpeg = await tinyJpeg();
+  const json = { mime: "image/jpeg", dataBase64: jpeg.toString("base64") };
+  if (mobile !== undefined) json.mobile = mobile;
+  await asFamily(world, familyOf(world, email), "POST", `/api/elf/entry/${await detectiveIdOf(email)}`, json);
+}
+
+When("the family {string} sends its detective's picture for the grand prize", { timeout: 20 * 1000 }, async function (email) {
+  await sendEntry(this, email);
+});
+
+When("the family {string} sends its detective's picture for the grand prize, with the mobile {string}", { timeout: 20 * 1000 }, async function (email, mobile) {
+  await sendEntry(this, email, mobile);
+});
+
+// Every family is enrolled with a mobile (features/steps/elf-join.steps.js): this one is taken off again, as a
+// family that enrolled before one was asked for has none.
+Given("the family {string} has no mobile number", async function (email) {
+  const r = await pool.query("UPDATE elf_families SET mobile = NULL WHERE email = $1", [email]);
+  assert.equal(r.rowCount, 1, `no family ${email}`);
+});
+
+// One entry for the detective however many pictures were sent, with the picture's bytes beside it.
+Then("the family {string} has one grand prize entry, with its picture", async function (email) {
+  const r = await pool.query(
+    `SELECT e.mime, octet_length(b.bytes) AS size
+       FROM elf_grand_prize_entries e
+       JOIN elf_families f ON f.id = e.family_id
+       LEFT JOIN elf_grand_prize_files b ON b.entry_id = e.id
+      WHERE f.email = $1 AND e.year = (SELECT year FROM elf_settings WHERE id = 1)`,
+    [email],
+  );
+  assert.equal(r.rows.length, 1, JSON.stringify(r.rows));
+  assert.equal(r.rows[0].mime, "image/jpeg");
+  assert.ok(Number(r.rows[0].size) > 0, "the entry has no picture");
 });

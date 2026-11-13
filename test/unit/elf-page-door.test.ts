@@ -905,4 +905,20 @@ describe("the same open door with its place: a family's own, or everyone's from 
     const late = at("2026-12-24T23:59:59.000Z");
     expect(doorVersion(CHRISTMAS, CHRISTMAS_DAY)).not.toBe(doorVersion(shared7(late), late));
   });
+
+  // Its twin (the rulings on Plan 2c-1, from Task 4's review): every open page takes the place and the photos off
+  // again at midnight as 1 January begins, so the fingerprint changes then too.
+  it("changes its fingerprint again at midnight as 1 January begins, when the place and the photos come off", () => {
+    const lastSecond = at("2026-12-31T23:59:59.000Z");
+    const newYear = at("2027-01-01T00:00:00.000Z");
+    const before = shared7(lastSecond);
+    const after = shared7(newYear);
+    expect(doorVersion(after, newYear)).not.toBe(doorVersion(before, lastSecond));
+    expect(doorTile(before, lastSecond)).toContain("Corner Bakehouse");
+    expect(doorDetail(before, atTime(lastSecond))).toContain("/photo/");
+    for (const said of [doorTile(after, newYear), doorDetail(after, atTime(newYear))]) {
+      expect(said).not.toContain("Corner Bakehouse");
+      expect(said).not.toContain("/photo/");
+    }
+  });
 });

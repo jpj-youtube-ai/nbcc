@@ -226,6 +226,7 @@ export function hqView(over: Partial<HqView> = {}): HqView {
       goUrl: null,
       closesAt: null,
       goneHome: false,
+      mayShowLater: false,
     },
     nextClueAt: at("2026-12-08T17:30:00.000Z"),
     // No missed door to crack (Plan 2c-1), unless told otherwise.

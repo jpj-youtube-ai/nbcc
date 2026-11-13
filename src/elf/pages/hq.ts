@@ -48,11 +48,11 @@ export function clueNote(c: TodayView["clues"][number]): string {
   );
 }
 
-/** May the family find out later than the reveal? While the elf is still hiding, unless the place closes by the
- *  reveal: the clue email's rule. Once the elf is found the place is shown at the reveal (the view's revealAt). */
+/** May the family find out later than the reveal? As the view says (TodayView.mayShowLater, from the run's own
+ *  closing): while the elf is still hiding and the place closes after the reveal. Once the elf is found the place
+ *  is shown at the reveal (the view's revealAt), whatever else the view holds. */
 function mayFindOutLater(today: TodayView): boolean {
-  if (today.state !== "hunting") return false;
-  return !(real(today.closesAt) && real(today.revealAt) && today.closesAt.getTime() <= today.revealAt.getTime());
+  return today.state === "hunting" && today.mayShowLater === true;
 }
 
 /** The clue ladder: a note for each clue that is out, then when the next comes out (counting down),

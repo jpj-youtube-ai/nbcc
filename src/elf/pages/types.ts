@@ -148,6 +148,10 @@ export interface TodayView {
    *  says where the elf was hiding, with no prize to win and no visit to make, and never that it is still out
    *  there. */
   goneHome: boolean;
+  /** May the place be shown later than the reveal time? Only while the elf is still hunted and the place closes
+   *  after the reveal: the run's own closing, the one typed in Doors or the 8pm a door falls back to (shownAt in
+   *  src/elf/doors.ts). Never worked out from closesAt above, which is gone once a typed closing has passed. */
+  mayShowLater: boolean;
 }
 
 /** A door's page in Detective HQ for having a go (Plan 2c-1): a family that missed a door's evening

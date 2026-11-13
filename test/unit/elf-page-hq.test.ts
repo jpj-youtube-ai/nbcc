@@ -26,7 +26,7 @@ const CLUE_3 = { n: 3 as const, at: at("2026-12-07T18:30:00.000Z"), words: "Prac
 const SIX_10 = at("2026-12-07T18:10:00.000Z");
 const SIX_40 = at("2026-12-07T18:40:00.000Z");
 const TWO_OUT = today({ clues: [CLUE_1, CLUE_2], nextClueAt: CLUE_3.at, revealAt: at("2026-12-07T19:00:00.000Z") }, { now: SIX_10 });
-const ALL_OUT = today({ clues: [CLUE_1, CLUE_2, CLUE_3], nextClueAt: null, revealAt: at("2026-12-07T19:00:00.000Z") }, { now: SIX_40 });
+const ALL_OUT = today({ clues: [CLUE_1, CLUE_2, CLUE_3], nextClueAt: null, revealAt: at("2026-12-07T19:00:00.000Z"), mayShowLater: true }, { now: SIX_40 });
 
 describe("Detective HQ", () => {
   it("is a private page with one heading and a greeting", () => {
@@ -119,16 +119,16 @@ describe("the clue ladder", () => {
   });
 
   // As the calendar says it once the elf is found, and as the clue email says it when the place closes by the
-  // reveal: the family finds out at the reveal, never later.
-  it("says only the reveal's time once the elf is found, or when the place closes by then", () => {
-    const found = page(today({ ...ALL_OUT.today!, state: "found-hidden" }, { now: SIX_40 }));
-    expect(words(found.querySelector(".elf-ladder__next"))).toBe("You find out whether you cracked it at 7pm.");
-    for (const closes of ["2026-12-07T19:00:00.000Z", "2026-12-07T18:50:00.000Z"]) {
-      const closing = page(today({ ...ALL_OUT.today!, closesAt: at(closes) }, { now: SIX_40 }));
-      expect(words(closing.querySelector(".elf-ladder__next")), closes).toBe("You find out whether you cracked it at 7pm.");
-    }
-    const later = page(today({ ...ALL_OUT.today!, closesAt: at("2026-12-07T20:00:00.000Z") }, { now: SIX_40 }));
-    expect(words(later.querySelector(".elf-ladder__next"))).toBe("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+  // reveal: the family finds out at the reveal, never later. Fix round 1 (the review's Minor 1): the view says
+  // which (TodayView.mayShowLater, from the run's own closing), never the closing time the case shows, which is
+  // gone once it has passed.
+  it("says only the reveal's time once the elf is found, or when the place closes by then, as the view says", () => {
+    const next = (over: Partial<TodayView>) => words(page(today({ ...ALL_OUT.today!, ...over }, { now: SIX_40 })).querySelector(".elf-ladder__next"));
+    expect(next({ state: "found-hidden", mayShowLater: false })).toBe("You find out whether you cracked it at 7pm.");
+    // A found elf's place is shown at the reveal, whatever else the view holds.
+    expect(next({ state: "found-hidden", mayShowLater: true })).toBe("You find out whether you cracked it at 7pm.");
+    expect(next({ mayShowLater: false, closesAt: null })).toBe("You find out whether you cracked it at 7pm.");
+    expect(next({ mayShowLater: true, closesAt: at("2026-12-07T20:00:00.000Z") })).toBe("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
   });
 
   // Final review, Important 2: once the reveal time has passed with the elf still hiding, the place is

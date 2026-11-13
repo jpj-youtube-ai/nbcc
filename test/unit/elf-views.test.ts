@@ -650,6 +650,28 @@ describe("Detective HQ catching up", () => {
     expect(today).toMatchObject({ goUrl: "/elf/hq/door/7", closesAt: null, outcome: null });
   });
 
+  // Task 9, fix round 1 (the review's Minor 1): whether a family may find out later than the reveal is the run's
+  // own: while the elf is hunted and the place closes after the reveal (its typed closing, or the 8pm a door
+  // falls back to). Never the closing time HQ shows, which is gone once it has passed.
+  it("says the place may be shown later than the reveal only while the elf is hunted and the place closes after it", () => {
+    const hunting = (closesAt: string | null, now = SIX_45) => hq7({ now, seven: { ...CORNER, closesAt } }).today!;
+    expect(hunting("20:00").mayShowLater).toBe(true);
+    // The 8pm a door falls back to, with no closing time typed (ruling F13).
+    expect(hunting(null).mayShowLater).toBe(true);
+    expect(hunting("19:00").mayShowLater).toBe(false);
+    expect(hunting("18:45", at("2026-12-07T18:50:00Z")).mayShowLater).toBe(false);
+    const found = hq7({ now: SIX_10, seven: { ...CORNER, closesAt: "20:00", foundAt: at("2026-12-07T18:05:00Z"), foundFamilyId: 3 } }).today!;
+    expect(found).toMatchObject({ state: "found-hidden", mayShowLater: false });
+  });
+
+  it("says only the reveal's time between a closing typed before the reveal and the reveal", () => {
+    const view = hq7({ now: at("2026-12-07T18:50:00Z"), seven: { ...CORNER, closesAt: "18:45" } });
+    expect(view.today).toMatchObject({ state: "hunting", closesAt: null });
+    const page = renderHqPage(view);
+    expect(page).toContain("You find out whether you cracked it at 7pm.");
+    expect(page).not.toContain("or later if the elf is still hiding then");
+  });
+
   // Task 9, from Task 7's review: the case knows when the elf has gone home, so it never promises the prize or a
   // visit then.
   it("says whether today's elf has gone home", () => {

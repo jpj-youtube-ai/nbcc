@@ -1209,6 +1209,8 @@ const ELF_MORNING_CLUE = new Date("2026-12-05T10:00:00.000Z");
 const ELF_CLUE_2 = new Date("2026-12-07T18:30:00.000Z");
 const ELF_CLUE_3 = new Date("2026-12-07T19:30:00.000Z");
 const ELF_REVEAL = new Date("2026-12-07T20:30:00.000Z");
+/** The pretend place's closing time, as typed in Doors. */
+const ELF_CLOSES = new Date("2026-12-07T21:00:00.000Z");
 const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (b: string) =>
   buildElfClueEmail({
     grownUpName: "Sam Example",
@@ -1219,6 +1221,7 @@ const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (
     clue2At: ELF_CLUE_2,
     clue3At: ELF_CLUE_3,
     revealAt: ELF_REVEAL,
+    closesAt: ELF_CLOSES,
     hqUrl: `${b}/elf/hq`,
     fact: factFor(7),
     giveUrl: `${b}/donate`,

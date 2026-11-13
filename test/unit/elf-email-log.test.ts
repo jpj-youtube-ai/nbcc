@@ -99,6 +99,7 @@ describe("every other elf email in the email log", () => {
           clue2At: C1,
           clue3At: C1,
           revealAt: C1,
+          closesAt: null,
           hqUrl: "https://nbcc.scot/elf/hq",
           fact: null,
           giveUrl: "https://nbcc.scot/donate",

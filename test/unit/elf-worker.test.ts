@@ -369,6 +369,23 @@ describe("the clue email, at 5:31pm on 7 December", () => {
     expect(first.text).toContain("Clue 1 is a picture: A pretend picture. See it in Detective HQ.");
     expect(first.html).not.toContain("/elf/hq/clue/");
   });
+
+  // Plan 2c-1, Task 9: the email says when the place closes on its day (closingShown), only when a closing time
+  // is typed in Doors; it never says when the place is shown, and says a missed hunt can be cracked later.
+  it("tells each family when the place closes when a closing time is typed, and nothing of closing when none is", async () => {
+    const typed = withClue({ loadDoorRuns: vi.fn(async () => [door7({ closesAt: "20:00", facts: { closesAt: at("2026-12-07T20:00:00Z") } })]) });
+    await typed.tick(FIVE_31);
+    const closing = sentOf(typed.sent, "clue")[0].text;
+    expect(closing).toContain("The hiding place closes at 8pm today.");
+    expect(closing).toContain("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+    expect(closing).toContain("If you miss tonight's hunt, you can still crack this case later in Detective HQ, with one guess.");
+    expect(closing).not.toContain("is shown at");
+    const none = withClue({ loadDoorRuns: vi.fn(async () => [door7({ closesAt: null })]) });
+    await none.tick(FIVE_31);
+    const plain = sentOf(none.sent, "clue")[0].text;
+    expect(plain).not.toContain("closes at");
+    expect(plain).toContain("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+  });
 });
 
 // ---- snow days, and the order of a tick -------------------------------------------------------------

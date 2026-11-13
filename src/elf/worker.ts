@@ -8,6 +8,7 @@ import { countPhotosWaiting, deleteExpiredPhotoFiles, oldestWaitingPhotoDoor } f
 import { sendElfClue, sendElfFindAlert, sendElfMorning, sendElfPhotoAlert, sendElfPlaceReminder, sendElfProud, type FundraiseEmailMessage } from "../clients/email";
 import { sendText, type SmsMessage } from "../clients/sms";
 import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
+import { closingShown } from "./catch-up";
 import { elfTextsOn } from "./texts-on";
 import { doorInstant, doorOn, type Door } from "./calendar";
 import { doorPicture, doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
@@ -283,6 +284,8 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
         clue2At: run.facts.clue2At,
         clue3At: run.facts.clue3At,
         revealAt: run.facts.revealAt,
+        // Only a closing time typed in Doors, on the door's own day, while it is still to come.
+        closesAt: closingShown(run, t.at),
         hqUrl: `${t.deps.siteOrigin}/elf/hq`,
         fact: factFor(door),
         giveUrl: `${t.deps.siteOrigin}/donate`,

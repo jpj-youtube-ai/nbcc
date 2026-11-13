@@ -12900,10 +12900,13 @@ the link, **Watch the graduates' video**, only while December's doors are on.
   image had none, so the Dockerfile's first `apt-get install` gains `fontconfig` (how sharp finds a font) and
   `fonts-dejavu-core` (DejaVu Sans and Serif). Two checks in `pr.yml`'s image job prove it in the built image:
   `fc-match sans-serif` must answer DejaVu, and `src/scripts/check-share-card.ts` (run there as `node
-  dist/scripts/check-share-card.js`) draws the name line of three cards, the longest name the rules allow among
-  them, through the real `shareCardSvg` and sharp, and fails unless each name's ink ends before x 1173, inside
-  the card's frame. The card's `fit` allows 0.64 of the font size a letter, for DejaVu Serif Bold's wider
-  letters. The job keeps the cards it drew as the run's `share-cards` artifact.
+  dist/scripts/check-share-card.js`) draws the name line of four cards, the widest and the longest names the
+  rules allow among them (a ticked first name of 20 letters, all m and w, with Merrymittens; and one of 20
+  characters, 43 in all), through the real `shareCardSvg` and sharp, and fails unless each name's ink ends
+  before x 1173, inside the card's frame. The card's `fit` weighs each character for DejaVu Serif Bold's wider
+  letters, as a share of the font size: m and w 1.1, M and W 1.25, other capitals 0.8, everything else 0.64
+  (an accented letter as its plain one), and sets the name at the biggest size whose weighed letters fit the 620
+  units beside the elf, never below 16. The job keeps the cards it drew as the run's `share-cards` artifact.
 - `GET /elf/hq/video` (`GRADUATE_VIDEO_PATH`): Detective HQ links only to this site, so the video's button is
   this address, which sends a signed in family with a graduate on (303) to the https link saved in Settings
   (`elf_settings.graduate_video_url`, at most 300 letters, one a browser can follow), with `Referrer-Policy:

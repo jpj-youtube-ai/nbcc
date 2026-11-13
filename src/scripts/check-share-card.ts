@@ -11,14 +11,16 @@ import { defaultLook, type ElfLook } from "../elf/wardrobe";
 //
 // A graduate's share card is drawn on the server, in the fonts the server has (DejaVu in the image: pr.yml checks
 // it), not the Georgia the card asks for, and those letters run wider. shareCardSvg sets a name smaller the more
-// letters it has (fit in src/elf/print.ts), and a card made to be shared must never cut a child's name off. So this
-// draws the name line of three cards through the real shareCardSvg and sharp, finds where each name's ink ends, and
-// fails unless every one ends clear of the frame's inside edge:
+// letters it has, and the wider they are (fit in src/elf/print.ts weighs each letter), and a card made to be shared
+// must never cut a child's name off. So this draws the name line of four cards through the real shareCardSvg and
+// sharp, finds where each name's ink ends, and fails unless every one ends clear of the frame's inside edge:
+//   - the widest name the name rules allow: a ticked first name of 20 letters, all m and w, the widest letters, and
+//     the longest surname, 12 letters: "Detective Mwmwmwmwmwmwmwmwmwmw Merrymittens";
 //   - a short name with wide letters, which is set biggest: "Detective W. Snowpaw";
 //   - a ticked name with a long surname of wide letters: "Detective Ruby Merrymittens";
 //   - the longest name the name rules allow: a first name of 20 characters and a 12 letter surname, 43 letters.
 // Given a folder, it first draws whole cards into it, so people can see them: two for the operator to approve (a
-// name staff have ticked, and one they have not, which shows its first letter) and the three it checks. pr.yml's
+// name staff have ticked, and one they have not, which shows its first letter) and the four it checks. pr.yml's
 // image job runs it in the built image and keeps the folder as the run's "share-cards".
 //
 //   node dist/scripts/check-share-card.js [folder]
@@ -37,6 +39,7 @@ const EVERY_DOOR = { doors: Array.from({ length: 24 }, (_, i) => i + 1) };
 
 /** The names the check draws, widest risk first. */
 export const NAMES_TO_CHECK: readonly DetectiveNameParts[] = [
+  { firstName: "Mwmwmwmwmwmwmwmwmwmw", surname: "Merrymittens", approved: true },
   { firstName: "Willow", surname: "Snowpaw", approved: false },
   { firstName: "Ruby", surname: "Merrymittens", approved: true },
   { firstName: "Maximiliano-Wolfgang", surname: "Merrymittens", approved: true },
@@ -135,7 +138,7 @@ export async function main(folder?: string, measure: (card: string) => Promise<n
   }
   if (!ok) {
     console.error(
-      "A share card's name runs onto or past the red frame in this machine's fonts (or was not drawn at all). Set names smaller: fit in src/elf/print.ts allows 0.64 of the size a letter.",
+      "A share card's name runs onto or past the red frame in this machine's fonts (or was not drawn at all). Set names smaller: fit in src/elf/print.ts weighs each letter as a share of the size, m and w 1.1 of the size, M and W 1.25, other capitals 0.8, everything else 0.64, down to 16 at the smallest.",
     );
     return 1;
   }

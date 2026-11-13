@@ -13,16 +13,30 @@ import { shareCardSvg } from "../../src/elf/print";
 // seen to fail), how it measures, and one real run with this machine's fonts. Every name is invented.
 
 describe("the names the check draws", () => {
-  it("are a short name with wide letters, a long ticked name, and the longest the name rules allow", () => {
+  it("are the widest the name rules allow, a short name with wide letters, a long ticked name, and the longest", () => {
     expect(NAMES_TO_CHECK.map(detectiveName)).toEqual([
+      "Detective Mwmwmwmwmwmwmwmwmwmw Merrymittens",
       "Detective W. Snowpaw",
       "Detective Ruby Merrymittens",
       "Detective Maximiliano-Wolfgang Merrymittens",
     ]);
   });
 
+  // The final review, issue 9: the check proves the rule, not three names. The widest public name is a ticked first
+  // name of 20 letters made of the widest letters, m and w, with the longest surname.
+  it("start with the widest name the rules allow: a ticked first name of 20 letters, all m and w, that passes them, and the longest surname", () => {
+    const widest = NAMES_TO_CHECK[0];
+    expect(widest.approved).toBe(true);
+    expect(cleanFirstName(widest.firstName)).toEqual({ ok: true, name: widest.firstName });
+    expect([...widest.firstName].length).toBe(20);
+    expect(widest.firstName.toLowerCase()).toMatch(/^[mw]{20}$/);
+    expect(cleanFirstName(`${widest.firstName}m`)).toEqual({ ok: false, reason: "too-long" });
+    expect(widest.surname).toBe("Merrymittens");
+    expect(widest.surname.length).toBe(Math.max(...FESTIVE_SURNAMES.map((s) => s.length)));
+  });
+
   it("include the longest name the rules allow: a first name of 20 characters that passes them, and the longest surname", () => {
-    const longest = NAMES_TO_CHECK[2];
+    const longest = NAMES_TO_CHECK[3];
     expect(cleanFirstName(longest.firstName)).toEqual({ ok: true, name: longest.firstName });
     expect([...longest.firstName].length).toBe(20);
     expect(cleanFirstName(`${longest.firstName}x`)).toEqual({ ok: false, reason: "too-long" });
@@ -41,6 +55,7 @@ describe("deciding whether every name ends clear of the frame", () => {
       [1172, true],
       [1172, true],
       [1172, true],
+      [1172, true],
     ]);
   });
 
@@ -52,7 +67,7 @@ describe("deciding whether every name ends clear of the frame", () => {
 
   it("refuses when any one name ends past the frame, and says which", async () => {
     let n = 0;
-    const r = await checkNames(async () => (++n === 2 ? 1180 : 1100));
+    const r = await checkNames(async () => (++n === 3 ? 1180 : 1100));
     expect(r.ok).toBe(false);
     expect(r.lines.filter((l) => !l.clear).map((l) => l.name)).toEqual(["Detective Ruby Merrymittens"]);
   });
@@ -68,9 +83,12 @@ describe("deciding whether every name ends clear of the frame", () => {
       cards.push(card);
       return 1000;
     });
-    expect(cards).toHaveLength(3);
-    expect(cards[0]).toContain(">Detective W. Snowpaw</text>");
-    expect(r.lines.map((l) => l.size)).toEqual([48, 35, 24]);
+    expect(cards).toHaveLength(4);
+    expect(cards[0]).toContain(">Detective Mwmwmwmwmwmwmwmwmwmw Merrymittens</text>");
+    expect(cards[1]).toContain(">Detective W. Snowpaw</text>");
+    // Each the biggest whole size at which its weighed letters fit 620 (src/elf/print.ts), counted by hand: 38.1,
+    // 14.65, 18.67 and 30.43.
+    expect(r.lines.map((l) => l.size)).toEqual([16, 42, 33, 20]);
   });
 });
 
@@ -105,16 +123,17 @@ describe("measuring where a name's ink ends", () => {
 });
 
 describe("running it", () => {
-  it("draws the two cards for people and the three it checks into the folder it is given, and answers 0 when every name fits", async () => {
+  it("draws the two cards for people and the four it checks into the folder it is given, and answers 0 when every name fits", async () => {
     const folder = mkdtempSync(join(tmpdir(), "share-cards-"));
     const said = vi.spyOn(console, "log").mockImplementation(() => undefined);
     try {
       expect(await main(folder)).toBe(0);
       const files = readdirSync(folder).sort();
       expect(files).toEqual([
-        "check-1-detective-w-snowpaw.png",
-        "check-2-detective-ruby-merrymittens.png",
-        "check-3-detective-maximiliano-wolfgang-merrymittens.png",
+        "check-1-detective-mwmwmwmwmwmwmwmwmwmw-merrymittens.png",
+        "check-2-detective-w-snowpaw.png",
+        "check-3-detective-ruby-merrymittens.png",
+        "check-4-detective-maximiliano-wolfgang-merrymittens.png",
         "share-card-leo-unticked-name.png",
         "share-card-ruby.png",
       ]);
@@ -122,7 +141,7 @@ describe("running it", () => {
         const meta = await sharp(join(folder, file)).metadata();
         expect([meta.format, meta.width, meta.height], file).toEqual(["png", 1200, 630]);
       }
-      expect(said.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/Detective W\. Snowpaw: 48px, ends at x \d+/);
+      expect(said.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/Detective W\. Snowpaw: 42px, ends at x \d+/);
     } finally {
       said.mockRestore();
       rmSync(folder, { recursive: true, force: true });
@@ -134,7 +153,10 @@ describe("running it", () => {
     const told = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       expect(await main(undefined, async () => FRAME_INSIDE + 5)).toBe(1);
-      expect(told.mock.calls.map((c) => String(c[0])).join("\n")).toMatch(/runs onto or past the red frame/);
+      const words = told.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(words).toMatch(/runs onto or past the red frame/);
+      // It says how fit weighs the letters now, not the old 0.64 a letter.
+      expect(words).toContain("m and w 1.1 of the size, M and W 1.25, other capitals 0.8, everything else 0.64");
     } finally {
       said.mockRestore();
       told.mockRestore();

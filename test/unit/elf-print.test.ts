@@ -269,20 +269,48 @@ describe("the share card", () => {
   });
 
   // The card is drawn on the server, in DejaVu Serif Bold (the image's fonts), whose letters run wider than the
-  // Georgia the card asks for: a name is sized for 0.64 of its size a letter (Plan 2c-2, Task 6's review), and
-  // src/scripts/check-share-card.ts proves, in the image, that the widest names end clear of the frame.
+  // Georgia the card asks for, and m, w and the capitals wider still. So each character of a name is weighed for the
+  // room it takes (the final review, issue 9): m and w 1.1 of the size, M and W 1.25, other capitals 0.8, everything
+  // else 0.64; the name is set at the biggest size whose weighed letters fit the 620 beside the elf, and never below 16.
+  // src/scripts/check-share-card.ts proves, in the image, that the widest names end clear of the frame. Every sum
+  // below is counted by hand.
+  const nameSize = (card: string) => Number(/font-size="(\d+)" fill="#800000"/.exec(card)![1]);
+  const named = (firstName: string, surname: string, approved = true) => shareCardSvg({ ...SHARE, detective: { firstName, surname, approved } });
+
   it("sets a long name smaller so that it stays on the card, sized for the server's wider letters", () => {
-    const size = (svg: string) => Number(/font-size="(\d+)" fill="#800000"/.exec(svg)![1]);
-    expect(size(svg)).toBeGreaterThan(40);
-    const name = "Detective Christopher Tinselfoot";
-    const card = shareCardSvg({ ...SHARE, detective: { firstName: "Christopher", surname: "Tinselfoot", approved: true } });
-    expect(card).toContain(name);
-    expect(size(card)).toBeLessThan(40);
-    expect(size(card) * 0.64 * name.length).toBeLessThanOrEqual(620);
-    // A short name with wide letters is set biggest, so it is the one most likely to reach the frame.
-    const short = shareCardSvg({ ...SHARE, detective: { firstName: "Willow", surname: "Snowpaw", approved: false } });
+    // A short name is set big, if a little smaller than a plain 0.64 a letter would have set it.
+    const ruby = named("Ruby", "Tinselfoot");
+    expect(ruby).toContain("Detective Ruby Tinselfoot");
+    expect(nameSize(ruby)).toBeGreaterThan(30);
+    const card = named("Christopher", "Tinselfoot");
+    expect(card).toContain("Detective Christopher Tinselfoot");
+    expect(nameSize(card)).toBeLessThan(nameSize(ruby));
+    // Three capitals at 0.8, and the other 29 characters at 0.64.
+    expect(nameSize(card) * (3 * 0.8 + 29 * 0.64)).toBeLessThanOrEqual(620);
+    // A short name with wide letters is set biggest, so it is one of the most likely to reach the frame.
+    const short = named("Willow", "Snowpaw", false);
     expect(short).toContain("Detective W. Snowpaw");
-    expect(size(short) * 0.64 * "Detective W. Snowpaw".length).toBeLessThanOrEqual(620);
+    // D, W and S, the two w of Snowpaw, and the other 15 characters.
+    expect(nameSize(short) * (0.8 + 1.25 + 0.8 + 2 * 1.1 + 15 * 0.64)).toBeLessThanOrEqual(620);
+  });
+
+  // The widest public name the rules allow: "Detective ", a ticked first name of 20 letters (FIRST_NAME_MAX in
+  // src/elf/names.ts) and the longest festive surname, 12 letters. At the old 24 a size, one heavy in m and w ran past
+  // the frame.
+  it("sets the widest name the rules allow, a ticked first name of 20 letters heavy in m and w, so that it fits", () => {
+    const card = named("Mwmwmwmwmwmwmwmwmwmw", "Merrymittens");
+    expect(card).toContain(">Detective Mwmwmwmwmwmwmwmwmwmw Merrymittens<");
+    // "Detective ": D and nine at 0.64. The first name: M, and nineteen m and w. " Merrymittens": a space and ten
+    // letters at 0.64, M and m.
+    const weighed = 0.8 + 9 * 0.64 + (1.25 + 19 * 1.1) + (11 * 0.64 + 1.25 + 1.1);
+    expect(weighed).toBeCloseTo(38.1, 6);
+    expect(nameSize(card) * weighed).toBeLessThanOrEqual(620);
+    expect(nameSize(card)).toBeGreaterThanOrEqual(16);
+  });
+
+  it("never sets a name smaller than 16, even one too wide to fit at it", () => {
+    // Twenty capital W: 6.56, then 20 at 1.25, then 9.39, which would need about 15.
+    expect(nameSize(named("WWWWWWWWWWWWWWWWWWWW", "Merrymittens"))).toBe(16);
   });
 
   it("shows the elf, never a photo", () => {

@@ -64,7 +64,8 @@
     // answers, and always with the doors off), and the doors it may still have a go at.
     var known = null;
     var goes = [];
-    // Each door the family can see that its own answer has not drawn yet: when it was first missed.
+    // Each door the family can see that its own answer has not drawn yet, or that is opening while that answer
+    // cannot be read: when it was first missed.
     var owed = {};
     var failures = 0;
     var stopped = false;
@@ -463,7 +464,7 @@
               var n = Number(items[i] && items[i].door);
               if (doors.indexOf(n) === -1 || drawn[n]) continue;
               var was = doorOf(n);
-              if (draw(n, items[i], newer[n] || (was ? was.getAttribute("data-v") : null))) {
+              if (put(n, parsed(items[i]), newer[n] || (was ? was.getAttribute("data-v") : null))) {
                 drawn[n] = true;
                 delete owed[n];
               }
@@ -478,6 +479,15 @@
         );
     }
 
+    // Is door n, missed again at `t`, still worth asking for? Its first miss starts its minute; once the minute is
+    // up it is owed no more.
+    function stillOwed(n, t) {
+      if (owed[n] === undefined) owed[n] = t;
+      if (t - owed[n] < GIVE_UP_MS) return true;
+      delete owed[n];
+      return false;
+    }
+
     // The doors the family's own answer did not draw are owed, and asked for again on the next poll. After a
     // minute a door is given up on: a door the feed says has changed is then drawn as the calendar everyone
     // shares draws it, and either way it is not asked for again until it changes again.
@@ -485,9 +495,7 @@
       var t = now();
       var chain = Promise.resolve();
       doors.forEach(function (n) {
-        if (owed[n] === undefined) owed[n] = t;
-        if (t - owed[n] < GIVE_UP_MS) return;
-        delete owed[n];
+        if (stillOwed(n, t)) return;
         if (changed.indexOf(n) !== -1) {
           chain = chain.then(function () {
             return refresh(n);
@@ -505,31 +513,53 @@
       });
     }
 
-    // A door the family cannot see the place of has changed. It may be tonight's door opening, whose place a
-    // family that guessed can see now, or a door one of its detectives has just been to, so the family's answer
-    // is read again first, once a poll (ruling F5). Without an answer the doors are drawn with what is known.
-    function reread(changed) {
-      if (!mineOn()) return Promise.resolve();
-      var unknown = changed.filter(function (n) {
-        return !isKnown(n);
-      });
-      if (unknown.length === 0) return Promise.resolve();
-      return readMe().then(
-        function (body) {
-          if (!takeMe(body)) return;
-          eachDoor(function (door) {
-            applyMarks(door.getAttribute("data-door"));
+    // Is a door of this kind standing open, its place shown? As isOpenKind in src/elf/pages/door.ts.
+    function openKind(kind) {
+      return kind === "found" || kind === "revealed";
+    }
+
+    // Does door n open with this fresh drawing: from a kind with no place shown to found or revealed?
+    function opens(n, got) {
+      var was = doorOf(n);
+      return !!was && !!got && !openKind(was.getAttribute("data-kind")) && openKind(got.door.getAttribute("data-kind"));
+    }
+
+    // Doors the family cannot see that are opening now: tonight's door at its shown moment. A family that guessed can
+    // see its place from now on, so the family's answer is read again, once a poll (ruling F5, narrowed to a door
+    // turning open). Each door is then drawn from the family's own answer if it can see the place (it joins `mine`),
+    // else from the shared drawing already fetched. If the answer cannot be read just now, each is left exactly as
+    // it was, keeping its fingerprint, so the next poll sees it opening and asks again, for up to a minute; after
+    // that it is drawn as the calendar everyone shares draws it.
+    function opened(held, mine) {
+      if (held.length === 0) return Promise.resolve();
+      return readMe()
+        .catch(function () {
+          return null;
+        })
+        .then(function (body) {
+          var read = takeMe(body);
+          if (read) {
+            eachDoor(function (door) {
+              applyMarks(door.getAttribute("data-door"));
+            });
+          }
+          var t = now();
+          held.forEach(function (h) {
+            if (read && mineOn() && isKnown(h.n)) {
+              if (mine.indexOf(h.n) === -1) mine.push(h.n);
+              return;
+            }
+            if (!read && stillOwed(h.n, t)) return;
+            delete owed[h.n];
+            put(h.n, h.got, null);
           });
-        },
-        function () {
-          // No answer just now: nothing is said.
-        }
-      );
+        });
     }
 
     // Draw again the doors the feed says have changed: a door the family can see from the family's own answer,
     // together with any it still owes; every other door from the calendar everyone shares, one at a time, as
-    // the site is small and a day's worth of changes is a handful of doors.
+    // the site is small and a day's worth of changes is a handful of doors. A shared door that turns open is held
+    // back until the family's answer has been read again (opened).
     function redraw(changed, newer) {
       var mine = [];
       if (mineOn()) {
@@ -544,12 +574,20 @@
       var shared = changed.filter(function (n) {
         return mine.indexOf(n) === -1;
       });
+      var held = [];
       return shared
         .reduce(function (chain, n) {
           return chain.then(function () {
-            return refresh(n);
+            return fetchShared(n).then(function (fresh) {
+              var got = parsed(fresh);
+              if (mineOn() && opens(n, got)) held.push({ n: n, got: got });
+              else put(n, got, null);
+            });
           });
         }, Promise.resolve())
+        .then(function () {
+          return opened(held, mine);
+        })
         .then(function () {
           return drawMine(mine, newer);
         })
@@ -585,18 +623,25 @@
       body.innerHTML = status.html;
     }
 
-    // Put a door the server drew in place of the one on the page. The HTML is the server's own, made by the code
-    // that drew the page. `v`, when given, is the fingerprint the door keeps: the shared calendar's, for a door
-    // drawn from the family's own answer. Answers whether the door was drawn.
-    function draw(n, fresh, v) {
-      var oldDoor = doorOf(n);
-      var oldDetail = detailOf(n);
-      if (!fresh || typeof fresh.tile !== "string" || typeof fresh.detail !== "string" || !oldDoor || !oldDetail) return false;
+    // A door the server drew, { tile, detail } as HTML made by the code that drew the page, read into its door and
+    // its detail; null when it is not one.
+    function parsed(fresh) {
+      if (!fresh || typeof fresh.tile !== "string" || typeof fresh.detail !== "string") return null;
       var box = doc.createElement("template");
       box.innerHTML = fresh.tile + fresh.detail;
       var door = box.content.querySelector(".elf-door");
       var detail = box.content.querySelector(".elf-detail");
-      if (!door || !detail) return false;
+      return door && detail ? { door: door, detail: detail } : null;
+    }
+
+    // Put a door the server drew (parsed) in place of the one on the page. `v`, when given, is the fingerprint the
+    // door keeps: the shared calendar's, for a door drawn from the family's own answer. Answers whether it was put.
+    function put(n, got, v) {
+      var oldDoor = doorOf(n);
+      var oldDetail = detailOf(n);
+      if (!got || !oldDoor || !oldDetail) return false;
+      var door = got.door;
+      var detail = got.detail;
       if (v) door.setAttribute("data-v", v);
       var wasOpen = oldDetail.classList.contains("is-open");
       var wasFound = oldDoor.getAttribute("data-kind") === "found";
@@ -609,16 +654,18 @@
       return true;
     }
 
+    // One door as the calendar everyone shares draws it, or null.
+    function fetchShared(n) {
+      return win.fetch(doorApi + n).then(function (res) {
+        return res.ok ? res.json() : null;
+      });
+    }
+
     // Draw one door again, as the calendar everyone shares draws it.
     function refresh(n) {
-      return win
-        .fetch(doorApi + n)
-        .then(function (res) {
-          return res.ok ? res.json() : null;
-        })
-        .then(function (fresh) {
-          draw(n, fresh, null);
-        });
+      return fetchShared(n).then(function (fresh) {
+        put(n, parsed(fresh), null);
+      });
     }
 
     function poll() {
@@ -644,9 +691,7 @@
               newer[list[i].door] = list[i].v;
             }
           }
-          return reread(changed).then(function () {
-            return redraw(changed, newer);
-          });
+          return redraw(changed, newer);
         })
         .catch(function () {
           // No news is not an error anyone needs to see. Try again later, a little less often.

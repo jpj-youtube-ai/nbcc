@@ -17,9 +17,9 @@ import { defaultLook, type ElfLook } from "../elf/wardrobe";
 //   - a short name with wide letters, which is set biggest: "Detective W. Snowpaw";
 //   - a ticked name with a long surname of wide letters: "Detective Ruby Merrymittens";
 //   - the longest name the name rules allow: a first name of 20 characters and a 12 letter surname, 43 letters.
-// Given a folder, it first draws whole cards into it, so people can see them: two for Jaimie (a name staff have
-// ticked, and one they have not, which shows its first letter) and the three it checks. pr.yml's image job runs it
-// in the built image and keeps the folder as the run's "share-cards".
+// Given a folder, it first draws whole cards into it, so people can see them: two for the operator to approve (a
+// name staff have ticked, and one they have not, which shows its first letter) and the three it checks. pr.yml's
+// image job runs it in the built image and keeps the folder as the run's "share-cards".
 //
 //   node dist/scripts/check-share-card.js [folder]
 //

@@ -3187,6 +3187,7 @@
     function markPrizeWinner(e, button, said) {
       if (prize.marking) return;
       prize.marking = true;
+      prize.seq++; // a read already on its way is older than this marking, so it never draws over it
       var held = Array.prototype.slice.call(prize.box.querySelectorAll(".hq-gp-entry button"));
       held.forEach(function (b) {
         b.disabled = true;

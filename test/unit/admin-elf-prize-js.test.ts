@@ -45,8 +45,10 @@ const WINNER_TAKEN = "Someone has just marked a winner. Reload to see it.";
 
 type Call = { method: string; url: string; body: unknown; auth: string | null };
 type Answer = { status?: number; body: unknown };
-/** An answer, a list of answers taken in turn (the last one stays), or one that waits to be let go. */
-type Answers = Record<string, Answer | Answer[] | (() => Promise<Answer>)>;
+/** An answer, or one that waits to be let go. */
+type OneAnswer = Answer | (() => Promise<Answer>);
+/** An answer, or a list of answers taken in turn (the last one stays). */
+type Answers = Record<string, OneAnswer | OneAnswer[]>;
 type Env = ReturnType<typeof page>;
 
 /** The admin page, a pretend server that answers by "METHOD /path", and Head Elf HQ started on it. A picture's
@@ -76,7 +78,8 @@ function page(o: { answers?: Answers; pictures?: "broken" | "slow" } = {}) {
     }
     const all: Answers = { "GET /api/admin/elf/hq": { body: HQ }, ...(o.answers ?? {}) };
     const found = all[`${method} ${url}`] ?? { body: {} };
-    const answer = typeof found === "function" ? found() : Promise.resolve(Array.isArray(found) ? (found.length > 1 ? (found.shift() as Answer) : found[0]) : found);
+    const one = Array.isArray(found) ? (found.length > 1 ? (found.shift() as OneAnswer) : found[0]) : found;
+    const answer = typeof one === "function" ? one() : Promise.resolve(one);
     return answer.then((a) => {
       const status = a.status ?? 200;
       return { ok: status < 400, status, json: () => Promise.resolve(JSON.parse(JSON.stringify(a.body))) };
@@ -336,6 +339,22 @@ describe("marking the winner", () => {
     await flush();
     expect(markButtons()).toHaveLength(2);
     for (const b of markButtons()) expect(b.disabled).toBe(false);
+  });
+
+  it("never lets a read already on its way draw the old winner back over a marking", async () => {
+    let letGo: (a: Answer) => void = () => undefined;
+    const reads: OneAnswer[] = [{ body: CLOSED }, () => new Promise<Answer>((r) => (letGo = r))];
+    await openPrize(CLOSED, { [`GET ${PART_PATH}`]: reads, [`POST ${PART_PATH}/12/winner`]: { body: RUBY_WINS } });
+    tab("hq").click();
+    tab("prize").click(); // read again, and that read is slow
+    await flush();
+    buttonIn(card("Ruby Tinselfoot"), "Mark as the winner")!.click();
+    await flush();
+    expect(chipsOf(card("Ruby Tinselfoot"))).toEqual(["The winner"]);
+    letGo({ body: CLOSED }); // read before the marking, it still says Kim
+    await flush();
+    expect(chipsOf(card("Ruby Tinselfoot"))).toEqual(["The winner"]);
+    expect(chipsOf(card("Kim Hollyhunt"))).toEqual([]);
   });
 
   it("shows a refusal's sentence on that card as an error, and keeps the card as it was", async () => {

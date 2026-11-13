@@ -13,11 +13,13 @@ import {
   deleteElfSession,
   deleteElfSignInCode,
   endOtherElfSessions,
+  familyByEmailsToken,
   findElfSession,
   familyWithDetectives,
   getElfSettings,
   orderForWelcome,
   saveLook,
+  setEmailsStopped,
   type ElfSettings,
 } from "../db/elf";
 import {
@@ -64,6 +66,7 @@ import { entriesOpenAt, entryOpen, grandPrizeClosesAt, prizeSectionShows } from 
 import { decideGuess, type GuessRefusal } from "../elf/guess";
 import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
 import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
+import { renderEmailsPage } from "../elf/pages/emails";
 import { renderEntryPage } from "../elf/pages/entry";
 import { goOutcomeWords, renderGoPage } from "../elf/pages/go";
 import { renderHqPage } from "../elf/pages/hq";
@@ -79,6 +82,7 @@ import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeS
 import {
   calendarViewFor,
   doorPlaceOf,
+  EMAILS_SWITCH_PATH,
   entryViewFor,
   familyDoorView,
   GRADUATE_VIDEO_PATH,
@@ -2040,6 +2044,86 @@ export async function getGraduateVideo(req: Request, res: Response): Promise<Res
   }
 }
 
+// --- the emails a family can stop (Plan 2c-2, Task 7) ------------------------------------------------------------
+//
+//   GET  /elf/emails/:token  the page the small link at the foot of a clue email, a promotion or a graduation opens:
+//                            the family's switch for the emails that are not essential, as a button, since following a
+//                            link never changes anything; 404 for a token that is no family's
+//   POST /elf/emails/:token  the page's button, the plain form's stopped=yes or stopped=no, from our own page only
+//                            (403): the page again, saying what it did; 404 for a token that is no family's, and 400,
+//                            changing nothing, for any other choice
+//   POST /api/elf/emails     Detective HQ's switch, for the signed in family: JSON { stopped } or the plain form's
+//                            stopped=yes or stopped=no, from our own page only (403); JSON { ok, stopped }, or 303
+//                            back to Detective HQ
+//
+// The link's page and its button answer while Elf Detective School is on, whatever December's doors say, so a family
+// can always stop the emails it has had. Detective HQ's switch answers only while December's doors are on, whatever
+// the preview link says (ruling F16). Every answer is the family's own, so no browser or shared cache keeps any of
+// them, and the link's page is never listed. The token in the link is the family's own (elf_families.emails_token),
+// and its page shows nothing of the family, so a forwarded email gives nothing away. The won email, sign in codes and
+// the welcome, which is the family's receipt, always go.
+
+/** The plain form's choice: stopped=yes stops the emails, stopped=no starts them again; anything else is none. */
+const stoppedFromForm = (raw: unknown): boolean | null => (raw === "yes" ? true : raw === "no" ? false : null);
+
+/** The link's own address, where its page's button posts. */
+const emailsPagePath = (token: string): string => `/elf/emails/${token}`;
+
+/** Never kept by a browser or a shared cache, and never listed: set before anything else, so every answer has it. */
+function emailsPageHeaders(res: Response): void {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+}
+
+export async function getEmailsPage(req: Request, res: Response): Promise<Response | void> {
+  emailsPageHeaders(res);
+  try {
+    const token = String(req.params.token);
+    const family = await familyByEmailsToken(token);
+    if (!family) return notFound(res);
+    return await sendPage(req, res, renderEmailsPage({ stopped: family.stopped, said: null, postUrl: emailsPagePath(token) }));
+  } catch (err) {
+    return gameFailed(res, "emails page", err, false);
+  }
+}
+
+export async function postEmailsPage(req: Request, res: Response): Promise<Response | void> {
+  emailsPageHeaders(res);
+  if (!ourOwnPage(req)) return res.status(403).type("text/plain").send(ELF_NOT_OURS);
+  try {
+    const token = String(req.params.token);
+    const family = await familyByEmailsToken(token);
+    if (!family) return notFound(res);
+    const postUrl = emailsPagePath(token);
+    const stopped = stoppedFromForm((req.body ?? {}).stopped);
+    // Not a choice the page's button sends: nothing changes, and the page is drawn as it stands.
+    if (stopped === null) return await sendPage(req, res.status(400), renderEmailsPage({ stopped: family.stopped, said: null, postUrl }));
+    await setEmailsStopped(family.id, stopped);
+    return await sendPage(req, res, renderEmailsPage({ stopped, said: stopped ? "stopped" : "started", postUrl }));
+  } catch (err) {
+    return gameFailed(res, "emails", err, false);
+  }
+}
+
+export async function postEmails(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const json = wantsJson(req);
+  if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
+  try {
+    // Only while December's doors are on, whatever the preview link says (ruling F16).
+    if (!settingsOf(res).doorsOn) return notFound(res, json);
+    const s = await signedInFamily(req);
+    if (!s) return json ? res.status(401).json({ error: "Please sign in again." }) : res.redirect(303, "/elf/sign-in");
+    const sent = (req.body ?? {}) as Record<string, unknown>;
+    const stopped = json ? (typeof sent.stopped === "boolean" ? sent.stopped : null) : stoppedFromForm(sent.stopped);
+    if (stopped === null) return json ? res.status(400).json({ error: ELF_NOT_OURS }) : res.status(400).type("text/plain").send(ELF_NOT_OURS);
+    await setEmailsStopped(s.familyId, stopped);
+    return json ? res.status(200).json({ ok: true, stopped }) : res.redirect(303, "/elf/hq");
+  } catch (err) {
+    return gameFailed(res, "emails switch", err, json);
+  }
+}
+
 elfRouter.get("/elf/p/:code", schoolOn, doorsOn, getPoster);
 elfRouter.post("/elf/p/:code/word", forms, schoolOn, doorsOn, postWord);
 elfRouter.post("/api/elf/word", forms, schoolOn, doorsOn, postWord);
@@ -2058,3 +2142,6 @@ elfRouter.get("/elf/hq/entry/:detective/picture.jpg", schoolOn, doorsOn, getEntr
 elfRouter.get("/elf/hq/certificate/:detective", schoolOn, doorsOn, getCertificate);
 elfRouter.get("/elf/hq/share/:file", schoolOn, doorsOn, getShareCard);
 elfRouter.get(GRADUATE_VIDEO_PATH, schoolOn, doorsOn, getGraduateVideo);
+elfRouter.get("/elf/emails/:token", schoolOn, getEmailsPage);
+elfRouter.post("/elf/emails/:token", forms, schoolOn, postEmailsPage);
+elfRouter.post(EMAILS_SWITCH_PATH, forms, schoolOn, doorsOn, postEmails);

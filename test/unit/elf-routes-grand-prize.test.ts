@@ -22,7 +22,14 @@ import { resolve } from "node:path";
 // (GET /elf/hq/share/:detective.png) and the graduates' video (GET /elf/hq/video), at 6pm on Christmas Eve, with
 // the elf's picture (elfPng) answering a small PNG and the share card drawn by the real sharp.
 
-const db = vi.hoisted(() => ({ getElfSettings: vi.fn(), findElfSession: vi.fn(), familyWithDetectives: vi.fn() }));
+const db = vi.hoisted(() => ({
+  getElfSettings: vi.fn(),
+  findElfSession: vi.fn(),
+  familyWithDetectives: vi.fn(),
+  // Task 7: the family's switch for the emails that are not essential.
+  familyByEmailsToken: vi.fn(),
+  setEmailsStopped: vi.fn(),
+}));
 const doors = vi.hoisted(() => ({ listElfDoors: vi.fn(), getElfDoor: vi.fn(), findElfDoorByPosterCode: vi.fn(), ensureElfDoors: vi.fn() }));
 const practice = vi.hoisted(() => ({ getPractice: vi.fn() }));
 const game = vi.hoisted(() => ({
@@ -127,6 +134,8 @@ beforeEach(() => {
   db.getElfSettings.mockResolvedValue(ON);
   db.findElfSession.mockResolvedValue({ familyId: 3 });
   db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? FAMILY : null));
+  db.familyByEmailsToken.mockImplementation(async (token: string) => (token === EMAILS_TOKEN ? { id: 3, stopped: false } : null));
+  db.setEmailsStopped.mockResolvedValue(undefined);
   doors.listElfDoors.mockResolvedValue(snowedIn(EVERY_DOOR));
   doors.getElfDoor.mockResolvedValue(null);
   practice.getPractice.mockResolvedValue(null);
@@ -734,7 +743,212 @@ describe("Detective HQ's graduates", () => {
   });
 });
 
-// ---- the emails a family can stop: Detective HQ's switch (Task 7) -----------------------------------------------
+// ---- the emails a family can stop (Task 7) ----------------------------------------------------------------------
+//
+// The link at the foot of a clue email, a promotion or a graduation opens GET /elf/emails/:token, which asks; only
+// its button (POST /elf/emails/:token) changes the family's switch. Detective HQ has the same switch for a signed in
+// family (POST /api/elf/emails). The link answers while Elf Detective School is on, whatever December's doors say,
+// so a family can always stop the emails it has had (ruling F16 for the checks).
+
+const STOPPING = "Stop the emails from Elf Detective School? You will not get each door's first clue, or the emails when a detective is promoted or graduates. Everything stays in Detective HQ.";
+const STOPPED_ALREADY = "You have stopped the emails from Elf Detective School. Everything is still in Detective HQ.";
+const DONE_STOPPED = "Done. We will not send you these emails any more.";
+const DONE_STARTED = "Done. They will start again with the next clue.";
+const NOT_OURS = "Please use the form on our website.";
+const LINK = `/elf/emails/${EMAILS_TOKEN}`;
+
+describe("the page the link to stop the emails opens", () => {
+  it("is the family's own switch, private, never kept and never listed, and asks before it stops anything", async () => {
+    const r = await call("GET", LINK, { cookie: null });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(r.text).toContain("<title>Your emails | Night Before Christmas Campaign</title>");
+    expect(r.text).toContain(STOPPING);
+    expect(r.text).toContain(`<form class="elf-emails" method="post" action="${LINK}">`);
+    expect(r.text).toContain('<input type="hidden" name="stopped" value="yes" />');
+    expect(db.familyByEmailsToken).toHaveBeenCalledWith(EMAILS_TOKEN);
+    // Following a link never changes anything.
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  it("says the emails are stopped, with the button to start them again", async () => {
+    db.familyByEmailsToken.mockResolvedValue({ id: 3, stopped: true });
+    const r = await call("GET", LINK, { cookie: null });
+    expect(r.text).toContain(STOPPED_ALREADY);
+    expect(r.text).toContain('<input type="hidden" name="stopped" value="no" />');
+    expect(r.text).toContain("Start them again");
+  });
+
+  it("shows nothing of the family", async () => {
+    const r = await call("GET", LINK, { cookie: null });
+    for (const theirs of ["Sam", "sam.example@example.com", "Ruby", "Tinselfoot"]) expect(r.text, theirs).not.toContain(theirs);
+  });
+
+  it("is not found for a token that is no family's, private and never listed", async () => {
+    const r = await call("GET", "/elf/emails/fedcba9876543210fedcba9876543210", { cookie: null });
+    expect(r.status).toBe(404);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
+  it("answers while Elf Detective School is on, whatever December's doors say", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    const r = await call("GET", LINK, { cookie: null });
+    expect(r.status).toBe(200);
+    expect(r.text).toContain(STOPPING);
+  });
+
+  it("is not found while Elf Detective School is switched off, and reads no family", async () => {
+    db.getElfSettings.mockResolvedValue({ ...ON, schoolOn: false });
+    expect((await call("GET", LINK, { cookie: null })).status).toBe(404);
+    expect(db.familyByEmailsToken).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 with the game's words when the family cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    db.familyByEmailsToken.mockRejectedValue(new Error("connection lost"));
+    const r = await call("GET", LINK, { cookie: null });
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    logged.mockRestore();
+  });
+});
+
+describe("the button on the page the link opens", () => {
+  const press = (stopped: string | undefined, ask: Ask = {}, link = LINK) => call("POST", link, { cookie: null, form: stopped === undefined ? {} : { stopped }, ...ask });
+
+  it("stops the emails with stopped=yes, and says so, with the button turned round", async () => {
+    const r = await press("yes");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(r.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(db.setEmailsStopped).toHaveBeenCalledWith(3, true);
+    expect(r.text).toContain(DONE_STOPPED);
+    expect(r.text).toContain('<input type="hidden" name="stopped" value="no" />');
+    expect(r.text).toContain("Start them again");
+  });
+
+  it("starts them again with stopped=no, and says so", async () => {
+    db.familyByEmailsToken.mockResolvedValue({ id: 3, stopped: true });
+    const r = await press("no");
+    expect(r.status).toBe(200);
+    expect(db.setEmailsStopped).toHaveBeenCalledWith(3, false);
+    expect(r.text).toContain(DONE_STARTED);
+    expect(r.text).toContain('<input type="hidden" name="stopped" value="yes" />');
+  });
+
+  it("is refused from a page that is not ours, with nothing read or changed", async () => {
+    const r = await press("yes", { headers: { Origin: "https://elsewhere.example.org" } });
+    expect(r.status).toBe(403);
+    expect(r.text).toBe(NOT_OURS);
+    expect(db.familyByEmailsToken).not.toHaveBeenCalled();
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  // Ruling F16.
+  it("is not found for a token that is no family's, with nothing changed", async () => {
+    const r = await press("yes", {}, "/elf/emails/fedcba9876543210fedcba9876543210");
+    expect(r.status).toBe(404);
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  it("changes nothing for a choice that is not yes or no, and draws the page as it stands", async () => {
+    for (const stopped of [undefined, "", "maybe", "YES", "true"]) {
+      const r = await press(stopped);
+      expect(r.status, String(stopped)).toBe(400);
+      expect(r.text).toContain(STOPPING);
+      expect(r.text).not.toContain("Done.");
+    }
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  it("works while December's doors are off, so a family can always stop the emails it has had", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    expect((await press("yes")).status).toBe(200);
+    expect(db.setEmailsStopped).toHaveBeenCalledWith(3, true);
+  });
+
+  it("is not found while Elf Detective School is switched off, with nothing changed", async () => {
+    db.getElfSettings.mockResolvedValue({ ...ON, schoolOn: false });
+    expect((await press("yes")).status).toBe(404);
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 with the game's words when the switch cannot be saved", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    db.setEmailsStopped.mockRejectedValue(new Error("connection lost"));
+    const r = await press("yes");
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    logged.mockRestore();
+  });
+});
+
+describe("Detective HQ's switch, posted", () => {
+  const post = (body: { json?: unknown; form?: Record<string, string> }, ask: Ask = {}) => call("POST", "/api/elf/emails", { ...body, ...ask });
+
+  it("starts the emails again from the script's { stopped: false }, answering what it did, privately", async () => {
+    const r = await post({ json: { stopped: false } });
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ ok: true, stopped: false });
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(db.setEmailsStopped).toHaveBeenCalledWith(3, false);
+  });
+
+  it("stops them from { stopped: true }", async () => {
+    const r = await post({ json: { stopped: true } });
+    expect(r.data).toEqual({ ok: true, stopped: true });
+    expect(db.setEmailsStopped).toHaveBeenCalledWith(3, true);
+  });
+
+  it("takes the plain form's stopped=yes or stopped=no, and goes back to Detective HQ", async () => {
+    const yes = await post({ form: { stopped: "yes" } });
+    expect(yes.status).toBe(303);
+    expect(yes.headers.get("location")).toBe("/elf/hq");
+    expect(db.setEmailsStopped).toHaveBeenLastCalledWith(3, true);
+    const no = await post({ form: { stopped: "no" } });
+    expect(no.status).toBe(303);
+    expect(db.setEmailsStopped).toHaveBeenLastCalledWith(3, false);
+  });
+
+  // Ruling F16.
+  it("is refused from a page that is not ours, with nothing changed", async () => {
+    const r = await post({ json: { stopped: true } }, { headers: { Origin: "https://elsewhere.example.org" } });
+    expect(r.status).toBe(403);
+    expect(r.data).toEqual({ error: NOT_OURS });
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  it("asks someone signed out to sign in, with nothing changed", async () => {
+    const json = await post({ json: { stopped: true } }, { cookie: null });
+    expect(json.status).toBe(401);
+    expect(json.data).toEqual({ error: "Please sign in again." });
+    const form = await post({ form: { stopped: "yes" } }, { cookie: null });
+    expect(form.status).toBe(303);
+    expect(form.headers.get("location")).toBe("/elf/sign-in");
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  it("changes nothing for a choice that is not one", async () => {
+    for (const json of [{}, { stopped: "yes" }, { stopped: 1 }, { stopped: null }]) {
+      const r = await post({ json });
+      expect(r.status, JSON.stringify(json)).toBe(400);
+      expect(r.data).toEqual({ error: NOT_OURS });
+    }
+    for (const stopped of ["", "maybe", "true"]) expect((await post({ form: { stopped } })).status, stopped).toBe(400);
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 with the game's words when the switch cannot be saved", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    db.setEmailsStopped.mockRejectedValue(new Error("connection lost"));
+    const r = await post({ json: { stopped: true } });
+    expect(r.status).toBe(500);
+    expect(r.data).toEqual({ error: WORDS });
+    logged.mockRestore();
+  });
+});
 
 describe("Detective HQ's switch for the emails", () => {
   it("is last on the page while December's doors are on, posting to the signed in switch", async () => {
@@ -820,6 +1034,19 @@ describe("with December's doors off", () => {
     expect(r.status).toBe(200);
     expect(r.text).toContain("All 24 doors done");
     for (const gone of ["/elf/hq/certificate/", "/elf/hq/share/", "/elf/hq/video", "elf-detective__graduate"]) expect(r.text, gone).not.toContain(gone);
+  });
+
+  // Task 7, ruling F16: Detective HQ's switch is not found while December's doors are off, whatever the preview link
+  // says, and changes nothing.
+  it("takes no post to Detective HQ's emails switch, with or without the preview link", async () => {
+    practice.getPractice.mockResolvedValue(practiceRow());
+    for (const cookie of [undefined, PRACTICE_PASS]) {
+      for (const body of [{ json: { stopped: true } }, { form: { stopped: "yes" } }]) {
+        const r = await call("POST", "/api/elf/emails", { cookie, ...body });
+        expect(r.status, `${cookie ?? "signed in"} ${JSON.stringify(body)}`).toBe(404);
+      }
+    }
+    expect(db.setEmailsStopped).not.toHaveBeenCalled();
   });
 
   // Task 7: no emails switch in Detective HQ, even for a browser with the preview link.

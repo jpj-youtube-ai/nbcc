@@ -12852,7 +12852,11 @@ loaded or not, so a hundred cards at 5pm are never a hundred requests at once; d
 whatever the drawing before was still waiting to fetch. The tile
 counts the pictures in (`grandPrizeEntries` in `/api/admin/elf/hq`, from `countEntries`; a screen reader hears
 "Grand prize, 3 pictures"). Anyone with the `elf` section can look; edit marks the winner. The winner can be
-marked only once the entries have closed (409 before), and marking another moves the mark: one winner a year
+marked only once the entries have closed (409 before). A head elf waiting with the part open sees the buttons
+appear by themselves: while the close is less than a day away (a browser fires a longer wait at once), the
+part reads itself again two seconds after the close by the browser's clock, and again every two seconds for
+half a minute should the server still say open; drawing the part again or leaving its tile ends the wait, so
+waits never pile up. Marking another moves the mark: one winner a year
 (Jaimie's answer 4), kept by the partial unique index `elf_grand_prize_one_winner` and by `markWinner`, which
 locks the year's entries in id order, clears the old mark and then sets the new one in one transaction, so
 two head elves marking at the same moment end with the later marking; one that still meets the index is

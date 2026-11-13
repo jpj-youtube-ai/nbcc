@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -136,6 +136,14 @@ async function openPrize(answer: unknown = CLOSED, more: Answers = {}, o: { pict
 
 beforeEach(() => {
   window.sessionStorage.clear();
+  // The part waits for the close while it is under a day away (the final review, issue 8). The pictures here are sent
+  // in on Christmas Eve 2026, and the date alone is faked, at 1 December, so that wait never starts in a test that is
+  // not about it, whatever day the tests run.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-12-01T12:00:00.000Z"));
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("the Grand prize tile", () => {
@@ -623,6 +631,119 @@ describe("loading the pictures three at a time", () => {
     await flush();
     expect(shown()).toBe(2);
     expect(env.server.most).toBe(3);
+  });
+});
+
+// The final review, issue 8: a head elf waiting with the part open at the close sees the buttons to mark the winner
+// appear by themselves, as the part reads again just after the entries close. The wait is set only for a close less
+// than a day away (a browser fires a wait of more than about 24.8 days at once), and drawing the part again or leaving
+// its tile ends it, so waits never pile up. The clock is faked: at 4:59pm unless a test says otherwise.
+describe("at the close", () => {
+  const HOUR = 60 * 60_000;
+  const reads = (env: Env) => env.calls.filter((c) => c.method === "GET" && c.url === PART_PATH).length;
+  /** Open at the first read, closed at the next: a list of its own each time, since the pretend server takes from it. */
+  const thenClosed = (): Answers => ({ [`GET ${PART_PATH}`]: [{ body: OPEN }, { body: CLOSED }] });
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(new Date("2026-12-24T16:59:00.000Z"));
+  });
+
+  it("reads the part again by itself once the entries close, and then offers the buttons", async () => {
+    const env = await openPrize(OPEN, thenClosed());
+    expect(markButtons()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(59_000);
+    await flush();
+    expect(reads(env)).toBe(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await flush();
+    expect(reads(env)).toBe(2);
+    expect(markButtons()).toHaveLength(2);
+    expect(part().textContent).toContain("Entries closed at 5pm on Christmas Eve.");
+  });
+
+  it("reads once at the close however often the part was drawn before it", async () => {
+    const env = await openPrize(OPEN, { [`GET ${PART_PATH}`]: [{ body: OPEN }, { body: OPEN }, { body: OPEN }, { body: CLOSED }] });
+    for (let i = 0; i < 2; i++) {
+      tab("hq").click();
+      tab("prize").click();
+      await flush();
+    }
+    expect(reads(env)).toBe(3);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await flush();
+    expect(reads(env)).toBe(4);
+    expect(markButtons()).toHaveLength(2);
+  });
+
+  it("reads nothing at the close once its tile has been left, its wait ended", async () => {
+    const set = vi.spyOn(window, "setTimeout");
+    const cleared = vi.spyOn(window, "clearTimeout");
+    try {
+      const env = await openPrize(OPEN, thenClosed());
+      // The wait for the close: a minute from now, and a moment after.
+      const at = set.mock.calls.findIndex((c) => c[1] === 62_000);
+      expect(at).toBeGreaterThan(-1);
+      const wait = set.mock.results[at].value;
+      cleared.mockClear();
+      tab("hq").click();
+      expect(cleared).toHaveBeenCalledWith(wait);
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await flush();
+      expect(reads(env)).toBe(1);
+    } finally {
+      set.mockRestore();
+      cleared.mockRestore();
+    }
+  });
+
+  it("waits for a close less than a day away", async () => {
+    vi.setSystemTime(new Date("2026-12-23T18:00:00.000Z")); // 23 hours before
+    const env = await openPrize(OPEN, thenClosed());
+    await vi.advanceTimersByTimeAsync(23 * HOUR + 5_000);
+    await flush();
+    expect(reads(env)).toBe(2);
+    expect(markButtons()).toHaveLength(2);
+  });
+
+  it("waits for nothing while the close is more than a day away", async () => {
+    vi.setSystemTime(new Date("2026-12-22T16:00:00.000Z")); // two days and an hour before
+    const env = await openPrize(OPEN, thenClosed());
+    await vi.advanceTimersByTimeAsync(49 * HOUR + 5_000);
+    await flush();
+    expect(reads(env)).toBe(1);
+  });
+
+  it("waits for nothing once the entries have closed", async () => {
+    vi.setSystemTime(new Date("2026-12-24T17:30:00.000Z"));
+    const env = await openPrize(CLOSED);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await flush();
+    expect(reads(env)).toBe(1);
+  });
+
+  // This browser's clock can run a little ahead of the server's: just after the close it may still be told "open".
+  it("reads again a moment later when the server still says open just after the close", async () => {
+    vi.setSystemTime(new Date("2026-12-24T17:00:01.000Z"));
+    const env = await openPrize(OPEN, thenClosed());
+    await vi.advanceTimersByTimeAsync(3_000);
+    await flush();
+    expect(reads(env)).toBe(2);
+    expect(markButtons()).toHaveLength(2);
+  });
+
+  it("stops reading again half a minute after the close, should the server still say open", async () => {
+    vi.setSystemTime(new Date("2026-12-24T17:00:01.000Z"));
+    const env = await openPrize(OPEN);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    await flush();
+    const after = reads(env);
+    expect(after).toBeGreaterThan(1);
+    expect(after).toBeLessThanOrEqual(16);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    await flush();
+    expect(reads(env)).toBe(after);
   });
 });
 

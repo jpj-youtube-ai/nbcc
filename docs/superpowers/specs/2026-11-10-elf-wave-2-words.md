@@ -1188,11 +1188,11 @@ change Head Elf HQ can mark the winner.
 - [ ] What a screen reader says for the tile: Grand prize, *3* pictures (or: Grand prize, 1 picture)
 - [ ] The heading: **Grand prize**
 - [ ] Under it: Every picture sent in for the grand prize, in the order they came in. Only head elves see them.
-- [ ] While the entries are open: Entries close at *5pm* on Christmas Eve. You can mark the winner after that.
+- [ ] While the entries are open: Entries close at *5pm* on Christmas Eve. You can mark the winner after that. (With the part open at the close, it reads itself again a moment after, so the buttons appear by themselves.)
 - [ ] Once they have closed: Entries closed at *5pm* on Christmas Eve.
 - [ ] Each picture's card: the picture, then the detective's full name, *Ruby Tinselfoot*; Grown up: *Sam Example*; Mobile *07700 900123* (a link to ring), or No mobile number; and Came in *Thursday 24 December* at *10:45am*
 - [ ] What a screen reader says for a picture: The picture sent in for *Ruby Tinselfoot*
-- [ ] While a picture loads: Loading the picture… (and if it cannot be fetched: The picture could not be loaded.)
+- [ ] While a picture loads: Loading the picture… (and if it cannot be fetched: The picture could not be loaded.) The pictures load three at a time, from the top, so further down they say this a little longer.
 - [ ] The winner's card is gold, with the chip: The winner
 - [ ] Once the entries have closed, on every other card: the button Mark as the winner
 - [ ] Then, on the new winner's card: Marked as the winner.

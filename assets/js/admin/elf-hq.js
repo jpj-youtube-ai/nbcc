@@ -183,6 +183,7 @@
       if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
       if (id === "finds") loadFinds();
       if (id === "prize") loadPrizeEntries();
+      else stopCloseWait(); // the Grand prize part's wait for the close ends as its tile is left
       if (id === "settings" && data) { loadPractice(); loadAlerts(); loadGrandPrize(); }
     }
 
@@ -3015,10 +3016,18 @@
     // website announces nothing: NBCC rings the winner's grown up. The part's pieces are named .hq-gp, since
     // .hq-prize is the Doors prize part's. The pictures are fetched three at a time, top first, so a hundred
     // cards at 5pm are never a hundred requests at once (gp.queue, gp.loading).
-    var gp = { box: null, answer: null, error: null, seq: 0, pictures: {}, marking: false, queue: [], loading: 0 };
+    var gp = { box: null, answer: null, error: null, seq: 0, pictures: {}, marking: false, queue: [], loading: 0, closeWait: null };
     var GP_PATH = "/api/admin/elf/grand-prize";
     /** How many pictures are on their way at once, at most. */
     var GP_AT_ONCE = 3;
+    // While the part is open and the entries close within a day, it reads itself again just after they close, so
+    // the buttons to mark the winner appear by themselves (gp.closeWait). A browser fires a wait of more than about
+    // 24.8 days at once, so none is set for a close further off than a day. Should the server still say open just
+    // after the close by this browser's clock (the two clocks can differ a little), it reads again a moment later,
+    // for half a minute at most.
+    var GP_WAIT_MAX_MS = 24 * 60 * 60 * 1000;
+    var GP_AFTER_CLOSE_MS = 2000;
+    var GP_LATE_MS = 30 * 1000;
     var GP_WORDS = {
       heading: "Grand prize",
       intro: "Every picture sent in for the grand prize, in the order they came in. Only head elves see them.",
@@ -3163,6 +3172,25 @@
         });
     }
 
+    /** Ends the wait for the close, if there is one: the part is drawn again, or its tile is left. */
+    function stopCloseWait() {
+      if (gp && gp.closeWait) win.clearTimeout(gp.closeWait);
+      if (gp) gp.closeWait = null;
+    }
+
+    /** While the entries are open and close within a day, waits for the close and reads the part again just after
+     *  it, so the buttons appear by themselves. Only one wait at a time: every drawing ends the one before. */
+    function waitForClose(p) {
+      stopCloseWait();
+      if (!p || p.closed || parts.prize.hidden) return;
+      var left = new Date(p.closesAt).getTime() - Date.now();
+      if (!(left < GP_WAIT_MAX_MS) || left < -GP_LATE_MS) return;
+      gp.closeWait = win.setTimeout(function () {
+        gp.closeWait = null;
+        if (!parts.prize.hidden) loadPrizeEntries();
+      }, Math.max(left, 0) + GP_AFTER_CLOSE_MS);
+    }
+
     function buildPrize() {
       if (gp.box) return;
       parts.prize.textContent = "";
@@ -3179,6 +3207,7 @@
       // The cards are drawn afresh, so whatever the drawing before was still waiting to fetch is left; pictures on
       // their way still count towards the three, and are kept for the new cards when they come.
       gp.queue = [];
+      waitForClose(p);
       box.textContent = "";
       box.appendChild(el("h2", { class: "hq-h2", text: GP_WORDS.heading }));
       box.appendChild(el("p", { class: "hq-words hq-soft", text: GP_WORDS.intro }));

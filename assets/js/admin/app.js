@@ -11249,6 +11249,9 @@
     return '<span class="fr-kind" data-kind="' + kind + '">' + H.escapeHtml(FR_INVITE_TYPES[kind].label) + "</span>";
   }
   var frOpenId = null; // the sign up open below its row
+  // 2026-11-13: an open sign up shows one part at a time (FR_PARTS). Kept while the same sign up stays
+  // open, as every save redraws the list; back to At a glance when another opens.
+  var frPart = "glance";
   var frDetail = null; // GET /api/admin/fundraisers/:id for the open one
   var frDetailFailed = false;
   var frHistoryRows = null; // null loading, false failed, else the rows
@@ -11351,6 +11354,9 @@
     group: "frTeamStatus", // team pages
     memory: "frMemoryStatus", // In memory
     pack: "frPackStatus", // welcome packs
+    // 2026-11-13: the supporter wall's own line. Its buttons are in Their page, and the sign up's main
+    // line (detail) is in At a glance, a part out of sight while you work on the wall.
+    wall: "frWallStatus",
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -11626,6 +11632,11 @@
     if (notBack) notBack.textContent = list.filter(frReqNotBack).length;
     var packs = doc.querySelector('[data-frcount="packs"]'); // welcome packs
     if (packs) packs.textContent = list.filter(frPackToSend).length;
+    // 2026-11-13: a Needs you tile with nothing in it steps back (admin-get-involved.css).
+    Array.prototype.forEach.call(doc.querySelectorAll(".fr-tile"), function (t) {
+      var n = t.querySelector("[data-frcount]");
+      t.classList.toggle("is-none", !!n && n.textContent === "0");
+    });
     // How many of each kind, of every sign up, whichever filters are pressed.
     var kinds = { all: list.length, raising: 0, team: 0, event: 0, memory: 0 };
     list.forEach(function (f) {
@@ -11774,6 +11785,7 @@
   function frToggle(id) {
     var n = Number(id);
     frOpenId = frOpenId === n ? null : n;
+    frPart = "glance";
     frDetail = null;
     frDetailFailed = false;
     frHistoryRows = null;
@@ -11806,33 +11818,106 @@
     }
     var f = frDetail.fundraiser;
     var write = frCanWrite();
-    return (
-      '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
+    // 2026-11-13 (Jaimie: "one big long scrolling list with lots of boxes and lots of buttons"): the
+    // same boxes as before, untouched, in six parts. A bar at the top shows one part at a time, as the
+    // Festive Ball tab's sections do. Every part is drawn every time, the hidden ones included, so
+    // everything that fills a box later (history, news, photos, the team) still finds it.
+    var parts = {
+      glance:
         '<section class="fx-panel fx-panel--wide"><h4>Where it is up to</h4>' + frStatePanel(f, write) + "</section>" +
-        frGroupSection(f) + // team pages
-        frMemorySection(f, write) + // In memory
-        frOffListSection(f, write) +
+        (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
+        frOffListSection(f, write),
+      touch:
         frCallsSection(f, write) +
         frTouchSection(f, write) + // TASK-515
-        (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         frRequestsSection(f, write) +
-        frPackSection(f, write) + // welcome packs
+        frPackSection(f, write), // welcome packs
+      page:
+        '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
         frNewsSection() + // TASK-506
         frPicsSection() + // profile pictures
+        '<section class="fx-panel fx-panel--wide"><h4>Supporter wall</h4>' + frWallPanel(frDetail.wall || [], write) + frNoticeHtml("wall", "frWallStatus") + "</section>" +
         frThanksSection() + // TASK-507
-        '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
-        frSplitSection(f) +
-        frWelcomeSection(f, write) + // the sign up tidy
-        '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
-        '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
-        '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
+        frGroupSection(f) + // team pages
+        frMemorySection(f, write), // In memory
+      money:
         '<section class="fx-panel"><h4>Money raised</h4>' + frMeterHtml(frDetail.meter) + "</section>" +
         '<section class="fx-panel"><h4>Cash paid in</h4>' + frCashPanel(frDetail.cash || [], write) + "</section>" +
-        (write ? '<section class="fx-panel fx-panel--wide"><h4>Change the details</h4>' + frEditForm(f) + "</section>" : "") +
-        '<section class="fx-panel fx-panel--wide"><h4>Supporter wall</h4>' + frWallPanel(frDetail.wall || [], write) + "</section>" +
-        '<section class="fx-panel fx-panel--wide"><h4>History</h4><div class="fx-history" id="frHistory"></div></section>' +
+        frSplitSection(f),
+      details:
+        '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
+        '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
+        '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
+        frWelcomeSection(f, write) + // the sign up tidy
+        (write ? '<section class="fx-panel fx-panel--wide"><h4>Change the details</h4>' + frEditForm(f) + "</section>" : ""),
+      history: '<section class="fx-panel fx-panel--wide"><h4>History</h4><div class="fx-history" id="frHistory"></div></section>',
+    };
+    var offered = FR_PARTS.filter(function (pt) { return parts[pt.key]; });
+    if (!offered.some(function (pt) { return pt.key === frPart; })) frPart = "glance";
+    var waiting = frPartsWaiting(listRow);
+    return (
+      '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
+        '<div class="fr-parts" role="group" aria-label="Which part of this sign up to show">' +
+          offered.map(function (pt) {
+            var on = pt.key === frPart;
+            return '<button class="fr-part-btn' + (on ? " is-active" : "") + '" type="button" data-frpart="' + pt.key +
+              '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(pt.name) +
+              (waiting[pt.key] ? '<span class="fr-part-dot" aria-hidden="true"></span><span class="sr-only">, needs you</span>' : "") +
+              "</button>";
+          }).join("") +
+        "</div>" +
+        offered.map(function (pt) {
+          return '<div class="fr-part" data-frpart-body="' + pt.key + '" role="region" aria-label="' + H.escapeHtml(pt.name) + '"' +
+            (pt.key === frPart ? "" : " hidden") + ">" +
+            '<p class="fr-part-intro">' + H.escapeHtml(pt.intro) + "</p>" +
+            '<div class="fr-part-grid">' + parts[pt.key] + "</div></div>";
+        }).join("") +
       "</div>"
     );
+  }
+
+  // The six parts of an open sign up, in the bar's order, each with the sentence it opens with.
+  var FR_PARTS = [
+    { key: "glance", name: "At a glance", intro: "Where this sign up is up to, and the big decisions: approve it, check a change they asked for, or mark it finished." },
+    { key: "touch", name: "Keeping in touch", intro: "Calls to make, things they asked us for, and their welcome pack." },
+    { key: "page", name: "Their page", intro: "What people see on the website, and what the organiser has sent in for it." },
+    { key: "money", name: "Money", intro: "How much they have raised, online and in cash. Add cash here when they pay it in, so their total is right." },
+    { key: "details", name: "Their details", intro: "Everything they told us when they signed up, and how to get in touch. Change the details to correct anything." },
+    { key: "history", name: "History", intro: "Everything that has happened to this sign up, and who did it." },
+  ];
+
+  // Which parts have something waiting for staff, from the same marks the list row shows as pills.
+  function frPartsWaiting(row) {
+    return {
+      glance: row.status === "new" || !!row.editWaiting || !!(row.finishedRequestedAt && row.status === "approved") || !!frPrompt(row),
+      touch: frCallDue(row) || frReqToDo(row) || frReqDueBack(row) || !!frPackPill(row) || frTouchPrompts(row).length > 0,
+      page: !!(frNewsPill(row) || frPicsPill(row) || frThanksPill(row) || frMemoryPills(row)),
+    };
+  }
+
+  // Shows one part, without redrawing: whatever is typed in another part stays as it was. From further
+  // down the page you are taken up to where the part starts, under the bar where it is pinned (a
+  // laptop), or to the bar itself where it is not (a phone), as the Festive Ball's sections do.
+  function frShowPart(key, scroll) {
+    var box = doc.querySelector("#frList [data-frdetail]");
+    if (!box || !FR_PARTS.some(function (pt) { return pt.key === key; })) return;
+    if (!box.querySelector('[data-frpart-body="' + key + '"]')) return;
+    frPart = key;
+    Array.prototype.forEach.call(box.querySelectorAll("[data-frpart]"), function (b) {
+      var on = b.getAttribute("data-frpart") === key;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    Array.prototype.forEach.call(box.querySelectorAll("[data-frpart-body]"), function (p) {
+      p.hidden = p.getAttribute("data-frpart-body") !== key;
+    });
+    if (!scroll) return;
+    var bar = box.querySelector(".fr-parts");
+    var part = box.querySelector('[data-frpart-body="' + key + '"]');
+    if (!bar || !part || !part.scrollIntoView || !window.getComputedStyle) return;
+    var pinned = window.getComputedStyle(bar).position === "sticky";
+    if (pinned && part.getBoundingClientRect().top < bar.getBoundingClientRect().bottom) part.scrollIntoView({ block: "start" });
+    else if (!pinned && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block: "start" });
   }
 
   function frStateWords(f) {
@@ -11962,7 +12047,15 @@
             '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-fraction="decline">Decline</button></div>' +
           "</div>";
       }
-      actions = shortName + (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") + decline;
+      var says = [];
+      if (buttons.indexOf('data-fraction="approve"') !== -1) {
+        says.push("Approve says yes. We email them, and put up their page if they have one. While fundraising is switched off, the page and its email wait until it is switched on.");
+      }
+      if (buttons.indexOf('data-fraction="finish"') !== -1) {
+        says.push("Mark finished is for when everything is in. You are asked to make sure first.");
+      }
+      actions = shortName + (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") +
+        says.map(function (w) { return '<span class="fr-field-hint fr-action-says">' + w + "</span>"; }).join("") + decline;
     }
     return (
       '<p class="fx-letter"><span class="fx-state fx-state--' + (f.status === "new" ? "todo" : f.status === "approved" ? "done" : "waiting") + '">' +
@@ -12622,7 +12715,7 @@
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    frRun("detail", null, function (run) {
+    frRun("wall", null, function (run) {
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/approve").then(function (r) {
         if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
         return Promise.all([frReload(), frMemoryLoadCounts()]);
@@ -13057,7 +13150,7 @@
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    frRun("detail", null, function (run) {
+    frRun("wall", null, function (run) {
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/" + (hide ? "hide" : "show"))
         .then(function (r) {
           if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
@@ -13126,8 +13219,10 @@
       })
       .catch(function () {
         if (tab && !tab.closed) tab.close();
-        frSay("detail", "Could not open that. Try again.", true, id);
-        frPaintNotice("detail");
+        // Said beside the button pressed: the envelopes are in the In memory box, in Their page.
+        var key = piece === "envelopes" ? "memory" : "detail";
+        frSay(key, "Could not open that. Try again.", true, id);
+        frPaintNotice(key);
       });
   }
 
@@ -13140,6 +13235,22 @@
     frPicsWire(view); // profile pictures
     frGroupWire(view); // team pages
     frPackWire(view); // welcome packs
+    view.addEventListener("click", function (e) {
+      var part = e.target && e.target.closest ? e.target.closest("[data-frpart]") : null;
+      if (part) frShowPart(part.getAttribute("data-frpart"), true);
+    });
+    view.addEventListener("keydown", function (e) {
+      var keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+      var move = keys[e.key];
+      var from = e.target && e.target.closest ? e.target.closest("[data-frpart]") : null;
+      if (!move || !from) return;
+      var all = Array.prototype.slice.call(from.parentNode.querySelectorAll("[data-frpart]"));
+      var at = all.indexOf(from);
+      e.preventDefault();
+      var next = move === "first" ? all[0] : move === "last" ? all[all.length - 1] : all[(at + move + all.length) % all.length];
+      next.focus();
+      frShowPart(next.getAttribute("data-frpart"), true);
+    });
     view.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
@@ -18510,6 +18621,17 @@
     el("evSaveBtn").addEventListener("click", evSave);
     el("evDelete").addEventListener("click", evDelete);
     el("evSwitchBtn").addEventListener("click", evFlipSwitch);
+    // 2026-11-13: the steps bar. A step's button takes you to that step and puts the focus on it, so the
+    // next Tab is its first field. The step is found by its place among the form's steps.
+    el("evSteps").addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-evstep]") : null;
+      if (!b) return;
+      var step = el("evForm").querySelectorAll("fieldset.ev-step")[Number(b.getAttribute("data-evstep")) - 1];
+      if (!step) return;
+      step.setAttribute("tabindex", "-1");
+      if (step.scrollIntoView) step.scrollIntoView({ block: "start" });
+      step.focus({ preventScroll: true });
+    });
     el("evAdd").addEventListener("click", function () {
       if (!evConfirmLeave()) return;
       evOpenNew();

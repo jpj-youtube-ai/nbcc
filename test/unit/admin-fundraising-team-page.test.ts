@@ -803,7 +803,7 @@ describe("Time to call", () => {
   it("lists only the calls due under Calls due, with their number", async () => {
     await openFundraising();
     const chip = q('[data-frfilter="calls"]') as HTMLElement;
-    expect(text(chip)).toBe("Calls due (2)");
+    expect([text(chip.querySelector(".fr-tile__n")!), text(chip.querySelector(".fr-tile__name")!)]).toEqual(["2", "Calls due"]);
     chip.click();
     await settle();
     expect(row(1)).not.toBeNull();
@@ -1016,7 +1016,8 @@ describe("nothing else on the screen moves", () => {
     await openFundraising();
     expect(text(el("frSwitchState"))).toMatch(/^Yes\./);
     // TASK-505 added Requests to do and Buckets not back, after Calls due.
-    expect(qa("[data-frfilter]").map((b) => b.getAttribute("data-frfilter"))).toEqual(["", "new", "approved", "declined", "finished", "calls", "requests", "notback", "packs"]); // welcome packs added Packs to send
+    // 2026-11-13: Needs you first, then Show (welcome packs added Packs to send).
+    expect(qa("[data-frfilter]").map((b) => b.getAttribute("data-frfilter"))).toEqual(["new", "calls", "requests", "notback", "packs", "", "approved", "finished", "declined"]);
     expect(qa("#frList tr.fx-summary")).toHaveLength(3);
   });
 });

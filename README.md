@@ -7183,6 +7183,42 @@ CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 4 GB
 (`NODE_OPTIONS=--max-old-space-size=4096`). With these screen tests added, three workers ran out at
 Node's default of about 2 GB and the run failed with 872 of 875 files passed.
 
+## Admin > Get involved, laid out so someone new can find their way (2026-11-13)
+
+Jaimie: the tab, and a sign up once opened, was "one big long scrolling list with lots of boxes and
+lots of buttons". A layout change only: no information added or taken away, nothing on the server,
+no button does anything different. Design: `docs/superpowers/specs/2026-11-13-get-involved-refresh-design.md`;
+styles in `assets/css/admin-get-involved.css` (loaded after `admin-overview.css`, using its `--ov-`
+colours); tests in `test/unit/admin-get-involved-parts.test.ts`.
+
+- **An open sign up shows one part at a time.** Its boxes, unchanged, are grouped into six parts behind
+  a bar at its top (`.fr-parts`, buttons `[data-frpart]` with `aria-pressed`, parts
+  `[data-frpart-body]`): **At a glance** (where it is up to, changes to check, taking it off Get
+  involved), **Keeping in touch** (calls, keeping in touch, requests, welcome pack), **Their page**
+  (its photo, news, the organiser's photos, the supporter wall, thank yous to supporters, the team, in
+  memory), **Money** (money raised, cash paid in, sharing with another cause), **Their details** (what
+  they told us, the organiser, what they would like, sport and the T-shirt, change the details) and
+  **History**. Each part opens with one sentence saying what it is for. It opens on At a glance, keeps
+  the part you are in through every save, and goes back to At a glance when another sign up opens
+  (`frPart`, `frShowPart`). A part with something waiting has a crimson dot (", needs you" to a screen
+  reader), worked out from the same marks the row's pills use (`frPartsWaiting`). Arrow keys, Home and
+  End move along the bar. On a laptop the bar is pinned under the menu (top 60px, as the Festive
+  Ball's sections bar), so the sign up list's box no longer clips sideways (`#frList` overflow visible;
+  the table is laid out to its width); on a phone it is three by two (two by two below 420px) and not
+  pinned, and pressing one takes you back up to the bar. Every part is drawn every time, hidden or not,
+  so whatever fills a box later still finds it. An opened sign up went from about 5,400px tall to
+  about 1,300px on a laptop.
+- **Approve** and **Mark finished** each say under them what pressing them does (`.fr-action-says`).
+- Every message shows in the part its button is in: the supporter wall has its own status line
+  (`frWallStatus`, notice key `wall`), and the in memory envelopes report in the In memory box.
+- **The Sign ups filters are in three labelled groups** (`#frFilter`): **Needs you**, as tiles with the
+  count large, the name and a line saying what it means (New, Calls due, Requests to do, Buckets not
+  back, Packs to send; a tile at 0 steps back, `.is-none`); **Show** (All, Approved, Finished,
+  Declined); and **What kind** (`#frKindFilter`). They filter exactly as before.
+- **The event editor has a bar of its eight steps** (`#evSteps`, `[data-evstep]`) above the form; each
+  takes you to that step and puts the focus on it. Every step stays in the page, as the form is saved
+  as a whole.
+
 ## Invoices for donations (Admin > Giving > Invoices)
 
 Some givers, often businesses, schools, churches and clubs and sometimes people, will only pay a gift
@@ -8957,6 +8993,8 @@ its routes and its permissions. The **Festive Ball** tab is untouched.
 admin's own segmented control, `#giSections`; real buttons with `aria-pressed`; arrow keys, Home and
 End move along them; on a phone the row wraps onto two lines, and nothing scrolls sideways or
 inside a box). Each starts with one line saying what it is for.
+Since 2026-11-13 an opened sign up shows one part at a time and the Sign ups filters are in labelled
+groups: see **Admin > Get involved, laid out so someone new can find their way (2026-11-13)**.
 
 | Section | What is in it | Permission section |
 |---|---|---|

@@ -12148,13 +12148,19 @@ preview link stay admins only, whoever holds the section.
   (its name, town, address, who to ring there and when it closes), the prize, the elf's name and its tag
   word, the three clues and the times they come out, and ticks for dropped off and thanked. Each door shows
   what it still needs; HQ's tile counts the doors not ready that are still to come, and Needs you names the next one and how
-  much is left to do. **Paste all the clues** takes every clue at once: a line `Door 7:` starts a door
+  much is left to do. **Every door has the same present (12 November 2026).** Jaimie: "just make a standard
+  present on them". So a door is ready without a picture of its own: its place, its prize, its elf and tag, its
+  three clues and dropped off ticked (`readinessOf` and `READY_WORDS` in `src/elf/door-setup.ts`, the same for
+  the worker's 8am email, the December's doors switch's check on door 1 and HQ's counts). The door's sheet
+  shows the present beside the prize, cut out of card on the doors' maroon as the calendar draws it, with
+  "Every door has the same present." (`DOOR_PICTURES` and `doorPicture` stay in the code, empty.)
+  **Paste all the clues** takes every clue at once: a line `Door 7:` starts a door
   (anything after the number is a note and is ignored), then `Clue 1:`, `Clue 2:` and `Clue 3:` each
   start a clue, and the lines under one run on as part of it. Capitals, Windows line endings and a stray
   mark at the start of the file make no difference, and nothing is saved until the head elf has seen
   what it found. The prints are each door's poster, staff card and elf tag, and the list of places and
   prizes. The poster, staff card and elf tag open as pages for head elves, never cached or indexed; the
-  prize list is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
+  prize list (every door's prize, one line a door) is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
   saved after clue 1 is out. Once a door's first clue is out, its times and tag word are locked. Nothing in Doors is ever seen by families.
   **Christmas Eve in the morning (TASK-613).** A door's clue 1 starts at 5:30pm on a school day and
   10am at a weekend or on a weekday marked a holiday (`dayKind` and `defaultClueTime`,
@@ -12524,10 +12530,12 @@ board itself widens (`.elf-advent` is a size container, and `@container` sets `-
 door stays about 135 to 235 pixels wide. Each door is a maroon card door on a hinge with a little
 paper pull tab, its number printed large in cream and its chip beside it. Door 23 is two doors wide
 and door 24 is the big double doors, a row of their own, so the doors fill every row at every width.
-A shut door is bright, with its day on a paper chip and the prize's shape (or the mystery star) cut
-out of card; today's door, and the one being hunted, glow gold with the painted bow; an open door
+A shut door is bright, with its day on a paper chip and a present cut out of card: every door has the
+same present (12 November 2026), a one colour shape in the stylesheet (`--elf-present` in
+`assets/css/elf.css`, the carving's default), so no door waits on a picture of its own, and a snow day
+has a snowflake cut out the same way. Today's door, and the one being hunted, glow gold with the painted bow; an open door
 (found or revealed) stands open on its hinge, swung almost flat, with the finder's picture filling the
-door (or the prize's shape in gold), swinging open only for a visitor happy with motion. The page's script gives a signed in family's done doors (cracked or visited) the painted holly
+door (or the present in gold), swinging open only for a visitor happy with motion. The page's script gives a signed in family's done doors (cracked or visited) the painted holly
 (`is-done`) beside their marks. A door's detail is a note taped across the board; the countdown at the
 top is on a candy cane strip.
 

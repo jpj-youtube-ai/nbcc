@@ -3,7 +3,9 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
   Every detective who has done all 24 doors can send in one picture for the grand prize from Detective HQ until
   the entries close: a drawing, or a photo of the family's naughtiest elf at home. The picture is made again so
   nothing from the camera is kept, and a second one takes the place of the first. A family with no mobile gives
-  one with its picture. Design: docs/superpowers/specs/2026-11-12-elf-catch-up-and-grand-prize-design.md, part 2.
+  one with its picture. Head elves see every picture in Head Elf HQ and, once the entries have closed, mark one
+  winner; they set when the entries close and the graduates' video in Settings. Design:
+  docs/superpowers/specs/2026-11-12-elf-catch-up-and-grand-prize-design.md, part 2.
   Every family, person and place here is invented.
 
   Background:
@@ -14,9 +16,9 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
   # ready at its first clue, so the first calendar read (or the elf worker, which ticks in CI too) snows it in,
   # and a family that has been to door 7 has done all 24 doors. The entries' closing moment is set by SQL from the
   # database's own clock, an hour from now and then a minute ago, so every answer holds whenever this runs, and no
-  # step compares the real clock with a date written here. The hooks put the closing and the year back, and take
-  # last year's rows away (the entries with them).
-  Scenario: A graduate sends in a picture for the grand prize
+  # step compares the real clock with a date written here. The hooks put the closing, the graduates' video and the
+  # year back, and take last year's rows away (the entries with them).
+  Scenario: A graduate sends in a picture for the grand prize, and a head elf marks one winner
     Given the school's year is last year, whose December is over
     And "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" has opened the doors list
     And door 7 is ready to run at "The Example Bakehouse" in "Snowford", with the prize "A pretend sledge"
@@ -55,6 +57,31 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     When the family "second.prize.elf.bdd@example.com" sends its detective's picture for the grand prize, with the mobile "07700 900 123"
     Then the game answers 201
     And the family of "second.prize.elf.bdd@example.com" keeps the mobile number "+447700900123"
+    # Head Elf HQ's Grand prize part: every picture in the order it came in, and no winner while the entries are open.
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" reads the grand prize entries
+    Then there are 2 entries, the first from "first.prize.elf.bdd@example.com"
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" marks the entry from "first.prize.elf.bdd@example.com" as the winner
+    Then the head elf's answer is 409, saying "The entries are still open, so the winner can be marked once they close."
+    # Settings > The grand prize. Door 24's place closes at 4pm, so 4:30pm is refused. A time saved goes on Christmas
+    # Eve of the school's year, last year's here, which is over: from that save the entries have closed.
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the grand prize closing time "16:30"
+    Then the head elf's answer is 409, saying "Door 24's hiding place closes at 4pm, so grand prize entries can close at 5pm at the earliest."
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the grand prize closing time "17:00"
+    Then the head elf's answer is 200
+    And the grand prize entries are saved to close at "17:00" on Christmas Eve of the school's year
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" saves the graduates' video "https://example.org/graduates"
+    Then the head elf's answer is 200
+    And the graduates' video is "https://example.org/graduates"
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" clears the graduates' video
+    Then the head elf's answer is 200
+    And there is no graduates' video
+    # Once the entries have closed: one winner, and marking another moves the mark.
     Given the grand prize entries closed a minute ago
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" marks the entry from "first.prize.elf.bdd@example.com" as the winner
+    Then the entry from "first.prize.elf.bdd@example.com" is the winner
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" marks the entry from "second.prize.elf.bdd@example.com" as the winner
+    Then the entry from "second.prize.elf.bdd@example.com" is the winner, and only that one
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" reads the picture of the entry from "first.prize.elf.bdd@example.com"
+    Then the head elf's answer is a picture of type "image/jpeg", kept by no cache
     When the family "first.prize.elf.bdd@example.com" sends its detective's picture for the grand prize
     Then the game answers 409

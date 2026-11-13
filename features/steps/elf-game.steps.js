@@ -5,7 +5,8 @@ const sharp = require("sharp");
 
 // Steps for features/elf-game.feature: December's doors switched off, a real door shut until its day, and
 // a whole practice evening played through the preview link; and for features/elf-grand-prize.feature, a
-// graduate's picture sent in for the grand prize on Christmas Eve. The families come from the elf join steps
+// graduate's picture sent in for the grand prize on Christmas Eve, and Head Elf HQ's side: the entries, the one
+// winner, and when the entries close and the graduates' video in Settings. The families come from the elf join steps
 // (features/steps/elf-join.steps.js, whose @elf-school hooks clear them, play every scenario in next
 // year's December with December's doors off, and clear the practice door); the staff from "an admin user
 // {string} with role {string} and password {string}" (features/steps/admin-api.steps.js, whose @admin
@@ -45,8 +46,10 @@ After({ tags: "@elf-game" }, async function () {
     await pool.query("DELETE FROM elf_doors WHERE year = $1", [this.gamePastYear]);
   }
   if (this.gamePreviewBefore) await pool.query("UPDATE elf_settings SET preview_hash = $1 WHERE id = 1", [this.gamePreviewBefore.hash]);
-  // The grand prize entries' closing, as it was before a step moved it (features/elf-grand-prize.feature).
+  // The grand prize entries' closing and the graduates' video, as they were before a step changed them
+  // (features/elf-grand-prize.feature).
   if (this.prizeClosesBefore) await pool.query("UPDATE elf_settings SET grand_prize_closes_at = $1 WHERE id = 1", [this.prizeClosesBefore.at]);
+  if (this.prizeVideoBefore) await pool.query("UPDATE elf_settings SET graduate_video_url = $1 WHERE id = 1", [this.prizeVideoBefore.url]);
 });
 AfterAll(async () => {
   await pool.end();
@@ -863,4 +866,160 @@ Then("the family {string} has one grand prize entry, with its picture", async fu
   assert.equal(r.rows.length, 1, JSON.stringify(r.rows));
   assert.equal(r.rows[0].mime, "image/jpeg");
   assert.ok(Number(r.rows[0].size) > 0, "the entry has no picture");
+});
+
+// ---- Head Elf HQ's side of the grand prize: the Grand prize part and Settings > The grand prize ----------
+//
+// The head elf's answers are kept whatever they are (asHeadElf above asserts a 200), so a step can see a 409.
+// Each head elf signs in once a scenario. An entry is found by SQL from its family's email; the winner is read
+// by SQL on winner_at. The video link as it was is kept the first time a step changes it, and the @elf-game
+// After hook puts it back, as it does the closing.
+
+/** A head elf's request to Head Elf HQ's API, kept as `world.headElf` whatever it answers: its status, its
+ *  type and its headers, its size, and its JSON when it is JSON. */
+async function headElfAsks(world, email, password, method, path, body) {
+  world.headElfTokens = world.headElfTokens || {};
+  if (!world.headElfTokens[email]) world.headElfTokens[email] = await login(email, password);
+  const token = world.headElfTokens[email];
+  assert.ok(token, `could not sign in as ${email}`);
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const type = res.headers.get("content-type") || "";
+  let json = null;
+  if (type.includes("json")) {
+    try {
+      json = JSON.parse(bytes.toString("utf8"));
+    } catch {
+      json = null;
+    }
+  }
+  world.headElf = {
+    request: `${method} ${path}`,
+    status: res.status,
+    type,
+    cache: res.headers.get("cache-control") || "",
+    sniff: res.headers.get("x-content-type-options") || "",
+    robots: res.headers.get("x-robots-tag") || "",
+    size: bytes.length,
+    body: json,
+  };
+  return world.headElf;
+}
+
+const headElfSaid = (world) => `${world.headElf.request}: ${world.headElf.status} ${JSON.stringify(world.headElf.body)}`;
+
+/** The grand prize entry of the family `email` this year, by SQL. */
+async function entryIdOf(email) {
+  const r = await pool.query(
+    `SELECT e.id FROM elf_grand_prize_entries e
+       JOIN elf_families f ON f.id = e.family_id
+      WHERE f.email = $1 AND e.year = (SELECT year FROM elf_settings WHERE id = 1)`,
+    [email],
+  );
+  assert.equal(r.rows.length, 1, `${email} has no one grand prize entry: ${JSON.stringify(r.rows)}`);
+  return Number(r.rows[0].id);
+}
+
+/** This year's entries marked as the winner, by SQL on winner_at. */
+async function winnersNow() {
+  const r = await pool.query(
+    "SELECT id FROM elf_grand_prize_entries WHERE year = (SELECT year FROM elf_settings WHERE id = 1) AND winner_at IS NOT NULL ORDER BY id",
+  );
+  return r.rows.map((row) => Number(row.id));
+}
+
+async function keepPrizeVideo(world) {
+  if (world.prizeVideoBefore) return;
+  const r = await pool.query("SELECT graduate_video_url FROM elf_settings WHERE id = 1");
+  world.prizeVideoBefore = { url: r.rows[0] ? r.rows[0].graduate_video_url : null };
+}
+
+When("{string} with password {string} reads the grand prize entries", async function (email, password) {
+  await headElfAsks(this, email, password, "GET", "/api/admin/elf/grand-prize");
+  assert.equal(this.headElf.status, 200, headElfSaid(this));
+});
+
+Then("there are {int} entries, the first from {string}", async function (n, email) {
+  const entries = (this.headElf.body && this.headElf.body.entries) || [];
+  assert.equal(entries.length, n, headElfSaid(this));
+  assert.equal(entries[0].id, await entryIdOf(email), headElfSaid(this));
+});
+
+When("{string} with password {string} marks the entry from {string} as the winner", async function (email, password, family) {
+  await headElfAsks(this, email, password, "POST", `/api/admin/elf/grand-prize/${await entryIdOf(family)}/winner`);
+});
+
+When("{string} with password {string} reads the picture of the entry from {string}", async function (email, password, family) {
+  await headElfAsks(this, email, password, "GET", `/api/admin/elf/grand-prize/${await entryIdOf(family)}/picture`);
+});
+
+Then("the head elf's answer is {int}", function (status) {
+  assert.equal(this.headElf.status, status, headElfSaid(this));
+});
+
+Then("the head elf's answer is {int}, saying {string}", function (status, words) {
+  assert.equal(this.headElf.status, status, headElfSaid(this));
+  assert.equal(this.headElf.body && this.headElf.body.error, words, headElfSaid(this));
+});
+
+Then("the entry from {string} is the winner", async function (family) {
+  assert.equal(this.headElf.status, 200, headElfSaid(this));
+  assert.ok((await winnersNow()).includes(await entryIdOf(family)), `the entry from ${family} is not the winner`);
+});
+
+Then("the entry from {string} is the winner, and only that one", async function (family) {
+  assert.equal(this.headElf.status, 200, headElfSaid(this));
+  assert.deepEqual(await winnersNow(), [await entryIdOf(family)]);
+});
+
+Then("the head elf's answer is a picture of type {string}, kept by no cache", function (type) {
+  const a = this.headElf;
+  assert.equal(a.status, 200, headElfSaid(this));
+  assert.equal(a.type.split(";")[0].trim(), type);
+  assert.ok(a.size > 0, "the picture came back empty");
+  assert.match(a.cache, /no-store/);
+  assert.equal(a.sniff, "nosniff");
+  assert.equal(a.robots, "noindex, nofollow");
+});
+
+When("{string} with password {string} saves the grand prize closing time {string}", async function (email, password, time) {
+  await keepPrizeClosing(this);
+  await headElfAsks(this, email, password, "PUT", "/api/admin/elf/grand-prize/settings", { time });
+});
+
+// The moment is worked out by the database from the school's own year (last year here) and the time typed, so no
+// step compares the real clock with a date written in the feature.
+Then("the grand prize entries are saved to close at {string} on Christmas Eve of the school's year", async function (clock) {
+  const [hour, minute] = clock.split(":").map(Number);
+  const r = await pool.query(
+    `SELECT grand_prize_closes_at, year,
+            grand_prize_closes_at = make_timestamptz(year, 12, 24, $1::int, $2::int, 0, 'Europe/London') AS saved
+       FROM elf_settings WHERE id = 1`,
+    [hour, minute],
+  );
+  assert.equal(r.rows[0].saved, true, `saved ${JSON.stringify(r.rows[0].grand_prize_closes_at)} for the year ${r.rows[0].year}`);
+});
+
+When("{string} with password {string} saves the graduates' video {string}", async function (email, password, videoUrl) {
+  await keepPrizeVideo(this);
+  await headElfAsks(this, email, password, "PUT", "/api/admin/elf/grand-prize/settings", { videoUrl });
+});
+
+When("{string} with password {string} clears the graduates' video", async function (email, password) {
+  await keepPrizeVideo(this);
+  await headElfAsks(this, email, password, "PUT", "/api/admin/elf/grand-prize/settings", { videoUrl: "" });
+});
+
+Then("the graduates' video is {string}", async function (url) {
+  const r = await pool.query("SELECT graduate_video_url FROM elf_settings WHERE id = 1");
+  assert.equal(r.rows[0].graduate_video_url, url);
+});
+
+Then("there is no graduates' video", async function () {
+  const r = await pool.query("SELECT graduate_video_url FROM elf_settings WHERE id = 1");
+  assert.equal(r.rows[0].graduate_video_url, null);
 });

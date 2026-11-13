@@ -160,6 +160,22 @@ describe("how a door is read out", () => {
   it("says the elf is still waiting at a revealed door", () => {
     expect(doorLabel(REVEALED, NOW)).toBe("Door 6, not found yet. Holly is waiting at The Seaside Cafe, Largs.");
   });
+
+  // Task 9, fix round 1 (the review's Minor 2): once a revealed door's elf has gone home it can no longer be found,
+  // and the poster refuses a visit, so the door's words for a screen reader say so, as its detail does, and never
+  // that the elf is waiting there.
+  it("says a revealed door's elf has gone home, with where it was hiding when the door carries its place", () => {
+    const gone = { ...REVEALED, goneHome: true };
+    expect(doorLabel({ ...gone, place: null }, NOW)).toBe("Door 6. Nobody found Holly in time, and it has gone home.");
+    expect(doorLabel({ ...gone, place: { name: "Corner Bakehouse", town: "Snowford" } }, NOW)).toBe(
+      "Door 6. Nobody found Holly in time, and it has gone home. Holly was hiding at Corner Bakehouse, Snowford.",
+    );
+    expect(doorLabel(gone, NOW)).not.toContain("waiting");
+    expect(doorLabel(gone, NOW)).not.toContain("not found yet");
+    expect(dom(doorTile({ ...gone, place: null }, NOW)).querySelector("a")!.getAttribute("aria-label")).toBe(
+      "Door 6. Nobody found Holly in time, and it has gone home.",
+    );
+  });
 });
 
 // Review focus 3: GET /api/elf/door/:n and the feed carry the tile and the detail, so a door that is

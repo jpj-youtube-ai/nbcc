@@ -98,6 +98,10 @@ export function doorLabel(d: DoorView, now: Date): string {
     return `Door ${d.door}, found.${d.found ? ` Found by ${d.found.by}.` : ""}${reveal ? ` ${findOutWords(reveal, false)}` : ""}`;
   }
   if (kind === "snow") return `Door ${d.door}, snow day. ${d.elfName} got snowed in.`;
+  // An elf that has gone home can no longer be found or visited (Task 9, fix round 1): never "waiting" then.
+  if (kind === "revealed" && d.goneHome) {
+    return `Door ${d.door}. Nobody found ${d.elfName} in time, and it has gone home.${place ? ` ${d.elfName} was hiding at ${place}.` : ""}`;
+  }
   if (kind === "revealed") return `Door ${d.door}, not found yet.${place ? ` ${d.elfName} is waiting at ${place}.` : ""}`;
   if (kind === "hunting") return `Door ${d.door}. The hunt is on.${big}`;
   if (kind === "today") return `Door ${d.door}, today. Clue out at ${clockWords(d.clueAt)}.${big}`;

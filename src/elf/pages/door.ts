@@ -366,7 +366,7 @@ function prizeLine(d: DoorView): string {
   if (!prize || !d.found) return "";
   return (
     `<p class="elf-book__prize"><span class="elf-book__cut" aria-hidden="true">${carving(d)}</span>` +
-    `<span>${escapeHtml(d.found.by)} won the prize cut into this door: ${escapeHtml(prize)}.</span></p>`
+    `<span>${escapeHtml(d.found.by)} won this door's prize: ${escapeHtml(prize)}.</span></p>`
   );
 }
 

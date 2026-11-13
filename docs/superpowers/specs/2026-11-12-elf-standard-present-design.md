@@ -24,7 +24,9 @@ waits on one before it can be ready.
 
 ## Not changing
 
-- Each door's prize words, Show it off, finding, and the scrapbook.
+- Each door's prize words, Show it off, finding, and the scrapbook, except one sentence: on a found door the
+  scrapbook said the finder "won the prize cut into this door", and now says they "won this door's prize"
+  (December's doors on only, as only then is a door found).
 - The per-door picture lookup (`DOOR_PICTURES`, `doorPicture`) stays in the code, empty, so the catch-up work in
   flight on another branch is untouched.
 - With December's doors switched off, the family pages change only in one line on a shut door's detail, and the

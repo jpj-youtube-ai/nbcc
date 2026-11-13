@@ -559,11 +559,13 @@ describe("an open door's scrapbook", () => {
 
   // The coordinator's ruling: once its elf is found, the prize is named on every door, whether or not
   // staff ticked Show it off.
-  it("names the prize cut into the door once its elf is found, with or without Show it off", () => {
+  // Every door has the same present (12 November 2026), so the prize is this door's, not a shape cut into it.
+  it("names this door's prize once its elf is found, with or without Show it off", () => {
     expect(FOUND.bigPrize).toBe(false);
-    expect(words(book())).toContain("Detectives Finn Hollyhunt and Mia Gingersnap won the prize cut into this door: A pretend family trip to the pantomime.");
-    expect(words(book({ ...FOUND, prize: "A pretend sledge." }))).toContain("won the prize cut into this door: A pretend sledge.");
-    expect(words(book({ ...FOUND, prize: null }))).not.toContain("won the prize");
+    expect(words(book())).toContain("Detectives Finn Hollyhunt and Mia Gingersnap won this door's prize: A pretend family trip to the pantomime.");
+    expect(words(book({ ...FOUND, prize: "A pretend sledge." }))).toContain("won this door's prize: A pretend sledge.");
+    expect(words(book())).not.toContain("cut into this door");
+    expect(words(book({ ...FOUND, prize: null }))).not.toContain("won this door's prize");
   });
 
   it("puts everyone who found the elf in a row first, one polaroid each with its detective name, the finders first with the rosette", () => {

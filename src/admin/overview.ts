@@ -52,7 +52,7 @@ export const NEEDS: readonly Need[] = [
   // 1. Money or overdue.
   { key: "transfersOverdue", level: 1, ...BALL, one: "bank transfer is overdue", many: "bank transfers are overdue" },
   { key: "monthlyFailing", level: 1, view: "monthly", button: "Monthly givers", one: "monthly gift is failing to take", many: "monthly gifts are failing to take" },
-  { key: "giftAidReady", level: 1, ...CLAIMS, one: "donation is ready to claim Gift Aid on", many: "donations are ready to claim Gift Aid on" },
+  { key: "giftAidReady", level: 1, ...CLAIMS, one: "donation is ready for a Gift Aid claim", many: "donations are ready for a Gift Aid claim" },
   { key: "emailFailures", level: 1, view: "email-audit", button: "Email audit", one: "email failed or bounced in the last 2 weeks", many: "emails failed or bounced in the last 2 weeks" },
   { key: "fundraisingDueBack", level: 1, ...FUNDRAISING, one: "fundraiser has a bucket or tin due back", many: "fundraisers have buckets or tins due back" },
   // 2. Waiting on a reply.
@@ -102,7 +102,8 @@ export function needsLines(counts: NeedCounts): NeedLine[] {
       const c = counts[need.key];
       if (!c || !(c.count > 0)) continue;
       const words = c.count === 1 ? need.one : need.many;
-      const extra = c.pence && c.pence > 0 ? ` (${money(c.pence)} of giving)` : "";
+      // The money given, after the words: "12 donations are ready for a Gift Aid claim, £480.50 given in all".
+      const extra = c.pence && c.pence > 0 ? `, ${money(c.pence)} given${c.count === 1 ? "" : " in all"}` : "";
       lines.push({
         key: need.key,
         level,

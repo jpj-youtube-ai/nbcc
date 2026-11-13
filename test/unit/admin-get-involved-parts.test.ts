@@ -38,6 +38,9 @@ const METER = { raisedPence: 0, onlinePence: 0, cashPence: 0, targetPence: 20000
 let records: Rec[] = [];
 let waitingEdit: Record<number, unknown> = {};
 let calls: { method: string; path: string }[] = [];
+let wallFails = false;
+const WALL = [{ donationId: 801, fullName: "Giver Example", shortName: "Giver E.", anonymous: false, showName: true, showAmount: true,
+  amountPence: 1500, refundedPence: 0, message: "Go on!", hidden: false, createdAt: "2026-11-10T12:00:00.000Z" }];
 
 function respond(url: string, init?: { method?: string; body?: string }) {
   const j = (body: unknown, status = 200) => ({
@@ -65,9 +68,10 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   const rest = m[2] || "";
   if (rest === "" && method === "GET") {
     const w = waitingEdit[f.id] || null;
-    return j({ fundraiser: f, meter: METER, waitingEdit: w, editWaiting: !!w, edits: w ? [w] : [], cash: [], wall: [] });
+    return j({ fundraiser: f, meter: METER, waitingEdit: w, editWaiting: !!w, edits: w ? [w] : [], cash: [], wall: WALL });
   }
   if (rest === "/history") return j({ history: [] });
+  if (/^\/wall\/\d+\/(hide|show)$/.test(rest)) return wallFails ? j({ error: "That did not work just now." }, 500) : j({ donationId: 801, hidden: true });
   if (rest === "/cash" && method === "POST") return j({ cash: { id: 1, amountPence: 500, paidInOn: "2026-11-13", note: "", createdBy: "admin:fern@example.com", createdAt: "2026-11-13T09:00:00.000Z" } }, 201);
   return j({ results: [] });
 }
@@ -76,6 +80,7 @@ beforeEach(() => {
   records = [];
   waitingEdit = {};
   calls = [];
+  wallFails = false;
   window.sessionStorage.clear();
   window.localStorage.clear();
   window.scrollTo = () => {};
@@ -214,6 +219,26 @@ describe("an open sign up, in parts", () => {
     await openRow(1);
     expect(partBtn("glance").querySelector(".fr-part-dot")).not.toBeNull();
     expect(partBody("glance").textContent).toContain("Changes to check");
+  });
+});
+
+describe("a message from a part's own buttons", () => {
+  // The sign up's main line is in At a glance. A refusal from the supporter wall used to be written
+  // there, out of sight while you work in Their page.
+  it("says a supporter wall refusal in Their page, where you pressed it", async () => {
+    records = [signup(1)];
+    wallFails = true;
+    await openSignups();
+    await openRow(1);
+    partBtn("page").click();
+    const hide = qa("#frList [data-frdetail] button").find((b) => /Hide/.test(text(b))) as HTMLElement;
+    expect(hide).toBeTruthy();
+    hide.click();
+    await settle();
+    expect(shown()).toEqual(["page"]);
+    const line = el("frWallStatus");
+    expect(line.closest("[data-frpart-body]")!.getAttribute("data-frpart-body")).toBe("page");
+    expect(text(line)).toContain("did not work");
   });
 });
 

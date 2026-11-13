@@ -11354,6 +11354,9 @@
     group: "frTeamStatus", // team pages
     memory: "frMemoryStatus", // In memory
     pack: "frPackStatus", // welcome packs
+    // 2026-11-13: the supporter wall's own line. Its buttons are in Their page, and the sign up's main
+    // line (detail) is in At a glance, a part out of sight while you work on the wall.
+    wall: "frWallStatus",
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -11833,7 +11836,7 @@
         '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
         frNewsSection() + // TASK-506
         frPicsSection() + // profile pictures
-        '<section class="fx-panel fx-panel--wide"><h4>Supporter wall</h4>' + frWallPanel(frDetail.wall || [], write) + "</section>" +
+        '<section class="fx-panel fx-panel--wide"><h4>Supporter wall</h4>' + frWallPanel(frDetail.wall || [], write) + frNoticeHtml("wall", "frWallStatus") + "</section>" +
         frThanksSection() + // TASK-507
         frGroupSection(f) + // team pages
         frMemorySection(f, write), // In memory
@@ -12049,7 +12052,7 @@
         says.push("Approve says yes. We email them, and put up their page if they have one. While fundraising is switched off, the page and its email wait until it is switched on.");
       }
       if (buttons.indexOf('data-fraction="finish"') !== -1) {
-        says.push("Mark finished is for when everything is in. You are asked first, and told whether they will be emailed their thank you.");
+        says.push("Mark finished is for when everything is in. You are asked to make sure first.");
       }
       actions = shortName + (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") +
         says.map(function (w) { return '<span class="fr-field-hint fr-action-says">' + w + "</span>"; }).join("") + decline;
@@ -12712,7 +12715,7 @@
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    frRun("detail", null, function (run) {
+    frRun("wall", null, function (run) {
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/approve").then(function (r) {
         if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
         return Promise.all([frReload(), frMemoryLoadCounts()]);
@@ -13147,7 +13150,7 @@
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    frRun("detail", null, function (run) {
+    frRun("wall", null, function (run) {
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/" + (hide ? "hide" : "show"))
         .then(function (r) {
           if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
@@ -13216,8 +13219,10 @@
       })
       .catch(function () {
         if (tab && !tab.closed) tab.close();
-        frSay("detail", "Could not open that. Try again.", true, id);
-        frPaintNotice("detail");
+        // Said beside the button pressed: the envelopes are in the In memory box, in Their page.
+        var key = piece === "envelopes" ? "memory" : "detail";
+        frSay(key, "Could not open that. Try again.", true, id);
+        frPaintNotice(key);
       });
   }
 

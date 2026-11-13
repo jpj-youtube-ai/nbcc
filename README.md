@@ -7208,6 +7208,8 @@ colours); tests in `test/unit/admin-get-involved-parts.test.ts`.
   so whatever fills a box later still finds it. An opened sign up went from about 5,400px tall to
   about 1,300px on a laptop.
 - **Approve** and **Mark finished** each say under them what pressing them does (`.fr-action-says`).
+- Every message shows in the part its button is in: the supporter wall has its own status line
+  (`frWallStatus`, notice key `wall`), and the in memory envelopes report in the In memory box.
 - **The Sign ups filters are in three labelled groups** (`#frFilter`): **Needs you**, as tiles with the
   count large, the name and a line saying what it means (New, Calls due, Requests to do, Buckets not
   back, Packs to send; a tile at 0 steps back, `.is-none`); **Show** (All, Approved, Finished,

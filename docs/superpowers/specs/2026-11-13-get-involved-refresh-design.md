@@ -19,7 +19,8 @@ filters, 14 buttons, with nothing marking which ones mean "this needs you".
 - A part with something waiting for you carries a dot on its button (and says so to a screen reader).
 - The Sign ups filters in labelled groups: what needs you (as tiles, each with a short explanation),
   which to show, and what kind.
-- Each of the five section buttons at the top of the tab carries a short line saying what is in it.
+- (Dropped while building: a short line under each of the five section buttons. The line under the bar
+  already says what the section is for, and a second one inside each button made the bar twice as tall.)
 - The event editor gets a bar of its eight steps that takes you to each one.
 - Approve and Mark finished each say what pressing them does.
 
@@ -75,8 +76,12 @@ pinned on a phone (pinned, two rows would take a third of the screen):
 - A part with nothing in it for this sign up is not offered (for example Keeping in touch for a declined
   one with no panels).
 - Approve: "Says yes and emails them. Their page goes on the website if it is meant to be shown there."
-  Mark finished: "For when everything is in. You are asked first, and told whether they will be emailed
-  their thank you." (Both checked against README, "Community fundraising".)
+  Mark finished: "For when everything is in. You are asked to make sure first." (Both checked against
+  README, "Community fundraising"; the question only mentions the thank you email for a sign up with a
+  page, so the hint does not promise it.)
+- Every message appears in the part its button is in. The supporter wall has its own status line
+  (`frWallStatus`), and the in memory envelopes report in the In memory box, as the sign up's main line
+  is in At a glance.
 
 ### The Sign ups filters
 
@@ -90,9 +95,7 @@ pinned on a phone (pinned, two rows would take a third of the screen):
 
 ### The section buttons
 
-Each keeps its name and gains a line under it: Sign ups "people raising money or holding an event";
-Our events "NBCC's own events on What's on"; Tickets and pledges "tickets sold and sponsors' promises";
-Emails "invites and the emails we send"; Settings "switches and lists".
+Unchanged. The line under the bar (`data-gi-intro`) already says what each section is for.
 
 ### The event editor
 

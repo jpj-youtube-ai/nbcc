@@ -117,6 +117,7 @@ const PAGES: [string, string][] = [
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
   ["rules", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
+  ["rules, with December's doors on", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true, doorsOn: true } })],
   ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z"), runs: waveOneRuns(2026, at("2026-11-13T09:00:00.000Z")), finders: new Map(), counts: new Map(), scrapbooks: new Map() }))],
   ["sign in, the email", renderSignInPage({ stage: "email" })],
   ["sign in, the code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "If that email has detectives enrolled, we have sent a sign in code to it." })],

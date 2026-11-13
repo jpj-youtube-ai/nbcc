@@ -11,6 +11,12 @@ import { at, hqView } from "./elf-fixtures";
 
 const page = (v: HqView = hqView()) => new DOMParser().parseFromString(renderHqPage(v), "text/html");
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+/** The words people see: everything but what is there for a screen reader alone. */
+const seen = (el: Element) => {
+  const copy = el.cloneNode(true) as Element;
+  for (const hidden of copy.querySelectorAll(".sr-only")) hidden.remove();
+  return words(copy);
+};
 const today = (over: Partial<TodayView>, view: Partial<HqView> = {}): HqView => hqView({ ...view, today: { ...hqView().today!, ...over } });
 
 // 7 December 2026 is a Monday: clue 1 at 5:30pm, clue 2 at 6pm, clue 3 at 6:30pm, the place at 7pm.
@@ -244,7 +250,8 @@ describe("today's case for a family that may still have a go", () => {
     expect(words(card.querySelector("h2"))).toBe("Case closed");
     expect(words(card)).toContain("You did not lock in a guess in time, but you can still crack this case, with one guess.");
     const go = card.querySelector('a[href="/elf/hq/door/7"]')!;
-    expect(words(go)).toBe("Have a go");
+    expect(seen(go)).toBe("Have a go");
+    expect(words(go)).toBe("Have a go at door 7");
     expect(go.className).toBe("elf-btn elf-btn--crimson");
     expect(words(card)).not.toContain("You did not lock in a guess for this one.");
     expect(words(card)).not.toContain("Visit the hiding place");
@@ -254,7 +261,7 @@ describe("today's case for a family that may still have a go", () => {
   it("keeps the heading of a door shown with nobody found", () => {
     const card = page(today({ ...MAY_GO.today!, state: "revealed" }, { now: SEVEN_05 })).querySelector(".elf-case")!;
     expect(words(card.querySelector("h2"))).toBe("Bauble is still out there");
-    expect(words(card.querySelector('a[href="/elf/hq/door/7"]'))).toBe("Have a go");
+    expect(seen(card.querySelector('a[href="/elf/hq/door/7"]')!)).toBe("Have a go");
   });
 
   it("offers no go beside how the case turned out", () => {
@@ -355,9 +362,22 @@ describe("the doors a family can still crack", () => {
     expect(words(doors[1])).toContain("Thu 3 Dec");
     expect(words(doors[1])).toContain("Pudding");
     const go = doors[0].querySelector('a[href="/elf/hq/door/5"]')!;
-    expect(words(go)).toBe("Have a go");
+    expect(seen(go)).toBe("Have a go");
     expect(go.classList.contains("elf-btn")).toBe(true);
     expect(doors[1].querySelector('a[href="/elf/hq/door/3"]')).not.toBeNull();
+  });
+
+  // Task 9, from Task 7's review: today's case and the list can hold several Have a go links at once, so each
+  // names its door to a screen reader, in words hidden from sight; the words people see stay "Have a go".
+  it("name their door to a screen reader on every Have a go link, as today's case does", () => {
+    const links = [...page({ ...MAY_GO, toCrack: TO_CRACK }).querySelectorAll('main a[href^="/elf/hq/door/"]')];
+    expect(links.map(words)).toEqual(["Have a go at door 7", "Have a go at door 5", "Have a go at door 3"]);
+    for (const a of links) {
+      expect(seen(a)).toBe("Have a go");
+      expect(words(a.querySelector(".sr-only"))).toMatch(/^at door [357]$/);
+    }
+    const practice = page(today({ ...MAY_GO.today!, door: 0, practice: true, goUrl: "/elf/hq/door/0" }, { now: SEVEN_05 }));
+    expect(words(practice.querySelector('a[href="/elf/hq/door/0"]'))).toBe("Have a go at the practice door");
   });
 
   it("are not on the page when there are none", () => {

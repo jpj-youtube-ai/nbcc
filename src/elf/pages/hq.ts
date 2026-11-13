@@ -136,6 +136,10 @@ function outcomeHtml(today: TodayView): string {
   return where + verdict + visit + closes;
 }
 
+/** "Have a go", which door it is said to a screen reader alone: Detective HQ can show several at once (today's
+ *  case and the doors still to crack), and a list of the page's links must tell them apart. */
+const haveAGo = (which: string): string => `Have a go<span class="sr-only"> at ${which}</span>`;
+
 /** A family that cannot see the place yet, once it is shown, and may still crack the case: its one go (Plan
  *  2c-1), in place of how the case turned out. Only a go on this site is offered. */
 function goCard(today: TodayView): string {
@@ -143,7 +147,7 @@ function goCard(today: TodayView): string {
   if (!go) return "";
   return (
     line("You did not lock in a guess in time, but you can still crack this case, with one guess.") +
-    `<p><a class="elf-btn elf-btn--crimson" href="${go}">Have a go</a></p>`
+    `<p><a class="elf-btn elf-btn--crimson" href="${go}">${haveAGo(today.practice ? "the practice door" : `door ${count(today.door)}`)}</a></p>`
   );
 }
 
@@ -223,7 +227,7 @@ function crackSection(view: HqView): string {
         `<h3>Door ${count(d.door)}</h3>` +
         (real(d.clueAt) ? `<p>${dayWords(d.clueAt)}</p>` : "") +
         `<p>${escapeHtml(d.elfName)}</p>` +
-        `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${d.go}">Have a go</a>` +
+        `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${d.go}">${haveAGo(`door ${count(d.door)}`)}</a>` +
         `</li>`,
     )
     .join("");

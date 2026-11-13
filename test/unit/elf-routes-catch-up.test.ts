@@ -887,7 +887,7 @@ describe("Detective HQ catching up", () => {
     expect(r.status).toBe(200);
     expect(r.text).toContain("Case closed");
     expect(r.text).toContain("You did not lock in a guess in time, but you can still crack this case, with one guess.");
-    expect(r.text).toContain('<a class="elf-btn elf-btn--crimson" href="/elf/hq/door/7">Have a go</a>');
+    expect(r.text).toContain('<a class="elf-btn elf-btn--crimson" href="/elf/hq/door/7">Have a go<span class="sr-only"> at door 7</span></a>');
     for (const secret of ["Example Bakehouse", "Exampleton", "Example Bakes"]) expect(r.text).not.toContain(secret);
     expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
   });
@@ -943,7 +943,7 @@ describe("Detective HQ catching up", () => {
     practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
     const r = await hq(PRACTICE_PASS);
     expect(r.status).toBe(200);
-    expect(r.text).toContain('href="/elf/hq/door/0">Have a go</a>');
+    expect(r.text).toContain('href="/elf/hq/door/0">Have a go<span class="sr-only"> at the practice door</span></a>');
     expect(r.text).not.toContain("The Example Office");
     expect(r.text).not.toContain("Doors you can still crack");
     expect(game.familyKnowledge).toHaveBeenCalledWith(0, 3);

@@ -3014,7 +3014,7 @@
     // have closed, so a picture never changes under the judge, and marking another moves the mark. The
     // website announces nothing: NBCC rings the winner's grown up. The part's pieces are named .hq-gp, since
     // .hq-prize is the Doors prize part's.
-    var gp = { box: null, answer: null, error: null, seq: 0, picSeq: 0, pictures: {}, made: [], marking: false };
+    var gp = { box: null, answer: null, error: null, seq: 0, pictures: {}, marking: false };
     var GP_PATH = "/api/admin/elf/grand-prize";
     var GP_WORDS = {
       heading: "Grand prize",
@@ -3039,53 +3039,68 @@
       return d && Array.isArray(d.entries) && typeof d.closesAt === "string" ? d : null;
     }
 
-    /** Lets go of every picture's Blob address, and of any picture still on its way. */
-    function clearEntryPictures() {
-      gp.picSeq++;
-      if (win.URL && typeof win.URL.revokeObjectURL === "function") {
-        gp.made.forEach(function (url) {
-          win.URL.revokeObjectURL(url);
-        });
-      }
-      gp.made = [];
-      gp.pictures = {};
+    /** Where an entry's picture is kept in gp.pictures: by the entry and when its picture came in, since a
+     *  replaced picture comes in again. */
+    function pictureKey(e) {
+      return e.id + " " + e.sentAt;
     }
 
-    /** An entry's picture as a Blob address: fetched with the token once for each read of the part, and
-     *  shared by every drawing of its card until the part is read again. */
-    function entryPicture(id) {
-      if (!gp.pictures[id]) {
-        var mine = gp.picSeq;
-        gp.pictures[id] = win
-          .fetch(GP_PATH + "/" + id + "/picture", { headers: { Authorization: "Bearer " + token() } })
-          .then(function (res) {
-            if (!res.ok || typeof res.blob !== "function") throw new Error("not found");
-            return res.blob();
-          })
-          .then(function (blob) {
-            if (!win.URL || typeof win.URL.createObjectURL !== "function") throw new Error("no blob addresses");
-            var url = win.URL.createObjectURL(blob);
-            if (mine !== gp.picSeq) {
-              if (typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
-              throw new Error("read again");
-            }
-            gp.made.push(url);
-            return url;
-          });
-      }
-      return gp.pictures[id];
+    /** Keeps the pictures `entries` still list, and lets go of the rest: an entry that has gone, or whose
+     *  picture was replaced. Their Blob addresses are revoked, and one still on its way is revoked as it comes. */
+    function keepEntryPictures(entries) {
+      var listed = {};
+      entries.forEach(function (e) {
+        listed[pictureKey(e)] = true;
+      });
+      Object.keys(gp.pictures).forEach(function (key) {
+        if (listed[key]) return;
+        var kept = gp.pictures[key];
+        kept.gone = true;
+        if (kept.url && win.URL && typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(kept.url);
+        delete gp.pictures[key];
+      });
+    }
+
+    /** An entry's picture as a Blob address: fetched with the token once, and kept across drawings and reads of
+     *  the part until its entry goes or its picture is replaced (keepEntryPictures). One that could not be
+     *  fetched is forgotten, so the next drawing tries it again. */
+    function entryPicture(e) {
+      var key = pictureKey(e);
+      if (gp.pictures[key]) return gp.pictures[key].promise;
+      var kept = { url: null, gone: false, promise: null };
+      gp.pictures[key] = kept;
+      kept.promise = win
+        .fetch(GP_PATH + "/" + e.id + "/picture", { headers: { Authorization: "Bearer " + token() } })
+        .then(function (res) {
+          if (!res.ok || typeof res.blob !== "function") throw new Error("not found");
+          return res.blob();
+        })
+        .then(function (blob) {
+          if (!win.URL || typeof win.URL.createObjectURL !== "function") throw new Error("no blob addresses");
+          var url = win.URL.createObjectURL(blob);
+          if (kept.gone) {
+            if (typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
+            throw new Error("no longer listed");
+          }
+          kept.url = url;
+          return url;
+        })
+        .catch(function (err) {
+          if (gp.pictures[key] === kept) delete gp.pictures[key];
+          throw err;
+        });
+      return kept.promise;
     }
 
     function showEntryPicture(e, img, wait) {
-      var mine = gp.picSeq;
-      entryPicture(e.id).then(
+      entryPicture(e).then(
         function (url) {
           img.setAttribute("src", url);
           img.hidden = false;
           wait.hidden = true;
         },
         function () {
-          if (mine === gp.picSeq) wait.textContent = GP_WORDS.noPicture;
+          wait.textContent = GP_WORDS.noPicture;
         },
       );
     }
@@ -3099,15 +3114,16 @@
       return ask("GET", GP_PATH)
         .then(function (d) {
           if (mine !== gp.seq) return;
-          clearEntryPictures();
           gp.answer = entriesAnswerOf(d);
           gp.error = gp.answer ? null : WORDS.didNotWork;
-          if (gp.answer) prizeCount(gp.answer.entries.length);
+          if (gp.answer) {
+            keepEntryPictures(gp.answer.entries);
+            prizeCount(gp.answer.entries.length);
+          }
           drawPrize();
         })
         .catch(function (e) {
           if (mine !== gp.seq) return;
-          clearEntryPictures();
           gp.answer = null;
           gp.error = e.message;
           drawPrize();
@@ -3203,6 +3219,7 @@
           gp.marking = false;
           gp.answer = p;
           gp.error = null;
+          keepEntryPictures(p.entries);
           prizeCount(p.entries.length);
           drawPrize();
           var now = gp.box.querySelector('.hq-gp-entry[data-entry="' + e.id + '"] .hq-status');

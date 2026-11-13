@@ -51,13 +51,24 @@ type OneAnswer = Answer | (() => Promise<Answer>);
 type Answers = Record<string, OneAnswer | OneAnswer[]>;
 type Env = ReturnType<typeof page>;
 
-/** The admin page, a pretend server that answers by "METHOD /path", and Head Elf HQ started on it. A picture's
- *  address answers a picture, unless `pictures` is "broken", or "slow", which never answers. */
-function page(o: { answers?: Answers; pictures?: "broken" | "slow" } = {}) {
+/** How the pretend server answers a picture: at once (undefined), "broken" (404), "slow" (never), or "held"
+ *  (each waits until `letGo`). A test may change it between reads. */
+type Pictures = "broken" | "slow" | "held" | undefined;
+
+/** The admin page, a pretend server that answers by "METHOD /path", and Head Elf HQ started on it. */
+function page(o: { answers?: Answers; pictures?: Pictures } = {}) {
   document.body.innerHTML = `<div id="appView"><section class="admin-view" id="view-elf" hidden><div id="elfHq"></div></section></div>`;
   const calls: Call[] = [];
   const made: string[] = [];
   const revoked: string[] = [];
+  const held: (() => void)[] = [];
+  const server = {
+    pictures: o.pictures as Pictures,
+    letGo: () => {
+      while (held.length) held.shift()!();
+    },
+  };
+  const aPicture = () => ({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(["pretend"], { type: "image/jpeg" })), json: () => Promise.resolve({}) });
   let n = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
@@ -72,9 +83,10 @@ function page(o: { answers?: Answers; pictures?: "broken" | "slow" } = {}) {
     const headers = (init.headers ?? {}) as Record<string, string>;
     calls.push({ method, url, body: init.body ? JSON.parse(String(init.body)) : null, auth: headers.Authorization ?? null });
     if (/\/picture$/.test(url)) {
-      if (o.pictures === "slow") return new Promise(() => undefined);
-      if (o.pictures === "broken") return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: "That picture is not there." }) });
-      return Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(["pretend"], { type: "image/jpeg" })), json: () => Promise.resolve({}) });
+      if (server.pictures === "slow") return new Promise(() => undefined);
+      if (server.pictures === "held") return new Promise((r) => held.push(() => r(aPicture())));
+      if (server.pictures === "broken") return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: "That picture is not there." }) });
+      return Promise.resolve(aPicture());
     }
     const all: Answers = { "GET /api/admin/elf/hq": { body: HQ }, ...(o.answers ?? {}) };
     const found = all[`${method} ${url}`] ?? { body: {} };
@@ -87,7 +99,7 @@ function page(o: { answers?: Answers; pictures?: "broken" | "slow" } = {}) {
   });
   window.sessionStorage.setItem("nbcc_admin_token", "t");
   const hq = initElfHq(document, window, { confirm: () => true });
-  return { hq, calls, made, revoked };
+  return { hq, calls, made, revoked, server };
 }
 
 const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#hqTab-${id}`)!;
@@ -100,7 +112,7 @@ const chipsOf = (c: HTMLElement) => [...c.querySelectorAll(".hq-chip")].map((x) 
 const pictureCalls = (env: Env) => env.calls.filter((c) => /\/picture$/.test(c.url));
 
 /** Head Elf HQ opened, then the Grand prize tile, with the part's read answering `answer`. */
-async function openPrize(answer: unknown = CLOSED, more: Answers = {}, o: { pictures?: "broken" | "slow" } = {}): Promise<Env> {
+async function openPrize(answer: unknown = CLOSED, more: Answers = {}, o: { pictures?: Pictures } = {}): Promise<Env> {
   const env = page({ answers: { [`GET ${PART_PATH}`]: { body: answer }, ...more }, ...o });
   await env.hq.open();
   tab("prize").click();
@@ -451,15 +463,90 @@ describe("marking the winner", () => {
     expect(document.activeElement).toBe(press);
   });
 
-  it("lets go of the old blob addresses when the part is read again", async () => {
-    const env = await openPrize(CLOSED);
-    const first = [...env.made];
-    expect(first).toHaveLength(3);
+});
+
+// Task 5's review, Minor 2: the pictures are kept across reads, by entry and the time its picture came in (a
+// replaced picture comes in again), so looking at the part again on a phone does not download them all again.
+describe("the pictures across reads", () => {
+  const srcOf = (name: string) => card(name).querySelector("img")!.getAttribute("src");
+  const allSrcs = () => cards().map((c) => c.querySelector("img")!.getAttribute("src"));
+  const readAgain = async () => {
     tab("hq").click();
     tab("prize").click();
     await flush();
-    expect(env.revoked).toEqual(first);
+  };
+  /** Ruby's picture replaced at 11:30am, after the first read. */
+  const REPLACED = { ...CLOSED, entries: [{ ...RUBY, sentAt: "2026-12-24T11:30:00.000Z" }, LEO, { ...KIM, winner: true }] };
+  /** Leo's family removed after the first read, so its entry has gone. */
+  const LEO_GONE = { ...CLOSED, entries: [RUBY, { ...KIM, winner: true }] };
+
+  it("fetches no picture twice when the part is read again", async () => {
+    const env = await openPrize(CLOSED);
+    const before = allSrcs();
+    await readAgain();
+    expect(env.calls.filter((c) => c.method === "GET" && c.url === PART_PATH)).toHaveLength(2);
+    expect(pictureCalls(env)).toHaveLength(3);
+    expect(env.revoked).toEqual([]);
+    expect(allSrcs()).toEqual(before);
+  });
+
+  it("fetches a replaced picture again, and lets its old address go", async () => {
+    const env = await openPrize(CLOSED, { [`GET ${PART_PATH}`]: [{ body: CLOSED }, { body: REPLACED }] });
+    const old = srcOf("Ruby Tinselfoot");
+    const others = [srcOf("Leo Frostwhistle"), srcOf("Kim Hollyhunt")];
+    await readAgain();
+    expect(pictureCalls(env).map((c) => c.url)).toEqual([
+      "/api/admin/elf/grand-prize/12/picture",
+      "/api/admin/elf/grand-prize/13/picture",
+      "/api/admin/elf/grand-prize/14/picture",
+      "/api/admin/elf/grand-prize/12/picture",
+    ]);
+    expect(env.revoked).toEqual([old]);
+    expect(srcOf("Ruby Tinselfoot")).not.toBe(old);
+    expect(env.made).toContain(srcOf("Ruby Tinselfoot"));
+    expect([srcOf("Leo Frostwhistle"), srcOf("Kim Hollyhunt")]).toEqual(others);
+  });
+
+  it("lets go of the address of an entry that has gone", async () => {
+    const env = await openPrize(CLOSED, { [`GET ${PART_PATH}`]: [{ body: CLOSED }, { body: LEO_GONE }] });
+    const leo = srcOf("Leo Frostwhistle");
+    await readAgain();
+    expect(env.revoked).toEqual([leo]);
+    expect(pictureCalls(env)).toHaveLength(3);
+    expect(cards()).toHaveLength(2);
+  });
+
+  it("lets go of a picture still on its way when a read no longer lists its entry", async () => {
+    const env = await openPrize(CLOSED, { [`GET ${PART_PATH}`]: [{ body: CLOSED }, { body: LEO_GONE }] }, { pictures: "held" });
+    await readAgain();
+    env.server.letGo();
+    await flush();
+    expect(pictureCalls(env)).toHaveLength(3);
+    expect(env.made).toHaveLength(3);
+    expect(env.revoked).toHaveLength(1);
+    expect(allSrcs()).not.toContain(env.revoked[0]);
+    for (const src of allSrcs()) expect(env.made).toContain(src);
+  });
+
+  it("lets go of an entry's address when the marking's answer no longer lists it", async () => {
+    const env = await openPrize(CLOSED, { [`POST ${PART_PATH}/12/winner`]: { body: { ...CLOSED, entries: [{ ...RUBY, winner: true }, KIM] } } });
+    const leo = srcOf("Leo Frostwhistle");
+    buttonIn(card("Ruby Tinselfoot"), "Mark as the winner")!.click();
+    await flush();
+    expect(cards()).toHaveLength(2);
+    expect(env.revoked).toEqual([leo]);
+    expect(pictureCalls(env)).toHaveLength(3);
+  });
+
+  it("tries a picture that could not be loaded again on the next read", async () => {
+    const env = await openPrize(CLOSED, {}, { pictures: "broken" });
+    expect(card("Ruby Tinselfoot").textContent).toContain("The picture could not be loaded.");
+    env.server.pictures = undefined;
+    await readAgain();
     expect(pictureCalls(env)).toHaveLength(6);
+    const img = card("Ruby Tinselfoot").querySelector<HTMLImageElement>("img")!;
+    expect(img.hidden).toBe(false);
+    expect(env.made).toContain(img.getAttribute("src"));
   });
 });
 

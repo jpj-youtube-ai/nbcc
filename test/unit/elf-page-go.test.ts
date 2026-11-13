@@ -149,6 +149,12 @@ describe("how a go went", () => {
     expect(text).not.toContain("Visit the hiding place");
   });
 
+  it("says the family has been there before anything about the elf going home", () => {
+    const text = said(goDoneView({ verdict: "none", visited: true, goneHome: true }, { found: null }));
+    expect(text).toContain("Your family has been there. Candy cane collected.");
+    expect(text).not.toContain("gone home");
+  });
+
   it("invites any other family to visit for its candy cane", () => {
     expect(said(goDoneView())).toContain("Visit the hiding place and scan its poster to collect your candy cane.");
   });

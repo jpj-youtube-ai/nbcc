@@ -519,6 +519,10 @@ describe("the go page's view", () => {
     expect(go7(SEVEN_05, { finders: [] }).found?.by).toBe("A detective");
   });
 
+  it("names no finder before the moment of the find", () => {
+    expect(go7(SIX_10, { over: { foundAt: at("2026-12-07T18:40:00Z") } }).found).toBeNull();
+  });
+
   // Rulings on Plan 2c-1, the notes for every task that shows a place: the one rule is asked only of an open door.
   it("never gives the place before the door opens, even to the family whose detective typed the tag word", () => {
     const v = go7(SIX_45, { typed: true, guess: go("the bakehouse", SIX_10) });
@@ -526,6 +530,12 @@ describe("the go page's view", () => {
     expect(v.outcome).toBeNull();
     expect(v.clues).toEqual([]);
     expect(JSON.stringify(v)).not.toContain("Corner Bakehouse");
+  });
+
+  it("never tells the place of a door that did not open, even from Christmas Day: a snowed in door keeps it", () => {
+    const snowed = go7(at("2026-12-25T00:00:00Z"), { over: { foundAt: null, foundFamilyId: null, snowDayAt: at("2026-12-07T17:30:00Z") } });
+    expect(snowed).toMatchObject({ stage: "closed", outcome: null });
+    expect(JSON.stringify(snowed)).not.toContain("Corner Bakehouse");
   });
 
   it("gives an open door with no place no outcome", () => {
@@ -544,6 +554,8 @@ describe("the go page's view", () => {
     expect(goViewFor({ run: practice(SEVEN_05), now: SEVEN_05, guess: null, typed: false, finders: [], cluesShown: 1 }).nextUrl).toBe("/elf/hq/door/0?clues=2");
     const christmas = at("2026-12-25T00:00:00Z");
     expect(goViewFor({ run: practice(christmas), now: christmas, guess: null, typed: false, finders: [], cluesShown: 1 }).stage).toBe("go");
+    // As Detective HQ's case, the practice door names no finder, whatever it is handed.
+    expect(goViewFor({ run: practice(SEVEN_05), now: SEVEN_05, guess: null, typed: false, finders: [RUBY], cluesShown: 1 }).found?.by).toBe("A detective");
   });
 });
 

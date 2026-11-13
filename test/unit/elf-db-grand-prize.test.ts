@@ -49,6 +49,10 @@ beforeEach(() => {
 describe("saveEntry", () => {
   const base = { year: 2026, detectiveId: 11, familyId: 3, picture, mobile: null, at: SENT };
   const ENTRY_READ = /^SELECT id FROM elf_grand_prize_entries WHERE year = \$1 AND detective_id = \$2 FOR UPDATE$/;
+  /** The one statement that writes a picture's bytes, for a new entry and a replaced one alike: it adds the
+   *  bytes row, or replaces the one there. The backups keep the entries but leave their pictures out, so
+   *  after a restore an entry can have no bytes row. */
+  const BYTES_UPSERT = "INSERT INTO elf_grand_prize_files (entry_id, bytes) VALUES ($1, $2) ON CONFLICT (entry_id) DO UPDATE SET bytes = EXCLUDED.bytes";
 
   /** The transaction's answers: whether the detective is the family's, and the entry already there, if any. */
   function entryTx(o: { existing?: number; detective?: boolean } = {}) {
@@ -76,6 +80,7 @@ describe("saveEntry", () => {
     );
     expect(insert[1]).toEqual([2026, 11, 3, "image/jpeg", 1200, 900, SENT]);
     expect(call(/^INSERT INTO elf_grand_prize_files/)![1]).toEqual([21, picture.bytes]);
+    expect(flat(call(/^INSERT INTO elf_grand_prize_files/)![0])).toBe(BYTES_UPSERT);
     expect(indexOf(ENTRY_READ)).toBeGreaterThan(1);
     expect(indexOf(/^INSERT INTO elf_grand_prize_entries/)).toBeGreaterThan(indexOf(ENTRY_READ));
     expect(indexOf(/^INSERT INTO elf_grand_prize_files/)).toBeGreaterThan(indexOf(/^INSERT INTO elf_grand_prize_entries/));
@@ -89,18 +94,21 @@ describe("saveEntry", () => {
     expect(sent(/^UPDATE/)).toBe(false);
   });
 
+  // Fix round 1: a plain UPDATE of the bytes would change nothing for an entry that lost its bytes row in a
+  // restore, while the answer still said replaced. The one statement adds the row or replaces it.
   it("replaces the entry that is there: its mime, size, sent time and bytes, never a second entry", async () => {
     entryTx({ existing: 21 });
     expect(await saveEntry({ ...base, at: LATER })).toEqual({ id: 21, replaced: true });
     const entry = call(/^UPDATE elf_grand_prize_entries/)!;
     expect(flat(entry[0])).toBe("UPDATE elf_grand_prize_entries SET mime = $2, width = $3, height = $4, sent_at = $5 WHERE id = $1");
     expect(entry[1]).toEqual([21, "image/jpeg", 1200, 900, LATER]);
-    const bytes = call(/^UPDATE elf_grand_prize_files/)!;
-    expect(flat(bytes[0])).toBe("UPDATE elf_grand_prize_files SET bytes = $2 WHERE entry_id = $1");
+    const bytes = call(/elf_grand_prize_files/)!;
+    expect(flat(bytes[0])).toBe(BYTES_UPSERT);
     expect(bytes[1]).toEqual([21, picture.bytes]);
+    expect(sent(/^UPDATE elf_grand_prize_files/)).toBe(false);
     expect(sent(/^INSERT INTO elf_grand_prize_entries/)).toBe(false);
-    expect(sent(/^INSERT INTO elf_grand_prize_files/)).toBe(false);
     expect(indexOf(/^UPDATE elf_grand_prize_entries/)).toBeGreaterThan(indexOf(ENTRY_READ));
+    expect(indexOf(/elf_grand_prize_files/)).toBeGreaterThan(indexOf(/^UPDATE elf_grand_prize_entries/));
     expect(sqls()[sqls().length - 1]).toBe("COMMIT");
   });
 

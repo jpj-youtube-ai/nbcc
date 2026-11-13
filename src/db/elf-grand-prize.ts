@@ -33,8 +33,8 @@ const isUniqueClash = (err: unknown): boolean => typeof err === "object" && err 
  *  detective and its family are taken from the one detective row, checked against both, so an entry is only
  *  ever its own family's (the tables cannot tie the two); a detective that is not the family's own stores
  *  nothing and throws. A mobile typed with the entry goes on the family, only when it has none. Then the
- *  entry for the year and the detective is read under lock and replaced in place (its mime, size, sent time
- *  and bytes), or added with its bytes. */
+ *  entry for the year and the detective is read under lock and replaced in place (its mime, size and sent
+ *  time), or added; either way its bytes row is added or replaced by one statement. */
 export async function saveEntry(o: {
   year: number;
   detectiveId: number;
@@ -71,7 +71,6 @@ export async function saveEntry(o: {
         o.picture.height,
         o.at,
       ]);
-      await client.query("UPDATE elf_grand_prize_files SET bytes = $2 WHERE entry_id = $1", [id, o.picture.bytes]);
     } else {
       const ins = await client.query<{ id: number }>(
         `INSERT INTO elf_grand_prize_entries (year, detective_id, family_id, mime, width, height, sent_at)
@@ -79,8 +78,13 @@ export async function saveEntry(o: {
         [o.year, detectiveId, familyId, o.picture.mime, o.picture.width, o.picture.height, o.at],
       );
       id = Number(ins.rows[0].id);
-      await client.query("INSERT INTO elf_grand_prize_files (entry_id, bytes) VALUES ($1, $2)", [id, o.picture.bytes]);
     }
+    // One statement for the bytes on both paths: the backups keep the entries but leave their pictures out,
+    // so after a restore an entry can have no bytes row, and a plain UPDATE would then store nothing.
+    await client.query(
+      "INSERT INTO elf_grand_prize_files (entry_id, bytes) VALUES ($1, $2) ON CONFLICT (entry_id) DO UPDATE SET bytes = EXCLUDED.bytes",
+      [id, o.picture.bytes],
+    );
     await insertAudit(client, {
       actor: "family",
       action: "elf.grand_prize.entry",

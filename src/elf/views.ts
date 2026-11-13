@@ -203,7 +203,7 @@ export function hqViewFor(o: {
 }
 
 /** A door's place, when it has one: its name, and its town (empty when none was typed). */
-function placeOf(run: DoorRun): { name: string; town: string } | null {
+export function doorPlaceOf(run: DoorRun): { name: string; town: string } | null {
   return filled(run.placeName) ? { name: run.placeName, town: run.placeTown ?? "" } : null;
 }
 
@@ -213,7 +213,7 @@ const stillHidingAt = (run: DoorRun, state: DoorState): boolean => state === "re
 
 /** How a door turned out for a family that may know its place (the caller decides): the verdict on its
  *  guess (cracked by cracked(), wrong for any other guess, none without one), where the elf was, and what
- *  is left to do there. `place` is the door's own (placeOf). */
+ *  is left to do there. `place` is the door's own, from doorPlaceOf. */
 export function goOutcomeOf(o: { run: DoorRun; now: Date; place: { name: string; town: string }; guess: SavedGuess | null; typed: boolean }): NonNullable<GoView["outcome"]> {
   const state = doorState(o.run.facts, o.now);
   const right = cracked({ state, openedAt: openedAt(o.run.facts, o.now), names: o.run.names }, o.guess);
@@ -254,7 +254,7 @@ export function goViewFor(o: {
     open && knowsPlace({ state, guessed, typed: o.typed }) ? "done" : mayHaveAGo({ year: run.year, state, guessed, typed: o.typed, now }) ? "go" : "closed";
   const out = stage === "go" ? cluesOutOf(run, now) : [];
   const clues = out.slice(0, heldClues(o.cluesShown));
-  const place = placeOf(run);
+  const place = doorPlaceOf(run);
   const told = open && (stage === "done" || (stage === "closed" && placesPublic(run.year, now)));
   const foundAt = run.facts.foundAt;
   const finders = run.door === 0 ? [] : o.finders;

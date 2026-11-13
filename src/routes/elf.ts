@@ -70,6 +70,7 @@ import type { Scrapbook } from "../elf/scrapbook";
 import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeState } from "../elf/wardrobe";
 import {
   calendarViewFor,
+  doorPlaceOf,
   familyDoorView,
   goOutcomeOf,
   goViewFor,
@@ -1364,7 +1365,7 @@ function cluesAsked(raw: unknown): number {
  *  door shut, hunted, found with its place still hidden or snowed in has nothing to crack yet, and nor has
  *  an open door with no place (a door never runs without one). */
 function goPlaceOf(run: DoorRun, now: Date): { name: string; town: string } | null {
-  return isOpen(doorState(run.facts, now)) && run.placeName?.trim() ? { name: run.placeName, town: run.placeTown ?? "" } : null;
+  return isOpen(doorState(run.facts, now)) ? doorPlaceOf(run) : null;
 }
 
 /** The go page's view for a family: what it has done at the door (read here, unless the caller has just

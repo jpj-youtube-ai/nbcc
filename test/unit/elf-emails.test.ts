@@ -616,6 +616,47 @@ describe("their lines in All emails, for staff", () => {
     }
   });
 
+  // Plan 2c-2, Task 8 (ruling F17): staff read every line the week before Christmas Eve adds, each in a version of its
+  // own, as a family gets it. Every version also ends with the link to stop the emails (the test above).
+  it("show the week before Christmas Eve's lines and the day before's, each in a version of its own", () => {
+    const versions = findEmail("elf-clue")!.versions;
+    const render = (label: string) => {
+      const found = versions.find((v) => v.label === label);
+      expect(found, label).toBeDefined();
+      const e = found!.render("https://nbcc.scot");
+      return { subject: e.subject, parts: [e.text, htmlWords(e.html)] };
+    };
+    const says = (e: { parts: string[] }, lines: string[], not: string[]) => {
+      for (const part of e.parts) {
+        for (const line of lines) expect(part, line).toContain(line);
+        for (const line of not) expect(part, line).not.toContain(line);
+      }
+    };
+    const READY = [
+      "Have you got your picture ready?",
+      "Every detective who does all 24 doors can send in a drawing, or a photo of their naughtiest elf at home, for the grand prize.",
+      "You can send it in Detective HQ from the morning of Christmas Eve until 5pm that day.",
+    ];
+    const BEHIND = ["Catching up for the grand prize", "Every detective who does all 24 doors can send in a picture for the grand prize on Christmas Eve."];
+    const CRACK = "You can still crack 3 doors from home, with one guess each. They are in Detective HQ, under Doors you can still crack.";
+    const VISIT = "To catch up, visit the hiding places of the doors you have not done yet, and type the word on each elf's tag.";
+    const TOMORROW = "Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early.";
+
+    const ready = render("The week before, up to date");
+    expect(ready.subject).toBe("Door 18: the first clue is out");
+    says(ready, READY, [BEHIND[0], TOMORROW]);
+    const behind = render("The week before, behind");
+    expect(behind.subject).toBe("Door 18: the first clue is out");
+    says(behind, [...BEHIND, CRACK], [VISIT, READY[0], TOMORROW]);
+    const visit = render("The week before, behind, nothing left to crack from home");
+    says(visit, [...BEHIND, VISIT], ["from home, with one guess each", READY[0], TOMORROW]);
+    const eve = render("The day before Christmas Eve");
+    expect(eve.subject).toBe("Door 23: the first clue is out");
+    says(eve, [TOMORROW, ...READY], [BEHIND[0]]);
+    // The first three are the clue email of any other door, as it was.
+    for (const v of versions.slice(0, 3)) says({ parts: [v.render("https://nbcc.scot").text] }, [], [TOMORROW, READY[0], BEHIND[0]]);
+  });
+
   // From the present PR's review: staff see both of the 8am email's not ready lines.
   it("show the 8am email's snow day only for a door that cannot open", () => {
     const render = (id: string) => findEmail("elf-morning")!.versions.find((v) => v.id === id)!.render("https://nbcc.scot").html;

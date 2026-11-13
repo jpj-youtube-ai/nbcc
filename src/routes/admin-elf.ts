@@ -22,7 +22,7 @@ import {
 import { listElfDoors } from "../db/elf-doors";
 import { clearPractice, getPractice, startPractice, type PracticeRow } from "../db/elf-practice";
 import { doorInstant, eveningFor, isDoor, DOOR_COUNT, type Door } from "../elf/calendar";
-import { doorPicture, doorSeason, emptyDoor, type DoorSetup, readinessOf, staffEveningOf } from "../elf/door-setup";
+import { doorSeason, emptyDoor, type DoorSetup, readinessOf, staffEveningOf } from "../elf/door-setup";
 import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/admin-families";
 import { daysUntil, questsFor, tileFor, type SoonNotReady } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
@@ -133,7 +133,7 @@ export async function patchAdminElfSettings(req: Request, res: Response): Promis
     // December's doors go live only with door 1 ready: its first clue is what every family sees first.
     if (parsed.data.doorsOn === true) {
       const door1 = (await listElfDoors(now.year)).find((d) => d.door === 1) ?? emptyDoor(1, "");
-      if (!readinessOf(door1, doorPicture(now.year, 1) !== null).ready) return res.status(409).json({ error: DOOR_1_NOT_READY });
+      if (!readinessOf(door1).ready) return res.status(409).json({ error: DOOR_1_NOT_READY });
     }
     // Every door of the year gets its row (so an unready one can be snowed in) and the practice goes,
     // before the switch is saved: if this fails the switch stays off, and trying again is harmless.
@@ -164,7 +164,7 @@ async function doorsNotReadyAt(year: number, now: Date): Promise<{ notReady: { d
     const late = doors
       .map((d) => {
         const at = doorInstant(season, d.door, eveningFor(season, d.door, staffEveningOf(d)).clue1);
-        return { door: d.door, at, toDo: readinessOf(d, doorPicture(year, d.door) !== null).toDo };
+        return { door: d.door, at, toDo: readinessOf(d).toDo };
       })
       .filter((d) => d.toDo > 0 && d.at !== null && d.at.getTime() > now.getTime())
       .sort((a, b) => a.at!.getTime() - b.at!.getTime());

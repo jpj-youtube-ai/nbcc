@@ -137,16 +137,16 @@ function eveningState(year: number, d: DoorSetup, now: Date): { evening: Evening
 async function sheetOf(year: number, d: DoorSetup, now: Date): Promise<DoorSheet> {
   const { evening, clueOut } = eveningState(year, d, now);
   const first = doorInstant(doorSeason(year), d.door, evening.clue1);
-  const picture = doorPicture(year, d.door);
   // Who called it off and who ticked gone home, by name, as the photo log names a head elf.
   const name = await headElfNamesOf([d.snowDayAt ? d.snowDayBy : null, d.goneHomeAt ? d.goneHomeBy : null]);
   return {
     ...d,
     day: first ? longDayWords(first) : "",
-    readiness: readinessOf(d, picture !== null),
+    // A door is ready without a picture of its own: every door has the same present.
+    readiness: readinessOf(d),
     evening,
     closesTooSoon: closesTooSoon(d.closesAt, evening.clue3),
-    picture,
+    picture: doorPicture(year, d.door),
     posterUrl: `${String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "")}/elf/p/${d.posterCode}`,
     clueOut,
     started: clueOut[0],
@@ -197,16 +197,15 @@ export const getAdminElfDoors = async (req: Request, res: Response): Promise<Res
     const now = new Date();
     await ensureElfDoors(year);
     const [rows, perms] = await Promise.all([listElfDoors(year), loadEffectivePermissions(claims.sub)]);
-    const withPicture = rows.map((setup) => ({ setup, hasPicture: doorPicture(year, setup.door) !== null }));
-    const tiles: DoorTile[] = withPicture.map(({ setup, hasPicture }) => {
-      const r = readinessOf(setup, hasPicture);
+    const tiles: DoorTile[] = rows.map((setup) => {
+      const r = readinessOf(setup);
       const started = eveningState(year, setup, now).clueOut[0];
       return { door: setup.door, weekday: doorWeekday(year, setup.door), placeName: setup.placeName, ready: r.ready, toDo: r.toDo, started };
     });
     return res.status(200).json({
       year,
       doors: tiles,
-      counts: doorsSummary(withPicture),
+      counts: doorsSummary(rows),
       prizeList: prizeListText(rows),
       canEdit: !!perms && can(perms, "elf", "edit"),
     });

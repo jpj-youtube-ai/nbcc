@@ -24,7 +24,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
       """
     Then the doors answer is 200
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends GET to "/api/admin/elf/doors"
-    Then the tile for door 7 shows the place "Pine Cone Café" and 4 to do
+    Then the tile for door 7 shows the place "Pine Cone Café" and 3 to do
 
   Scenario: Checking a text that names a door that does not exist
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends POST to "/api/admin/elf/clues/check" with:

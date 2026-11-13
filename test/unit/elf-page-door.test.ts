@@ -142,8 +142,9 @@ describe("how a door is read out", () => {
     expect(doorLabel(HUNTING, NOW)).toBe("Door 7. The hunt is on.");
   });
 
-  it("says who found an elf whose place is still hidden, and when the place is shown", () => {
-    expect(doorLabel(FOUND_HIDDEN, NOW)).toBe("Door 7, found. Found by Detective R. Tinselfoot. The hiding place is shown at 7pm.");
+  // Plan 2c-1, Task 9: in the clue email's words, since the place is shown only to a family that has had its guess.
+  it("says who found an elf whose place is still hidden, and when a family finds out whether it cracked it", () => {
+    expect(doorLabel(FOUND_HIDDEN, NOW)).toBe("Door 7, found. Found by Detective R. Tinselfoot. You find out whether you cracked it at 7pm.");
   });
 
   it("says a snow day's elf got snowed in", () => {
@@ -418,10 +419,11 @@ describe("a door whose elf is found while its place is still hidden", () => {
     expect(tile.querySelector(".elf-door__flap .elf-carve")).not.toBeNull();
   });
 
-  it("says who found it and when, when the place is shown, and that the guessing goes on", () => {
+  it("says who found it and when, when a family finds out whether it cracked it, and that the guessing goes on", () => {
     const html = doorDetail(FOUND_HIDDEN, { ...CTX, now: SIX_10 });
     expect(words(dom(html).querySelector("h3"))).toBe("Bauble has been found!");
-    expect(text(html)).toContain("Found by Detective R. Tinselfoot at 5:47pm. The hiding place is shown at 7pm.");
+    expect(text(html)).toContain("Found by Detective R. Tinselfoot at 5:47pm. You find out whether you cracked it at 7pm.");
+    expect(html).not.toContain("is shown at");
     expect(text(html)).toContain("Clues are still coming out in Detective HQ, and you can still lock in your guess.");
     expect(dom(html).querySelector('a[href="/elf/hq"]')).not.toBeNull();
   });

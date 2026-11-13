@@ -2,7 +2,7 @@ import { DOOR_COUNT } from "../calendar";
 import { christmasDay, newYearsDay } from "../catch-up";
 import { SCHOOL_NAME, schoolLogo } from "../logo";
 import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
-import { GUESS_LINE, doorDetail, doorTile } from "./door";
+import { GUESS_LINE, doorDetail, doorTile, findOutLine } from "./door";
 import { elfFilm } from "./film";
 import { candyCane, icon } from "./icons";
 import { headingStrip, rosette } from "./paper";
@@ -64,14 +64,14 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
         `<p class="elf-status__count elf-cane-strip"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>`,
     };
   }
-  // Found before its place is shown: who and when, never where.
+  // Found before its place is shown: who and when, never where, and when a family finds out how it did.
   if (today && today.state === "found-hidden" && today.found) {
     const at = clockWords(today.found.at);
     const reveal = today.revealAt ? clockWords(today.revealAt) : "";
     return {
       kind: "found-hidden",
       title: `${escapeHtml(today.elfName)} has been found!`,
-      html: `<p>${escapeHtml(today.found.by)} found today's elf${at ? ` at ${at}` : ""}.${reveal ? ` The hiding place is shown at ${reveal}.` : ""}</p>`,
+      html: `<p>${escapeHtml(today.found.by)} found today's elf${at ? ` at ${at}` : ""}.${reveal ? ` ${findOutLine(reveal)}` : ""}</p>`,
     };
   }
   if (today && today.state === "snow") {

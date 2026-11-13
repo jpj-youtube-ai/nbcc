@@ -349,7 +349,10 @@ describe("today's news at the top of the calendar", () => {
     expect(status.html).not.toContain(" at , ");
   });
 
-  it("says who found today's elf and when, and when its place is shown, while the place is still hidden", () => {
+  // Plan 2c-1, Task 9: the place is never shown to everyone at the reveal, only to a family that has had its
+  // guess, so the news says when a family finds out whether it cracked the case, in the clue email's words. So
+  // do the door's words for a screen reader and its detail: nowhere on the page says the place "is shown".
+  it("says who found today's elf and when, and when a family finds out whether it cracked it, while the place is still hidden", () => {
     const hidden = view(at("2026-12-07T18:10:00.000Z"), {
       state: "found-hidden",
       found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective Sam Snowsleuth" },
@@ -359,8 +362,9 @@ describe("today's news at the top of the calendar", () => {
     const status = calendarStatus(hidden);
     expect(status.title).toBe("Bauble has been found!");
     expect(words(new DOMParser().parseFromString(status.html, "text/html").body)).toBe(
-      "Detective Sam Snowsleuth found today's elf at 5:47pm. The hiding place is shown at 7pm.",
+      "Detective Sam Snowsleuth found today's elf at 5:47pm. You find out whether you cracked it at 7pm.",
     );
+    expect(renderCalendarPage(hidden)).not.toContain("is shown at");
     expect(renderCalendarPage(hidden)).not.toContain("Secret Cinema");
     // Its card is styled as the find; the class is the kind in letters, as the page's script writes it.
     expect(page(hidden).querySelector(".elf-status")!.classList.contains("elf-status--foundhidden")).toBe(true);

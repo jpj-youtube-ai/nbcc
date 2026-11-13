@@ -34,8 +34,11 @@
   --elf-ease: cubic-bezier(0.25, 1, 0.5, 1);
   --elf-ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* The shape carved into a door when staff have not uploaded one: the mystery star. */
-  --elf-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M24 6l5.3 11.6 12.7 1.4-9.5 8.6 2.7 12.5L24 33.6l-11.2 6.5 2.7-12.5L6 19l12.7-1.4z'/%3E%3C/svg%3E");
+  /* The present cut out of every door (Jaimie, 12 November 2026: "just make a standard present on
+     them"): a box with its lid and its ribbon cut apart, and a bow of two loops and a knot on the lid.
+     One colour, through the carving's mask. Every cut is at least 2.5 of its 48 units, so it still
+     shows on a 40 pixel door. */
+  --elf-present: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M6.9 19.4H17.6A0.9 0.9 0 0 1 18.5 20.3V25.5A0.9 0.9 0 0 1 17.6 26.4H6.9A0.9 0.9 0 0 1 6 25.5V20.3A0.9 0.9 0 0 1 6.9 19.4ZM21.7 19.4H26.3A0.5 0.5 0 0 1 26.8 19.9V25.9A0.5 0.5 0 0 1 26.3 26.4H21.7A0.5 0.5 0 0 1 21.2 25.9V19.9A0.5 0.5 0 0 1 21.7 19.4ZM30.4 19.4H41.1A0.9 0.9 0 0 1 42 20.3V25.5A0.9 0.9 0 0 1 41.1 26.4H30.4A0.9 0.9 0 0 1 29.5 25.5V20.3A0.9 0.9 0 0 1 30.4 19.4ZM9.9 29.8H17.6A0.9 0.9 0 0 1 18.5 30.7V44.9A0.9 0.9 0 0 1 17.6 45.8H9.9A0.9 0.9 0 0 1 9 44.9V30.7A0.9 0.9 0 0 1 9.9 29.8ZM21.7 29.8H26.3A0.5 0.5 0 0 1 26.8 30.3V45.3A0.5 0.5 0 0 1 26.3 45.8H21.7A0.5 0.5 0 0 1 21.2 45.3V30.3A0.5 0.5 0 0 1 21.7 29.8ZM30.4 29.8H38.1A0.9 0.9 0 0 1 39 30.7V44.9A0.9 0.9 0 0 1 38.1 45.8H30.4A0.9 0.9 0 0 1 29.5 44.9V30.7A0.9 0.9 0 0 1 30.4 29.8Z'/%3E%3Cpath fill-rule='evenodd' d='M22.2 17L17.38 7.92A5.3 5.3 0 1 0 12.01 15.65ZM18.21 14.23L15 8.99A2.7 2.7 0 1 0 12.18 13.05Z'/%3E%3Cpath fill-rule='evenodd' d='M25.8 17L35.99 15.65A5.3 5.3 0 1 0 30.62 7.92ZM29.79 14.23L35.82 13.05A2.7 2.7 0 1 0 33 8.99Z'/%3E%3Cpath d='M22.5 14H25.5A1.8 1.8 0 0 1 27.3 15.8V18.2A1.8 1.8 0 0 1 25.5 20H22.5A1.8 1.8 0 0 1 20.7 18.2V15.8A1.8 1.8 0 0 1 22.5 14Z'/%3E%3C/svg%3E");
   /* A snow day's door: a six armed snowflake, cut out the same way. */
   --elf-flake: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none' stroke='%23000' stroke-width='3.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20M19 6l5 5 5-5M37.1 10.7l-1.8 6.8 6.8 1.8M42.1 28.7l-6.8 1.8 1.8 6.8M29 42l-5-5-5 5M10.9 37.3l1.8-6.8-6.8-1.8M5.9 19.3l6.8-1.8-1.8-6.8'/%3E%3C/svg%3E");
 }
@@ -229,9 +232,9 @@
 .elf-door__tab { position: absolute; top: 50%; right: -5px; width: 9px; height: 19px; margin-top: -9.5px; border-radius: 0 8px 8px 0; background-color: var(--elf-edge); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 1px 1.5px 2px rgba(30, 0, 0, 0.45), inset -1px 0 0 rgba(94, 0, 0, 0.22); }
 .elf-door__face { position: relative; grid-row: 2; grid-column: 1; display: grid; place-items: center; }
 
-/* The prize's shape cut out of card and laid on the door: the card, its darker cut edge and a soft
-   shadow. Staff upload the shape in one colour; until they do, it is the mystery star. */
-.elf-carve { --shape: var(--elf-star); position: relative; display: block; width: 58px; height: 58px; filter: drop-shadow(0 2px 2px rgba(20, 0, 0, 0.5)); }
+/* The present cut out of card and laid on the door: the card, its darker cut edge and a soft shadow.
+   Every door has the same present, and a snow day the snowflake. */
+.elf-carve { --shape: var(--elf-present); position: relative; display: block; width: 58px; height: 58px; filter: drop-shadow(0 2px 2px rgba(20, 0, 0, 0.5)); }
 .elf-carve__hi,
 .elf-carve__lo { position: absolute; inset: 0; -webkit-mask: var(--shape) center / contain no-repeat; mask: var(--shape) center / contain no-repeat; }
 .elf-carve__lo { background: var(--elf-edge-dark); transform: translate(0.8px, 1.6px); }
@@ -327,8 +330,8 @@
 .elf-door[aria-expanded="true"],
 .elf-door:has(+ .elf-detail:target) { outline: 3px solid var(--card); outline-offset: 2px; }
 
-/* A snow day's face: a paper snowflake cut out of card the way a prize's shape is (no picture: the
-   stylesheet supplies its shape, as it does the mystery star). */
+/* A snow day's face: a paper snowflake cut out of card the way the present is (no picture: the
+   stylesheet supplies its shape, as it does the present). */
 .elf-snowflake { --shape: var(--elf-flake); }
 
 /* A family's own marks, laid on by the page's script. Marks are only ever earned at an open door,
@@ -380,7 +383,7 @@
 .elf-board.is-live .elf-detail:target:not(.is-open) { display: none; }
 .elf-detail p { margin: 0 0 8px; }
 .elf-detail__media { justify-self: center; }
-/* The prize's shape (or a snow day's snowflake) on a square of the doors' maroon, as it is on its door. */
+/* The present (or a snow day's snowflake) on a square of the doors' maroon, as it is on its door. */
 .elf-detail__shape { display: grid; place-items: center; width: 150px; min-height: 150px; padding: 12px; border-radius: 3px; background-color: var(--maroon); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.6), 0 3px 6px rgba(58, 0, 0, 0.3); }
 .elf-detail__shape .elf-carve { width: 96px; height: 96px; }
 .elf-detail--today .elf-detail__shape,

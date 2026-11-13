@@ -104,8 +104,8 @@ export function doorLabel(d: DoorView, now: Date): string {
   return `Door ${d.door}, shut. Clue out ${dayWords(d.clueAt)} at ${clockWords(d.clueAt)}.${big}`;
 }
 
-/** The prize's shape, cut out of card and laid on the door. With no shape of its own, a door has the
- *  mystery star, which the stylesheet supplies. */
+/** The shape cut out of card and laid on the door. With no shape of its own (and none has one), a door
+ *  has the present every door has, which the stylesheet supplies. */
 function carving(d: DoorView): string {
   const shape = sitePath(d.shapeUrl);
   const style = shape ? ` style="--shape:url('${shape}')"` : "";

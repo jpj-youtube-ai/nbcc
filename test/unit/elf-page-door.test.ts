@@ -279,13 +279,13 @@ describe("a door on the board", () => {
     }
   });
 
-  it("carves the mystery star when no shape has been uploaded, and the shape when one has", () => {
+  it("carves the stylesheet's present when a door has no shape of its own, and the shape when one has", () => {
     expect(dom(doorTile(door(), NOW)).querySelector(".elf-carve")!.getAttribute("style")).toBeNull();
     const shaped = dom(doorTile(door({ shapeUrl: "/elf/shape/9.png?v=3" }), NOW)).querySelector(".elf-carve")!;
     expect(shaped.getAttribute("style")).toBe("--shape:url('/elf/shape/9.png?v=3')");
   });
 
-  it("falls back to the mystery star for a shape address that is not one of the site's own", () => {
+  it("falls back to the stylesheet's present for a shape address that is not one of the site's own", () => {
     for (const bad of ["https://example.com/x.png", "//example.com/x.png", "/a.png');background:url('/b", "javascript:alert(1)", ""]) {
       expect(dom(doorTile(door({ shapeUrl: bad }), NOW)).querySelector(".elf-carve")!.getAttribute("style"), bad).toBeNull();
     }

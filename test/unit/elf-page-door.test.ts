@@ -448,12 +448,17 @@ describe("a door's detail", () => {
     }
   });
 
-  it("tells a shut door's day and time, and invites a guess at the shape cut out of the door", () => {
+  // Every door has the same present (12 November 2026), so the shape no longer hints at a door's prize: the
+  // line invites a guess at the prize itself, the same with December's doors off, as the present shows then too.
+  it("tells a shut door's day and time, and invites a guess at its prize", () => {
+    const LINE = "Every door has a prize for the first detective to find its elf. Can you guess what it is?";
     const said = text(doorDetail(door(), CTX));
     expect(said).toContain("Door 9");
     expect(said).toContain("Still shut");
     expect(said).toContain("Clue out Wed 9 Dec at 5:30pm");
-    expect(said).toContain("Look at the shape cut out of the door. Can you guess the prize?");
+    expect(said).toContain(LINE);
+    expect(said).not.toContain("shape cut out");
+    expect(text(doorDetail(door({ doorsOn: false }), CTX))).toContain(LINE);
   });
 
   it("shows a big prize on a paper chip, and its way to the clue on a torn paper button", () => {

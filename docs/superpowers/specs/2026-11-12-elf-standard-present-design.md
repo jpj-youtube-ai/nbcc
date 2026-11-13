@@ -27,8 +27,10 @@ waits on one before it can be ready.
 - Each door's prize words, Show it off, finding, and the scrapbook.
 - The per-door picture lookup (`DOOR_PICTURES`, `doorPicture`) stays in the code, empty, so the catch-up work in
   flight on another branch is untouched.
-- With December's doors switched off, every family page's HTML is byte for byte what it is today. The shape is
-  CSS only.
+- With December's doors switched off, the family pages change only in one line on a shut door's detail, and the
+  shape is CSS. The line was "Look at the shape cut out of the door. Can you guess the prize?", and is now "Every
+  door has a prize for the first detective to find its elf. Can you guess what it is?", because the same present
+  on every door no longer hints at a door's prize. It shows with the doors off too, as the present does.
 
 ## Look
 

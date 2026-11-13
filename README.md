@@ -12171,7 +12171,8 @@ preview link stay admins only, whoever holds the section.
   close early. Staff can change any of them." The rules end their clue times sentence "...and at
   10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve." The calendar's first step
   says "It comes out after school on school days, and in the morning at weekends, in the holidays and
-  on Christmas Eve." Both say so with December's doors off too, the one change to wave 1's words.
+  on Christmas Eve." Both say so with December's doors off too, one of two changes to wave 1's words (the
+  other is a shut door's line, under **Switched off means wave 1** below).
 - **Finds** (after Doors, its count the photos waiting): the photo check, the photo log, and Tonight and
   before, who found each door and when (see **Photos, alerts, emails, the worker and Finds** below).
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every
@@ -12251,7 +12252,11 @@ teaser, no door picture, no snow and no progress; Detective HQ has no today's ca
 only to door 1's first clue, as wave 1's did. Nothing a family reads differs from wave 1: the
 calendar's How it works and today's door keep wave 1's words (`view.doorsOn` picks them), and so does
 the rules page's line on who wins what ("Each family can win one elf."; with the doors on, decision 1's
-and C6's words: the finder wins that door's prize, the elf stays there, one prize a family). Every game
+and C6's words: the finder wins that door's prize, the elf stays there, one prize a family). One line
+changed for both, with the standard present (12 November 2026): a shut door's detail used to say "Look at
+the shape cut out of the door. Can you guess the prize?", and every door now has the same present, so it
+says "Every door has a prize for the first detective to find its elf. Can you guess what it is?"
+(`CARVING_LINE` in `src/elf/pages/door.ts`), with the doors off too. Every game
 route answers 404. A practice browser (the preview cookie) also gets door 0, never a real door.
 
 **The public calendar** is built at most once every 15 seconds and shared by everyone

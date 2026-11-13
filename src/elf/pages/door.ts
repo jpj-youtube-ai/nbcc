@@ -42,7 +42,9 @@ export interface DoorContext {
   hqUrl: string;
 }
 
-const CARVING_LINE = "Look at the shape cut out of the door. Can you guess the prize?";
+/** A shut door's invitation to guess its prize. Every door has the same present (12 November 2026), so the
+ *  shape no longer hints at it; the same words show with December's doors off, as the present does. */
+const CARVING_LINE = "Every door has a prize for the first detective to find its elf. Can you guess what it is?";
 
 /** How the guess works, in one line: the calendar's second step says it too. A guess counts until the
  *  hiding place is shown, not until the elf is found. */

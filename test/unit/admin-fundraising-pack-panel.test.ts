@@ -223,7 +223,9 @@ describe("the list", () => {
     expect(row(2)!.querySelector(".fr-pack-pill")).toBeNull();
     expect(text(row(4)!.querySelector(".fr-pack-pill"))).toBe("Things to send");
     const filter = q('[data-frfilter="packs"]')!;
-    expect(text(filter)).toBe("Packs to send (4)");
+    // A Needs you tile (2026-11-13): the count, the name, and what it means.
+    expect(text(filter.querySelector(".fr-tile__n")!)).toBe("4");
+    expect(text(filter.querySelector(".fr-tile__name")!)).toBe("Packs to send");
     await press(filter);
     expect(qa("#frList tr[data-frtoggle]").map((r) => r.getAttribute("data-frtoggle"))).toEqual(["1", "3", "4", "5"]);
   });
@@ -232,7 +234,7 @@ describe("the list", () => {
     stored.set(5, { sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com", signer: null, signerRole: null, items: [tickedItem("letter")] });
     await openFundraising();
     expect(row(5)!.querySelector(".fr-pack-pill")).toBeNull();
-    expect(text(q('[data-frfilter="packs"]'))).toBe("Packs to send (3)");
+    expect(text(q('[data-frfilter="packs"] .fr-tile__n')!)).toBe("3");
   });
 });
 

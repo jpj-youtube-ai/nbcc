@@ -48,6 +48,10 @@ export const twoFactorSchema = z.object({
   email: z.string().email(),
   code: z.string().regex(/^\d{6}$/),
   remember: z.boolean().optional(),
+  // TASK-619: true when the admin is running as the app pinned to a phone's home screen, which
+  // earns the 30-day session instead of 8 hours (src/admin/session.ts sessionTtlMs). Optional,
+  // because a browser tab does not send it.
+  installed: z.boolean().optional(),
 });
 
 export type TwoFactorInput = z.infer<typeof twoFactorSchema>;

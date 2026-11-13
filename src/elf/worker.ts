@@ -11,7 +11,7 @@ import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
 import { closingShown, goesOpen } from "./catch-up";
 import { elfTextsOn } from "./texts-on";
 import { doorInstant, doorOn, type Door } from "./calendar";
-import { doorPicture, doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
+import { doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
 import { doorState, isOpen } from "./doors";
 import { buildElfClueEmail, buildElfFindAlertEmail, buildElfMorningEmail, buildElfPhotoAlertEmail, buildElfPlaceReminderEmail, buildElfProudEmail, ELF_PHOTO_TEXT, type BuiltEmail } from "./emails";
 import { factFor } from "./facts";
@@ -330,7 +330,7 @@ async function morningEmail(date: string, t: Tick): Promise<BuiltEmail> {
   let today: Parameters<typeof buildElfMorningEmail>[0]["today"] = null;
   if (todayDoor !== null && todayRun) {
     const setup = await t.setup(todayDoor);
-    const readiness = readinessOf(setup, doorPicture(t.year, todayDoor) !== null);
+    const readiness = readinessOf(setup);
     today = {
       door: todayDoor,
       ready: readiness.ready,

@@ -492,9 +492,27 @@ describe("the advent calendar at every width", () => {
     expect(css).toMatch(/\.elf-room__foot \{[^}]*flex-wrap:\s*wrap/);
   });
 
-  it("draws a snow day's face as a paper snowflake cut out like the prize's shape, with no new picture", () => {
+  it("draws a snow day's face as a paper snowflake cut out like the present, with no new picture", () => {
     expect(css).toMatch(/\.elf-snowflake \{[^}]*--shape:\s*var\(--elf-flake\)/);
     expect(css).toMatch(/--elf-flake:\s*url\("data:image\/svg\+xml,/);
+  });
+
+  // Jaimie, 12 November 2026: "just make a standard present on them". Every door carries the same present,
+  // cut out of card the way the snowflake is, in place of the mystery star and of a picture for each prize.
+  it("cuts the same present out of every door, with no picture of its own", () => {
+    expect(css).toMatch(/\.elf-carve \{[^}]*--shape:\s*var\(--elf-present\)/);
+    const shape = (name: string) => {
+      const uri = new RegExp(`--elf-${name}:\\s*url\\("data:image\\/svg\\+xml,([^"]+)"\\)`).exec(css)?.[1];
+      expect(uri, name).toBeTruthy();
+      return new DOMParser().parseFromString(decodeURIComponent(uri!), "image/svg+xml");
+    };
+    // A well formed picture (a broken one would leave every door bare), the same size as the snowflake.
+    const present = shape("present");
+    expect(present.querySelector("parsererror")).toBeNull();
+    expect(present.querySelectorAll("path").length).toBeGreaterThan(0);
+    expect(present.documentElement.getAttribute("viewBox")).toBe(shape("flake").documentElement.getAttribute("viewBox"));
+    // Each of the bow's two loops has its hole cut out even-odd; drawn any other way, both fill in solid.
+    expect(present.querySelectorAll("path[fill-rule='evenodd']").length).toBe(2);
   });
 
   // Seen on the pictures: with 3 or more doors to a row, door 24 alone in the middle left bare maroon

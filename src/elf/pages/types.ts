@@ -22,8 +22,8 @@ export interface DoorView {
   state: DoorState;
   /** When clue 1 comes out, as the calendar shows it (DoorRun.calendarAt). */
   clueAt: Date;
-  /** The picture of the prize shape to carve into the door, as a path on this site, or null for
-   *  the mystery star. */
+  /** A picture of its own to carve into the door, as a path on this site, or null for the present
+   *  every door has (the stylesheet's). */
   shapeUrl: string | null;
   /** Staff ticked "Show off": the door wears a Big prize pill and the teaser is shown. */
   bigPrize: boolean;

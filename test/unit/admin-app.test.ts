@@ -340,7 +340,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("userRole").textContent).toBe("editor");
     expect(el("overviewNeeds").textContent).toContain("Nothing needs you right now");
     await flush();
-    expect(document.querySelector("#overviewRecent table")).not.toBeNull();
+    // The Overview draws its recent gifts as cards now (2026-11-12); Search keeps the table.
+    expect(document.querySelector("#overviewRecent .ov-gift")).not.toBeNull();
 
     // Browse donations: the gift log's cards now, not a table (Task 4 of
     // docs/superpowers/plans/2026-11-05-donations-screen.md). A paid gift carries no Payment mark (only
@@ -1271,10 +1272,15 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(document.querySelector("#donationsTable .gl-gift")).not.toBeNull();
     });
 
-    it("labels every cell in the Overview's recent donations", async () => {
+    // TASK-483 labelled each cell so a phone could read the table. The Overview's recent gifts are
+    // cards now (2026-11-12), which read top to bottom with nothing to label: amount, donor, when.
+    it("draws the Overview's recent donations as cards a phone reads top to bottom", async () => {
       await signIn();
       await flush();
-      expect(labelsIn("#overviewRecent")).toEqual(LABELS);
+      const card = document.querySelector("#overviewRecent .ov-gift") as HTMLElement;
+      expect(card.querySelector(".ov-gift__amount")?.textContent).toMatch(/^£/);
+      expect(card.querySelector(".ov-gift__name")?.textContent).not.toBe("");
+      expect(card.querySelector(".ov-gift__time")).not.toBeNull();
     });
 
     it("labels every cell in donation search results", async () => {
@@ -1310,8 +1316,12 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         expect.stringContaining("3 contact messages are waiting for a reply"),
         expect.stringContaining("12 Gift Aid declarations have not come back yet"),
       ]);
-      expect(lines().map((l) => l.getAttribute("data-level"))).toEqual(["1", "2", "3"]);
-      expect(lines().map((l) => (l.querySelector("button") as HTMLElement).textContent)).toEqual(["Festive Ball", "Contact form", "Claims"]);
+      // Most urgent first, under its heading, and the urgent one marked (2026-11-12 redesign).
+      expect(Array.from(document.querySelectorAll("#overviewNeeds .ov-group")).map((g) => g.textContent)).toEqual(["Urgent", "Waiting on you", "Coming due"]);
+      expect(lines().map((l) => l.classList.contains("ov-need--urgent"))).toEqual([true, false, false]);
+      // Each card is the button, and names the screen it opens.
+      expect(lines().map((l) => l.tagName)).toEqual(["BUTTON", "BUTTON", "BUTTON"]);
+      expect(lines().map((l) => l.querySelector(".ov-need__where")?.textContent)).toEqual(["Festive Ball", "Contact form", "Claims"]);
       expect(el("overviewUpdated").textContent).toMatch(/^Updated \d{1,2}:\d{2}/);
     });
 
@@ -1319,7 +1329,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: NEEDS, failed: [] } };
       await signIn();
       await settle();
-      (lines()[1].querySelector("button") as HTMLElement).click();
+      lines()[1].click();
       await settle();
       expect(el("view-contact").hidden).toBe(false);
       expect(el("view-overview").hidden).toBe(true);
@@ -1353,7 +1363,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await settle();
       const asked = (globalThis.fetch as unknown as { mock: { calls: Array<[unknown]> } }).mock.calls.map(([u]) => String(u));
       expect(asked).toContain("/api/admin/donations?limit=5");
-      expect(document.querySelector("#overviewRecent table")).not.toBeNull();
+      expect(document.querySelector("#overviewRecent .ov-gift")).not.toBeNull();
     });
 
     it("asks once when you sign in, not twice", async () => {
@@ -1387,7 +1397,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       { key: "money", title: "Money in", headline: "£4,210 this month so far", detail: "£3,900 by this time last month.", view: "donations", button: "Donations" },
       { key: "ball", title: "Festive Ball", headline: "212 of 300 seats sold", detail: "£18,400 taken. 36 days to go.", view: "ball", button: "Festive Ball" },
     ];
-    const rows = () => Array.from(document.querySelectorAll("#overviewNumbers .ov-number")) as HTMLElement[];
+    // A scoreboard tile each now (2026-11-12), the tile itself the button.
+    const rows = () => Array.from(document.querySelectorAll("#overviewNumbers .ov-tile")) as HTMLElement[];
     const answer = (numbers: unknown[]) => {
       overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], numbers, failed: [] } };
     };
@@ -1399,17 +1410,21 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(el("ovNumbersCard").hidden).toBe(false);
       expect(rows()).toHaveLength(2);
       const first = rows()[0];
-      expect(first.querySelector(".ov-number-title")?.textContent).toBe("Money in");
-      expect(first.querySelector(".ov-number-headline")?.textContent).toBe("£4,210 this month so far");
-      expect(first.querySelector(".ov-number-detail")?.textContent).toBe("£3,900 by this time last month.");
-      expect(rows().map((r) => (r.querySelector("button") as HTMLElement).textContent)).toEqual(["Donations", "Festive Ball"]);
+      expect(first.querySelector(".ov-tile__name")?.textContent).toBe("Money in");
+      // This answer has no figure of its own, as an older server's would not, so the whole
+      // headline stands in the figure's place.
+      expect(first.querySelector(".ov-tile__figure")?.textContent).toBe("£4,210 this month so far");
+      expect(first.querySelector(".ov-tile__detail")?.textContent).toBe("£3,900 by this time last month.");
+      // The old rows had a button naming the screen; a screen reader still hears it.
+      expect(rows().map((r) => r.querySelector(".sr-only")?.textContent)).toEqual([", opens Donations", ", opens Festive Ball"]);
+      expect(rows().map((r) => r.getAttribute("data-ov-view"))).toEqual(["donations", "ball"]);
     });
 
     it("opens the screen behind a number", async () => {
       answer(NUMBERS);
       await signIn();
       await settle();
-      (rows()[1].querySelector("button") as HTMLElement).click();
+      rows()[1].click();
       await settle();
       expect(el("view-ball").hidden).toBe(false);
       expect(el("view-overview").hidden).toBe(true);
@@ -1440,7 +1455,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await signIn();
       await settle();
       expect(document.querySelector("#overviewNumbers img")).toBeNull();
-      expect(rows()[0].querySelector(".ov-number-headline")?.textContent).toBe("<img src=x onerror=alert(1)>");
+      expect(rows()[0].querySelector(".ov-tile__figure")?.textContent).toBe("<img src=x onerror=alert(1)>");
     });
   });
 
@@ -1477,14 +1492,16 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(items.map((i) => i.querySelector(".ov-event-when")?.textContent)).toEqual(["7:30pm", ""]);
       expect(items.map((i) => i.querySelector(".ov-event-text")?.textContent)).toEqual(["Quiz night", "Bake sale (a fundraiser)"]);
       // The server still names the two old tabs; both are in Get involved now, and the button says so.
-      expect(items.map((i) => (i.querySelector("button") as HTMLElement).textContent)).toEqual(["Get involved", "Get involved"]);
+      // Each thing is its own button now (2026-11-12), and still names Get involved, not the old tabs.
+      expect(items.map((i) => i.tagName)).toEqual(["BUTTON", "BUTTON"]);
+      expect(items.map((i) => i.querySelector(".sr-only")?.textContent)).toEqual([", opens Get involved", ", opens Get involved"]);
     });
 
     it("opens the screen behind a thing coming up", async () => {
       answer(COMING);
       await signIn();
       await settle();
-      (days()[1].querySelector(".ov-event button") as HTMLElement).click();
+      (days()[1].querySelector("button.ov-event") as HTMLElement).click();
       await settle();
       expect(el("view-events").hidden).toBe(false);
       expect(el("view-overview").hidden).toBe(true);
@@ -1801,6 +1818,35 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(seenPosts()).toEqual(["contact"]);
     });
 
+    // Elf Detective School: a photo waiting lights the menu entry, and opening Head Elf HQ clears it.
+    it("marks Elf Detective School when a photo is waiting, and clears it when Head Elf HQ is opened", async () => {
+      whatsNew = [{ area: "elf", new: true, since: "2026-12-01T00:00:00.000Z" }];
+      storedPermissions = { ...roleToPermissions("viewer"), elf: "view" };
+      await signIn();
+      await settle();
+      expect(link("elf").hidden).toBe(false);
+      expect(pill(link("elf"))).not.toBeNull();
+      link("elf").click();
+      await settle();
+      expect(pill(link("elf"))).toBeNull();
+      expect(seenPosts()).toEqual(["elf"]);
+    });
+
+    // A tap that loads the admin with a live session runs before elf-hq.js has set AdminElfHq, which
+    // then opens the tab it remembers: so the tap leaves "finds" in the key it reads.
+    it("opens Head Elf HQ at Finds when a notification tap loads the admin with a live session", async () => {
+      storedPermissions = { ...roleToPermissions("viewer"), elf: "view" };
+      window.sessionStorage.setItem("nbcc_admin_token", loginToken);
+      window.sessionStorage.setItem("nbcc_elf_hq_tab", "hq");
+      document.body.innerHTML = bodyHtml;
+      window.history.replaceState({}, "", "/admin?area=elf");
+      // eslint-disable-next-line no-eval
+      (0, eval)(appSrc);
+      await settle();
+      expect(window.sessionStorage.getItem("nbcc_elf_hq_tab")).toBe("finds");
+      window.history.replaceState({}, "", "/");
+    });
+
     // An answer already on its way when the visit was recorded must not bring the pill back.
     it("keeps it cleared when a slower answer still says it is new", async () => {
       whatsNew = [{ area: "contact", new: true, since: "2026-10-01T00:00:00.000Z" }];
@@ -1842,8 +1888,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(pill(document.querySelector("#donationsTable .gl-gift"))).toBeNull(); // the gift log's card
     });
 
-    // The Overview shares the Donations table. Refreshing on Donations reopens it before the Overview
-    // loads, and the Overview's rows must never be marked, then or later.
+    // The Overview once shared the Donations table; it draws its own cards now (2026-11-12). Either
+    // way, refreshing on Donations reopens it before the Overview loads, and the Overview's recent gifts
+    // must never be marked, then or later.
     it("never marks the Overview's recent donations, even after a refresh on Donations", async () => {
       loginToken = tokenFor("admin");
       whatsNew = [{ area: "donations", new: true, since: "2026-01-01T00:00:00.000Z" }];
@@ -1860,7 +1907,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         expect(el("view-donations").hidden).toBe(false);
         link("overview").click();
         await settle();
-        expect(document.querySelector("#overviewRecent table")).not.toBeNull();
+        expect(document.querySelector("#overviewRecent .ov-gift")).not.toBeNull();
         expect(pill(el("overviewRecent"))).toBeNull();
       } finally {
         if (desc) Object.defineProperty(HTMLElement.prototype, "offsetParent", desc);

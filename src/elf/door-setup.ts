@@ -120,12 +120,13 @@ export function staffEveningOf(d: DoorSetup): StaffEvening {
   return { clue1: d.clue1Time, clue2: d.clue2Time, clue3: d.clue3Time, reveal: d.revealTime };
 }
 
-export type ReadyKey = "place" | "prize" | "picture" | "elf" | "clues" | "droppedOff";
+// A door needs no picture of its own: every door has the same present, cut out of card by the
+// stylesheet (Jaimie, 12 November 2026; docs/superpowers/specs/2026-11-12-elf-standard-present-design.md).
+export type ReadyKey = "place" | "prize" | "elf" | "clues" | "droppedOff";
 
 export const READY_WORDS: Record<ReadyKey, string> = {
   place: "The place",
   prize: "The prize",
-  picture: "The door picture",
   elf: "The elf and its tag",
   clues: "The three clues",
   droppedOff: "Dropped off",
@@ -142,11 +143,10 @@ function filled(s: string | null | undefined): s is string {
 }
 
 /** What a door still needs. */
-export function readinessOf(d: DoorSetup, hasPicture: boolean): Readiness {
+export function readinessOf(d: DoorSetup): Readiness {
   const done: Record<ReadyKey, boolean> = {
     place: filled(d.placeName) && filled(d.placeTown) && filled(d.placeAddress),
     prize: filled(d.prize),
-    picture: hasPicture,
     elf: filled(d.elfName) && filled(d.tagWord) && isUsableSecretWord(d.tagWord),
     clues: [1, 2, 3].every((n) => {
       const clue = d.clues.find((c) => c.n === n);
@@ -154,20 +154,18 @@ export function readinessOf(d: DoorSetup, hasPicture: boolean): Readiness {
     }),
     droppedOff: d.droppedOffAt !== null,
   };
-  const keys: ReadyKey[] = ["place", "prize", "picture", "elf", "clues", "droppedOff"];
+  const keys: ReadyKey[] = ["place", "prize", "elf", "clues", "droppedOff"];
   const items = keys.map((key) => ({ key, done: done[key] }));
   const toDo = items.filter((i) => !i.done).length;
   return { items, toDo, ready: toDo === 0 };
 }
 
-export function doorsSummary(
-  rows: { setup: DoorSetup; hasPicture: boolean }[],
-): { placesAgreed: number; prizesChosen: number; ready: number } {
+export function doorsSummary(rows: DoorSetup[]): { placesAgreed: number; prizesChosen: number; ready: number } {
   let placesAgreed = 0;
   let prizesChosen = 0;
   let ready = 0;
-  for (const { setup, hasPicture } of rows) {
-    const r = readinessOf(setup, hasPicture);
+  for (const setup of rows) {
+    const r = readinessOf(setup);
     if (r.items[0].done) placesAgreed++;
     if (r.items[1].done) prizesChosen++;
     if (r.ready) ready++;

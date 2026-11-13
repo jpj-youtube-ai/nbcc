@@ -5,9 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- The admin dashboard is a private, token-authed staff tool: keep it out of search. -->
     <meta name="robots" content="noindex, nofollow" />
+    <!-- Pinned to a phone's home screen, the admin is its own app on maroon, named apart from the
+         public site's icon. display:standalone in the manifest is load-bearing: iOS only delivers
+         push notifications to a home-screen web app, never to a bookmark. -->
+    <link rel="manifest" href="/assets/admin-icons/admin.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/admin-icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="NBCC Admin" />
+    <meta name="theme-color" content="#800000" />
     <title>Admin | Night Before Christmas Campaign</title>
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <link rel="stylesheet" href="/assets/css/admin.css" />
+    <!-- The Overview, the Contact form, and the menu and bottom bar on a phone, in the Donations look
+         (2026-11-12). After admin.css so it wins on order alone, with no !important. -->
+    <link rel="stylesheet" href="/assets/css/admin-overview.css" />
+    <link rel="stylesheet" href="/assets/css/admin-get-involved.css" />
     <!-- Admin > Giving > Donations, the gift log: its own stylesheet (.gl-) and script, which draws
          the cards app.js asks for, so it loads before app.js. -->
     <link rel="stylesheet" href="/assets/css/admin-donations.css" />
@@ -106,6 +117,10 @@
 
         <div class="admin-body-grid">
           <nav class="admin-nav" aria-label="Dashboard sections">
+            <!-- On a phone (2026-11-12) the tall top bar is hidden and this one pinned bar carries the logo
+                 and the Menu button, as the mockup Jaimie approved. Hidden wider than 860px, where the top
+                 bar shows as before. Not a menu link, so nothing counting the menu's screens counts it. -->
+            <a class="pm-brand" href="/admin"><img src="/assets/img/nbcc-logo-white.svg" alt="" width="30" height="30" /><span>NBCC Admin</span></a>
             <!-- TASK-454: below 860px the sections sit behind this button (admin.css hides it wider
                  than that), which opens the whole list wrapped into its groups. It replaces a line of
                  twenty buttons that scrolled sideways. -->
@@ -121,6 +136,11 @@
                 <ul class="admin-nav-panel" id="adminNavMonitor">
                   <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
+                  <!-- TASK-619: notifications on your own phone. In Monitor, not Admin: it is a
+                       personal setting rather than an administrative power, and an ungated link
+                       in the Admin group would stop that group ever collapsing for somebody with
+                       no admin permissions, leaving them an "Admin" menu holding only this. -->
+                  <li><button class="admin-nav-link" type="button" data-view="notifications">Notifications</button></li>
                 </ul>
               </li>
               <li class="admin-nav-group" data-nav-group="giving">
@@ -184,6 +204,16 @@
                 </ul>
               </li>
             </ul>
+            <!-- The open phone menu's foot: who is signed in, and the top bar's two buttons, which the top
+                 bar no longer shows on a phone. They press the top bar's own buttons, so they do exactly what
+                 those do. Outside #adminNavList, so it is not a group of the menu. -->
+            <div class="pm-me">
+              <p class="pm-me__who" id="pmWho"></p>
+              <div class="pm-me__actions">
+                <button class="pm-me__btn" type="button" id="pmAccountBtn">My account</button>
+                <button class="pm-me__btn" type="button" id="pmLogoutBtn">Sign out</button>
+              </div>
+            </div>
           </nav>
 
           <div class="admin-content">
@@ -201,27 +231,38 @@
             </div>
             <!-- Overview: the three operational queues at a glance + recent donations. -->
             <section class="admin-view" id="view-overview" aria-labelledby="overview-heading">
-              <div class="ov-head">
-                <h2 id="overview-heading">Overview</h2>
-                <p class="ov-updated" id="overviewUpdated"></p>
+              <!-- The Overview in the Donations look (2026-11-12): what needs you, how we are doing,
+                   what is coming up, from GET /api/admin/overview (TASK-508/509/510), each line only for
+                   people who may open the screen it comes from. Needs you on the left on a wide screen. -->
+              <div class="ov-root">
+                <div class="ov-title">
+                  <h2 id="overview-heading">Overview</h2>
+                  <p class="ov-lede"><span class="ov-summary" id="overviewSummary"></span> <span class="ov-updated" id="overviewUpdated"></span></p>
+                </div>
+                <div class="ov-cols">
+                  <section class="ov-section" aria-labelledby="ovNeedsHead">
+                    <h3 class="ov-h3" id="ovNeedsHead">Needs you</h3>
+                    <div id="overviewNeeds" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+                  </section>
+                  <div class="ov-side">
+                    <section class="ov-section" id="ovNumbersCard" aria-labelledby="ovNumbersHead" hidden>
+                      <h3 class="ov-h3" id="ovNumbersHead">How we are doing</h3>
+                      <div id="overviewNumbers"></div>
+                    </section>
+                    <section class="ov-section" id="ovComingCard" aria-labelledby="ovComingHead" hidden>
+                      <h3 class="ov-h3" id="ovComingHead">Coming up</h3>
+                      <div id="overviewComing"></div>
+                    </section>
+                    <section class="ov-section" aria-labelledby="ovRecentHead">
+                      <div class="ov-section__head">
+                        <h3 class="ov-h3" id="ovRecentHead">Recent donations</h3>
+                        <button class="ov-see-all" type="button" data-ov-view="donations">See them all</button>
+                      </div>
+                      <div id="overviewRecent"><p class="admin-loading">Loading…</p></div>
+                    </section>
+                  </div>
+                </div>
               </div>
-              <!-- TASK-508: what is waiting on someone, most urgent first, from GET /api/admin/overview. -->
-              <section class="ov-card" aria-labelledby="ovNeedsHead">
-                <h3 class="ov-card-head" id="ovNeedsHead">Needs you</h3>
-                <div id="overviewNeeds" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              </section>
-              <!-- TASK-509: how we are doing, one line each, only those this person may see. -->
-              <section class="ov-card" id="ovNumbersCard" aria-labelledby="ovNumbersHead" hidden>
-                <h3 class="ov-card-head" id="ovNumbersHead">How we are doing</h3>
-                <div id="overviewNumbers"></div>
-              </section>
-              <!-- TASK-510: the next 14 days, by day, only what this person may see. -->
-              <section class="ov-card" id="ovComingCard" aria-labelledby="ovComingHead" hidden>
-                <h3 class="ov-card-head" id="ovComingHead">Coming up</h3>
-                <div id="overviewComing"></div>
-              </section>
-              <h3 class="admin-subhead">Recent donations</h3>
-              <div class="admin-table-wrap" id="overviewRecent"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Search: donors / declarations / donations by a free query. -->
@@ -472,6 +513,52 @@
               <p class="admin-action-status" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
             </section>
 
+            <!-- TASK-619: phone notifications, per person and per phone. The warning sits ABOVE the
+                 button deliberately: iOS asks for permission once and only once, and somebody who
+                 taps Don't Allow has to delete the icon and add it again to be asked afresh. A
+                 caption underneath would be read after the damage. -->
+            <section class="admin-view" id="view-notifications" aria-labelledby="notifications-heading" hidden>
+              <h2 id="notifications-heading">Notifications on this phone</h2>
+              <p class="admin-view-intro">Get a notification when something new arrives &mdash; a donation, a Get involved sign up, a message, a ticket. It is the same &ldquo;new&rdquo; the New pills use, so your phone and this screen always agree, and you only ever hear about the parts of the admin you can open.</p>
+
+              <p class="admin-action-status is-error" id="pushUnsupported" role="status" hidden></p>
+
+              <div id="pushSetup">
+                <h3 class="admin-subhead">Turning it on</h3>
+                <ol class="np-steps" id="pushSteps">
+                  <li>Open this page on your phone, press Share, then <strong>Add to Home Screen</strong>.</li>
+                  <li>Open the admin from that new icon, not from Safari.</li>
+                  <li>Press the button below and choose <strong>Allow</strong>.</li>
+                </ol>
+                <p class="admin-note" id="pushOnceWarning"><strong>Your phone only asks once.</strong> If you choose Don&rsquo;t Allow, the only way to be asked again is to delete the icon from your home screen and add it back.</p>
+                <div class="admin-claim-actions">
+                  <button class="admin-btn" type="button" id="pushEnable">Turn on notifications for this phone</button>
+                  <span class="admin-action-status" id="pushEnableStatus" role="status" aria-live="polite"></span>
+                </div>
+                <p class="admin-note" id="pushPhoneCount" role="status" aria-live="polite" hidden></p>
+              </div>
+
+              <h3 class="admin-subhead">What buzzes</h3>
+              <p class="admin-note">Everything is on. Switch off anything you would rather catch up with on screen.</p>
+              <div class="np-areas" id="pushAreas"><p class="admin-loading">Loading&hellip;</p></div>
+
+              <h3 class="admin-subhead">If it gets too much</h3>
+              <p class="admin-note">Both of these are off, so you get a buzz every single time. Turn one on if a busy day is too noisy &mdash; anything held back still shows as a New pill here.</p>
+              <div class="admin-field">
+                <label class="admin-check"><input id="pushBundle" name="pushBundle" type="checkbox" /> <span>Group them: one notification a minute instead of one each</span></label>
+              </div>
+              <div class="admin-field np-quiet">
+                <label for="pushQuietFrom">Stay quiet from</label>
+                <input id="pushQuietFrom" name="pushQuietFrom" type="time" />
+                <label for="pushQuietTo">until</label>
+                <input id="pushQuietTo" name="pushQuietTo" type="time" />
+              </div>
+              <div class="admin-claim-actions">
+                <button class="admin-btn" type="button" id="pushPrefsSave">Save these settings</button>
+                <span class="admin-action-status" id="pushPrefsStatus" role="status" aria-live="polite"></span>
+              </div>
+            </section>
+
             <!-- Stories: My Story submissions from the separate stories database (Task C). -->
             <section class="admin-view" id="view-stories" aria-labelledby="stories-heading" hidden>
               <h2 id="stories-heading">Stories</h2>
@@ -532,27 +619,24 @@
 
             <!-- Contact form: public enquiries from the isolated contact database (2026-07-10 spec). -->
             <section class="admin-view" id="view-contact" aria-labelledby="contact-heading" hidden>
-              <h2 id="contact-heading">Contact form</h2>
-              <p class="admin-view-intro">Messages sent through the public contact form. Open one to read it, reply in Gmail (which marks it Replied), or delete it. These live in their own database, separate from donor and story data.</p>
-              <div class="admin-search-bar">
-                <div class="admin-segmented" role="group" aria-label="Filter by status" id="contactStatusFilter">
-                  <button class="admin-seg is-active" type="button" data-status="">All</button>
-                  <button class="admin-seg" type="button" data-status="new">New</button>
-                  <button class="admin-seg" type="button" data-status="replied">Replied</button>
+              <!-- The Contact form in the Donations look (2026-11-12): a card per message under its day,
+                   opening where it is. Messages live in their own database, separate from donor and story
+                   data (2026-07-10 spec); reply in Gmail, which marks nothing until Mark as replied. -->
+              <div class="ct-root">
+                <div class="ct-title">
+                  <h2 id="contact-heading">Contact form</h2>
+                  <p class="ct-lede"><strong id="ctWaitingLine"></strong> Tap a message to read it and reply.</p>
                 </div>
+                <div class="ct-filter" role="group" aria-label="Show" id="contactStatusFilter">
+                  <button class="admin-seg ct-seg is-active" type="button" data-status="" aria-pressed="true"><span class="ct-seg__count"></span><span class="ct-seg__name">All</span></button>
+                  <button class="admin-seg ct-seg" type="button" data-status="new" aria-pressed="false"><span class="ct-seg__count"></span><span class="ct-seg__name">Waiting</span></button>
+                  <button class="admin-seg ct-seg" type="button" data-status="replied" aria-pressed="false"><span class="ct-seg__count"></span><span class="ct-seg__name">Replied</span></button>
+                </div>
+                <div id="contactTable"><p class="admin-loading">Loading…</p></div>
               </div>
-              <div class="admin-table-wrap" id="contactTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
-            <!-- Contact enquiry detail (reached from a contact row); Editor+ reply/delete actions. -->
-            <section class="admin-view" id="view-contact-detail" aria-labelledby="contact-detail-heading" hidden>
-              <button class="admin-back" id="contactBack" type="button">&larr; Back</button>
-              <h2 id="contact-detail-heading">Enquiry</h2>
-              <div id="contactDetail" aria-live="polite"></div>
-              <p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p>
-            </section>
-
-            <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
+                        <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
 
@@ -1357,6 +1441,18 @@
                 </div>
 
                 <form class="ev-form" id="evForm" novalidate>
+                  <!-- 2026-11-13: the eight steps, each a button that takes you to it. Every step stays
+                       in the page, as the form is saved as a whole (app.js, evWire). -->
+                  <nav class="ev-steps" id="evSteps" aria-label="Steps of this form">
+                    <button class="ev-step-jump" type="button" data-evstep="1"><b aria-hidden="true">1</b>The basics</button>
+                    <button class="ev-step-jump" type="button" data-evstep="2"><b aria-hidden="true">2</b>When</button>
+                    <button class="ev-step-jump" type="button" data-evstep="3"><b aria-hidden="true">3</b>Where</button>
+                    <button class="ev-step-jump" type="button" data-evstep="4"><b aria-hidden="true">4</b>Picture</button>
+                    <button class="ev-step-jump" type="button" data-evstep="5"><b aria-hidden="true">5</b>Tickets and booking</button>
+                    <button class="ev-step-jump" type="button" data-evstep="6"><b aria-hidden="true">6</b>The back of the card</button>
+                    <button class="ev-step-jump" type="button" data-evstep="7"><b aria-hidden="true">7</b>Who&rsquo;s running it</button>
+                    <button class="ev-step-jump" type="button" data-evstep="8"><b aria-hidden="true">8</b>On the website</button>
+                  </nav>
                   <fieldset class="ev-step">
                     <legend><span>1</span>The basics</legend>
                     <div class="ev-f">
@@ -1625,30 +1721,40 @@
                    "Show all" grows the page. -->
               <div id="view-fundraising" hidden>
                 <div class="gi-part" data-gi-part="signups" role="group" aria-label="Sign ups" hidden>
-                  <!-- What kind of sign up: one list, filtered. app.js counts each kind and draws the same words
-                       on a large pill on every row. It works alongside the status filter under it. -->
-                  <div class="fr-bar fr-bar--kind">
-                    <div class="admin-segmented" id="frKindFilter" role="group" aria-label="Which kind of sign up to list">
-                      <button class="admin-seg is-active" type="button" data-frkind="" aria-pressed="true">All (<span data-frkindcount="all">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="raising" aria-pressed="false">Raising money (<span data-frkindcount="raising">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">A team (<span data-frkindcount="team">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Hosting an event (<span data-frkindcount="event">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="memory" aria-pressed="false">In memory (<span data-frkindcount="memory">0</span>)</button>
+                  <!-- 2026-11-13: the filters in three labelled groups. Needs you first, as tiles in the
+                       Donations look, each with a line saying what it means; then which to show; then
+                       what kind. They filter exactly as before (frRenderList): one status, one kind. -->
+                  <div class="fr-filters" id="frFilter">
+                    <div class="fr-filter-group">
+                      <h3 class="fr-filter-label" id="frNeedsLabel">Needs you</h3>
+                      <div class="fr-tiles" role="group" aria-labelledby="frNeedsLabel">
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="new" aria-pressed="false"><span class="fr-tile__n" data-frcount="new">0</span><span class="fr-tile__name">New</span><span class="fr-tile__says">Waiting for a yes or no</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="calls" aria-pressed="false"><span class="fr-tile__n" data-frcount="calls">0</span><span class="fr-tile__name">Calls due</span><span class="fr-tile__says">Time to give them a ring</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="requests" aria-pressed="false"><span class="fr-tile__n" data-frcount="requests">0</span><span class="fr-tile__name">Requests to do</span><span class="fr-tile__says">Things they asked us for</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="notback" aria-pressed="false"><span class="fr-tile__n" data-frcount="notback">0</span><span class="fr-tile__name">Buckets not back</span><span class="fr-tile__says">Collection buckets or tins still out</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="packs" aria-pressed="false"><span class="fr-tile__n" data-frcount="packs">0</span><span class="fr-tile__name">Packs to send</span><span class="fr-tile__says">Welcome packs to post</span></button>
+                      </div>
+                    </div>
+                    <div class="fr-filter-group">
+                      <h3 class="fr-filter-label" id="frShowLabel">Show</h3>
+                      <div class="admin-segmented" role="group" aria-labelledby="frShowLabel">
+                        <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
+                      </div>
+                    </div>
+                    <div class="fr-filter-group">
+                      <h3 class="fr-filter-label" id="frKindLabel">What kind</h3>
+                      <div class="admin-segmented" id="frKindFilter" role="group" aria-label="Which kind of sign up to list">
+                        <button class="admin-seg is-active" type="button" data-frkind="" aria-pressed="true">All (<span data-frkindcount="all">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="raising" aria-pressed="false">Raising money (<span data-frkindcount="raising">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">A team (<span data-frkindcount="team">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Hosting an event (<span data-frkindcount="event">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="memory" aria-pressed="false">In memory (<span data-frkindcount="memory">0</span>)</button>
+                      </div>
                     </div>
                   </div>
-              <div class="fr-bar">
-                <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
-                  <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="new" aria-pressed="false">New (<span data-frcount="new">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="calls" aria-pressed="false">Calls due (<span data-frcount="calls">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="requests" aria-pressed="false">Requests to do (<span data-frcount="requests">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="notback" aria-pressed="false">Buckets not back (<span data-frcount="notback">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="packs" aria-pressed="false">Packs to send (<span data-frcount="packs">0</span>)</button>
-                </div>
-              </div>
               <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live
                    region would read it all out again (TASK-465). Each action speaks through its own
                    status line inside the sign up. -->
@@ -2851,6 +2957,18 @@
             </section>
           </div>
         </div>
+        <!-- The bar along the bottom on a phone (2026-11-12): the four screens used most, and
+             Everything, which opens the whole menu. Each tab copies its menu link (app.js, syncTabBar):
+             there only when the link is, a dot when it has a New pill, marked when it is where you are.
+             Not menu links (another class, no data-view), so nothing that counts the menu's screens counts these.
+             Inside #appView, so the sign-in screen never shows it. Hidden wider than 860px. -->
+        <nav class="pm-bar" aria-label="Quick links">
+            <button class="pm-tab" type="button" data-pm-view="overview"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span><span class="pm-tab__word">Overview</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="donations"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 6.5A4.5 4.5 0 0 0 8.5 10v2.5c0 3-1.5 5-3 6.5h12M6 13h8"/></svg></span><span class="pm-tab__word">Donations</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="get-involved"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2c2.9.2 5 2.6 5 5.8"/></svg></span><span class="pm-tab__word">Get involved</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" data-pm-view="contact"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/></svg></span><span class="pm-tab__word">Contact</span><span class="pm-tab__new sr-only" hidden>, new</span></button>
+            <button class="pm-tab" type="button" id="pmEverything" aria-controls="adminNavList" aria-expanded="false"><span class="pm-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><span class="pm-tab__word">Everything</span></button>
+        </nav>
       </div>
     </main>
   </body>

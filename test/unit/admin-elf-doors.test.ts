@@ -128,10 +128,36 @@ describe("the doors list", () => {
     const b = body(res);
     expect(b.year).toBe(2026);
     expect(b.doors).toHaveLength(24);
-    expect(b.doors[6]).toMatchObject({ door: 7, weekday: "Mon", placeName: "Pine Cone Café", ready: false, toDo: 4 });
+    expect(b.doors[6]).toMatchObject({ door: 7, weekday: "Mon", placeName: "Pine Cone Café", ready: false, toDo: 3 });
     expect(b.counts).toEqual({ placesAgreed: 1, prizesChosen: 1, ready: 0 });
     expect(b.prizeList.split("\n")[6]).toBe("Door 7: A cake");
     expect(b.canEdit).toBe(false);
+  });
+
+  // 12 November 2026: every door carries the same present, so a door no longer waits on a picture.
+  it("counts a door with everything in as ready, on its tile, in the counts and on its sheet, with no door picture", async () => {
+    const full = doorOf(7, {
+      placeName: "Pine Cone Café",
+      placeTown: "Exampleton",
+      placeAddress: "1 Example Street",
+      prize: "A cake",
+      elfName: "Pip",
+      tagWord: "SNOWBALL 472",
+      clues: [1, 2, 3].map((n) => ({ n: n as 1 | 2 | 3, words: `Pretend clue ${n}`, hasPicture: false, pictureAlt: null })),
+      droppedOffAt: new Date("2026-12-01T10:00:00Z"),
+    });
+    doors.listElfDoors.mockResolvedValue(all24().map((d) => (d.door === 7 ? full : d)));
+    const b = body(await run(routes.getAdminElfDoors, ask("viewer", { permissions: VIEW })));
+    expect(b.doors[6]).toMatchObject({ door: 7, ready: true, toDo: 0 });
+    expect(b.counts).toEqual({ placesAgreed: 1, prizesChosen: 1, ready: 1 });
+    doors.getElfDoor.mockResolvedValue(full);
+    const d = body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door: "7" } }))).door;
+    expect(d.picture).toBeNull();
+    expect(d.readiness).toEqual({
+      items: ["place", "prize", "elf", "clues", "droppedOff"].map((key) => ({ key, done: true })),
+      toDo: 0,
+      ready: true,
+    });
   });
 
   it("says for each tile whether its first clue is out yet", async () => {

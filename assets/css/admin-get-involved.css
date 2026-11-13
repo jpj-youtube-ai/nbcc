@@ -1,0 +1,120 @@
+/* NBCC admin: Get involved, laid out so someone new can find their way (2026-11-13).
+ * Design: docs/superpowers/specs/2026-11-13-get-involved-refresh-design.md. Jaimie: "it's really hard
+ * to navigate because it's just one big long scrolling list with lots of boxes and lots of buttons".
+ *
+ * Three things: the Sign ups filters in labelled groups, with Needs you as tiles; an open sign up in
+ * six parts behind a bar, one part at a time; and a bar of the event editor's eight steps.
+ *
+ * The Donations look, by value, from the --ov- colours admin-overview.css sets on .admin-body. House
+ * rules: no !important; nothing scrolls inside a box or sideways; motion only for someone happy with
+ * it, moving only transform and opacity. Loaded after admin.css and admin-overview.css, so it wins
+ * on order alone. A phone is below 860px, as everywhere in the admin. */
+
+/* ---- the Sign ups filters ---- */
+#view-get-involved .fr-filters { display: grid; gap: 14px; margin: 18px 0 18px; }
+#view-get-involved .fr-filter-group { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); align-items: start; gap: 8px 16px; }
+#view-get-involved .fr-filter-label { margin: 10px 0 0; font-family: var(--ov-head); font-size: 1.02rem; font-weight: 700; color: var(--ov-ink); }
+#view-get-involved .fr-filter-group .admin-segmented { flex-wrap: wrap; max-width: 100%; border-radius: 22px; justify-self: start; }
+
+#view-get-involved .fr-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 10px; }
+#view-get-involved .fr-tile {
+  display: grid; align-content: start; gap: 2px; min-height: 92px; margin: 0; padding: 10px 12px 12px;
+  border: var(--ov-thin); border-radius: 14px; background: var(--ov-card); box-shadow: var(--ov-pop);
+  color: var(--ov-text); font: inherit; text-align: left; white-space: normal; cursor: pointer;
+}
+#view-get-involved .fr-tile:hover:not(.is-active) { background: var(--ov-hover); }
+#view-get-involved .fr-tile:focus-visible { outline: 3px solid var(--ov-crimson); outline-offset: 3px; }
+#view-get-involved .fr-tile__n { font-family: var(--ov-head); font-weight: 800; font-size: 1.6rem; line-height: 1.05; color: var(--ov-ink); font-variant-numeric: tabular-nums; }
+#view-get-involved .fr-tile__name { font-weight: 700; font-size: 0.92rem; color: var(--ov-ink); }
+#view-get-involved .fr-tile__says { font-size: 0.8rem; line-height: 1.35; color: var(--ov-soft); }
+/* Nothing waiting: the tile steps back, so the ones with something in them are what you see. */
+#view-get-involved .fr-tile.is-none:not(.is-active) { box-shadow: none; border-color: var(--ov-rule); }
+#view-get-involved .fr-tile.is-none:not(.is-active) .fr-tile__n { color: var(--ov-soft); }
+#view-get-involved .fr-tile.is-active { background: var(--ov-maroon); border-color: var(--ov-ink); transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+#view-get-involved .fr-tile.is-active .fr-tile__n,
+#view-get-involved .fr-tile.is-active .fr-tile__name,
+#view-get-involved .fr-tile.is-active .fr-tile__says { color: var(--ov-on-dark); }
+#view-get-involved .fr-tile:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+
+/* ---- an open sign up, in parts ---- */
+/* The list box lets the bar pin: a box that may scroll sideways pins nothing inside it. Clip, unlike
+   auto, is not a scrolling box, so the bar still pins and the rounded corners still clip; a browser
+   too old for clip keeps visible. The table is laid out to the box's width (.fx-table), so nothing in
+   it needs to scroll sideways. */
+#view-get-involved #frList { overflow: visible; overflow: clip; }
+#view-get-involved .fr-detail { display: block; background: var(--tint); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+
+/* Pinned under the menu while you work down a long part, as the Festive Ball's sections bar is. */
+#view-get-involved .fr-parts {
+  position: sticky; top: 60px; z-index: 12; display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 0; padding: 12px 14px; background: var(--ov-cream); border-bottom: 2px solid var(--ov-ink);
+}
+#view-get-involved .fr-part-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; margin: 0; padding: 8px 16px;
+  border: var(--ov-thin); border-radius: 999px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink);
+  color: var(--ov-ink); font: inherit; font-size: 0.9rem; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+#view-get-involved .fr-part-btn:hover:not(.is-active) { background: var(--ov-hover); }
+#view-get-involved .fr-part-btn:focus-visible { outline: 3px solid var(--ov-crimson); outline-offset: 3px; }
+#view-get-involved .fr-part-btn.is-active { background: var(--ov-maroon); color: var(--ov-on-dark); transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+#view-get-involved .fr-part-btn:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+/* Something in this part is waiting for you. */
+#view-get-involved .fr-part-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ov-crimson); box-shadow: 0 0 0 2px var(--ov-card); }
+#view-get-involved .fr-part-btn.is-active .fr-part-dot { box-shadow: 0 0 0 2px var(--ov-maroon); background: #FFB3BE; }
+
+#view-get-involved .fr-part { scroll-margin-top: 136px; }
+#view-get-involved .fr-part-intro { margin: 0; padding: 14px 20px 12px; max-width: 72ch; color: var(--ov-soft); font-size: 0.92rem; line-height: 1.5; }
+#view-get-involved .fr-part-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px;
+  background: var(--line); border-top: 1px solid var(--line);
+}
+/* What a button does, said under it. */
+#view-get-involved .fr-action-says { display: block; max-width: 62ch; margin-top: 6px; }
+
+/* ---- the event editor's steps ---- */
+#view-get-involved .ev-steps {
+  position: sticky; top: 60px; z-index: 12; display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 0 0 16px; padding: 10px 0; background: var(--tint);
+}
+#view-get-involved .ev-step-jump {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 40px; margin: 0; padding: 6px 12px 6px 7px;
+  border: var(--ov-thin); border-radius: 999px; background: var(--ov-card); color: var(--ov-ink);
+  font: inherit; font-size: 0.84rem; font-weight: 600; cursor: pointer;
+}
+#view-get-involved .ev-step-jump:hover { background: var(--ov-hover); }
+#view-get-involved .ev-step-jump:focus-visible { outline: 3px solid var(--ov-crimson); outline-offset: 3px; }
+#view-get-involved .ev-step-jump b {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--ov-crimson); color: var(--ov-on-dark); font-size: 0.78rem;
+}
+/* Below the bar: 60px of menu, then the bar, two rows deep (106px) beside the preview, measured. */
+#view-get-involved .ev-step { scroll-margin-top: 184px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  #view-get-involved .fr-tile, #view-get-involved .fr-part-btn { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1); }
+}
+
+@media (max-width: 900px) {
+  #view-get-involved .fr-part-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 860px) {
+  #view-get-involved .fr-filter-group { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  #view-get-involved .fr-filter-label { margin: 0; }
+  #view-get-involved .fr-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  /* Shorter on a phone, so all five and the list start on the first screen or two. */
+  #view-get-involved .fr-tile { min-height: 0; padding: 8px 10px 9px; }
+  #view-get-involved .fr-tile__n { font-size: 1.3rem; }
+  #view-get-involved .fr-tile__says { font-size: 0.76rem; }
+  /* Three by two and not pinned: pinned, two rows would sit on a third of the screen. Pressing one
+     brings you back to the bar (frShowPart). */
+  #view-get-involved .fr-parts { position: static; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px; }
+  #view-get-involved .fr-part-btn { justify-content: center; padding: 8px 6px; white-space: normal; text-align: center; line-height: 1.2; font-size: 0.84rem; }
+  #view-get-involved .fr-part-intro { padding: 12px 14px 10px; }
+  #view-get-involved .ev-steps { position: static; }
+  /* Not pinned here: just below the 61px menu bar. */
+  #view-get-involved .ev-step { scroll-margin-top: 76px; }
+}
+@media (max-width: 420px) {
+  #view-get-involved .fr-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

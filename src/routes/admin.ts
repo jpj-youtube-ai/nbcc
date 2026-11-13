@@ -124,7 +124,7 @@ import { repliedSummary, waitingLabel } from "../contact/enquiry-summary";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { touchLastLogin } from "../db/admin-users";
-import { signAdminSession, type AdminSessionClaims } from "../admin/session";
+import { sessionTtlMs, signAdminSession, type AdminSessionClaims } from "../admin/session";
 import {
   generateLoginCode,
   hashLoginCode,
@@ -244,6 +244,9 @@ const loginSchema = z.object({
   // Admin management Phase 3 (TASK-188): a 30-day "remember this device" token, replayed by the
   // front end from localStorage. Optional — its absence is the normal case (2FA required).
   deviceToken: z.string().optional(),
+  // TASK-619: true when this is the app pinned to a phone's home screen, which earns the 30-day
+  // session instead of 8 hours. Optional, because a browser tab does not send it.
+  installed: z.boolean().optional(),
 });
 
 // Abuse control for both login steps (Phase 3 · TASK-188): cap attempts per email AND per client IP
@@ -316,6 +319,7 @@ export async function postAdminLogin(req: Request, res: Response): Promise<Respo
           email: user.email,
           role: user.role,
           now: new Date(),
+          ttlMs: sessionTtlMs(parsed.data),
           secret: config.ADMIN_SESSION_SECRET,
         });
         return res.status(200).json({
@@ -406,6 +410,7 @@ export async function postAdminLoginTwoFactor(req: Request, res: Response): Prom
       email: user.email,
       role: user.role,
       now: new Date(),
+      ttlMs: sessionTtlMs(parsed.data),
       secret: config.ADMIN_SESSION_SECRET,
     });
     // deviceToken is genuinely OMITTED (not present-with-undefined) when not remembering — a

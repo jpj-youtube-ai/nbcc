@@ -43,7 +43,8 @@ vi.mock("../../src/clients/sms", () => ({ sendText: sms.sendText, get smsConfigu
 vi.mock("../../src/clients/email", () => mailer);
 // The elf worker's tick hook runs the worker's own tick; here it is watched, never run.
 vi.mock("../../src/elf/worker", () => worker);
-// No door has a picture on disk in a test; one test gives door 1 its picture.
+// No door has a picture of its own in a test, whatever the code's list of door pictures holds: every door
+// has the same present, and a door is ready without one.
 vi.mock("../../src/elf/door-setup", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../src/elf/door-setup")>()), doorPicture: pictureOf }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
@@ -226,7 +227,7 @@ describe("HQ in the admin", () => {
       vi.setSystemTime(new Date("2026-11-30T12:00:00Z"));
       let body = (await run(getAdminElfHq, req("admin"))).body as { doorsNotReady: number; quests: { id: string; words: string }[] };
       expect(body.doorsNotReady).toBe(24);
-      expect(body.quests.find((q) => q.id === "doors")!.words).toBe("Door 1 is next: 6 to do.");
+      expect(body.quests.find((q) => q.id === "doors")!.words).toBe("Door 1 is next: 5 to do.");
       vi.setSystemTime(new Date("2026-12-08T12:00:00Z"));
       body = (await run(getAdminElfHq, req("admin"))).body as typeof body;
       expect(body.doorsNotReady).toBe(17);
@@ -243,7 +244,7 @@ describe("HQ in the admin", () => {
       vi.setSystemTime(new Date("2026-11-30T12:00:00Z"));
       const body = (await run(getAdminElfHq, req("admin"))).body as { doorsNotReady: number; quests: { id: string; words: string }[] };
       expect(body.doorsNotReady).toBe(24);
-      expect(body.quests.find((q) => q.id === "doors")!.words).toBe("Door 1 is next: 6 to do.");
+      expect(body.quests.find((q) => q.id === "doors")!.words).toBe("Door 1 is next: 5 to do.");
       expect(dbDoors.ensureElfDoors).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -715,9 +716,9 @@ describe("the practice door in the admin", () => {
 describe("December's doors switch", () => {
   const NOT_READY = "Door 1 is not ready yet, so December's doors cannot be switched on.";
   const NUMBERS_NONE = { families: 0, detectives: 0, namesToCheck: 0, waitingPayments: 0, entryPence: 0, giftPence: 0, giftAidPence: 0 };
+  /** Door 1 with everything in, and no picture of its own: every door has the same present. */
   async function readyDoor1() {
     const { emptyDoor } = await import("../../src/elf/door-setup");
-    pictureOf.mockImplementation((_year: number, door: number) => (door === 1 ? "door-1.webp" : null));
     return {
       ...emptyDoor(1, "abcdefghjkmn"),
       placeName: "Pine Cone Cafe",
@@ -739,7 +740,7 @@ describe("December's doors switch", () => {
     expect(dbGame.onDoorsSwitchedOn).not.toHaveBeenCalled();
   });
 
-  it("switches on once door 1 is ready, makes the doors for the year, and saves through the settings", async () => {
+  it("switches on once door 1 is ready, with no door picture, makes the doors for the year, and saves through the settings", async () => {
     dbDoors.listElfDoors.mockResolvedValue([await readyDoor1()]);
     const res = await run(patchAdminElfSettings, req("admin", { doorsOn: true }));
     expect(res.statusCode).toBe(200);
@@ -804,11 +805,11 @@ describe("December's doors switch", () => {
       const body = (await run(getAdminElfHq, req("admin"))).body as { doorsOn: boolean; doorsSoonNotReady: unknown[]; quests: { id: string; title: string; words: string; go: string; button: string }[] };
       expect(body.doorsOn).toBe(true);
       expect(body.doorsSoonNotReady).toEqual([
-        { door: 7, day: "Monday", toDo: 6 },
-        { door: 8, day: "Tuesday", toDo: 6 },
-        { door: 9, day: "Wednesday", toDo: 6 },
+        { door: 7, day: "Monday", toDo: 5 },
+        { door: 8, day: "Tuesday", toDo: 5 },
+        { door: 9, day: "Wednesday", toDo: 5 },
       ]);
-      expect(body.quests[0]).toMatchObject({ id: "doors-soon", title: "Door 7 is on Monday and is not ready", words: "6 to do.", go: "doors", button: "Open Doors" });
+      expect(body.quests[0]).toMatchObject({ id: "doors-soon", title: "Door 7 is on Monday and is not ready", words: "5 to do.", go: "doors", button: "Open Doors" });
       expect(body.quests.map((q) => q.id)).toEqual(["doors-soon", "doors-soon", "doors-soon", "doors"]);
     } finally {
       vi.useRealTimers();

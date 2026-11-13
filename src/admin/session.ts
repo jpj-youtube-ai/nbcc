@@ -10,6 +10,24 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+// The admin pinned to a phone's home screen (TASK-619). iOS shuts a backgrounded web app whenever
+// it likes, so on the 8-hour session a notification at 2am would buzz the phone, the tap would
+// open the app, and the app would ask for a password instead of showing the donation — the
+// feature failing at its last step. Jaimie chose 30 days on 12 Nov 2026, knowing that anybody
+// holding her unlocked phone is then inside the admin.
+export const INSTALLED_APP_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// How long to sign a session for. Only a real `true` lengthens it: the flag arrives in the login
+// request, so a missing one (an older admin page, any existing caller) and a stray value both fall
+// back to the shorter session rather than quietly granting the longer one.
+//
+// Faking the flag gains an attacker nothing on its own — no token is issued until the password
+// and the one-time code have both been accepted — so it lengthens only a session its holder had
+// already legitimately earned.
+export function sessionTtlMs(input: { installed?: unknown }): number {
+  return input.installed === true ? INSTALLED_APP_TTL_MS : ADMIN_SESSION_TTL_MS;
+}
+
 export interface AdminSessionClaims {
   sub: number; // the user id
   email: string;

@@ -10,7 +10,7 @@ const at = (iso: string) => new Date(iso);
 describe("the sections that can carry a New pill", () => {
   it("covers every kind of arrival the client asked for, and the Events page", () => {
     expect(AREAS.map((a) => a.area)).toEqual([
-      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "qr", "fundraising", "red-bag", "invoices",
+      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "qr", "fundraising", "red-bag", "invoices", "elf",
     ]);
   });
 
@@ -28,6 +28,8 @@ describe("the sections that can carry a New pill", () => {
       "red-bag": "red-bag:view",
       // Invoices for donations: no permission of its own; its menu link gates on Donations.
       invoices: "donations:view",
+      // Elf Detective School: Head Elf HQ, whose menu link gates on the elf section.
+      elf: "elf:view",
     });
     for (const a of AREAS) expect(SECTIONS).toContain(a.section);
   });
@@ -37,6 +39,7 @@ describe("the sections that can carry a New pill", () => {
     expect(viewer).toContain("donations");
     expect(viewer).not.toContain("fulfilments"); // business-supporters needs edit
     expect(viewer).not.toContain("analytics"); // admins only by role (TASK-479)
+    expect(viewer).not.toContain("elf"); // Head Elf HQ is for admins by role, or by a grant in Team
     expect(reachableAreas(roleToPermissions("admin")).map((a) => a.area)).toEqual(AREAS.map((a) => a.area));
     expect(reachableAreas({})).toEqual([]);
   });

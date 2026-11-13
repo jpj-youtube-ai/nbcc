@@ -40,6 +40,10 @@ data "aws_iam_policy_document" "exec_secrets" {
       aws_ssm_parameter.stripe_webhook_secret.arn,
       # Cloudflare Turnstile secret (TASK-490), injected via valueFrom like the Stripe secret.
       aws_ssm_parameter.turnstile_secret_key.arn,
+      # Both halves of the push pair: the task definition pulls each through valueFrom, which
+      # needs ssm:GetParameters whether the parameter is a SecureString or a plain String.
+      aws_ssm_parameter.vapid_public_key.arn,
+      aws_ssm_parameter.vapid_private_key.arn,
       # SES delivery-webhook token (Resend→SES migration): the shared secret in the SNS
       # subscription path, injected via valueFrom, so the exec role must be able to read it.
       aws_ssm_parameter.ses_webhook_token.arn,
@@ -237,6 +241,11 @@ resource "aws_ecs_task_definition" "app" {
       { name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.stripe_webhook_secret.arn },
       # Cloudflare Turnstile SECRET key (TASK-490). Its ARN is also in exec_secrets above.
       { name = "TURNSTILE_SECRET_KEY", valueFrom = aws_ssm_parameter.turnstile_secret_key.arn },
+      # The VAPID pair for admin phone notifications (TASK-619). Both ARNs are also in
+      # exec_secrets above. The public half is not a secret, but it is injected the same way so
+      # the pair is generated, stored and rotated as one thing.
+      { name = "VAPID_PUBLIC_KEY", valueFrom = aws_ssm_parameter.vapid_public_key.arn },
+      { name = "VAPID_PRIVATE_KEY", valueFrom = aws_ssm_parameter.vapid_private_key.arn },
       # SES delivery-webhook token (Resend→SES migration): a SecureString, injected like a
       # secret — its ARN must also appear in exec_secrets above.
       { name = "SES_WEBHOOK_TOKEN", valueFrom = aws_ssm_parameter.ses_webhook_token.arn },

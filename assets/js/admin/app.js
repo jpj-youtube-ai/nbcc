@@ -48,6 +48,10 @@
   // New pills); here they are only where in the one tab each lands.
   var GI_VIEW = "get-involved";
   var GI_SECTIONS = ["signups", "events", "tickets", "emails", "settings"];
+  // Menu links with no permission behind them, shown to everyone. Overview is the landing screen;
+  // Notifications (TASK-619) is about this person's own phone, and what they actually receive is
+  // filtered by their permissions when it is sent, not by whether they can open this screen.
+  var UNGATED_VIEWS = ["overview", "notifications"];
   var GI_OLD_VIEWS = { events: "events", fundraising: "signups" }; // old tab -> the section it opens
   var GI_AREA = { signups: "fundraising", events: "events" }; // section -> the New pill it is a visit to
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
@@ -94,14 +98,49 @@
     return rolePresetPermissions(u.role);
   }
 
+  // TASK-619: true when the admin is running as the app pinned to a phone's home screen rather
+  // than in a browser tab. iOS reports it through navigator.standalone; everything else through
+  // the display-mode media query, which matches the manifest's "standalone".
+  function isInstalledApp() {
+    try {
+      if (window.navigator && window.navigator.standalone === true) return true;
+      return !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    } catch (e) {
+      return false;
+    }
+  }
+  // A tab's token lives in sessionStorage and dies with the tab, as it always has. The pinned
+  // app's lives in localStorage, because iOS shuts a backgrounded web app whenever it likes and
+  // sessionStorage would take the 30-day session down with it — which is exactly the 2am
+  // notification landing on a password box that the long session exists to prevent.
+  function tokenStore() {
+    try {
+      return isInstalledApp() ? window.localStorage : sessionStorage;
+    } catch (e) {
+      return sessionStorage;
+    }
+  }
   function token() {
-    return sessionStorage.getItem(TOKEN_KEY);
+    try {
+      return tokenStore().getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    } catch (e) {
+      return null;
+    }
   }
   function setToken(t) {
-    sessionStorage.setItem(TOKEN_KEY, t);
+    try {
+      tokenStore().setItem(TOKEN_KEY, t);
+    } catch (e) {
+      /* a phone with storage blocked still works for this one session */
+    }
   }
   function clearToken() {
-    sessionStorage.removeItem(TOKEN_KEY);
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+      if (window.localStorage) window.localStorage.removeItem(TOKEN_KEY);
+    } catch (e) {
+      /* nothing to clear */
+    }
   }
   function el(id) {
     return doc.getElementById(id);
@@ -152,17 +191,85 @@
     if (email && email.focus) email.focus();
   }
 
+  // TASK-619: where a tapped notification wants to land. Captured at load, BEFORE any sign-in,
+  // because a 2am tap on a phone whose session has lapsed shows the password box first and the
+  // destination must survive that. The admin has no URL routing of its own, so this is all of it:
+  // read it once, strip it from the address bar so a refresh does not re-trigger it, and apply it
+  // when the app is actually on screen.
+  var pendingArea = null;
+  (function captureNotificationTarget() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var area = params.get("area");
+      if (!area) return;
+      pendingArea = area;
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (e) {
+      /* an address bar we cannot read is not a reason to fail to load */
+    }
+  })();
+
+  // The worker sends this when a notification is tapped while the admin is ALREADY open: there is
+  // no fresh page load to read a query string from, so it says where to go directly.
+  if (window.navigator && window.navigator.serviceWorker) {
+    window.navigator.serviceWorker.addEventListener("message", function (event) {
+      var area = event.data && event.data.nbccGoTo;
+      if (area) goToNotificationArea(area);
+    });
+  }
+
+  // Where a tapped notification lands. An Elf Detective School one is about a photo to check, which
+  // lives on the Finds tab of Head Elf HQ, so it opens there rather than wherever the last visit left off.
+  function goToNotificationArea(area) {
+    // On a load with a live session this runs before elf-hq.js has set AdminElfHq, and that file then
+    // opens the tab it remembers: so leave "finds" where it reads (the same hand-over as the family
+    // key further down). The show() below covers elf-hq.js already being loaded.
+    if (area === "elf") {
+      try {
+        sessionStorage.setItem("nbcc_elf_hq_tab", "finds");
+      } catch (err) {
+        // Storage refused: Head Elf HQ still opens, on HQ.
+      }
+    }
+    selectView(area);
+    if (area === "elf" && window.AdminElfHq && window.AdminElfHq.show) window.AdminElfHq.show("finds");
+  }
+
   function showApp(claims) {
     el("loginView").hidden = true;
     el("appView").hidden = false;
     currentRole = claims.role || "viewer";
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
+    // The phone menu's foot says it too, since the top bar is hidden there (2026-11-12).
+    el("pmWho").textContent = "Signed in as " + (claims.email || "") + (claims.role ? " · " + claims.role : "");
     // TASK-478: a fresh start for whoever has signed in, so nobody sees the last person's pills.
     resetWhatsNew();
     refreshWhatsNew();
     loadMyPermissions();
     refreshEnquiryNotice();
+    // A notification was tapped to get here. Done after loadMyPermissions so the nav it lands on
+    // has already been filtered to what this person may open.
+    if (pendingArea) {
+      var area = pendingArea;
+      pendingArea = null;
+      goToNotificationArea(area);
+    }
+    registerPushWorker();
+  }
+
+  // TASK-619: the service worker that receives notifications. Registered only once somebody is
+  // signed in — there is nothing to notify an anonymous visitor about — and from /admin-sw.js at
+  // the root, because a worker served from /assets could never control /admin.
+  function registerPushWorker() {
+    try {
+      if (!window.navigator || !window.navigator.serviceWorker) return;
+      window.navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin" }).catch(function () {
+        /* an older browser, or a page not served over https: notifications simply stay off */
+      });
+    } catch (e) {
+      /* same */
+    }
   }
 
   // Admin Phase 2 (TASK-186): fetch this user's EFFECTIVE per-section permissions and use them to
@@ -216,7 +323,12 @@
 
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       var section = b.getAttribute("data-view");
-      if (section === "overview") return;
+      // Screens that belong to the person rather than to a permission section: everyone has them,
+      // and gating them on a section the server has never heard of would hide them from
+      // absolutely everybody — which is precisely how Monthly givers went unseen for weeks
+      // (TASK-447). admin-sections-in-sync.test.ts holds the same list and will not let the two
+      // drift apart.
+      if (UNGATED_VIEWS.indexOf(section) !== -1) return;
       // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
       // data-view - e.g. Business supporters gates on business-supporters:edit, matching its server
       // route. Or on VIEW of another section (data-view-gate), when its screen has no permission of
@@ -239,6 +351,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
       g.hidden = !g.querySelector(".admin-nav-link:not([hidden])");
     });
+    syncTabBar();
   }
 
   // Fetch an admin API path with the bearer token; a 401 means the session is gone -> back to login.
@@ -312,7 +425,7 @@
       err.hidden = true;
       var email = el("adminEmail").value.trim();
       var password = el("adminPassword").value;
-      var body = { email: email, password: password };
+      var body = { email: email, password: password, installed: isInstalledApp() };
       var dt = deviceToken();
       if (dt) body.deviceToken = dt;
       fetch("/api/admin/login", {
@@ -353,7 +466,12 @@
       fetch("/api/admin/login/2fa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: pendingTwoFactorEmail, code: code, remember: remember }),
+        body: JSON.stringify({
+          email: pendingTwoFactorEmail,
+          code: code,
+          remember: remember,
+          installed: isInstalledApp(),
+        }),
       })
         .then(function (res) {
           return res.ok
@@ -386,6 +504,31 @@
 
   // My account (Admin Phase 4, TASK-197): topbar entry point, reachable by every signed-in user
   // regardless of section permissions - not a nav-link, so it isn't part of applyNavFiltering.
+  // The phone menu's foot (2026-11-12): its two buttons press the top bar's own, so they can never
+  // drift from what those do.
+  // The bottom bar (2026-11-12): a tab opens its screen as its menu link does. Everything presses
+  // the Menu button, which takes you up to the menu and, closed again, back to where you were.
+  Array.prototype.forEach.call(doc.querySelectorAll(".pm-bar [data-pm-view]"), function (t) {
+    t.addEventListener("click", function () {
+      selectView(t.getAttribute("data-pm-view"));
+    });
+  });
+  bindClick("pmEverything", function () {
+    var toggle = el("adminNavToggle");
+    toggle.click();
+    // Opened from the foot of the page, the focus would stay down here, after everything in the
+    // menu. Take it to the menu's first screen instead.
+    if (toggle.getAttribute("aria-expanded") === "true") {
+      var first = doc.querySelector("#adminNavList .admin-nav-link:not([hidden])");
+      if (first && first.focus) first.focus();
+    }
+  });
+  bindClick("pmAccountBtn", function () {
+    el("accountBtn").click();
+  });
+  bindClick("pmLogoutBtn", function () {
+    el("logoutBtn").click();
+  });
   bindClick("accountBtn", function () {
     selectView("account");
   });
@@ -466,6 +609,22 @@
     return whatsNewLoad;
   }
 
+  // The bar along the bottom on a phone (2026-11-12). Each tab copies its menu link, so it can never
+  // offer a screen the menu would not, nor disagree with it about what is new or where you are. Run
+  // whenever any of those changes: after the menu is filtered (applyNavFiltering) and after the pills
+  // are drawn (renderNewPills, which selectView runs once it has marked the screen you chose).
+  function syncTabBar() {
+    Array.prototype.forEach.call(doc.querySelectorAll(".pm-bar [data-pm-view]"), function (t) {
+      var link = doc.querySelector('#adminNavList .admin-nav-link[data-view="' + t.getAttribute("data-pm-view") + '"]');
+      t.hidden = !link || link.hidden;
+      var isNew = !!link && !link.hidden && !!link.querySelector(".admin-new-pill");
+      t.classList.toggle("pm-tab--new", isNew);
+      var words = t.querySelector(".pm-tab__new");
+      if (words) words.hidden = !isNew;
+      if (link && link.classList.contains("is-active")) t.setAttribute("aria-current", "page");
+      else t.removeAttribute("aria-current");
+    });
+  }
   function renderNewPills() {
     var any = false;
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link[data-view]"), function (b) {
@@ -499,6 +658,7 @@
         b.insertAdjacentHTML("beforeend", NEW_PILL);
       }
     });
+    syncTabBar();
     var toggle = el("adminNavToggle");
     if (!toggle) return;
     var oldT = toggle.querySelector(".admin-new-pill");
@@ -641,10 +801,146 @@
     else if (name === "invoices") loadInvoices();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
+    else if (name === "notifications") loadPushSettings();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
     b.addEventListener("click", function () {
       selectView(b.getAttribute("data-view"));
+    });
+  });
+
+  // ---- Notifications on this phone (TASK-619) ----
+  // Every area a notification can be about, with the wording the admin's own menu uses. Mirrors
+  // AREA_TITLES in src/admin/whats-new.ts; the server filters by permission at send time, so a
+  // switch here that somebody cannot see anyway is harmless, just pointless.
+  var PUSH_AREAS = [
+    ["donations", "Donations"], ["monthly", "Monthly givers"], ["fundraising", "Get involved"],
+    ["contact", "Contact form"], ["ball", "Festive Ball"], ["fulfilments", "Business supporters"],
+    ["stories", "Stories"], ["newsletter", "Newsletter"], ["elf", "Elf Detective School"],
+  ];
+
+  function pushSupported() {
+    return !!(window.navigator && window.navigator.serviceWorker && window.PushManager && window.Notification);
+  }
+
+  // base64url to the Uint8Array pushManager.subscribe insists on.
+  function pushKeyBytes(base64url) {
+    var padded = (base64url + "===").slice(0, base64url.length + ((4 - (base64url.length % 4)) % 4));
+    var raw = window.atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function loadPushSettings() {
+    var unsupported = el("pushUnsupported");
+    var setup = el("pushSetup");
+    if (!pushSupported()) {
+      unsupported.textContent = "This browser cannot show notifications. On an iPhone, add the admin to your home screen and open it from there.";
+      unsupported.hidden = false;
+      setup.hidden = true;
+      el("pushEnable").disabled = true;
+    } else if (!isInstalledApp() && /iPhone|iPad/i.test(window.navigator.userAgent || "")) {
+      // An iPhone will not deliver a notification to a Safari tab, only to a home-screen app, so
+      // saying this BEFORE the button is the difference between a setting that works and one
+      // that silently never fires.
+      unsupported.textContent = "Add the admin to your home screen first, then open it from that icon. An iPhone only sends notifications to the app, never to a Safari tab.";
+      unsupported.hidden = false;
+      // Pressing it here would ask iOS for permission in a Safari tab, which it only grants once
+      // ever — spending the single prompt on a context that can never receive a notification.
+      el("pushEnable").disabled = true;
+    } else {
+      unsupported.hidden = true;
+      setup.hidden = false;
+      el("pushEnable").disabled = false;
+    }
+
+    authFetch("/api/admin/push/subscription").then(j).then(function (d) {
+      var count = (d && d.phones) || 0;
+      var box = el("pushPhoneCount");
+      box.hidden = count === 0;
+      box.textContent = count === 1 ? "One phone is set up." : count + " phones are set up.";
+    }).catch(function () {});
+
+    authFetch("/api/admin/push/prefs").then(j).then(function (prefs) {
+      el("pushBundle").checked = !!prefs.bundle;
+      el("pushQuietFrom").value = (prefs.quietFrom || "").slice(0, 5);
+      el("pushQuietTo").value = (prefs.quietTo || "").slice(0, 5);
+      var off = prefs.areasOff || [];
+      el("pushAreas").innerHTML = PUSH_AREAS.map(function (a) {
+        return '<label class="admin-check"><input type="checkbox" data-push-area="' + a[0] + '"' +
+          (off.indexOf(a[0]) === -1 ? " checked" : "") + " /> <span>" + H.escapeHtml(a[1]) + "</span></label>";
+      }).join("");
+    }).catch(function () {
+      el("pushAreas").innerHTML = '<p class="admin-empty">Could not load your settings.</p>';
+    });
+  }
+
+  bindClick("pushEnable", function () {
+    var status = el("pushEnableStatus");
+    status.className = "admin-action-status";
+    status.textContent = "Asking your phone…";
+    if (!pushSupported()) {
+      status.className = "admin-action-status is-error";
+      status.textContent = "This browser cannot show notifications.";
+      return;
+    }
+    authFetch("/api/admin/push/key").then(j).then(function (d) {
+      if (!d.configured) throw new Error("Notifications are not set up on the server yet.");
+      return window.Notification.requestPermission().then(function (permission) {
+        if (permission !== "granted") {
+          // iOS asks once and only once. Say what the way back is, because there is no second prompt.
+          throw new Error("Your phone said no. To be asked again, delete the icon from your home screen and add it back.");
+        }
+        return window.navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin" })
+          .then(function () { return window.navigator.serviceWorker.ready; })
+          .then(function (reg) {
+            return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(d.publicKey) });
+          });
+      });
+    }).then(function (sub) {
+      return authFetch("/api/admin/push/subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sub.toJSON ? sub.toJSON() : sub),
+      });
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not save this phone.");
+      status.className = "admin-action-status is-ok";
+      status.textContent = "This phone is on. You will get a notification the next time something arrives.";
+      loadPushSettings();
+    }).catch(function (e) {
+      status.className = "admin-action-status is-error";
+      status.textContent = e.message || "Could not turn notifications on.";
+    });
+  });
+
+  bindClick("pushPrefsSave", function () {
+    var status = el("pushPrefsStatus");
+    status.className = "admin-action-status";
+    status.textContent = "Saving…";
+    var off = [];
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-push-area]"), function (box) {
+      if (!box.checked) off.push(box.getAttribute("data-push-area"));
+    });
+    var from = el("pushQuietFrom").value;
+    var to = el("pushQuietTo").value;
+    authFetch("/api/admin/push/prefs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bundle: el("pushBundle").checked,
+        quietFrom: from ? from + ":00" : null,
+        quietTo: to ? to + ":00" : null,
+        areasOff: off,
+      }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not save.");
+      status.className = "admin-action-status is-ok";
+      status.textContent = "Saved.";
+    }).catch(function () {
+      status.className = "admin-action-status is-error";
+      status.textContent = "Could not save those settings.";
     });
   });
 
@@ -807,6 +1103,8 @@
   function markNav(open) {
     navBar.classList.toggle("is-open", open);
     navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    var all = el("pmEverything");
+    if (all) all.setAttribute("aria-expanded", open ? "true" : "false");
   }
   function openNav() {
     if (!navBar || navIsOpen()) return;
@@ -1097,49 +1395,71 @@
   function ovButtonWords(item) {
     return GI_OLD_VIEWS[item.view] ? "Get involved" : item.button;
   }
+  // The Overview in the Donations look (2026-11-12). Each line is a card that is its own button: the
+  // count large at the front, as Donations leads with the amount, the words beside it, and the screen
+  // it opens beneath. Grouped by how soon it matters, under the gift log's kind of heading.
+  var NEED_GROUPS = { 1: "Urgent", 2: "Waiting on you", 3: "Coming due" };
+  function needCard(n) {
+    var esc = H.escapeHtml;
+    var level = Number(n.level);
+    // An older server, mid-deploy, sends the sentence without its count: it still reads, whole.
+    var split = typeof n.count === "number" && isFinite(n.count) && typeof n.words === "string";
+    return (
+      "<li>" +
+      '<button type="button" class="ov-card ov-need' + (level === 1 ? " ov-need--urgent" : "") + (split ? "" : " ov-need--sentence") +
+      '" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' +
+      (split ? '<span class="ov-need__count">' + String(Number(n.count)) + "</span>" : "") +
+      '<span class="ov-need__body">' +
+      '<span class="ov-need__words">' + esc(split ? n.words : n.text) + "</span>" +
+      '<span class="ov-need__where">' + esc(ovButtonWords(n)) + "</span>" +
+      "</span></button></li>"
+    );
+  }
   function needsHtml(d) {
     var esc = H.escapeHtml;
     var needs = d.needs || [];
     var failed = d.failed || [];
-    var list = needs.length
-      ? '<ul class="ov-needs">' +
-        needs
-          .map(function (n) {
-            return (
-              '<li class="ov-need" data-level="' + Number(n.level) + '">' +
-              '<span class="ov-dot" aria-hidden="true"></span>' +
-              '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
-              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' + esc(ovButtonWords(n)) + "</button>" +
-              "</li>"
-            );
-          })
-          .join("") +
-        "</ul>"
-      : "";
+    var groups = [1, 2, 3]
+      .map(function (level) {
+        var mine = needs.filter(function (n) { return Number(n.level) === level; });
+        if (!mine.length) return "";
+        return (
+          '<p class="ov-group" data-level="' + level + '"><span class="ov-pill">' + NEED_GROUPS[level] + "</span></p>" +
+          '<ul class="ov-list">' + mine.map(needCard).join("") + "</ul>"
+        );
+      })
+      .join("");
     // Never "nothing needs you" when part of it could not be checked: that would be a guess.
     var quiet = !needs.length && !failed.length ? '<p class="ov-clear">Nothing needs you right now.</p>' : "";
     var gaps = failed.length
       ? '<p class="ov-failed">Could not check: ' + esc(failed.join(", ")) + ". Open Overview again in a moment.</p>"
       : "";
-    return list + quiet + gaps;
+    return '<div class="ov-needs">' + groups + quiet + gaps + "</div>";
   }
-  // TASK-509: how we are doing, one line each, worded by src/admin/overview-numbers.ts. The card
-  // stays hidden for someone who may see none of them.
+  // "9 things need you." above the cards; nothing on a quiet day, or when it could not load.
+  function ovSummaryWords(needs) {
+    var n = (needs || []).length;
+    return n === 0 ? "" : n === 1 ? "1 thing needs you." : n + " things need you.";
+  }
+  // TASK-509: how we are doing, now the gift log's scoreboard, a tile each with the figure large. The
+  // server sends the figure apart from the rest of its headline; an older one sends the headline only.
   function numbersHtml(numbers) {
     var esc = H.escapeHtml;
     return (
-      '<ul class="ov-numbers">' +
+      '<ul class="ov-tiles">' +
       numbers
         .map(function (n) {
+          var split = typeof n.figure === "string";
           return (
-            '<li class="ov-number">' +
-            '<span class="ov-number-title">' + esc(n.title) + "</span>" +
-            '<span class="ov-number-body">' +
-            '<span class="ov-number-headline">' + esc(n.headline) + "</span>" +
-            '<span class="ov-number-detail">' + esc(n.detail) + "</span>" +
-            "</span>" +
-            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(ovButtonWords(n)) + "</button>" +
-            "</li>"
+            '<li><button type="button" class="ov-tile" data-ov-view="' + esc(n.view) + '">' +
+            '<span class="ov-tile__name">' + esc(n.title) + "</span>" +
+            '<span class="ov-tile__figure">' + esc(split ? n.figure : n.headline) + "</span>" +
+            '<span class="ov-tile__rest">' + esc(split ? n.rest : "") + "</span>" +
+            '<span class="ov-tile__detail">' + esc(n.detail) + "</span>" +
+            // The old rows had a button naming the screen; the tile is the button now, so a screen
+            // reader still hears where it goes.
+            '<span class="sr-only">, opens ' + esc(ovButtonWords(n)) + "</span>" +
+            "</button></li>"
           );
         })
         .join("") +
@@ -1151,36 +1471,96 @@
     el("overviewNumbers").innerHTML = list.length ? numbersHtml(list) : "";
     el("ovNumbersCard").hidden = !list.length;
   }
-  // TASK-510: Coming up, the next 14 days by day, from src/admin/overview-coming-up.ts. Hidden when
-  // nothing this person may see is coming.
+  // TASK-510: Coming up, the next 14 days by day, as slim cards under the day's heading.
   function comingHtml(days) {
     var esc = H.escapeHtml;
-    return days
-      .map(function (d) {
-        return (
-          '<section class="ov-day">' +
-          '<h4 class="ov-day-label">' + esc(d.label) + "</h4>" +
-          '<ul class="ov-events">' +
-          (d.items || [])
-            .map(function (i) {
-              return (
-                '<li class="ov-event">' +
-                '<span class="ov-event-when">' + esc(i.when) + "</span>" +
-                '<span class="ov-event-text">' + esc(i.text) + "</span>" +
-                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(ovButtonWords(i)) + "</button>" +
-                "</li>"
-              );
-            })
-            .join("") +
-          "</ul></section>"
-        );
-      })
-      .join("");
+    return (
+      '<div class="ov-days">' +
+      days
+        .map(function (d) {
+          return (
+            '<section class="ov-day">' +
+            '<h4 class="ov-day-label">' + esc(d.label) + "</h4>" +
+            '<ul class="ov-list">' +
+            (d.items || [])
+              .map(function (i) {
+                return (
+                  '<li><button type="button" class="ov-card ov-event' + (i.when ? "" : " ov-event--allday") +
+                  '" data-ov-view="' + esc(i.view) + '">' +
+                  '<span class="ov-event-when">' + esc(i.when) + "</span>" +
+                  '<span class="ov-event-text">' + esc(i.text) + "</span>" +
+                  '<span class="sr-only">, opens ' + esc(ovButtonWords(i)) + "</span>" +
+                  "</button></li>"
+                );
+              })
+              .join("") +
+            "</ul></section>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
   }
   function showComing(days) {
     var list = days || [];
     el("overviewComing").innerHTML = list.length ? comingHtml(list) : "";
     el("ovComingCard").hidden = !list.length;
+  }
+  // The Overview's own recent gifts: compact cards, as the gift log draws a gift, never the table.
+  // Search still shares donationsTable() and keeps it. The same marks the table showed, worded the
+  // gift log's way, and never a New pill: these five are a glance, not a list to work through.
+  var OV_SOURCE_WORDS = {
+    red_bag: "Red Bag",
+    ball: "Festive Ball",
+    ball_bags: "Red bags at the Ball",
+    santa_sleigh: "Santa Sleigh",
+    invoice: "Invoice",
+  };
+  function ovWhen(iso) {
+    var GL = window.AdminGiftLog;
+    if (!GL || !GL.dayLabel) return H.fmtDate(iso);
+    var day = GL.dayLabel(iso);
+    var time = GL.timeLabel(iso);
+    if (day === "Today") return time;
+    return day === "Yesterday" ? "Yesterday, " + time : day;
+  }
+  function ovGiftsHtml(rows) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    if (!rows.length) return '<p class="ov-empty">No donations yet.</p>';
+    return (
+      '<ul class="ov-list">' +
+      rows
+        .map(function (d) {
+          var elfRow = d.kind === "elf";
+          var marks = [];
+          if (d.gift_aid) marks.push(["aid", "Gift Aid"]);
+          if (d.mode === "monthly") marks.push(["monthly", "Monthly"]);
+          var from = elfRow ? "Elf Detective School" : OV_SOURCE_WORDS[d.source];
+          if (from) marks.push(["from", from]);
+          var pay = H.paymentLabel(d);
+          if (pay.state !== "paid") marks.push(["pay", pay.label]);
+          // A gift opens its donor, as the row's View did; an elf payment opens Head Elf HQ, and only
+          // for someone who may open it. One that opens nothing is drawn still, not as a button.
+          var opener = elfRow
+            ? canView("elf") ? ' data-elf-family="' + Number(d.elf_family_id) + '"' : ""
+            : ' data-donor="' + Number(d.donor_id) + '"';
+          var amount = GL && GL.money ? GL.money(d.amount_pence) : H.formatPence(d.amount_pence);
+          var name = d.donor_name || (elfRow ? d.elf_reference : "") || "";
+          var inner =
+            '<span class="ov-gift__amount">' + esc(amount) + "</span>" +
+            '<span class="ov-gift__who"><span class="ov-gift__name">' + esc(name) + "</span>" +
+            '<span class="ov-gift__time">' + esc(ovWhen(d.created_at)) + "</span></span>" +
+            '<span class="ov-gift__marks">' +
+            marks.map(function (m) { return '<span class="ov-mark ov-mark--' + m[0] + '">' + esc(m[1]) + "</span>"; }).join("") +
+            "</span>";
+          return opener
+            ? '<li><button type="button" class="ov-card ov-gift"' + opener + ">" + inner + "</button></li>"
+            : '<li><div class="ov-card ov-card--still ov-gift">' + inner + "</div></li>";
+        })
+        .join("") +
+      "</ul>"
+    );
   }
   function overviewTime(iso) {
     var t = new Date(iso);
@@ -1199,14 +1579,14 @@
         if (btn.getAttribute("data-ov-view") === "ball") ballAsk(BALL_NEED_SECTIONS[btn.getAttribute("data-ov-key")]);
         selectView(btn.getAttribute("data-ov-view"));
       };
-      el("overviewNeeds").addEventListener("click", openView);
-      el("overviewNumbers").addEventListener("click", openView);
-      el("overviewComing").addEventListener("click", openView);
+      // One delegate for the whole view: the cards, the tiles, Coming up and "See them all".
+      el("view-overview").addEventListener("click", openView);
     }
     authFetch("/api/admin/overview")
       .then(okJson)
       .then(function (d) {
         el("overviewNeeds").innerHTML = needsHtml(d);
+        el("overviewSummary").textContent = ovSummaryWords(d.needs);
         showNumbers(d.numbers);
         showComing(d.comingUp);
         el("overviewUpdated").textContent = overviewTime(d.updatedAt);
@@ -1214,15 +1594,19 @@
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
         el("overviewNeeds").innerHTML = unavailableHtml("The overview could not load. Open it again in a moment.");
+        el("overviewSummary").textContent = "";
         // Never last visit's numbers under a message that says nothing could load.
         showNumbers([]);
         showComing([]);
         el("overviewUpdated").textContent = "";
       });
+    // A button to a screen that would only say no is one that looks tappable and is not.
+    var seeAll = doc.querySelector("#view-overview .ov-see-all");
+    if (seeAll) seeAll.hidden = !canView("donations");
     authFetch("/api/admin/donations?limit=5")
       .then(okJson)
       .then(function (d) {
-        el("overviewRecent").innerHTML = donationsTable(d.results || []);
+        el("overviewRecent").innerHTML = ovGiftsHtml(d.results || []);
       })
       .catch(function (err) {
         el("overviewRecent").innerHTML = unavailableHtml(
@@ -1235,10 +1619,12 @@
 
   // ---- search ----
   var searchKind = "donors";
-  Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg"), function (b) {
+  // Only Search's own kind buttons (data-kind). Bound to every .admin-seg, as it was, a press on
+  // any other screen's segmented buttons took the pressed look off whichever was chosen there.
+  Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (b) {
     b.addEventListener("click", function () {
       searchKind = b.getAttribute("data-kind");
-      Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg"), function (x) {
+      Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (x) {
         x.classList.toggle("is-active", x === b);
       });
     });
@@ -2932,6 +3318,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     storyStatus("");
     var wrap = el("storyDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -3171,126 +3558,243 @@
   // ---- contact form (2026-07-10 spec): list + filter, detail, reply-in-Gmail/mark-new/delete
   // (editor+). Reads/writes go to the isolated contact DB via /api/admin/contact*. Mirrors the
   // Stories view controller above (loadStories/storiesTable/openStory/renderStory).
+  // The Contact form in the Donations look (2026-11-12). Each message is a card under its day's
+  // heading, and opens where it is, the way a gift opens in Donations, rather than on a screen of
+  // its own. One fetch brings every live message, so the three filter tiles can show their counts
+  // and filtering is instant; the list has no cap (listEnquiries), and contact is low volume.
+  //
+  // Only the card's summary button carries data-contact. The opened part sits beside it, not inside
+  // it, so pressing Reply in Gmail or Archive never bubbles up to the opener and redraws the card.
+  // Only one is ever open, so #contactDetail and #contactActionStatus stay unique.
+  var ctRows = [];
+  var ctOpenId = null;
+  var CT_FILTER_WORDS = { "": "No enquiries yet.", new: "Nothing is waiting for a reply.", replied: "Nothing has been replied to yet." };
+  function ctName(r) {
+    return ((r.first_name || "") + " " + (r.last_name || "")).trim();
+  }
+  // The server's own words for who replied and when (repliedSummary, src/contact/enquiry-summary.ts):
+  // "by jaimie@nbcc.scot, 22 Sep 14:03", in UK time, with its own month names. Made here too so a
+  // message marked replied just now reads exactly as it will after a reload.
+  var CT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function ctRepliedSummary(by, at) {
+    if (!at) return null;
+    var when = new Date(at);
+    if (isNaN(when.getTime())) return null;
+    var parts = {};
+    new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/London" })
+      .formatToParts(when)
+      .forEach(function (p) { parts[p.type] = p.value; });
+    var stamp = Number(parts.day) + " " + CT_MONTHS[Number(parts.month) - 1] + " " + parts.hour + ":" + parts.minute;
+    return by ? "by " + by + ", " + stamp : stamp;
+  }
+  function ctMarkHtml(r) {
+    var esc = H.escapeHtml;
+    return r.status === "replied"
+      ? '<span class="ct-mark ct-mark--done">Replied</span>' + (r.replied_summary ? ' <span class="ct-msg__by">' + esc(r.replied_summary) + "</span>" : "")
+      // The red dot by the name says it to the eye, as in the mockup Jaimie approved; these words
+      // say it to a screen reader, which a colour alone cannot.
+      : '<span class="sr-only">Waiting for a reply</span>';
+  }
+  function ctCardHtml(r) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    var id = Number(r.id);
+    var waiting = r.status !== "replied";
+    var text = String(r.message || "");
+    return (
+      '<article class="ct-msg' + (waiting ? " ct-msg--waiting" : "") + '" data-ct-id="' + id + '">' +
+      '<button type="button" class="ct-msg__summary" data-contact="' + id + '" aria-expanded="false">' +
+      '<span class="ct-msg__top"><span class="ct-msg__name">' + esc(ctName(r)) + "</span>" +
+      '<span class="ct-msg__time">' + esc(GL && GL.timeLabel ? GL.timeLabel(r.created_at) : H.fmtDate(r.created_at)) + "</span></span>" +
+      '<span class="ct-msg__snippet">' + esc(text.length > 240 ? text.slice(0, 240) + "…" : text) + "</span>" +
+      '<span class="ct-msg__mark">' + ctMarkHtml(r) + "</span>" +
+      "</button>" +
+      "</article>"
+    );
+  }
+  // The open part of a card, added beside its summary button when it opens (openContact).
+  var CT_MORE_HTML =
+    '<div class="ct-msg__more"><div id="contactDetail" aria-live="polite"></div>' +
+    '<p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p></div>';
+  function ctListHtml(rows) {
+    var esc = H.escapeHtml;
+    var GL = window.AdminGiftLog;
+    if (!rows.length) return '<p class="admin-empty">' + esc(ctRows.length ? CT_FILTER_WORDS[contactStatusFilter] || CT_FILTER_WORDS[""] : CT_FILTER_WORDS[""]) + "</p>";
+    var out = "";
+    var lastDay = null;
+    rows.forEach(function (r) {
+      var key = GL && GL.dayKey ? GL.dayKey(r.created_at) : H.fmtDate(r.created_at);
+      if (key !== lastDay) {
+        out += '<h3 class="ct-day">' + esc(GL && GL.dayLabel ? GL.dayLabel(r.created_at) : H.fmtDate(r.created_at)) + "</h3>";
+        lastDay = key;
+      }
+      out += ctCardHtml(r);
+    });
+    return '<div class="ct-list">' + out + "</div>";
+  }
+  function ctCounts() {
+    var waiting = ctRows.filter(function (r) { return r.status !== "replied"; }).length;
+    var counts = { "": ctRows.length, new: waiting, replied: ctRows.length - waiting };
+    Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .ct-seg"), function (b) {
+      var c = b.querySelector(".ct-seg__count");
+      if (c) c.textContent = String(counts[b.getAttribute("data-status") || ""] || 0);
+    });
+    var line = el("ctWaitingLine");
+    if (line) line.textContent = waiting === 0 ? "Nothing waiting for a reply." : waiting === 1 ? "1 waiting for a reply." : waiting + " waiting for a reply.";
+  }
+  // Redraws the list, every card closed.
+  function ctDraw() {
+    ctOpenId = null;
+    ctCounts();
+    var shown = contactStatusFilter
+      ? ctRows.filter(function (r) { return contactStatusFilter === "replied" ? r.status === "replied" : r.status !== "replied"; })
+      : ctRows;
+    el("contactTable").innerHTML = ctListHtml(shown);
+  }
   Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (b) {
     b.addEventListener("click", function () {
       contactStatusFilter = b.getAttribute("data-status") || "";
       Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (x) {
         x.classList.toggle("is-active", x === b);
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
       });
-      loadContact();
+      // A message that the new filter hides cannot stay open.
+      ctOpenId = null;
+      ctDraw();
     });
   });
-  function contactSnippet(message) {
-    var s = String(message || "");
-    return s.length > 80 ? s.slice(0, 80) + "…" : s;
-  }
-  function contactStatusBadge(status) {
-    return status === "replied"
-      ? '<span class="admin-pill is-replied">Replied</span>'
-      : '<span class="admin-pill is-new">New</span>';
-  }
-  // TASK-425: the status pill, with who replied and when beneath it. replied_summary arrives
-  // already formatted from the server, and is null whenever there is nothing honest to say.
-  // Putting it in the existing cell rather than a new column keeps the table within the width
-  // that TASK-422 fixed for phones.
-  function contactStatusCell(r) {
-    var badge = contactStatusBadge(r.status);
-    if (!r.replied_summary) return badge;
-    return badge + '<span class="admin-replied-by">' + H.escapeHtml(r.replied_summary) + "</span>";
-  }
-
-  function contactTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No enquiries yet.</p>';
-    var body = rows
-      .map(function (r) {
-        return (
-          "<tr><td>" + window.formatReceived(r.created_at) + "</td><td>" +
-          H.escapeHtml(((r.first_name || "") + " " + (r.last_name || "")).trim()) + "</td><td>" +
-          H.escapeHtml(r.email) + "</td><td>" + contactStatusCell(r) + "</td><td>" +
-          H.escapeHtml(contactSnippet(r.message)) +
-          '</td><td><button class="admin-link" type="button" data-contact="' + r.id + '">View</button></td></tr>'
-        );
-      })
-      .join("");
-    return (
-      '<table class="admin-table"><thead><tr><th>Received</th><th>Name</th><th>Email</th>' +
-      "<th>Status</th><th>Message</th><th></th></tr></thead><tbody>" +
-      body + "</tbody></table>"
-    );
-  }
   function loadContact() {
     var wrap = el("contactTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    var path = "/api/admin/contact" + (contactStatusFilter ? "?status=" + encodeURIComponent(contactStatusFilter) : "");
-    authFetch(path)
+    ctOpenId = null;
+    authFetch("/api/admin/contact")
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = contactTable(d.results || []);
+        ctRows = d.results || [];
+        ctDraw();
       })
       .catch(function () {
+        ctRows = [];
         wrap.innerHTML = unavailableHtml("Enquiries are unavailable.");
+        // TASK-476: never the last load's numbers under a message that says nothing could load.
+        var line = el("ctWaitingLine");
+        if (line) line.textContent = "";
+        Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .ct-seg__count"), function (c) {
+          c.textContent = "";
+        });
       });
   }
   function contactStatus(msg) {
-    el("contactActionStatus").textContent = msg || "";
+    var s = el("contactActionStatus");
+    if (s) s.textContent = msg || "";
+  }
+  // A message opens where it is, and pressing its card again closes it. It is done in place, never
+  // by redrawing the list: the card you pressed stays the same button with the focus on it, and
+  // nothing else on the list changes. Only one is ever open, so #contactDetail stays unique.
+  function ctClose() {
+    if (ctOpenId === null) return;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + ctOpenId + '"]');
+    ctOpenId = null;
+    if (!card) return;
+    card.classList.remove("ct-msg--open");
+    var more = card.querySelector(".ct-msg__more");
+    if (more) more.remove();
+    var btn = card.querySelector(".ct-msg__summary");
+    if (btn) btn.setAttribute("aria-expanded", "false");
   }
   function openContact(id) {
+    id = Number(id);
+    var was = ctOpenId;
+    ctClose();
+    if (was === id) return;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + id + '"]');
+    if (!card) return;
+    ctOpenId = id;
     currentContactId = id;
-    showOnly("view-contact-detail");
-    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
-      b.classList.remove("is-active");
-    });
-    contactStatus("");
-    var wrap = el("contactDetail");
+    card.classList.add("ct-msg--open");
+    var btn = card.querySelector(".ct-msg__summary");
+    btn.setAttribute("aria-expanded", "true");
+    card.insertAdjacentHTML("beforeend", CT_MORE_HTML);
+    // Closing a long message above this one moves this one up the page, and iOS Safari does not
+    // keep your place for you, so bring it back into view (clear of the pinned bars: scroll-margin).
+    if (btn.scrollIntoView) btn.scrollIntoView({ block: "nearest" });
+    var wrap = card.querySelector("#contactDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    // A reply for a message you have since closed, or moved on from, is dropped: it belongs to a card
+    // that is no longer open, and drawn into the open one it would show one person's message, and
+    // buttons, in another person's card.
+    var stillOpen = function () { return ctOpenId === id; };
     authFetch("/api/admin/contact/" + id)
       .then(function (res) {
+        if (!stillOpen()) throw new Error("moved on");
         if (res.status === 404) {
           wrap.innerHTML = '<p class="admin-empty">Enquiry not found.</p>';
           throw new Error("not found");
         }
         return okJson(res);
       })
-      .then(renderContact)
+      .then(function (c) {
+        if (stillOpen()) renderContact(c, wrap);
+      })
       .catch(function (err) {
         // TASK-476: a failure is not a record with nothing in it. "Not found" has said so already.
-        if (err && err.message === "not found") return;
+        if (!stillOpen() || (err && err.message === "not found")) return;
         wrap.innerHTML = unavailableHtml("Could not load this enquiry. Please try again.");
       });
   }
-  function renderContact(c) {
+  function renderContact(c, into) {
+    var esc = H.escapeHtml;
     var canWrite = canEdit("contact");
-    var info =
-      '<dl class="admin-dl">' +
-      dl("Name", ((c.first_name || "") + " " + (c.last_name || "")).trim()) +
+    var facts =
+      '<dl class="ct-facts">' +
       dl("Email", c.email) +
       // Optional on the form, so only a line when the sender gave one.
       (c.phone ? dl("Phone", c.phone) : "") +
       dl("Received", window.formatReceived(c.created_at)) +
-      dl("Status", c.status === "replied" ? "Replied" : "New") +
       (c.status === "replied"
-        ? dl("Replied by", (c.replied_by || "") + " · " + window.formatReceived(c.replied_at))
+        ? dl("Replied by", (c.replied_by || "") + (c.replied_at ? " · " + window.formatReceived(c.replied_at) : ""))
         : "") +
       "</dl>" +
-      '<h3 class="admin-subhead">Message</h3><p class="admin-story-text">' + H.escapeHtml(c.message || "") + "</p>";
+      '<p class="ct-msg__full">' + esc(c.message || "") + "</p>";
     var actions = "";
     if (canWrite) {
       actions =
-        '<div class="admin-donor-actions">' +
-        '<button class="btn btn-primary" type="button" id="contactReplyBtn">Reply in Gmail</button> ' +
+        '<div class="ct-actions">' +
+        '<button class="ct-act ct-act--primary" type="button" id="contactReplyBtn">Reply in Gmail</button>' +
         (c.status === "replied"
-          ? '<button class="btn btn-ghost" type="button" id="contactMarkNewBtn">Mark as new</button> '
-          : '<button class="btn btn-ghost" type="button" id="contactMarkRepliedBtn">Mark as replied</button> ') +
-        '<button class="btn" type="button" id="contactArchiveBtn">Archive</button>' +
-        '<button class="btn" type="button" id="contactRestoreBtn" hidden>Restore</button>' +
-        '<button class="btn btn-danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
+          ? '<button class="ct-act" type="button" id="contactMarkNewBtn">Mark as new</button>'
+          : '<button class="ct-act" type="button" id="contactMarkRepliedBtn">Mark as replied</button>') +
+        '<button class="ct-act" type="button" id="contactArchiveBtn">Archive</button>' +
+        '<button class="ct-act" type="button" id="contactRestoreBtn" hidden>Restore</button>' +
+        '<button class="ct-act ct-act--danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
         "</div>";
     }
-    el("contactDetail").innerHTML = info + actions;
+    var wrap = into || el("contactDetail");
+    if (!wrap) return;
+    wrap.innerHTML = facts + actions;
     if (canWrite) wireContactActions(c);
   }
+  // After a status change: the card's mark and the counts follow, without redrawing the opened part
+  // (which holds the message saying it worked).
+  function ctRowChanged(updated) {
+    var row = ctRows.find(function (r) { return Number(r.id) === Number(updated.id); });
+    if (!row) return;
+    row.status = updated.status;
+    row.replied_summary = updated.status === "replied" ? ctRepliedSummary(updated.replied_by, updated.replied_at) : null;
+    var card = doc.querySelector('.ct-msg[data-ct-id="' + Number(row.id) + '"]');
+    if (card) {
+      card.classList.toggle("ct-msg--waiting", row.status !== "replied");
+      var mark = card.querySelector(".ct-msg__mark");
+      if (mark) mark.innerHTML = ctMarkHtml(row);
+    }
+    ctCounts();
+  }
   function patchContact(body, okMsg, errMsg) {
-    return authFetch("/api/admin/contact/" + currentContactId, {
+    // The card the change is for. If you have opened another by the time the answer comes, that
+    // card's mark and the counts still follow, but its open part and its status line are left alone.
+    var id = Number(currentContactId);
+    var stillOpen = function () { return ctOpenId === id; };
+    return authFetch("/api/admin/contact/" + id, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -3300,13 +3804,16 @@
       })
       .then(function (updated) {
         if (updated) {
-          renderContact(updated);
-          contactStatus(okMsg);
+          ctRowChanged(updated);
+          if (stillOpen()) {
+            renderContact(updated);
+            contactStatus(okMsg);
+          }
           refreshEnquiryNotice(); // one fewer waiting, or one more if it was un-marked
-        } else contactStatus(errMsg);
+        } else if (stillOpen()) contactStatus(errMsg);
       })
       .catch(function () {
-        contactStatus(errMsg);
+        if (stillOpen()) contactStatus(errMsg);
       });
   }
   function wireContactActions(c) {
@@ -3371,9 +3878,6 @@
       })
       .catch(function () { contactStatus("Could not erase the message."); });
   }
-  bindClick("contactBack", function () {
-    selectView("contact");
-  });
 
   // ---- audit ----
   function loadAudit() {
@@ -5002,6 +5506,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     el("teamPermStatus").textContent = "";
     renderTeamPermMatrix(u);
   }
@@ -8749,6 +9254,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     donorStatus("");
     var wrap = el("donorDetail");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -10395,6 +10901,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
+    syncTabBar();
     businessSay("businessOutcomeStatus", "");
     businessSay("businessNoteStatus", "");
     el("businessDetail").innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -10742,6 +11249,9 @@
     return '<span class="fr-kind" data-kind="' + kind + '">' + H.escapeHtml(FR_INVITE_TYPES[kind].label) + "</span>";
   }
   var frOpenId = null; // the sign up open below its row
+  // 2026-11-13: an open sign up shows one part at a time (FR_PARTS). Kept while the same sign up stays
+  // open, as every save redraws the list; back to At a glance when another opens.
+  var frPart = "glance";
   var frDetail = null; // GET /api/admin/fundraisers/:id for the open one
   var frDetailFailed = false;
   var frHistoryRows = null; // null loading, false failed, else the rows
@@ -10844,6 +11354,9 @@
     group: "frTeamStatus", // team pages
     memory: "frMemoryStatus", // In memory
     pack: "frPackStatus", // welcome packs
+    // 2026-11-13: the supporter wall's own line. Its buttons are in Their page, and the sign up's main
+    // line (detail) is in At a glance, a part out of sight while you work on the wall.
+    wall: "frWallStatus",
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -11119,6 +11632,11 @@
     if (notBack) notBack.textContent = list.filter(frReqNotBack).length;
     var packs = doc.querySelector('[data-frcount="packs"]'); // welcome packs
     if (packs) packs.textContent = list.filter(frPackToSend).length;
+    // 2026-11-13: a Needs you tile with nothing in it steps back (admin-get-involved.css).
+    Array.prototype.forEach.call(doc.querySelectorAll(".fr-tile"), function (t) {
+      var n = t.querySelector("[data-frcount]");
+      t.classList.toggle("is-none", !!n && n.textContent === "0");
+    });
     // How many of each kind, of every sign up, whichever filters are pressed.
     var kinds = { all: list.length, raising: 0, team: 0, event: 0, memory: 0 };
     list.forEach(function (f) {
@@ -11267,6 +11785,7 @@
   function frToggle(id) {
     var n = Number(id);
     frOpenId = frOpenId === n ? null : n;
+    frPart = "glance";
     frDetail = null;
     frDetailFailed = false;
     frHistoryRows = null;
@@ -11299,33 +11818,106 @@
     }
     var f = frDetail.fundraiser;
     var write = frCanWrite();
-    return (
-      '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
+    // 2026-11-13 (Jaimie: "one big long scrolling list with lots of boxes and lots of buttons"): the
+    // same boxes as before, untouched, in six parts. A bar at the top shows one part at a time, as the
+    // Festive Ball tab's sections do. Every part is drawn every time, the hidden ones included, so
+    // everything that fills a box later (history, news, photos, the team) still finds it.
+    var parts = {
+      glance:
         '<section class="fx-panel fx-panel--wide"><h4>Where it is up to</h4>' + frStatePanel(f, write) + "</section>" +
-        frGroupSection(f) + // team pages
-        frMemorySection(f, write) + // In memory
-        frOffListSection(f, write) +
+        (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
+        frOffListSection(f, write),
+      touch:
         frCallsSection(f, write) +
         frTouchSection(f, write) + // TASK-515
-        (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         frRequestsSection(f, write) +
-        frPackSection(f, write) + // welcome packs
+        frPackSection(f, write), // welcome packs
+      page:
+        '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
         frNewsSection() + // TASK-506
         frPicsSection() + // profile pictures
+        '<section class="fx-panel fx-panel--wide"><h4>Supporter wall</h4>' + frWallPanel(frDetail.wall || [], write) + frNoticeHtml("wall", "frWallStatus") + "</section>" +
         frThanksSection() + // TASK-507
-        '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
-        frSplitSection(f) +
-        frWelcomeSection(f, write) + // the sign up tidy
-        '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
-        '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
-        '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
+        frGroupSection(f) + // team pages
+        frMemorySection(f, write), // In memory
+      money:
         '<section class="fx-panel"><h4>Money raised</h4>' + frMeterHtml(frDetail.meter) + "</section>" +
         '<section class="fx-panel"><h4>Cash paid in</h4>' + frCashPanel(frDetail.cash || [], write) + "</section>" +
-        (write ? '<section class="fx-panel fx-panel--wide"><h4>Change the details</h4>' + frEditForm(f) + "</section>" : "") +
-        '<section class="fx-panel fx-panel--wide"><h4>Supporter wall</h4>' + frWallPanel(frDetail.wall || [], write) + "</section>" +
-        '<section class="fx-panel fx-panel--wide"><h4>History</h4><div class="fx-history" id="frHistory"></div></section>' +
+        frSplitSection(f),
+      details:
+        '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
+        '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
+        '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
+        frWelcomeSection(f, write) + // the sign up tidy
+        (write ? '<section class="fx-panel fx-panel--wide"><h4>Change the details</h4>' + frEditForm(f) + "</section>" : ""),
+      history: '<section class="fx-panel fx-panel--wide"><h4>History</h4><div class="fx-history" id="frHistory"></div></section>',
+    };
+    var offered = FR_PARTS.filter(function (pt) { return parts[pt.key]; });
+    if (!offered.some(function (pt) { return pt.key === frPart; })) frPart = "glance";
+    var waiting = frPartsWaiting(listRow);
+    return (
+      '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
+        '<div class="fr-parts" role="group" aria-label="Which part of this sign up to show">' +
+          offered.map(function (pt) {
+            var on = pt.key === frPart;
+            return '<button class="fr-part-btn' + (on ? " is-active" : "") + '" type="button" data-frpart="' + pt.key +
+              '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(pt.name) +
+              (waiting[pt.key] ? '<span class="fr-part-dot" aria-hidden="true"></span><span class="sr-only">, needs you</span>' : "") +
+              "</button>";
+          }).join("") +
+        "</div>" +
+        offered.map(function (pt) {
+          return '<div class="fr-part" data-frpart-body="' + pt.key + '" role="region" aria-label="' + H.escapeHtml(pt.name) + '"' +
+            (pt.key === frPart ? "" : " hidden") + ">" +
+            '<p class="fr-part-intro">' + H.escapeHtml(pt.intro) + "</p>" +
+            '<div class="fr-part-grid">' + parts[pt.key] + "</div></div>";
+        }).join("") +
       "</div>"
     );
+  }
+
+  // The six parts of an open sign up, in the bar's order, each with the sentence it opens with.
+  var FR_PARTS = [
+    { key: "glance", name: "At a glance", intro: "Where this sign up is up to, and the big decisions: approve it, check a change they asked for, or mark it finished." },
+    { key: "touch", name: "Keeping in touch", intro: "Calls to make, things they asked us for, and their welcome pack." },
+    { key: "page", name: "Their page", intro: "What people see on the website, and what the organiser has sent in for it." },
+    { key: "money", name: "Money", intro: "How much they have raised, online and in cash. Add cash here when they pay it in, so their total is right." },
+    { key: "details", name: "Their details", intro: "Everything they told us when they signed up, and how to get in touch. Change the details to correct anything." },
+    { key: "history", name: "History", intro: "Everything that has happened to this sign up, and who did it." },
+  ];
+
+  // Which parts have something waiting for staff, from the same marks the list row shows as pills.
+  function frPartsWaiting(row) {
+    return {
+      glance: row.status === "new" || !!row.editWaiting || !!(row.finishedRequestedAt && row.status === "approved") || !!frPrompt(row),
+      touch: frCallDue(row) || frReqToDo(row) || frReqDueBack(row) || !!frPackPill(row) || frTouchPrompts(row).length > 0,
+      page: !!(frNewsPill(row) || frPicsPill(row) || frThanksPill(row) || frMemoryPills(row)),
+    };
+  }
+
+  // Shows one part, without redrawing: whatever is typed in another part stays as it was. From further
+  // down the page you are taken up to where the part starts, under the bar where it is pinned (a
+  // laptop), or to the bar itself where it is not (a phone), as the Festive Ball's sections do.
+  function frShowPart(key, scroll) {
+    var box = doc.querySelector("#frList [data-frdetail]");
+    if (!box || !FR_PARTS.some(function (pt) { return pt.key === key; })) return;
+    if (!box.querySelector('[data-frpart-body="' + key + '"]')) return;
+    frPart = key;
+    Array.prototype.forEach.call(box.querySelectorAll("[data-frpart]"), function (b) {
+      var on = b.getAttribute("data-frpart") === key;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    Array.prototype.forEach.call(box.querySelectorAll("[data-frpart-body]"), function (p) {
+      p.hidden = p.getAttribute("data-frpart-body") !== key;
+    });
+    if (!scroll) return;
+    var bar = box.querySelector(".fr-parts");
+    var part = box.querySelector('[data-frpart-body="' + key + '"]');
+    if (!bar || !part || !part.scrollIntoView || !window.getComputedStyle) return;
+    var pinned = window.getComputedStyle(bar).position === "sticky";
+    if (pinned && part.getBoundingClientRect().top < bar.getBoundingClientRect().bottom) part.scrollIntoView({ block: "start" });
+    else if (!pinned && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block: "start" });
   }
 
   function frStateWords(f) {
@@ -11455,7 +12047,15 @@
             '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-fraction="decline">Decline</button></div>' +
           "</div>";
       }
-      actions = shortName + (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") + decline;
+      var says = [];
+      if (buttons.indexOf('data-fraction="approve"') !== -1) {
+        says.push("Approve says yes. We email them, and put up their page if they have one. While fundraising is switched off, the page and its email wait until it is switched on.");
+      }
+      if (buttons.indexOf('data-fraction="finish"') !== -1) {
+        says.push("Mark finished is for when everything is in. You are asked to make sure first.");
+      }
+      actions = shortName + (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") +
+        says.map(function (w) { return '<span class="fr-field-hint fr-action-says">' + w + "</span>"; }).join("") + decline;
     }
     return (
       '<p class="fx-letter"><span class="fx-state fx-state--' + (f.status === "new" ? "todo" : f.status === "approved" ? "done" : "waiting") + '">' +
@@ -12115,7 +12715,7 @@
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    frRun("detail", null, function (run) {
+    frRun("wall", null, function (run) {
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/approve").then(function (r) {
         if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
         return Promise.all([frReload(), frMemoryLoadCounts()]);
@@ -12550,7 +13150,7 @@
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    frRun("detail", null, function (run) {
+    frRun("wall", null, function (run) {
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/" + (hide ? "hide" : "show"))
         .then(function (r) {
           if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
@@ -12619,8 +13219,10 @@
       })
       .catch(function () {
         if (tab && !tab.closed) tab.close();
-        frSay("detail", "Could not open that. Try again.", true, id);
-        frPaintNotice("detail");
+        // Said beside the button pressed: the envelopes are in the In memory box, in Their page.
+        var key = piece === "envelopes" ? "memory" : "detail";
+        frSay(key, "Could not open that. Try again.", true, id);
+        frPaintNotice(key);
       });
   }
 
@@ -12633,6 +13235,22 @@
     frPicsWire(view); // profile pictures
     frGroupWire(view); // team pages
     frPackWire(view); // welcome packs
+    view.addEventListener("click", function (e) {
+      var part = e.target && e.target.closest ? e.target.closest("[data-frpart]") : null;
+      if (part) frShowPart(part.getAttribute("data-frpart"), true);
+    });
+    view.addEventListener("keydown", function (e) {
+      var keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+      var move = keys[e.key];
+      var from = e.target && e.target.closest ? e.target.closest("[data-frpart]") : null;
+      if (!move || !from) return;
+      var all = Array.prototype.slice.call(from.parentNode.querySelectorAll("[data-frpart]"));
+      var at = all.indexOf(from);
+      e.preventDefault();
+      var next = move === "first" ? all[0] : move === "last" ? all[all.length - 1] : all[(at + move + all.length) % all.length];
+      next.focus();
+      frShowPart(next.getAttribute("data-frpart"), true);
+    });
     view.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
@@ -18003,6 +18621,17 @@
     el("evSaveBtn").addEventListener("click", evSave);
     el("evDelete").addEventListener("click", evDelete);
     el("evSwitchBtn").addEventListener("click", evFlipSwitch);
+    // 2026-11-13: the steps bar. A step's button takes you to that step and puts the focus on it, so the
+    // next Tab is its first field. The step is found by its place among the form's steps.
+    el("evSteps").addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-evstep]") : null;
+      if (!b) return;
+      var step = el("evForm").querySelectorAll("fieldset.ev-step")[Number(b.getAttribute("data-evstep")) - 1];
+      if (!step) return;
+      step.setAttribute("tabindex", "-1");
+      if (step.scrollIntoView) step.scrollIntoView({ block: "start" });
+      step.focus({ preventScroll: true });
+    });
     el("evAdd").addEventListener("click", function () {
       if (!evConfirmLeave()) return;
       evOpenNew();

@@ -36,22 +36,33 @@ describe("door setup", () => {
     expect(d.prizeShowOff).toBe(false);
     expect(d.names).toEqual([]);
     expect(d.clues.map((c) => c.n)).toEqual([1, 2, 3]);
-    expect(readinessOf(d, false)).toMatchObject({ toDo: 6, ready: false });
+    expect(readinessOf(d)).toMatchObject({ toDo: 5, ready: false });
     expect(staffEveningOf(d)).toEqual({ clue1: null, clue2: null, clue3: null, reveal: null });
     expect(doorSeason(2026)).toEqual({ year: 2026, holidayDoors: [], schoolClueTime: "17:30", morningClueTime: "10:00" });
   });
 
-  it("is ready when everything is in", () => {
-    expect(readinessOf(fullDoor(), true)).toMatchObject({ toDo: 0, ready: true });
-    const r = readinessOf(fullDoor(), false);
-    expect(r.toDo).toBe(1);
-    expect(r.items.find((i) => i.key === "picture")?.done).toBe(false);
-    expect(r.items.map((i) => i.key)).toEqual(["place", "prize", "picture", "elf", "clues", "droppedOff"]);
+  // 12 November 2026: every door carries the same present, so no door waits on a picture of its own.
+  it("is ready with its place, prize, elf and tag, three clues and dropped off ticked, and no door picture", () => {
+    const r = readinessOf(fullDoor());
+    expect(r).toMatchObject({ toDo: 0, ready: true });
+    expect(r.items.map((i) => i.key)).toEqual(["place", "prize", "elf", "clues", "droppedOff"]);
+  });
+
+  it("is not ready while any one of them is missing", () => {
+    for (const missing of [{ placeAddress: null }, { prize: null }, { tagWord: "SNOWBALL" }, { droppedOffAt: null }] as Partial<DoorSetup>[]) {
+      expect(readinessOf({ ...fullDoor(), ...missing }), JSON.stringify(missing)).toMatchObject({ toDo: 1, ready: false });
+    }
+  });
+
+  it("has words for everything a door needs, and a door picture is not one of them", () => {
+    expect(Object.keys(READY_WORDS)).toEqual(["place", "prize", "elf", "clues", "droppedOff"]);
+    // The 8am email lists what is left in these words, so every item has some.
+    for (const i of readinessOf(emptyDoor(7, "abc")).items) expect(READY_WORDS[i.key], i.key).toMatch(/^[A-Z]/);
     expect(READY_WORDS.elf).toBe("The elf and its tag");
   });
 
   it("checks each item", () => {
-    const find = (d: DoorSetup, k: string) => readinessOf(d, true).items.find((i) => i.key === k)?.done;
+    const find = (d: DoorSetup, k: string) => readinessOf(d).items.find((i) => i.key === k)?.done;
     expect(find({ ...fullDoor(), placeAddress: null }, "place")).toBe(false);
     expect(find({ ...fullDoor(), tagWord: "SNOWBALL" }, "elf")).toBe(false);
     expect(find({ ...fullDoor(), clues: [{ n: 1, words: "   ", hasPicture: false, pictureAlt: null }, { n: 2, words: "a", hasPicture: false, pictureAlt: null }, { n: 3, words: "b", hasPicture: false, pictureAlt: null }] }, "clues")).toBe(false);
@@ -66,9 +77,8 @@ describe("door setup", () => {
     expect(d.clues[0]).toEqual({ n: 1, words: null, hasPicture: false, pictureAlt: null });
   });
 
-  it("summarises", () => {
-    expect(doorsSummary([{ setup: fullDoor(), hasPicture: true }, { setup: emptyDoor(8, "x"), hasPicture: false }]))
-      .toEqual({ placesAgreed: 1, prizesChosen: 1, ready: 1 });
+  it("summarises, counting a door with everything in as ready", () => {
+    expect(doorsSummary([fullDoor(), emptyDoor(8, "x")])).toEqual({ placesAgreed: 1, prizesChosen: 1, ready: 1 });
   });
 
   it("lists prizes in door order", () => {

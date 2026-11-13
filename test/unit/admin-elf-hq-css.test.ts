@@ -107,6 +107,19 @@ describe("Head Elf HQ's stylesheet", () => {
     expect(wide!.body).toContain("grid-template-columns: minmax(180px, 40%)");
   });
 
+  // Jaimie, 12 November 2026: every door has the same present. Doors shows it as the calendar cuts it out
+  // of the door, so the two must be the very same shape, through a mask the same way.
+  it("draws the present every door has with the calendar's own shape", () => {
+    const shapeIn = (css: string, name: string) => new RegExp(`${name}:\\s*(url\\("data:image\\/svg\\+xml,[^"]+"\\))`).exec(css)?.[1];
+    const calendar = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+    expect(shapeIn(CSS, "--hq-present"), "the admin's present").toBeTruthy();
+    expect(shapeIn(CSS, "--hq-present")).toBe(shapeIn(calendar, "--elf-present"));
+    for (const s of [".hq-door-pic__door", ".hq-present", ".hq-present__hi", ".hq-present__lo"]) {
+      expect(all.some((r) => r.selector.split(",").some((x) => x.trim() === s)), s).toBe(true);
+    }
+    expect(all.find((r) => r.selector.includes(".hq-present__hi"))!.body).toMatch(/(^|;)\s*mask:\s*var\(--hq-present\)/);
+  });
+
   it("draws in NBCC's own colours, with a deep maroon ink rather than black", () => {
     expect(CSS).toContain("--hq-ink: #3A0B0B");
     expect(CSS).toContain("--hq-maroon: #800000");

@@ -249,9 +249,37 @@ export const configSchema = z.object({
   // start, nothing in this process is alive to complain. That gap is covered outside the app, by
   // a CloudWatch alarm on the absence of a success metric (infra/modules/app/backups.tf), because
   // an alert that shares fate with the thing it watches is not an alert.
+
+  // ---- Admin phone notifications (TASK-619) ----
+  // The VAPID key pair that signs a push to a staff phone (RFC 8292). The PUBLIC key also goes to
+  // the browser, which uses it to create the subscription; the PRIVATE one never leaves the task.
+  //
+  // Empty by default, and deliberately NOT required in production: Terraform creates both SSM
+  // parameters holding REPLACE_ME and the real pair is pasted in out of band afterwards. Were they
+  // required, the very merge that ships this feature could not deploy. With them empty the sweep
+  // never starts (see pushIsConfigured) and nothing else in the app notices.
+  //
+  // There is no third value for the RFC's contact address: vapidSubject() below derives it from
+  // ADMIN_NOTIFICATION_EMAIL, which is already the inbox for operational notices.
+  VAPID_PUBLIC_KEY: z.string().default(""),
+  VAPID_PRIVATE_KEY: z.string().default(""),
 });
 
 export type Config = z.infer<typeof configSchema>;
+
+// Whether admin phone notifications can run at all. Both keys must be real: Terraform seeds the
+// SSM parameters with REPLACE_ME so the task can start before anyone has pasted the pair in, and
+// treating that placeholder as a key would start the minute-by-minute sweep and fail every send.
+export function pushIsConfigured(c: Pick<Config, "VAPID_PUBLIC_KEY" | "VAPID_PRIVATE_KEY">): boolean {
+  const real = (v: string) => v.trim().length > 0 && v.trim() !== "REPLACE_ME";
+  return real(c.VAPID_PUBLIC_KEY) && real(c.VAPID_PRIVATE_KEY);
+}
+
+// The contact a push service may use if our sends misbehave (RFC 8292 "sub"). Reuses the inbox
+// that already receives operational notices rather than adding a config value of its own.
+export function vapidSubject(c: Pick<Config, "ADMIN_NOTIFICATION_EMAIL">): string {
+  return `mailto:${c.ADMIN_NOTIFICATION_EMAIL}`;
+}
 
 // Rules that only the production web server needs, applied where it starts (src/index.ts), so the
 // scheduled jobs that load the same config never depend on them. Kept out of configSchema itself so

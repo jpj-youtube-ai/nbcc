@@ -94,7 +94,14 @@ jobs:
       - name: Create contact database
         run: PGPASSWORD=app psql -h localhost -U app -d charity -c 'CREATE DATABASE contact'
       - run: npm run migrate:contact
-      - run: npm run test:unit
+      # 4 GB of heap per test worker rather than Node's default of about 2 GB. The admin screen
+      # tests each run a fresh copy of the 19,000-line admin script in jsdom, several hundred MB a
+      # file, and in TASK-621 three workers ran out at 2 GB and the run failed with 872 of 875 files
+      # passed. The runner has 16 GB for its handful of workers.
+      - name: Unit tests
+        run: npm run test:unit
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
       - name: Start app + BDD against it
         run: |
           node dist/index.js & APP_PID=$!

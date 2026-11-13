@@ -12,9 +12,17 @@ describe("the words for each waiting item", () => {
     expect(needsLines({ transfersOverdue: { count: 2 } })[0].text).toBe("2 bank transfers are overdue");
   });
 
+  // Jaimie, 13 Nov 2026: the old "ready to claim Gift Aid on (£480.50 of giving)" read oddly.
   it("gives the money where there is some to collect", () => {
     expect(needsLines({ giftAidReady: { count: 12, pence: 48_050 } })[0].text).toBe(
-      "12 donations are ready to claim Gift Aid on (£480.50 of giving)",
+      "12 donations are ready for a Gift Aid claim, £480.50 given in all",
+    );
+    expect(needsLines({ giftAidReady: { count: 1, pence: 2_500 } })[0].text).toBe(
+      "1 donation is ready for a Gift Aid claim, £25.00 given",
+    );
+    // The card draws the count large, then these words.
+    expect(needsLines({ giftAidReady: { count: 12, pence: 48_050 } })[0].words).toBe(
+      "donations are ready for a Gift Aid claim, £480.50 given in all",
     );
   });
 
@@ -62,5 +70,30 @@ describe("which items show, and in what order", () => {
     expect(new Set(keys).size).toBe(keys.length);
     const views = ["ball", "monthly", "claims", "email-audit", "fundraising", "contact", "stories", "fulfilments", "outreach", "thank-you", "gasds"];
     for (const n of NEEDS) expect(views, n.key).toContain(n.view);
+  });
+});
+
+// The figure apart from its words, so the Overview can draw the count large at the front of a card,
+// the way Donations leads with the amount (2026-11-12 redesign). The sentence is kept as it was.
+describe("each line's count and words, apart", () => {
+  it("gives the count and the words apart, as well as the sentence", () => {
+    const [line] = needsLines({ contactWaiting: { count: 3 } });
+    expect(line.count).toBe(3);
+    expect(line.words).toBe("contact messages are waiting for a reply");
+    expect(line.text).toBe(`3 ${line.words}`);
+  });
+
+  it("keeps the money with the words, not with the count", () => {
+    const [line] = needsLines({ giftAidReady: { count: 12, pence: 48_050 } });
+    expect(line.count).toBe(12);
+    expect(line.words).toContain("£480.50");
+    expect(line.text).toBe(`12 ${line.words}`);
+  });
+
+  it("does it for every kind of line", () => {
+    for (const need of NEEDS) {
+      const [line] = needsLines({ [need.key]: { count: 2 } } as NeedCounts);
+      expect(line.text, need.key).toBe(`${line.count} ${line.words}`);
+    }
   });
 });

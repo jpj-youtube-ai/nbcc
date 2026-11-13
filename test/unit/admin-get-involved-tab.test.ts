@@ -632,7 +632,10 @@ describe("who sees which section", () => {
 
 describe("every old way in still lands in the right place", () => {
   beforeEach(() => boot(true));
-  const ovButtons = () => qa("#view-overview [data-ov-view]");
+  // The Overview's cards and coming-up lines (2026-11-12): each is its own button, so the screen it
+  // opens is the card's .ov-need__where, or a coming-up line's hidden ", opens …" words.
+  const ovButtons = () => qa("#view-overview [data-ov-view]:not(.ov-see-all)");
+  const where = (b: Element) => text(b.querySelector(".ov-need__where, .sr-only")).replace(/^, opens /, "");
 
   it("an Overview button for fundraising opens Get involved at Sign ups", async () => {
     overview = {
@@ -641,7 +644,7 @@ describe("every old way in still lands in the right place", () => {
     };
     await signIn();
     const b = ovButtons()[0];
-    expect(text(b)).toBe("Get involved");
+    expect(where(b)).toBe("Get involved");
     b.click();
     await settle();
     expect(el("view-get-involved").hidden).toBe(false);
@@ -679,7 +682,7 @@ describe("every old way in still lands in the right place", () => {
     };
     await signIn();
     const b = ovButtons()[0];
-    expect(text(b)).toBe("Get involved");
+    expect(where(b)).toBe("Get involved");
     b.click();
     await settle();
     expect(shownSections()).toEqual(["events"]);
@@ -692,7 +695,7 @@ describe("every old way in still lands in the right place", () => {
       needs: [{ level: 1, text: "A claim is ready", view: "claims", button: "Claims" }, { level: 2, text: "Ball", view: "ball", button: "Festive Ball" }],
     };
     await signIn();
-    expect(ovButtons().map((b) => text(b))).toEqual(["Claims", "Festive Ball"]);
+    expect(ovButtons().map((b) => where(b))).toEqual(["Claims", "Festive Ball"]);
     ovButtons()[1].click();
     await settle();
     expect(el("view-ball").hidden).toBe(false);

@@ -175,6 +175,9 @@ describe("the Overview's line", () => {
       key: "redBag",
       title: "Fill a Red Bag",
       headline: "£412 from 19 gifts this month",
+      // The headline's figure apart from its words, for the Overview's tile (2026-11-12, splitHeadline).
+      figure: "£412",
+      rest: "from 19 gifts this month",
       detail: "Donate page: £2,130 from 64 gifts this month.",
       view: "donations",
       button: "Donations",

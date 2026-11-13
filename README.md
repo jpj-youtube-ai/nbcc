@@ -4679,8 +4679,10 @@ Stories and Newsletter) for the public enquiry form (`contact.html`), backed ent
 stories DB; see **Configuration** and the migration walkthrough below). Reads are **Viewer+**:
 `GET /api/admin/contact` lists enquiries newest-first (optional `?status=new|replied`),
 `GET /api/admin/contact/:id` returns one enquiry in full. The list table shows Received
-(`formatReceived`), Name, Email, a Status badge and an ~80-character message snippet; opening a row
-shows the full message (line breaks preserved) and, once replied, a **"Replied by `<email>` ·
+(`formatReceived`), Name, Email, a Status badge and an ~80-character message snippet (since
+2026-11-12 these are cards under day headings, each opening where it is: see
+[The Overview, the Contact form and the phone menu](#the-overview-the-contact-form-and-the-phone-menu-in-the-donations-look-2026-11-12));
+opening a row shows the full message (line breaks preserved) and, once replied, a **"Replied by `<email>` ·
 `<when>`"** line. Writes are **Editor+** (the server enforces regardless of what the UI hides, via
 `H.roleCan`): **Reply in Gmail** opens a prefilled Gmail compose tab
 (`buildGmailReplyUrl`/`formatReceived`, `assets/js/gmail-reply.js` — pure, unit-tested in
@@ -6850,6 +6852,7 @@ your previous visit carry the same pill for as long as you stay.
 | Newsletter | somebody signed up on the website (not imports or staff additions) | on "Added", for website sign-ups |
 | Events | only when there is a new feature (below) | none |
 | Analytics (TASK-482) | only when there is a new feature (below): page views are not news | none |
+| Elf Detective School | a photo is waiting to be checked. The mark can clear without you opening it: once a colleague checks the photo it stops counting for everyone | none |
 
 **The rules** are in `src/admin/whats-new.ts`, tested in `test/unit/whats-new.test.ts`:
 - **You only see pills on sections you can open.** Each section uses the same permission as its
@@ -6890,6 +6893,78 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
+## The admin as a phone app, with notifications (TASK-619)
+
+The admin can be pinned to a phone's home screen as its own app, and will then push a notification
+whenever something new arrives. It is the SAME "new" as the New pills above — the same areas, the
+same per-person cursor, the same permission filtering — so the phone and the screen never disagree.
+Design: `docs/superpowers/specs/2026-11-12-admin-phone-app-design.md`.
+
+**Installing it.** On the phone, open the admin, press Share, then Add to Home Screen. The icon is
+the NBCC logo on maroon, named "NBCC Admin", and it opens in its own window rather than a Safari
+tab (`assets/admin-icons/admin.webmanifest`, `display: "standalone"`). That is not cosmetic: **iOS
+delivers a push only to a home-screen web app, never to a browser tab.** The still-open pull
+request #699 sets the SITE manifest to `display: "browser"`, which is right for the public pages
+and would silently disable all of this if the admin shared it, which is why the admin carries a
+manifest of its own.
+
+Regenerate the icons with `node scripts/make-admin-icons.mjs`. They are flattened onto opaque
+maroon and stripped of their alpha channel, because iOS fills a transparent icon with black.
+
+**Turning notifications on.** Admin > Notifications, from the icon (not a tab), then Allow. iOS
+asks **once and only once**: somebody who taps Don't Allow has to delete the icon and add it back
+to be asked again, which is why the screen warns about that above the button rather than below it.
+Each person and each phone is separate.
+
+**What buzzes.** Everything that would raise a New pill, with one deliberate exception noted
+below: donations, monthly givers, Get involved
+sign-ups, contact messages, Festive Ball bookings, business supporters, stories and newsletter
+sign-ups, and Elf Detective School's photos waiting to be checked (the `elf` area, for whoever can
+open Head Elf HQ: "A photo is waiting to be checked", never a family, a child, a detective or a place;
+tapping it opens Head Elf HQ at Finds; it has its own switch under Monitor > Notifications and a New
+mark beside Elf Detective School in the menu, cleared by opening Head Elf HQ; photos from the practice
+door count too). Nothing a staff member does in the admin ever buzzes anyone — which costs one
+divergence from the pills: a Festive Ball bank transfer that staff tick as received sets `paid_at`
+like any payment, so the notification query alone also requires `marked_paid_by IS NULL`. The pill
+still appears; only the interruption is suppressed. It is the single place where the phone and the
+screen differ, and it is in `DETAILS` in `src/db/whats-new.ts` with the reason beside it. Notifications carry the
+amount and the source but **never a name** — a phone on a table at an event shows its lock screen
+to the room — so "£25 donation — card reader", not who gave it.
+
+By default there is one buzz per arrival, with no quiet hours, which is what the charity asked
+for. Two switches on the same screen calm it down (group them; stay quiet between two times), both
+off, and either way anything held back still shows as a New pill. One exception is not optional:
+**more than 20 arrivals in a single sweep collapse into one "N new things"**, because a CSV import
+or a webhook replay would otherwise fire hundreds.
+
+**Sessions.** The pinned app stays signed in for **30 days**, against 8 hours in a browser tab,
+and keeps its token in `localStorage` rather than `sessionStorage`. Without both, iOS evicting a
+backgrounded app would mean a 2am notification opening onto a password box instead of the donation.
+
+**Config.** `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, both SSM parameters created holding
+`REPLACE_ME` and pasted in out of band (the generation recipe is in `.env.example`). They are
+deliberately NOT required in production: until both are real, `pushIsConfigured()` is false, the
+sweep never starts, and nothing else notices. There is no third value for the RFC 8292 contact —
+`vapidSubject()` derives it from `ADMIN_NOTIFICATION_EMAIL`.
+
+**How it is built.** There is no `web-push` dependency and there cannot be (the npm registry is
+blocked on the owner's machine), so `src/admin/web-push.ts` implements RFC 8291, RFC 8188 and
+RFC 8292 on `node:crypto`, pinned in its tests to the RFCs' own published intermediate values.
+`src/admin/notify-runner.ts` sweeps every 60 seconds from `src/index.ts` — never from
+`createApp()`, so no test run sends a real notification. It **claims the window before it reads
+it**: one statement moves each (person, area) cursor in `admin_notified` to now and hands back the
+previous value, and the arrivals are then read from the window between the two. Claiming
+afterwards — the obvious way round — does not work, because two sweeps overlapping during a deploy
+both read from the same old cursor and the later one claims a higher timestamp, so both succeed
+and both send. The cursor is carried as text, not as a Date: Postgres keeps microseconds,
+JavaScript Dates hold milliseconds and truncate, and a cursor rounded down lands before the row it
+came from, which re-sends that row on every later sweep for ever.
+
+**Tests:** `test/unit/web-push-crypto.test.ts` (the RFC vectors and every guard),
+`admin-notify.test.ts` (the burst cap, the switches, quiet hours), `admin-push-model.test.ts`,
+`admin-session-installed.test.ts`, `admin-sw.test.ts`, `admin-notifications-screen.test.ts`,
+`admin-app-install.test.ts`, and `features/admin-app-install.feature`.
+
 ## The admin Overview: Needs you (TASK-508), How we are doing (TASK-509) and Coming up (TASK-510)
 
 The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent
@@ -6901,7 +6976,8 @@ numbers, one line each, and **Coming up** the next 14 days. The design is in
   1. **Money or overdue** (crimson):
      - bank transfers overdue;
      - monthly gifts failing to take;
-     - Gift Aid ready to claim, with the amount;
+     - Gift Aid ready to claim, with the amount given ("12 donations are ready for a Gift Aid claim,
+       £480.50 given in all", reworded 13 Nov 2026 from "ready to claim Gift Aid on (£x of giving)");
      - emails that failed or bounced in 2 weeks;
      - fundraisers with buckets or tins due back.
   2. **Waiting on a reply** (gold):
@@ -7064,6 +7140,86 @@ billboard or a business card, so staff can see which ones work. The design is in
   is numbered below 310, which the open Elf Detective School pull request has taken: right while
   this merges first. Production refuses a migration that sorts before one it has already run, so
   if that one lands first, this is renumbered above it before merging.
+
+## The Overview, the Contact form and the phone menu in the Donations look (2026-11-12)
+
+Jaimie loved how Donations and Elf Detective School look and work on a phone, and asked for the
+Overview and the Contact form to match, and for the menu and navigation bars to stop being "all over
+the place" on a phone. Design: `docs/superpowers/specs/2026-11-12-overview-contact-phone-menu-design.md`;
+plan: `docs/superpowers/plans/2026-11-12-overview-contact-phone-menu.md`. It is a change of look and
+layout only: what each screen says and does, and every test pinning it, is as before.
+
+- **One stylesheet**, `assets/css/admin-overview.css`, after `admin.css`, with the Donations tokens
+  copied by value (`--ov-*`). Overview rules are all scoped `#view-overview …` (the Festive Ball's
+  list shares the `ov-` names, and a test holds the scoping); Contact rules `#view-contact …`; the
+  phone menu and bottom bar are `pm-`. The old Overview rules in `admin.css` are retired.
+- **Overview.** Each Needs you line is a card that is its own button: the count large at the front,
+  the words beside it, the screen it opens beneath, grouped Urgent / Waiting on you / Coming due. The
+  server now sends each line's `count` and `words` (`src/admin/overview.ts`) and each number's
+  `figure` and `rest` (`splitHeadline`, `src/admin/overview-numbers.ts`); an older server's plain
+  sentence still reads whole. How we are doing is tiles; Coming up is cards under day headings; the
+  latest gifts are drawn the way the Donations log draws them, each opening the donor (or the elf
+  family). On a laptop, two columns from 1000px.
+- **Contact form.** Messages are cards under day headings and open in place, one at a time, with the
+  same Reply in Gmail / Mark as replied / Archive buttons; the separate detail screen is gone. One
+  fetch brings every message, so the All / Waiting / Replied tiles show their counts and filter at
+  once. Only the card's summary is the opener, so pressing a button inside an open message never
+  redraws it.
+- **The phone menu (below 860px).** One pinned maroon bar: the logo, "NBCC Admin" and Menu. The tall
+  top bar is hidden; who is signed in, My account and Sign out sit at the foot of the open menu
+  (`.pm-me`, whose buttons press the top bar's own). The open menu is the same groups and screens in
+  the same order, as a two-column grid of tiles; the one you are on is pressed in maroon. Closed, it
+  is still hidden with `visibility`, never `display:none` (TASK-443). The laptop banner is untouched.
+- **The bar along the bottom (below 860px).** Overview, Donations, Get involved, Contact and
+  Everything (which presses Menu). `syncTabBar()` in `app.js` makes each tab copy its menu link:
+  hidden with it (the same permission gate), a crimson dot when it has a New pill, `aria-current`
+  when it is where you are. It sits inside `#appView`, so the sign-in screen never shows it; the app
+  has 84px plus the iPhone's home bar of room beneath its last thing, so the bar never covers it;
+  and it steps aside while you type.
+
+Tests: `admin-overview-screen`, `admin-contact-screen`, `admin-phone-menu` and `admin-bottom-bar`
+(`test/unit/`), with `admin-overview`, `admin-overview-numbers`, `admin-app`, `admin-red-bag`,
+`admin-get-involved-tab` and `admin-screen-styles` updated for the new markup and stylesheet.
+
+CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 4 GB of heap
+(`NODE_OPTIONS=--max-old-space-size=4096`). With these screen tests added, three workers ran out at
+Node's default of about 2 GB and the run failed with 872 of 875 files passed.
+
+## Admin > Get involved, laid out so someone new can find their way (2026-11-13)
+
+Jaimie: the tab, and a sign up once opened, was "one big long scrolling list with lots of boxes and
+lots of buttons". A layout change only: no information added or taken away, nothing on the server,
+no button does anything different. Design: `docs/superpowers/specs/2026-11-13-get-involved-refresh-design.md`;
+styles in `assets/css/admin-get-involved.css` (loaded after `admin-overview.css`, using its `--ov-`
+colours); tests in `test/unit/admin-get-involved-parts.test.ts`.
+
+- **An open sign up shows one part at a time.** Its boxes, unchanged, are grouped into six parts behind
+  a bar at its top (`.fr-parts`, buttons `[data-frpart]` with `aria-pressed`, parts
+  `[data-frpart-body]`): **At a glance** (where it is up to, changes to check, taking it off Get
+  involved), **Keeping in touch** (calls, keeping in touch, requests, welcome pack), **Their page**
+  (its photo, news, the organiser's photos, the supporter wall, thank yous to supporters, the team, in
+  memory), **Money** (money raised, cash paid in, sharing with another cause), **Their details** (what
+  they told us, the organiser, what they would like, sport and the T-shirt, change the details) and
+  **History**. Each part opens with one sentence saying what it is for. It opens on At a glance, keeps
+  the part you are in through every save, and goes back to At a glance when another sign up opens
+  (`frPart`, `frShowPart`). A part with something waiting has a crimson dot (", needs you" to a screen
+  reader), worked out from the same marks the row's pills use (`frPartsWaiting`). Arrow keys, Home and
+  End move along the bar. On a laptop the bar is pinned under the menu (top 60px, as the Festive
+  Ball's sections bar), so the sign up list's box no longer clips sideways (`#frList` overflow visible;
+  the table is laid out to its width); on a phone it is three by two (two by two below 420px) and not
+  pinned, and pressing one takes you back up to the bar. Every part is drawn every time, hidden or not,
+  so whatever fills a box later still finds it. An opened sign up went from about 5,400px tall to
+  about 1,300px on a laptop.
+- **Approve** and **Mark finished** each say under them what pressing them does (`.fr-action-says`).
+- Every message shows in the part its button is in: the supporter wall has its own status line
+  (`frWallStatus`, notice key `wall`), and the in memory envelopes report in the In memory box.
+- **The Sign ups filters are in three labelled groups** (`#frFilter`): **Needs you**, as tiles with the
+  count large, the name and a line saying what it means (New, Calls due, Requests to do, Buckets not
+  back, Packs to send; a tile at 0 steps back, `.is-none`); **Show** (All, Approved, Finished,
+  Declined); and **What kind** (`#frKindFilter`). They filter exactly as before.
+- **The event editor has a bar of its eight steps** (`#evSteps`, `[data-evstep]`) above the form; each
+  takes you to that step and puts the focus on it. Every step stays in the page, as the form is saved
+  as a whole.
 
 ## Invoices for donations (Admin > Giving > Invoices)
 
@@ -8839,6 +8995,8 @@ its routes and its permissions. The **Festive Ball** tab is untouched.
 admin's own segmented control, `#giSections`; real buttons with `aria-pressed`; arrow keys, Home and
 End move along them; on a phone the row wraps onto two lines, and nothing scrolls sideways or
 inside a box). Each starts with one line saying what it is for.
+Since 2026-11-13 an opened sign up shows one part at a time and the Sign ups filters are in labelled
+groups: see **Admin > Get involved, laid out so someone new can find their way (2026-11-13)**.
 
 | Section | What is in it | Permission section |
 |---|---|---|
@@ -12082,13 +12240,19 @@ preview link stay admins only, whoever holds the section.
   (its name, town, address, who to ring there and when it closes), the prize, the elf's name and its tag
   word, the three clues and the times they come out, and ticks for dropped off and thanked. Each door shows
   what it still needs; HQ's tile counts the doors not ready that are still to come, and Needs you names the next one and how
-  much is left to do. **Paste all the clues** takes every clue at once: a line `Door 7:` starts a door
+  much is left to do. **Every door has the same present (12 November 2026).** Jaimie: "just make a standard
+  present on them". So a door is ready without a picture of its own: its place, its prize, its elf and tag, its
+  three clues and dropped off ticked (`readinessOf` and `READY_WORDS` in `src/elf/door-setup.ts`, the same for
+  the worker's 8am email, the December's doors switch's check on door 1 and HQ's counts). The door's sheet
+  shows the present beside the prize, cut out of card on the doors' maroon as the calendar draws it, with
+  "Every door has the same present." (`DOOR_PICTURES` and `doorPicture` stay in the code, empty.)
+  **Paste all the clues** takes every clue at once: a line `Door 7:` starts a door
   (anything after the number is a note and is ignored), then `Clue 1:`, `Clue 2:` and `Clue 3:` each
   start a clue, and the lines under one run on as part of it. Capitals, Windows line endings and a stray
   mark at the start of the file make no difference, and nothing is saved until the head elf has seen
   what it found. The prints are each door's poster, staff card and elf tag, and the list of places and
   prizes. The poster, staff card and elf tag open as pages for head elves, never cached or indexed; the
-  prize list is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
+  prize list (every door's prize, one line a door) is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
   saved after clue 1 is out. Once a door's first clue is out, its times and tag word are locked. Nothing in Doors is ever seen by families.
   **Christmas Eve in the morning (TASK-613).** A door's clue 1 starts at 5:30pm on a school day and
   10am at a weekend or on a weekday marked a holiday (`dayKind` and `defaultClueTime`,
@@ -12099,7 +12263,8 @@ preview link stay admins only, whoever holds the section.
   close early. Staff can change any of them." The rules end their clue times sentence "...and at
   10am, 10:30am and 11am at weekends, in the holidays and on Christmas Eve." The calendar's first step
   says "It comes out after school on school days, and in the morning at weekends, in the holidays and
-  on Christmas Eve." Both say so with December's doors off too, the one change to wave 1's words.
+  on Christmas Eve." Both say so with December's doors off too, one of two changes to wave 1's words (the
+  other is a shut door's line, under **Switched off means wave 1** below).
 - **Finds** (after Doors, its count the photos waiting): the photo check, the photo log, and Tonight and
   before, who found each door and when (see **Photos, alerts, emails, the worker and Finds** below).
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every
@@ -12183,7 +12348,11 @@ teaser, no door picture, no snow and no progress; Detective HQ has no today's ca
 only to door 1's first clue, as wave 1's did. Nothing a family reads differs from wave 1: the
 calendar's How it works and today's door keep wave 1's words (`view.doorsOn` picks them), and so does
 the rules page's line on who wins what ("Each family can win one elf."; with the doors on, decision 1's
-and C6's words: the finder wins that door's prize, the elf stays there, one prize a family). Every game
+and C6's words: the finder wins that door's prize, the elf stays there, one prize a family). One line
+changed for both, with the standard present (12 November 2026): a shut door's detail used to say "Look at
+the shape cut out of the door. Can you guess the prize?", and every door now has the same present, so it
+says "Every door has a prize for the first detective to find its elf. Can you guess what it is?"
+(`CARVING_LINE` in `src/elf/pages/door.ts`), with the doors off too. Every game
 route answers 404. A practice browser (the preview cookie) also gets door 0, never a real door.
 
 **The public calendar** is built at most once every 15 seconds and shared by everyone
@@ -12290,6 +12459,12 @@ only, never the number). The rules (`photoAlertDue`):
 - a find is told by email only, to the same people (C7);
 - neither alert shows the photo or the family's name, and following a link changes nothing;
 - a text that Amazon refuses never stops the email, and Settings > Alerts names whose text did not go.
+
+Head elves with the NBCC Admin app also get the app's own notification for each waiting photo, on top of
+the text and the email. It is separate and free, and it follows none of the rules above: it sends one for
+every photo, at any hour unless that person has set quiet hours, and each person can switch it off in
+Monitor > Notifications. It changes nothing about the text or the email (see **What buzzes** under the
+admin phone app).
 
 **Send me a test alert** sends the caller the test email and, when they have a mobile and texts are
 tried, the test text, and says which went. Texts go only once they are switched on in production
@@ -12620,10 +12795,12 @@ board itself widens (`.elf-advent` is a size container, and `@container` sets `-
 door stays about 135 to 235 pixels wide. Each door is a maroon card door on a hinge with a little
 paper pull tab, its number printed large in cream and its chip beside it. Door 23 is two doors wide
 and door 24 is the big double doors, a row of their own, so the doors fill every row at every width.
-A shut door is bright, with its day on a paper chip and the prize's shape (or the mystery star) cut
-out of card; today's door, and the one being hunted, glow gold with the painted bow; an open door
+A shut door is bright, with its day on a paper chip and a present cut out of card: every door has the
+same present (12 November 2026), a one colour shape in the stylesheet (`--elf-present` in
+`assets/css/elf.css`, the carving's default), so no door waits on a picture of its own, and a snow day
+has a snowflake cut out the same way. Today's door, and the one being hunted, glow gold with the painted bow; an open door
 (found or revealed) stands open on its hinge, swung almost flat, with the finder's picture filling the
-door (or the prize's shape in gold), swinging open only for a visitor happy with motion. The page's script gives a signed in family's done doors (cracked or visited) the painted holly
+door (or the present in gold), swinging open only for a visitor happy with motion. The page's script gives a signed in family's done doors (cracked or visited) the painted holly
 (`is-done`) beside their marks. A door's detail is a note taped across the board; the countdown at the
 top is on a candy cane strip.
 

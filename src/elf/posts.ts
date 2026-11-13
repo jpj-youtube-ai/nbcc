@@ -53,7 +53,8 @@ export function yesterdayPost(o: {
   return `Door ${o.door} is open! Nobody has found ${elf} yet, so the first detective to find it still wins the prize.${missed}`;
 }
 
-/** The committed picture for a door's post, on the site's own address, or null for the mystery star. */
+/** The committed picture for a door's post, on the site's own address, or null when the door has none
+ *  of its own. None has: every door has the same present, so a post goes without a picture. */
 export function postPicture(year: number, door: Door, siteOrigin: string): string | null {
   const path = doorPicture(year, door);
   return path === null ? null : `${siteOrigin.replace(/\/+$/, "")}${path.startsWith("/") ? "" : "/"}${path}`;

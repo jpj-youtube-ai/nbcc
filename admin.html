@@ -18,6 +18,7 @@
     <!-- The Overview, the Contact form, and the menu and bottom bar on a phone, in the Donations look
          (2026-11-12). After admin.css so it wins on order alone, with no !important. -->
     <link rel="stylesheet" href="/assets/css/admin-overview.css" />
+    <link rel="stylesheet" href="/assets/css/admin-get-involved.css" />
     <!-- Admin > Giving > Donations, the gift log: its own stylesheet (.gl-) and script, which draws
          the cards app.js asks for, so it loads before app.js. -->
     <link rel="stylesheet" href="/assets/css/admin-donations.css" />
@@ -1440,6 +1441,18 @@
                 </div>
 
                 <form class="ev-form" id="evForm" novalidate>
+                  <!-- 2026-11-13: the eight steps, each a button that takes you to it. Every step stays
+                       in the page, as the form is saved as a whole (app.js, evWire). -->
+                  <nav class="ev-steps" id="evSteps" aria-label="Steps of this form">
+                    <button class="ev-step-jump" type="button" data-evstep="1"><b aria-hidden="true">1</b>The basics</button>
+                    <button class="ev-step-jump" type="button" data-evstep="2"><b aria-hidden="true">2</b>When</button>
+                    <button class="ev-step-jump" type="button" data-evstep="3"><b aria-hidden="true">3</b>Where</button>
+                    <button class="ev-step-jump" type="button" data-evstep="4"><b aria-hidden="true">4</b>Picture</button>
+                    <button class="ev-step-jump" type="button" data-evstep="5"><b aria-hidden="true">5</b>Tickets and booking</button>
+                    <button class="ev-step-jump" type="button" data-evstep="6"><b aria-hidden="true">6</b>The back of the card</button>
+                    <button class="ev-step-jump" type="button" data-evstep="7"><b aria-hidden="true">7</b>Who&rsquo;s running it</button>
+                    <button class="ev-step-jump" type="button" data-evstep="8"><b aria-hidden="true">8</b>On the website</button>
+                  </nav>
                   <fieldset class="ev-step">
                     <legend><span>1</span>The basics</legend>
                     <div class="ev-f">
@@ -1708,30 +1721,40 @@
                    "Show all" grows the page. -->
               <div id="view-fundraising" hidden>
                 <div class="gi-part" data-gi-part="signups" role="group" aria-label="Sign ups" hidden>
-                  <!-- What kind of sign up: one list, filtered. app.js counts each kind and draws the same words
-                       on a large pill on every row. It works alongside the status filter under it. -->
-                  <div class="fr-bar fr-bar--kind">
-                    <div class="admin-segmented" id="frKindFilter" role="group" aria-label="Which kind of sign up to list">
-                      <button class="admin-seg is-active" type="button" data-frkind="" aria-pressed="true">All (<span data-frkindcount="all">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="raising" aria-pressed="false">Raising money (<span data-frkindcount="raising">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">A team (<span data-frkindcount="team">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Hosting an event (<span data-frkindcount="event">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="memory" aria-pressed="false">In memory (<span data-frkindcount="memory">0</span>)</button>
+                  <!-- 2026-11-13: the filters in three labelled groups. Needs you first, as tiles in the
+                       Donations look, each with a line saying what it means; then which to show; then
+                       what kind. They filter exactly as before (frRenderList): one status, one kind. -->
+                  <div class="fr-filters" id="frFilter">
+                    <div class="fr-filter-group">
+                      <h3 class="fr-filter-label" id="frNeedsLabel">Needs you</h3>
+                      <div class="fr-tiles" role="group" aria-labelledby="frNeedsLabel">
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="new" aria-pressed="false"><span class="fr-tile__n" data-frcount="new">0</span><span class="fr-tile__name">New</span><span class="fr-tile__says">Waiting for a yes or no</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="calls" aria-pressed="false"><span class="fr-tile__n" data-frcount="calls">0</span><span class="fr-tile__name">Calls due</span><span class="fr-tile__says">Time to give them a ring</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="requests" aria-pressed="false"><span class="fr-tile__n" data-frcount="requests">0</span><span class="fr-tile__name">Requests to do</span><span class="fr-tile__says">Things they asked us for</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="notback" aria-pressed="false"><span class="fr-tile__n" data-frcount="notback">0</span><span class="fr-tile__name">Buckets not back</span><span class="fr-tile__says">Collection buckets or tins still out</span></button>
+                        <button class="admin-seg fr-tile" type="button" data-frfilter="packs" aria-pressed="false"><span class="fr-tile__n" data-frcount="packs">0</span><span class="fr-tile__name">Packs to send</span><span class="fr-tile__says">Welcome packs to post</span></button>
+                      </div>
+                    </div>
+                    <div class="fr-filter-group">
+                      <h3 class="fr-filter-label" id="frShowLabel">Show</h3>
+                      <div class="admin-segmented" role="group" aria-labelledby="frShowLabel">
+                        <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
+                      </div>
+                    </div>
+                    <div class="fr-filter-group">
+                      <h3 class="fr-filter-label" id="frKindLabel">What kind</h3>
+                      <div class="admin-segmented" id="frKindFilter" role="group" aria-label="Which kind of sign up to list">
+                        <button class="admin-seg is-active" type="button" data-frkind="" aria-pressed="true">All (<span data-frkindcount="all">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="raising" aria-pressed="false">Raising money (<span data-frkindcount="raising">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">A team (<span data-frkindcount="team">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Hosting an event (<span data-frkindcount="event">0</span>)</button>
+                        <button class="admin-seg" type="button" data-frkind="memory" aria-pressed="false">In memory (<span data-frkindcount="memory">0</span>)</button>
+                      </div>
                     </div>
                   </div>
-              <div class="fr-bar">
-                <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
-                  <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="new" aria-pressed="false">New (<span data-frcount="new">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="calls" aria-pressed="false">Calls due (<span data-frcount="calls">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="requests" aria-pressed="false">Requests to do (<span data-frcount="requests">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="notback" aria-pressed="false">Buckets not back (<span data-frcount="notback">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="packs" aria-pressed="false">Packs to send (<span data-frcount="packs">0</span>)</button>
-                </div>
-              </div>
               <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live
                    region would read it all out again (TASK-465). Each action speaks through its own
                    status line inside the sign up. -->

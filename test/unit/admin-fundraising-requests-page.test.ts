@@ -279,8 +279,9 @@ describe("the list", () => {
     await openFundraising();
     const todo = q('[data-frfilter="requests"]') as HTMLElement;
     const notBack = q('[data-frfilter="notback"]') as HTMLElement;
-    expect(text(todo)).toBe("Requests to do (1)");
-    expect(text(notBack)).toBe("Buckets not back (2)");
+    // Needs you tiles (2026-11-13): the count, the name, and what it means.
+    expect([text(todo.querySelector(".fr-tile__n")!), text(todo.querySelector(".fr-tile__name")!)]).toEqual(["1", "Requests to do"]);
+    expect([text(notBack.querySelector(".fr-tile__n")!), text(notBack.querySelector(".fr-tile__name")!)]).toEqual(["2", "Buckets not back"]);
     todo.click();
     await settle();
     expect(row(1)).not.toBeNull();

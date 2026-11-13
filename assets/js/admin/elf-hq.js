@@ -3014,8 +3014,8 @@
     // have closed, so a picture never changes under the judge, and marking another moves the mark. The
     // website announces nothing: NBCC rings the winner's grown up. The part's pieces are named .hq-gp, since
     // .hq-prize is the Doors prize part's.
-    var prize = { box: null, answer: null, error: null, seq: 0, picSeq: 0, pictures: {}, made: [], marking: false };
-    var PRIZE_PART_PATH = "/api/admin/elf/grand-prize";
+    var gp = { box: null, answer: null, error: null, seq: 0, picSeq: 0, pictures: {}, made: [], marking: false };
+    var GP_PATH = "/api/admin/elf/grand-prize";
     var GP_WORDS = {
       heading: "Grand prize",
       intro: "Every picture sent in for the grand prize, in the order they came in. Only head elves see them.",
@@ -3041,23 +3041,23 @@
 
     /** Lets go of every picture's Blob address, and of any picture still on its way. */
     function clearEntryPictures() {
-      prize.picSeq++;
+      gp.picSeq++;
       if (win.URL && typeof win.URL.revokeObjectURL === "function") {
-        prize.made.forEach(function (url) {
+        gp.made.forEach(function (url) {
           win.URL.revokeObjectURL(url);
         });
       }
-      prize.made = [];
-      prize.pictures = {};
+      gp.made = [];
+      gp.pictures = {};
     }
 
     /** An entry's picture as a Blob address: fetched with the token once for each read of the part, and
      *  shared by every drawing of its card until the part is read again. */
     function entryPicture(id) {
-      if (!prize.pictures[id]) {
-        var mine = prize.picSeq;
-        prize.pictures[id] = win
-          .fetch(PRIZE_PART_PATH + "/" + id + "/picture", { headers: { Authorization: "Bearer " + token() } })
+      if (!gp.pictures[id]) {
+        var mine = gp.picSeq;
+        gp.pictures[id] = win
+          .fetch(GP_PATH + "/" + id + "/picture", { headers: { Authorization: "Bearer " + token() } })
           .then(function (res) {
             if (!res.ok || typeof res.blob !== "function") throw new Error("not found");
             return res.blob();
@@ -3065,19 +3065,19 @@
           .then(function (blob) {
             if (!win.URL || typeof win.URL.createObjectURL !== "function") throw new Error("no blob addresses");
             var url = win.URL.createObjectURL(blob);
-            if (mine !== prize.picSeq) {
+            if (mine !== gp.picSeq) {
               if (typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
               throw new Error("read again");
             }
-            prize.made.push(url);
+            gp.made.push(url);
             return url;
           });
       }
-      return prize.pictures[id];
+      return gp.pictures[id];
     }
 
     function showEntryPicture(e, img, wait) {
-      var mine = prize.picSeq;
+      var mine = gp.picSeq;
       entryPicture(e.id).then(
         function (url) {
           img.setAttribute("src", url);
@@ -3085,51 +3085,51 @@
           wait.hidden = true;
         },
         function () {
-          if (mine === prize.picSeq) wait.textContent = GP_WORDS.noPicture;
+          if (mine === gp.picSeq) wait.textContent = GP_WORDS.noPicture;
         },
       );
     }
 
     function loadPrizeEntries() {
       buildPrize();
-      var mine = ++prize.seq;
-      return ask("GET", PRIZE_PART_PATH)
+      var mine = ++gp.seq;
+      return ask("GET", GP_PATH)
         .then(function (d) {
-          if (mine !== prize.seq) return;
+          if (mine !== gp.seq) return;
           clearEntryPictures();
-          prize.answer = entriesAnswerOf(d);
-          prize.error = prize.answer ? null : WORDS.didNotWork;
-          if (prize.answer) prizeCount(prize.answer.entries.length);
+          gp.answer = entriesAnswerOf(d);
+          gp.error = gp.answer ? null : WORDS.didNotWork;
+          if (gp.answer) prizeCount(gp.answer.entries.length);
           drawPrize();
         })
         .catch(function (e) {
-          if (mine !== prize.seq) return;
+          if (mine !== gp.seq) return;
           clearEntryPictures();
-          prize.answer = null;
-          prize.error = e.message;
+          gp.answer = null;
+          gp.error = e.message;
           drawPrize();
         });
     }
 
     function buildPrize() {
-      if (prize.box) return;
+      if (gp.box) return;
       parts.prize.textContent = "";
-      prize.box = el("section", { class: "hq-panel hq-gp", "aria-label": GP_WORDS.heading }, [
+      gp.box = el("section", { class: "hq-panel hq-gp", "aria-label": GP_WORDS.heading }, [
         el("h2", { class: "hq-h2", text: GP_WORDS.heading }),
         el("p", { class: "hq-loading", text: WORDS.loading }),
       ]);
-      parts.prize.appendChild(prize.box);
+      parts.prize.appendChild(gp.box);
     }
 
     function drawPrize() {
-      var box = prize.box;
-      var p = prize.answer;
+      var box = gp.box;
+      var p = gp.answer;
       box.textContent = "";
       box.appendChild(el("h2", { class: "hq-h2", text: GP_WORDS.heading }));
       box.appendChild(el("p", { class: "hq-words hq-soft", text: GP_WORDS.intro }));
       if (!p) {
         var failed = el("p", { class: "hq-status", role: "status" });
-        say(failed, prize.error || WORDS.didNotWork, false);
+        say(failed, gp.error || WORDS.didNotWork, false);
         box.appendChild(failed);
         return;
       }
@@ -3185,24 +3185,24 @@
      *  another head elf's marking at the same moment, says the server's sentence on this card as an error and
      *  gives the buttons back. */
     function markPrizeWinner(e, button, said) {
-      if (prize.marking) return;
-      prize.marking = true;
-      prize.seq++; // a read already on its way is older than this marking, so it never draws over it
-      var held = Array.prototype.slice.call(prize.box.querySelectorAll(".hq-gp-entry button"));
+      if (gp.marking) return;
+      gp.marking = true;
+      gp.seq++; // a read already on its way is older than this marking, so it never draws over it
+      var held = Array.prototype.slice.call(gp.box.querySelectorAll(".hq-gp-entry button"));
       held.forEach(function (b) {
         b.disabled = true;
       });
       say(said, "", null);
-      ask("POST", PRIZE_PART_PATH + "/" + e.id + "/winner")
+      ask("POST", GP_PATH + "/" + e.id + "/winner")
         .then(function (d) {
           var p = entriesAnswerOf(d);
           if (!p) throw new Error(WORDS.didNotWork);
-          prize.marking = false;
-          prize.answer = p;
-          prize.error = null;
+          gp.marking = false;
+          gp.answer = p;
+          gp.error = null;
           prizeCount(p.entries.length);
           drawPrize();
-          var now = prize.box.querySelector('.hq-gp-entry[data-entry="' + e.id + '"] .hq-status');
+          var now = gp.box.querySelector('.hq-gp-entry[data-entry="' + e.id + '"] .hq-status');
           if (now) {
             say(now, GP_WORDS.marked, true);
             now.setAttribute("tabindex", "-1");
@@ -3210,7 +3210,7 @@
           }
         })
         .catch(function (err) {
-          prize.marking = false;
+          gp.marking = false;
           held.forEach(function (b) {
             b.disabled = false;
           });

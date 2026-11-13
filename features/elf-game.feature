@@ -196,6 +196,9 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     When the family "first.game.elf.bdd@example.com" opens "/api/elf/me/door/7"
     Then the game answers 200
     And the family's own door says "The Example Bakehouse"
+    When the family "first.game.elf.bdd@example.com" opens "/api/elf/me/doors"
+    Then the game answers 200
+    And the family's own doors are door 7 alone, and it says "The Example Bakehouse"
     And door 2 on the calendar says "got snowed in"
     And door 2 was snowed in automatically
     When the family "first.game.elf.bdd@example.com" opens "/api/elf/me"

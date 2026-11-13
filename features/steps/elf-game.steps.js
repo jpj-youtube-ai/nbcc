@@ -666,6 +666,19 @@ Then("the family's own door says {string}", function (words) {
   assert.ok(doorSaid(this).includes(words), `the family's own door does not say "${words}": ${sentence(this)}`);
 });
 
+// Every door of the family's own in one answer (/api/elf/me/doors), which the calendar's script draws when the
+// page loads: each door's number, tile and detail, with every door's photos read in one query.
+Then("the family's own doors are door {int} alone, and it says {string}", function (door, words) {
+  assert.equal(this.gameStatus, 200, sentence(this));
+  const doors = (this.gameBody && this.gameBody.doors) || [];
+  assert.deepEqual(
+    doors.map((d) => d.door),
+    [door],
+    sentence(this),
+  );
+  assert.ok(`${doors[0].tile || ""}${doors[0].detail || ""}`.includes(words), `the family's own door ${door} does not say "${words}": ${sentence(this)}`);
+});
+
 Then("door {int}'s scrapbook shows {string} first, then {string}", async function (door, first, then) {
   await asFamily(this, null, "GET", `/api/elf/door/${door}`);
   const detail = String((this.gameBody && this.gameBody.detail) || "");

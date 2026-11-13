@@ -566,6 +566,25 @@ export async function doorPhotos(year: number, door: number): Promise<ScrapPhoto
   return photos.rows.map((p) => ({ token: p.token, url: `/elf/door/${door}/photo/${p.token}.jpg` }));
 }
 
+/** The shown photos (SHOWN_PHOTO_SQL) of each of the doors asked for, read in one query, by door, each with
+ *  its address: for a family's own doors, all drawn in one answer (Plan 2c-1). A door with none has an empty
+ *  list; no doors read nothing. Only for someone who may see every one of those doors' places. */
+export async function doorsPhotos(year: number, doors: readonly number[]): Promise<Map<number, ScrapPhoto[]>> {
+  const out = new Map<number, ScrapPhoto[]>(doors.map((d) => [d, []]));
+  if (doors.length === 0) return out;
+  const photos = await pool.query<{ door: number; token: string }>(
+    `SELECT p.door, p.token FROM elf_photos p
+       JOIN elf_families f ON f.id = p.family_id
+      WHERE p.year = $1 AND p.door = ANY($2::int[]) AND ${SHOWN_PHOTO_SQL}`,
+    [year, [...doors]],
+  );
+  for (const p of photos.rows) {
+    const door = Number(p.door);
+    out.get(door)?.push({ token: p.token, url: `/elf/door/${door}/photo/${p.token}.jpg` });
+  }
+  return out;
+}
+
 /** A door's scrapbook: the elves that count by `now`, and its shown photos only `withPhotos` (a photo can
  *  show the inside of the place), in the scrapbook's order. */
 export async function doorScrapbook(year: number, door: number, now: Date, withPhotos: boolean): Promise<Scrapbook> {

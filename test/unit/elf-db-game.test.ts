@@ -21,6 +21,7 @@ import {
   cluePicture,
   doorCounts,
   doorPhotos,
+  doorsPhotos,
   doorScrapbook,
   familyDoorsDone,
   familyGuesses,
@@ -976,6 +977,37 @@ describe("doorPhotos", () => {
     expect(sql).toContain("deleted_at IS NULL");
     expect(sql).toContain("removed_at IS NULL");
     expect(query.mock.calls[0][1]).toEqual([2026, 7]);
+  });
+});
+
+// Plan 2c-1, Task 8 (the rulings, from Task 5's report): the calendar's script draws every door a family can see
+// from one answer, so the photos of all those doors are read in one query, never one a door.
+describe("doorsPhotos", () => {
+  it("reads the shown photos of every door asked for in one query, by the two families rule, each by its door with its address", async () => {
+    query.mockResolvedValueOnce({ rows: [{ door: 7, token: "zzzzzzzzzzzz" }, { door: 3, token: "bbbbbbbbbbbb" }, { door: 7, token: "aaaaaaaaaaaa" }] });
+    const photos = await doorsPhotos(2026, [3, 5, 7]);
+    expect(query).toHaveBeenCalledTimes(1);
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain("FROM elf_photos");
+    expect(sql).toContain("p.door = ANY($2::int[])");
+    expect(sql).toContain("p.status = 'approved'");
+    expect(sql).toContain(">= 2");
+    expect(sql).toContain("NOT EXISTS");
+    expect(sql).toContain("deleted_at IS NULL");
+    expect(sql).toContain("removed_at IS NULL");
+    expect(query.mock.calls[0][1]).toEqual([2026, [3, 5, 7]]);
+    expect([...photos.keys()]).toEqual([3, 5, 7]);
+    expect(photos.get(3)).toEqual([{ token: "bbbbbbbbbbbb", url: "/elf/door/3/photo/bbbbbbbbbbbb.jpg" }]);
+    expect(photos.get(5)).toEqual([]);
+    expect(photos.get(7)).toEqual([
+      { token: "zzzzzzzzzzzz", url: "/elf/door/7/photo/zzzzzzzzzzzz.jpg" },
+      { token: "aaaaaaaaaaaa", url: "/elf/door/7/photo/aaaaaaaaaaaa.jpg" },
+    ]);
+  });
+
+  it("reads nothing for no doors", async () => {
+    expect((await doorsPhotos(2026, [])).size).toBe(0);
+    expect(query).not.toHaveBeenCalled();
   });
 });
 

@@ -39,6 +39,7 @@ const game = vi.hoisted(() => ({
   // can see its place, and a go. Mocked here so no route runs the real ones against the pool's mock.
   familyKnowledge: vi.fn(),
   doorPhotos: vi.fn(),
+  doorsPhotos: vi.fn(),
   saveLateGuess: vi.fn(),
 }));
 const png = vi.hoisted(() => ({ elfPng: vi.fn(), elfPngKey: vi.fn() }));
@@ -157,6 +158,7 @@ const gameCalls = () =>
     game.familyVisits,
     game.familyKnowledge,
     game.doorPhotos,
+    game.doorsPhotos,
   ].reduce((n, f) => n + f.mock.calls.length, 0);
 
 let server: Server;
@@ -283,6 +285,7 @@ describe("with December's doors switched off, at 6:10pm on 7 December", () => {
     ["GET", "/elf/door/7/elf/5.png"],
     ["GET", "/elf/hq/clue/7/1.jpg"],
     ["GET", "/api/elf/me/door/7"],
+    ["GET", "/api/elf/me/doors"],
   ];
 
   it.each(GAME_ROUTES)("%s %s answers 404 to a family", async (method, path, ask) => {

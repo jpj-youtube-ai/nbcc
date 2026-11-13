@@ -29,6 +29,7 @@ const game = vi.hoisted(() => ({
   doorCounts: vi.fn(),
   doorScrapbook: vi.fn(),
   doorPhotos: vi.fn(),
+  doorsPhotos: vi.fn(),
   approvedPhoto: vi.fn(),
   saveLateGuess: vi.fn(),
   saveGuess: vi.fn(),
@@ -116,6 +117,8 @@ beforeEach(() => {
   game.doorCounts.mockResolvedValue(COUNTS);
   game.doorScrapbook.mockResolvedValue(BOOK);
   game.doorPhotos.mockResolvedValue([PHOTO]);
+  // The photos of every door asked for, in one read: door 7 has the one photo.
+  game.doorsPhotos.mockImplementation(async (_year: number, asked: number[]) => new Map(asked.map((d) => [d, d === 7 ? [PHOTO] : []])));
   game.approvedPhoto.mockResolvedValue({ mime: "image/jpeg", bytes: Buffer.from("the photo") });
   game.saveLateGuess.mockResolvedValue("saved");
   game.saveGuess.mockResolvedValue(true);
@@ -350,6 +353,133 @@ describe("a family's own door", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
     const r = await call("GET", "/api/elf/me/door/7");
+    expect(r.status).toBe(500);
+    expect(r.data).toEqual({ error: WORDS });
+    const lines = JSON.stringify(logged.mock.calls);
+    expect(lines).toContain("connection lost");
+    expect(lines).not.toContain("Example Bakehouse");
+    logged.mockRestore();
+  });
+});
+
+// ---- every door a family can see, in one answer (Task 8) -----------------------------------------
+//
+// The rulings on Plan 2c-1, from Task 5's report: the calendar's script draws the doors a family can see from
+// one private answer holding all of them, with every door's photos read in one query, never one request a door.
+
+describe("a family's own doors, all in one answer", () => {
+  const mine = (cookie?: string | null) => call("GET", "/api/elf/me/doors", { cookie });
+  /** Doors 3 and 6, found on their days, are open beside door 7: doors 1, 2, 4 and 5 were snowed in. */
+  const withDoors3And6 = () => doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 4, 5]), door3(), door6(), foundDoor7()]);
+  const doorNumbers = (data: Record<string, unknown>) => (data.doors as { door: number }[]).map((d) => d.door);
+
+  it("come in door order, each drawn exactly as the family's own door is, with every door's photos read in one query, never kept", async () => {
+    withDoors3And6();
+    // A guess on the night at door 7, and a detective's visit to door 3: the family cannot see door 6's place.
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7], typed: [3] }));
+    const r = await mine();
+    expect(r.status).toBe(200);
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(doorNumbers(r.data)).toEqual([3, 7]);
+    const [three, seven] = r.data.doors as { door: number; tile: string; detail: string }[];
+    expect(three.detail).toContain("The Old Example Mill");
+    expect(seven.detail).toContain("The Example Bakehouse");
+    expect(seven.detail).toContain(PHOTO.url);
+    expect(r.text).not.toContain("The Example Mill");
+    expect(game.familyKnowledge).toHaveBeenCalledTimes(1);
+    expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+    expect(game.doorsPhotos).toHaveBeenCalledTimes(1);
+    expect(game.doorsPhotos).toHaveBeenCalledWith(2026, [3, 7]);
+    // Nothing is read a door at a time.
+    expect(game.doorPhotos).not.toHaveBeenCalled();
+    expect(doors.getElfDoor).not.toHaveBeenCalled();
+    // Door 7 is drawn exactly as its own route draws it.
+    const one = await call("GET", "/api/elf/me/door/7");
+    expect(seven).toEqual({ door: 7, ...one.data });
+  });
+
+  it("are none for a family that can see no door's place, and no photo is read", async () => {
+    const r = await mine();
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ doors: [] });
+    expect(r.text).not.toContain("Example Bakehouse");
+    expect(game.doorsPhotos).not.toHaveBeenCalled();
+  });
+
+  it("ask someone signed out to sign in, and read nothing of the family's", async () => {
+    const r = await mine(null);
+    expect(r.status).toBe(401);
+    expect(r.data).toEqual({ error: "Not signed in" });
+    expect(r.headers.get("cache-control")).toBe("private, no-store");
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+    expect(game.doorsPhotos).not.toHaveBeenCalled();
+  });
+
+  it("leave out door 7 while its place is still hidden, at 6:10pm, even for the family that found its elf and guessed, and nothing more is read", async () => {
+    vi.setSystemTime(SIX_10);
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7], typed: [7] }));
+    const r = await mine();
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ doors: [] });
+    expect(r.text).not.toContain("Example Bakehouse");
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+    expect(game.doorsPhotos).not.toHaveBeenCalled();
+  });
+
+  it("leave out an open door with no place, and read no photo for it", async () => {
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 3, 4, 5, 6]), foundDoor7({ placeName: "  ", placeTown: null })]);
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    const r = await mine();
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ doors: [] });
+    expect(game.familyKnowledge).toHaveBeenCalled();
+    expect(game.doorsPhotos).not.toHaveBeenCalled();
+  });
+
+  it("are not found with December's doors off, even for a browser playing the practice door", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    expect((await mine()).status).toBe(404);
+    practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
+    const practising = await mine(PRACTICE_PASS);
+    expect(practising.status).toBe(404);
+    expect(practising.data).toEqual({ error: "Not found" });
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+    expect(game.doorsPhotos).not.toHaveBeenCalled();
+  });
+
+  it("draw every open door from midnight as Christmas Day begins until 1 January, as the family's own door does, without reading what it has done", async () => {
+    const moments: [Date, number[]][] = [
+      [at("2026-12-24T23:59:59.000Z"), []],
+      [at("2026-12-25T00:00:00.000Z"), [7]],
+      [at("2026-12-31T23:59:59.000Z"), [7]],
+      [at("2027-01-01T00:00:00.000Z"), []],
+    ];
+    for (const [now, shown] of moments) {
+      vi.setSystemTime(now);
+      resetPublicCalendar();
+      game.familyKnowledge.mockClear();
+      const r = await mine();
+      expect(r.status, now.toISOString()).toBe(200);
+      expect(r.headers.get("cache-control"), now.toISOString()).toBe("private, no-store");
+      expect(doorNumbers(r.data), now.toISOString()).toEqual(shown);
+      expect(game.familyKnowledge.mock.calls.length, now.toISOString()).toBe(shown.length > 0 ? 0 : 1);
+    }
+  });
+
+  it("put nothing of the family's into the calendar everyone shares", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    expect(String((await mine()).text)).toContain("The Example Bakehouse");
+    const r = await call("GET", "/api/elf/door/7", { cookie: null });
+    expect(r.status).toBe(200);
+    expect(r.text).not.toContain("Example Bakehouse");
+    expect(r.text).not.toContain(PHOTO.url);
+  });
+
+  it("answer 500 with the game's words when what the family has done cannot be read, and log no place", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    const r = await mine();
     expect(r.status).toBe(500);
     expect(r.data).toEqual({ error: WORDS });
     const lines = JSON.stringify(logged.mock.calls);

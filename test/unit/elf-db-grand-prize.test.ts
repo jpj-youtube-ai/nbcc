@@ -340,8 +340,9 @@ describe("markWinner", () => {
 // December an entry's picture came in for, the worker's tick deletes the entry, and its picture goes with it
 // (elf_grand_prize_files is ON DELETE CASCADE), the winner's mark too. The December is worked out from when the picture
 // came in, by the rule a practice photo's clear out uses (decemberOf), never from the entry's year: BDD plays last
-// year's December, and a picture sent today belongs to the coming December, so a ticking worker never deletes it in
-// the middle of a scenario.
+// year's December, and a picture sent today is never past its clear out (sent in January before the 31st it belongs to
+// the December just gone, otherwise to the coming one), so a ticking worker deletes it in the middle of a scenario only
+// if that scenario runs across midnight as 31 January begins.
 describe("deleteExpiredGrandPrizeEntries", () => {
   const READ = /^SELECT id, sent_at FROM elf_grand_prize_entries$/;
   const DELETE = /^DELETE FROM elf_grand_prize_entries WHERE id = ANY\(\$1::int\[\]\) RETURNING id$/;
@@ -383,7 +384,7 @@ describe("deleteExpiredGrandPrizeEntries", () => {
   });
 
   it("goes by when the picture came in, never by the entry's year", async () => {
-    // As BDD plays it: an entry for a December long over (last year's), sent today, belongs to the coming December.
+    // As BDD plays it: an entry for a December long over (last year's), sent in November, belongs to the coming December.
     held([{ id: 23, year: 2025, sent_at: at("2026-11-13T12:00:00Z") }]);
     expect(await deleteExpiredGrandPrizeEntries(at("2027-01-30T12:00:00Z"))).toBe(0);
     expect(sent(/^DELETE/)).toBe(false);

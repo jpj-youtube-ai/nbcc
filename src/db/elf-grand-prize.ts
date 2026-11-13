@@ -233,10 +233,11 @@ export async function markWinner(year: number, id: number, actor: string): Promi
  *  ("it is deleted at the end of January"): its picture goes with it (elf_grand_prize_files is ON DELETE CASCADE, and
  *  is never in the backups, so deleted means gone), and so does the winner's mark. The December is worked out from
  *  sent_at by the rule a practice photo's clear out uses (decemberOf, src/elf/calendar.ts), never from the entry's
- *  year: in production an entry is sent on Christmas Eve of its year, so the answer is the same, and in BDD, played
- *  in last year's December, a picture sent today belongs to the coming December, so a ticking worker never deletes it
- *  in the middle of a scenario. One transaction. Answers how many were deleted. Idempotent: it runs on every worker
- *  tick. */
+ *  year: in production an entry is sent on Christmas Eve of its year, so the answer is the same. In BDD, played in
+ *  last year's December, a picture sent today is never past its clear out: sent in January before the 31st it belongs
+ *  to the December just gone, whose clear out begins on 31 January, and sent on any other day to the coming December.
+ *  So a ticking worker deletes it in the middle of a scenario only if that scenario runs across midnight as 31 January
+ *  begins. One transaction. Answers how many were deleted. Idempotent: it runs on every worker tick. */
 export async function deleteExpiredGrandPrizeEntries(now: Date): Promise<number> {
   return inTransaction(async (client) => {
     const found = await client.query<{ id: number; sent_at: Date }>("SELECT id, sent_at FROM elf_grand_prize_entries");

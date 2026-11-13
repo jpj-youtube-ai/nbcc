@@ -12564,9 +12564,11 @@ photo alert; last, the clear outs: the photos', then the grand prize entries'.
   after the December an entry's picture came in for, the entry is deleted in one transaction, and its picture
   goes with it (`elf_grand_prize_files` is `ON DELETE CASCADE`), the winner's mark too. Its December is worked
   out from its `sent_at` by the practice photos' rule, never from its `year`: in production an entry is sent on
-  Christmas Eve of its year, so the answer is the same, and in BDD, played in last year's December, a picture
-  sent today belongs to the coming December, so the worker ticking on the real clock never deletes it in the
-  middle of a scenario.
+  Christmas Eve of its year, so the answer is the same. In BDD, played in last year's December, a picture sent
+  today is never past its clear out: sent in January before the 31st it belongs to the December just gone, whose
+  clear out begins on 31 January, and sent on any other day to the coming December. So the worker ticking on the
+  real clock deletes it in the middle of a scenario only if that scenario runs across midnight as 31 January
+  begins.
 - **The tick hook.** `POST /api/admin/elf/worker/tick { at }` (section `elf`: edit) runs one tick at the
   moment given, outside production only (404 in production, for anyone). It is how the BDD plays a tick
   at midday, so quiet hours never bite; the claims keep it and the task's own timer from sending
@@ -12853,7 +12855,8 @@ whatever the drawing before was still waiting to fetch. The tile
 counts the pictures in (`grandPrizeEntries` in `/api/admin/elf/hq`, from `countEntries`; a screen reader hears
 "Grand prize, 3 pictures"). Anyone with the `elf` section can look; edit marks the winner. The winner can be
 marked only once the entries have closed (409 before). A head elf waiting with the part open sees the buttons
-appear by themselves: while the close is less than a day away (a browser fires a longer wait at once), the
+appear by themselves: while the close is less than a day away (a browser fires a wait of more than about 24
+days at once, so none is set for a close further off than a day), the
 part reads itself again two seconds after the close by the browser's clock, and again every two seconds for
 half a minute should the server still say open; drawing the part again or leaving its tile ends the wait, so
 waits never pile up. Marking another moves the mark: one winner a year
@@ -12905,12 +12908,13 @@ the link, **Watch the graduates' video**, only while December's doors are on.
   image had none, so the Dockerfile's first `apt-get install` gains `fontconfig` (how sharp finds a font) and
   `fonts-dejavu-core` (DejaVu Sans and Serif). Two checks in `pr.yml`'s image job prove it in the built image:
   `fc-match sans-serif` must answer DejaVu, and `src/scripts/check-share-card.ts` (run there as `node
-  dist/scripts/check-share-card.js`) draws the name line of four cards, the widest and the longest names the
-  rules allow among them (a ticked first name of 20 letters, all m and w, with Merrymittens; and one of 20
-  characters, 43 in all), through the real `shareCardSvg` and sharp, and fails unless each name's ink ends
-  before x 1173, inside the card's frame. The card's `fit` weighs each character for DejaVu Serif Bold's wider
-  letters, as a share of the font size: m and w 1.1, M and W 1.25, other capitals 0.8, everything else 0.64
-  (an accented letter as its plain one), and sets the name at the biggest size whose weighed letters fit the 620
+  dist/scripts/check-share-card.js`) draws the name line of six cards, the widest and the longest names the
+  rules let through among them (ticked first names of 20 letters, all m and w, or all œ, with Merrymittens; one
+  of 20 characters, 43 in all; and one of 20 in capitals), through the real `shareCardSvg` and sharp, and fails
+  unless each name's ink ends before x 1173, inside the card's frame. The card's `fit` weighs each character for
+  DejaVu Serif Bold's wider letters, as a share of the font size: m, w, æ and œ 1.1; M, W, Æ and Œ 1.25; other
+  capitals 0.8; everything else 0.64 (an accented letter as its plain one), and sets the name at the biggest
+  size whose weighed letters fit the 620
   units beside the elf, never below 16. The job keeps the cards it drew as the run's `share-cards` artifact.
 - `GET /elf/hq/video` (`GRADUATE_VIDEO_PATH`): Detective HQ links only to this site, so the video's button is
   this address, which sends a signed in family with a graduate on (303) to the https link saved in Settings

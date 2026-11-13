@@ -145,10 +145,11 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
 
   # The end of January clear out, as the entry page promises: from 31 January after the December its picture came in
   # for, the elf worker's tick deletes an entry, and its picture with it. Played in last year's December, whose doors
-  # are over. A picture sent today belongs to the coming December, so it is kept whenever this runs, and the worker
-  # ticking on the real clock never deletes it mid scenario; one a step moves to two years ago, by SQL from the
-  # database's own clock, is always past its clear out. The worker is then run at midday today, so no step compares
-  # the real clock with a date written here.
+  # are over. A picture sent today is never past its clear out (sent in January before the 31st it belongs to the
+  # December just gone, otherwise to the coming one), so it is kept whenever this runs, and the worker ticking on the
+  # real clock deletes it mid scenario only if this runs across midnight as 31 January begins; one a step moves to two
+  # years ago, by SQL from the database's own clock, is always past its clear out. The worker is then run at midday
+  # today, so no step compares the real clock with a date written here.
   Scenario: The elf worker deletes a grand prize entry and its picture from the end of January after its December
     Given the school's year is last year, whose December is over
     And "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" has opened the doors list

@@ -16,8 +16,11 @@ sentence in parts 1 to 9, that sentence is struck through, has no box, and says 
 Part 11 adds Christmas Eve and the grand prize (Plan 2c-2): the picture each graduate can send in on
 Christmas Eve, the Grand prize part of Head Elf HQ where head elves mark the winner, the week before's
 lines in the clue email, a graduate's certificate, share card and video, and a way for a family to stop
-the emails that are not essential. Its sentences are taken from the code as it is on 13 November 2026,
-and a sentence it replaces is struck through in the same way.
+the emails that are not essential. Its sentences are taken from the code as it is on 13 November 2026.
+Part 11 replaces one line in parts 1 to 9, All emails' line for the first clue email in part 7, which is
+struck through there in the same way. It strikes nothing in part 10: where it changes what one of part 10's
+sentences says on door 24 (its latest time, now 4pm), part 11 gives that sentence again with the change in
+brackets after it.
 
 How to read it:
 
@@ -957,7 +960,7 @@ this case later in Detective HQ, with one guess." (see question M below).
 
 ### Detective HQ: the grand prize *(doors on)*
 
-Straight after today's case, from midnight as Christmas Eve begins until 1 January. Detective HQ now reads,
+Straight after today's case, from midnight as Christmas Eve begins until 1 January, or the closing if later. Detective HQ now reads,
 top to bottom: today's case, The grand prize, Doors you can still crack, Your detectives, Your marks and
 Your emails.
 

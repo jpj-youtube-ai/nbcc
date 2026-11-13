@@ -237,10 +237,13 @@ const postCard = (post: string, picture: string | null): string =>
       `</td></tr>`,
   );
 
-/** The 8am email to head elves: the day's door, yesterday's find, photos waiting and the two posts. */
+/** The 8am email to head elves: the day's door, yesterday's find, photos waiting and the two posts. A door that
+ *  is not ready becomes a snow day only when it cannot open as it stands (`canRun`: canRun in
+ *  src/db/elf-game.ts, without its place, a usable word on its tag or its first clue, it is snowed in at its
+ *  first clue); anything else it still needs is only a to do. */
 export function buildElfMorningEmail(o: {
   day: Date;
-  today: { door: Door; ready: boolean; toDo: string[]; clue1At: Date; snow: boolean } | null;
+  today: { door: Door; ready: boolean; toDo: string[]; clue1At: Date; snow: boolean; canRun: boolean } | null;
   yesterday: { door: Door; finders: DetectiveNameParts[]; foundAt: Date | null; place: { name: string; town: string } | null; state: DoorState; snow: boolean } | null;
   photosWaiting: number;
   posts: { today: string | null; yesterday: string | null };
@@ -255,7 +258,8 @@ export function buildElfMorningEmail(o: {
       ? `Door ${t.door} is a snow day.`
       : t.ready
         ? `Door ${t.door} is ready. The first clue comes out at ${clockWords(t.clue1At)}.`
-        : `Door ${t.door} is NOT ready: ${t.toDo.join(", ")}. Fix it in Doors before ${clockWords(t.clue1At)}, or it becomes a snow day.`;
+        : `Door ${t.door} is NOT ready: ${t.toDo.join(", ")}. Fix it in Doors before ${clockWords(t.clue1At)}.` +
+          (t.canRun === true ? "" : " Without its place, the word on its tag or its first clue, it becomes a snow day.");
   const y = o.yesterday;
   const yesterdayLine = !y
     ? null

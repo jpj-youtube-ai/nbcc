@@ -507,7 +507,9 @@ describe("the morning email, at 8am on 7 December", () => {
     expect(mails.map((m) => m.to)).toEqual(["alex@example.org", "jo@example.org"]);
     const text = mails[0].text;
     expect(mails[0].subject).toBe("Elf HQ: Monday 7 December");
-    expect(text).toContain("Door 7 is NOT ready: the door picture. Fix it in Doors before 5:30pm, or it becomes a snow day.");
+    // Door 7 has its place, the word on its tag and its first clue, so it opens: what it still needs is a to do.
+    expect(text).toContain("Door 7 is NOT ready: the door picture. Fix it in Doors before 5:30pm.");
+    expect(text).not.toContain("becomes a snow day");
     expect(text).toContain("Detective R. Tinselfoot found door 6's elf at 10:20am.");
     expect(text).toContain("3 photos waiting to be checked");
     expect(text).toContain("Door 7 of NBCC Elf Detective School opens tonight!");
@@ -518,6 +520,15 @@ describe("the morning email, at 8am on 7 December", () => {
     expect(text).not.toContain("The Example Mill");
     expect(deps.finderParts).toHaveBeenCalledWith(2026, 6);
     expect(deps.markSent).toHaveBeenCalledWith("morning", "2026-12-07");
+  });
+
+  // From the present PR's review: only a door that cannot open is snowed in at its first clue (canRun).
+  it("says today's door becomes a snow day only when it cannot open as it stands", async () => {
+    const { sent, tick } = morning({ listDoors: vi.fn(async () => [door7Setup({ tagWord: null })]) });
+    await tick(EIGHT);
+    expect(sentOf(sent, "morning")[0].text).toContain(
+      "Door 7 is NOT ready: the door picture, the elf and its tag. Fix it in Doors before 5:30pm. Without its place, the word on its tag or its first clue, it becomes a snow day.",
+    );
   });
 
   it("calls a snowed in door a snow day, today and yesterday, with no post for either", async () => {

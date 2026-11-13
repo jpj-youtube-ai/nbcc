@@ -1,6 +1,6 @@
 import { config } from "../config";
 import { familyWithDetectives, getElfSettings } from "../db/elf";
-import { familyDoorsDone, finderOf, finderParts, loadDoorRuns, markAutomaticSnowDays, type DoorRun, type Finder } from "../db/elf-game";
+import { canRun, familyDoorsDone, finderOf, finderParts, loadDoorRuns, markAutomaticSnowDays, type DoorRun, type Finder } from "../db/elf-game";
 import { listElfDoors } from "../db/elf-doors";
 import { claimSend, familiesStillToEmail, familiesToSweep, markSendFailed, markSent, type ClueFamily } from "../db/elf-sends";
 import { lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert } from "../db/elf-alerts";
@@ -329,13 +329,16 @@ async function morningEmail(date: string, t: Tick): Promise<BuiltEmail> {
 
   let today: Parameters<typeof buildElfMorningEmail>[0]["today"] = null;
   if (todayDoor !== null && todayRun) {
-    const readiness = readinessOf(await t.setup(todayDoor), doorPicture(t.year, todayDoor) !== null);
+    const setup = await t.setup(todayDoor);
+    const readiness = readinessOf(setup, doorPicture(t.year, todayDoor) !== null);
     today = {
       door: todayDoor,
       ready: readiness.ready,
       toDo: readiness.items.filter((i) => !i.done).map((i) => lowerFirst(READY_WORDS[i.key])),
       clue1At: todayRun.facts.clue1At,
       snow: todayRun.facts.snowDay,
+      // The snow days' own rule (markAutomaticSnowDays), so the email warns of one only when it will come.
+      canRun: canRun(setup),
     };
   }
 

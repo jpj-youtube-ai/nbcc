@@ -109,7 +109,7 @@ const htmlWords = (html: string) => html.replace(/&#39;/g, "'");
 const morning = (o: Partial<Parameters<typeof buildElfMorningEmail>[0]> = {}) =>
   buildElfMorningEmail({
     day: new Date("2026-12-08T08:00:00.000Z"),
-    today: { door: 8, ready: true, toDo: [], clue1At: C1, snow: false },
+    today: { door: 8, ready: true, toDo: [], clue1At: C1, snow: false, canRun: true },
     yesterday: {
       door: 7,
       finders: [{ firstName: "Ruby", surname: "Tinselfoot", approved: false }],
@@ -276,13 +276,25 @@ describe("the morning email", () => {
     expect(e.html).toContain("Yesterday post");
   });
 
-  it("says a door is not ready, and what to fix", () => {
-    const e = morning({ today: { door: 8, ready: false, toDo: ["a clue", "the elf's name"], clue1At: C1, snow: false } });
-    expect(e.text).toContain("Door 8 is NOT ready: a clue, the elf's name. Fix it in Doors before 5:30pm, or it becomes a snow day.");
+  // From the present PR's review: the worker snows in only a door that cannot open (canRun in
+  // src/db/elf-game.ts: no place, no usable word on its tag, or no first clue). Anything else still to do is a
+  // to do, not a snow day.
+  it("says a door is not ready, and what to fix, with no snow day for a door that can still open", () => {
+    const e = morning({ today: { door: 8, ready: false, toDo: ["the prize", "dropped off"], clue1At: C1, snow: false, canRun: true } });
+    expect(e.text).toContain("Door 8 is NOT ready: the prize, dropped off. Fix it in Doors before 5:30pm.");
+    expect(e.text).not.toContain("snow day");
+    expect(e.html).not.toContain("snow day");
+  });
+
+  it("says a door that cannot open becomes a snow day, and what a door needs to open", () => {
+    const e = morning({ today: { door: 8, ready: false, toDo: ["the elf and its tag", "the three clues"], clue1At: C1, snow: false, canRun: false } });
+    expect(e.text).toContain(
+      "Door 8 is NOT ready: the elf and its tag, the three clues. Fix it in Doors before 5:30pm. Without its place, the word on its tag or its first clue, it becomes a snow day.",
+    );
   });
 
   it("says a snow day, and that nobody found an elf", () => {
-    expect(morning({ today: { door: 8, ready: false, toDo: [], clue1At: C1, snow: true } }).text).toContain("Door 8 is a snow day.");
+    expect(morning({ today: { door: 8, ready: false, toDo: [], clue1At: C1, snow: true, canRun: false } }).text).toContain("Door 8 is a snow day.");
     expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "revealed", snow: false } }).text).toContain("Nobody found door 7's elf; its place was shown.");
     expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "snow", snow: true } }).text).toContain("Door 7 was a snow day.");
   });
@@ -380,6 +392,14 @@ describe("their lines in All emails, for staff", () => {
       expect(html, version.id).toContain("you can still crack this case later in Detective HQ, with one guess.");
       expect(html, version.id).not.toContain("is shown at");
     }
+  });
+
+  // From the present PR's review: staff see both of the 8am email's not ready lines.
+  it("show the 8am email's snow day only for a door that cannot open", () => {
+    const render = (id: string) => findEmail("elf-morning")!.versions.find((v) => v.id === id)!.render("https://nbcc.scot").html;
+    expect(render("snow")).toContain("Without its place, the word on its tag or its first clue, it becomes a snow day.");
+    expect(render("todo")).toContain("is NOT ready:");
+    expect(render("todo")).not.toContain("becomes a snow day");
   });
 });
 

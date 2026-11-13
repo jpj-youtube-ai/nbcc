@@ -295,8 +295,15 @@ describe("the morning email", () => {
 
   it("says a snow day, and that nobody found an elf", () => {
     expect(morning({ today: { door: 8, ready: false, toDo: [], clue1At: C1, snow: true, canRun: false } }).text).toContain("Door 8 is a snow day.");
-    expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "revealed", snow: false } }).text).toContain("Nobody found door 7's elf; its place was shown.");
+    expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "revealed", snow: false } }).text).toContain("Nobody found door 7's elf in time.");
     expect(morning({ yesterday: { door: 7, finders: [], foundAt: null, place: null, state: "snow", snow: true } }).text).toContain("Door 7 was a snow day.");
+  });
+
+  // Task 9, fix round 1 (the review's Minor 3): a found elf whose finder cannot be named (the family removed) is
+  // still found, as yesterday's post says, never "Nobody found"; and a place shown is shown only to some families.
+  it("names a finder it cannot read as a detective, never as nobody", () => {
+    expect(morning({ yesterday: { door: 7, finders: [], foundAt: C1, place: null, state: "found", snow: false } }).text).toContain("A detective found door 7's elf at 5:30pm.");
+    expect(morning({ yesterday: { door: 7, finders: [], foundAt: C1, place: null, state: "found-hidden", snow: false } }).text).toContain("A detective found door 7's elf at 5:30pm.");
   });
 
   it("says a find is not public yet when there is no post for it", () => {

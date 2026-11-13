@@ -257,13 +257,14 @@ export function buildElfMorningEmail(o: {
         : `Door ${t.door} is NOT ready: ${t.toDo.join(", ")}. Fix it in Doors before ${clockWords(t.clue1At)}.` +
           (t.canRun === true ? "" : " Without its place, the word on its tag or its first clue, it becomes a snow day.");
   const y = o.yesterday;
+  // A found elf whose finder cannot be named (the family removed) is still found, as yesterday's post says.
   const yesterdayLine = !y
     ? null
     : y.snow || y.state === "snow"
       ? `Door ${y.door} was a snow day.`
-      : y.finders.length > 0 && y.foundAt
-        ? `${detectiveNames(y.finders)} found door ${y.door}'s elf at ${clockWords(y.foundAt)}.`
-        : `Nobody found door ${y.door}'s elf; its place was shown.`;
+      : y.state === "found" || y.state === "found-hidden"
+        ? `${detectiveNames(y.finders) || "A detective"} found door ${y.door}'s elf${y.foundAt ? ` at ${clockWords(y.foundAt)}` : ""}.`
+        : `Nobody found door ${y.door}'s elf in time.`;
   const waiting = `${things(o.photosWaiting, "photo")} waiting to be checked`;
   const NOT_PUBLIC = "Yesterday's find is not public yet, so there is no post for it.";
 

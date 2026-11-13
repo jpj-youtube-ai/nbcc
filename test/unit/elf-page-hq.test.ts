@@ -3,8 +3,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderHqPage } from "../../src/elf/pages/hq";
-import type { HqView, TodayView } from "../../src/elf/pages/types";
-import { at, grandPrize, hqView } from "./elf-fixtures";
+import type { DetectiveView, HqView, TodayView } from "../../src/elf/pages/types";
+import { at, graduateDetective, graduateHqView, grandPrize, hqView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: Detective HQ, a family's own page. Every family, detective, clue and
 // business here is invented (see elf-fixtures.ts).
@@ -611,6 +611,83 @@ describe("the family's detectives", () => {
     expect(words(ruby)).toContain("Graduate");
     expect(words(ruby)).toContain("Gold seal");
     expect(words(ruby)).toContain("All 24 doors done");
+  });
+});
+
+// Plan 2c-2, Task 6: a graduate's certificate to print, share card to save and, once a head elf has set it, the
+// graduates' video, across the foot of their card. Ruby is the graduate (detective 11 in the fixture); Leo has done 23.
+describe("a graduate's card", () => {
+  const cards = (v: HqView) => [...page(v).querySelectorAll(".elf-detective")];
+  const linksOf = (card: Element) => [...card.querySelectorAll(".elf-detective__graduate a")];
+  const withRuby = (over: Partial<DetectiveView>, view: Partial<HqView> = {}): HqView => {
+    const v = graduateHqView(view);
+    v.detectives[0] = graduateDetective(over);
+    return v;
+  };
+
+  it("offers the certificate to print, the share card to save and the graduates' video, in those words", () => {
+    const [ruby] = cards(graduateHqView());
+    const links = linksOf(ruby);
+    expect(links.map(seen)).toEqual(["Print the certificate", "Save the share card", "Watch the graduates' video"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/elf/hq/certificate/11", "/elf/hq/share/11.png", "/elf/hq/video"]);
+    for (const a of links) expect(a.classList.contains("elf-btn"), a.outerHTML).toBe(true);
+  });
+
+  it("saves the share card rather than opening it, and nothing else", () => {
+    const links = linksOf(cards(graduateHqView())[0]);
+    expect(links.map((a) => a.hasAttribute("download"))).toEqual([false, true, false]);
+  });
+
+  it("names the graduate to a screen reader on their certificate and share card, as several graduates can each have them", () => {
+    const links = linksOf(cards(graduateHqView())[0]);
+    expect(links.map(words)).toEqual([
+      "Print the certificate for Detective Ruby Tinselfoot",
+      "Save the share card for Detective Ruby Tinselfoot",
+      "Watch the graduates' video",
+    ]);
+  });
+
+  it("has no video link while no graduates' video is set", () => {
+    const links = linksOf(cards(graduateHqView({ videoUrl: null }))[0]);
+    expect(links.map(seen)).toEqual(["Print the certificate", "Save the share card"]);
+  });
+
+  it("gives a detective who has not done all 24 doors none of them, whatever the view holds", () => {
+    const [, leo] = cards(graduateHqView());
+    expect(leo.querySelector(".elf-detective__graduate")).toBeNull();
+    const stale = withRuby({ graduate: false, rank: "Senior Detective", doorsDone: 23, next: { rank: "Graduate", toGo: 1 } });
+    expect(cards(stale)[0].querySelector(".elf-detective__graduate")).toBeNull();
+    expect(renderHqPage(stale)).not.toContain("/elf/hq/certificate/");
+  });
+
+  it("draws only an address on this site: never one somewhere else", () => {
+    const elsewhere = withRuby({ certificateUrl: "https://elsewhere.example/c", shareUrl: "//elsewhere.example/s.png" }, { videoUrl: "https://example.org/graduates" });
+    expect(cards(elsewhere)[0].querySelector(".elf-detective__graduate")).toBeNull();
+    expect(renderHqPage(elsewhere)).not.toContain("elsewhere");
+    expect(renderHqPage(elsewhere)).not.toContain("example.org/graduates");
+  });
+
+  it("sits across the foot of the card, under the elf and the progress", () => {
+    const ruby = cards(graduateHqView())[0];
+    const row = ruby.querySelector(".elf-detective__graduate")!;
+    expect(row.parentElement).toBe(ruby);
+    expect(ruby.lastElementChild).toBe(row);
+    const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+    expect(css).toMatch(/\.elf-detective \.elf-detective__graduate \{[^}]*grid-column:\s*1 \/ -1/);
+    expect(css).toMatch(/\.elf-detective \.elf-detective__graduate \{[^}]*flex-wrap:\s*wrap/);
+  });
+
+  // With December's doors off the view holds no addresses, so a graduate's card is exactly what it was.
+  it("draws a graduate's card exactly as before when the view holds none of them, so Detective HQ is what it was", () => {
+    const none = withRuby({ certificateUrl: null, shareUrl: null }, { videoUrl: null });
+    // A view from before Plan 2c-2's Task 6, with none of the three fields at all.
+    const older = withRuby({}, {});
+    delete (older.detectives[0] as Partial<DetectiveView>).certificateUrl;
+    delete (older.detectives[0] as Partial<DetectiveView>).shareUrl;
+    delete (older as Partial<HqView>).videoUrl;
+    expect(renderHqPage(none)).toBe(renderHqPage(older));
+    expect(renderHqPage(none)).not.toContain("elf-detective__graduate");
+    expect(words(page(none).querySelector("main"))).not.toMatch(/certificate|share card|video/i);
   });
 });
 

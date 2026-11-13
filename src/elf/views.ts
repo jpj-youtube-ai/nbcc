@@ -55,8 +55,12 @@ function earned(doors: DoorsDone) {
 
 const NO_DOORS: DoorsDone = { cracked: [], visited: [] };
 
-export function detectiveViewFor(d: DetectiveRow, doorsDone: DoorsDone): DetectiveView {
+/** A detective as their own family's screens show them. `doorsOn` is December's doors' switch: only while it is on
+ *  does a graduate get their certificate to print and share card to save (Plan 2c-2), so with it off a detective
+ *  reads exactly as before. */
+export function detectiveViewFor(d: DetectiveRow, doorsDone: DoorsDone, doorsOn = false): DetectiveView {
   const { progress, state } = earned(doorsDone);
+  const prints = doorsOn && progress.graduate;
   return {
     id: String(d.id),
     // A family always sees its own detectives' names in full.
@@ -72,7 +76,20 @@ export function detectiveViewFor(d: DetectiveRow, doorsDone: DoorsDone): Detecti
     frame: normaliseLook(d.look, state).frame,
     newThings: d.fresh.length,
     wardrobeUrl: `/elf/hq/wardrobe/${d.id}`,
+    certificateUrl: prints ? `/elf/hq/certificate/${d.id}` : null,
+    shareUrl: prints ? `/elf/hq/share/${d.id}.png` : null,
   };
+}
+
+/** Detective HQ's own address for the graduates' video (ruling F10): a family's page links only to this site, and
+ *  this address sends a graduate's family on to the video's link (getGraduateVideo in src/routes/elf.ts). */
+export const GRADUATE_VIDEO_PATH = "/elf/hq/video";
+
+/** The graduates' video's link that a head elf saved (Plan 2c-2), when it is an https link; null otherwise, and then
+ *  Detective HQ shows no video link and its address is not found. One rule for both. */
+export function graduateVideoOf(settings: Pick<ElfSettings, "graduateVideoUrl">): string | null {
+  const link = settings.graduateVideoUrl;
+  return typeof link === "string" && link.startsWith("https://") ? link : null;
 }
 
 function firstWord(name: string): string {
@@ -247,7 +264,7 @@ export function hqViewFor(o: {
     : o.now.getTime() < start.getTime()
       ? start
       : undefined;
-  const detectives = o.family.detectives.map((d) => ({ id: d.id, view: detectiveViewFor(d, o.doorsDone.get(d.id) ?? NO_DOORS) }));
+  const detectives = o.family.detectives.map((d) => ({ id: d.id, view: detectiveViewFor(d, o.doorsDone.get(d.id) ?? NO_DOORS, o.settings.doorsOn) }));
   return {
     now: o.now,
     familyName: firstWord(o.family.grownUpName),
@@ -260,6 +277,8 @@ export function hqViewFor(o: {
     guessUrl: "/api/elf/guess",
     addDetectiveUrl: "/elf/join",
     grandPrize: grandPrizeOf(o, detectives),
+    // With December's doors off, no family sees anything new: no video link.
+    videoUrl: o.settings.doorsOn && graduateVideoOf(o.settings) ? GRADUATE_VIDEO_PATH : null,
   };
 }
 
@@ -372,7 +391,7 @@ export function wardrobeViewFor(o: {
   const doorDays = [];
   for (let n = 1; n <= DOOR_COUNT; n += 1) doorDays.push({ door: n, clueAt: clueAtOf(o.settings, n as Door), date: doorDate(o.settings, n as Door) });
   return {
-    detective: detectiveViewFor(o.detective, o.doorsDone),
+    detective: detectiveViewFor(o.detective, o.doorsDone, o.settings.doorsOn),
     look: normaliseLook(o.detective.look, state),
     state,
     fresh: o.detective.fresh,

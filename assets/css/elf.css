@@ -611,6 +611,9 @@
 .elf-cane-progress::-moz-progress-bar { border-radius: 4px; background: var(--elf-grain) 0 0 / 384px, repeating-linear-gradient(45deg, var(--crimson) 0 9px, var(--card) 9px 18px); background-blend-mode: soft-light, normal; }
 .elf-detective__note { font-size: 0.9rem; color: var(--slate-soft); }
 .elf-detective .elf-detective__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+/* A graduate's certificate, share card and video (Plan 2c-2): across the whole foot of the card, under the elf and
+   the progress, so each button has the card's full width at 360 pixels and drops under the one before when it must. */
+.elf-detective .elf-detective__graduate { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; }
 .elf-add-detective { margin: clamp(22px, 3vw, 30px) 0 0; }
 @media (min-width: 720px) {
   .elf-detectives { grid-template-columns: repeat(2, minmax(0, 1fr)); }

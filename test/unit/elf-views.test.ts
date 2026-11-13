@@ -896,6 +896,64 @@ describe("the grand prize entry page's view", () => {
   });
 });
 
+// Plan 2c-2, Task 6: a graduate's certificate to print, share card to save and the graduates' video. Ruby (detective
+// 100) has done all 24 doors and Leo (detective 101) 23, at 6pm on Christmas Eve.
+describe("a graduate's certificate, share card and video", () => {
+  const EVERY_DOOR = Array.from({ length: 24 }, (_, i) => i + 1);
+  const DONE = new Map<number, DoorsDone>([
+    [100, { cracked: [], visited: [], snow: EVERY_DOOR }],
+    [101, { cracked: [], visited: [], snow: EVERY_DOOR.slice(0, 23) }],
+  ]);
+  const SIX_PM = at("2026-12-24T18:00:00.000Z");
+  const VIDEO = "https://example.org/graduates";
+  const ON = { ...SETTINGS, doorsOn: true };
+
+  it("gives a graduate the addresses of their certificate and share card, and a detective at 23 doors neither", () => {
+    const [ruby, leo] = hq({ now: SIX_PM, doorsDone: DONE }).detectives;
+    expect(ruby.graduate).toBe(true);
+    expect([ruby.certificateUrl, ruby.shareUrl]).toEqual(["/elf/hq/certificate/100", "/elf/hq/share/100.png"]);
+    expect(leo.graduate).toBe(false);
+    expect([leo.certificateUrl, leo.shareUrl]).toEqual([null, null]);
+  });
+
+  it("gives neither with December's doors off, even to a detective with every door done", () => {
+    const [ruby] = hq({ now: SIX_PM, doorsDone: DONE, settings: { ...SETTINGS, doorsOn: false } }).detectives;
+    expect(ruby.graduate).toBe(true);
+    expect([ruby.certificateUrl, ruby.shareUrl]).toEqual([null, null]);
+  });
+
+  it("gives the wardrobe's view of a graduate the same addresses, and none with December's doors off", () => {
+    const view = (settings: typeof SETTINGS) =>
+      wardrobeViewFor({ detective: FAMILY.detectives[0], settings, now: SIX_PM, doorsDone: DONE.get(100)!, runs: WAVE_ONE(SIX_PM), knowledge: NOTHING_DONE }).detective;
+    expect(view(ON).certificateUrl).toBe("/elf/hq/certificate/100");
+    expect(view(ON).shareUrl).toBe("/elf/hq/share/100.png");
+    expect(view(SETTINGS).certificateUrl).toBeNull();
+    expect(view(SETTINGS).shareUrl).toBeNull();
+  });
+
+  // Ruling F10: the video's link stays on this site. Detective HQ links to its own address, which sends a graduate's
+  // family on to the link a head elf saved.
+  it("carries the graduates' video as Detective HQ's own address while a head elf has set the link, and none without one", () => {
+    expect(hq({ now: SIX_PM, settings: { ...ON, graduateVideoUrl: VIDEO } }).videoUrl).toBe("/elf/hq/video");
+    expect(hq({ now: SIX_PM, settings: { ...ON, graduateVideoUrl: null } }).videoUrl).toBeNull();
+  });
+
+  it("carries no video with December's doors off", () => {
+    expect(hq({ now: SIX_PM, settings: { ...SETTINGS, doorsOn: false, graduateVideoUrl: VIDEO } }).videoUrl).toBeNull();
+  });
+
+  // Tests are never type checked, and a stored value that is not an https link is no link: the address would answer
+  // not found.
+  it("carries no video for settings without the link, or with one that is not an https link", () => {
+    const older: Partial<typeof ON> = { ...ON, graduateVideoUrl: VIDEO };
+    delete older.graduateVideoUrl;
+    expect(hq({ now: SIX_PM, settings: older as typeof ON }).videoUrl).toBeNull();
+    for (const stored of ["http://example.org/graduates", "javascript:alert(1)", "", "  "]) {
+      expect(hq({ now: SIX_PM, settings: { ...ON, graduateVideoUrl: stored } }).videoUrl, stored).toBeNull();
+    }
+  });
+});
+
 describe("a door's prize words and picture", () => {
   const found = { foundAt: at("2026-12-07T18:40:00Z"), foundFamilyId: 3 };
 

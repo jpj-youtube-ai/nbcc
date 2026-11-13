@@ -16,7 +16,8 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // so it shows first names in full and is never listed by search engines. While December's doors are on
 // (Plan 2c-1), a family that missed today's evening is offered its one go once the place is shown, and the
 // other missed doors it can still crack are listed under today's case. From Christmas Eve (Plan 2c-2) the
-// grand prize comes between the two: each graduate's picture to send in, until the entries close.
+// grand prize comes between the two: each graduate's picture to send in, until the entries close. A graduate's
+// card then offers their certificate to print, their share card to save and the graduates' video.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
 // script only saves the guess without leaving the page, and fetches the page again when the next
@@ -308,7 +309,25 @@ function presentsWords(n: number): string {
 /** The card sheets' backing colours, in turn down the family. */
 const SHEETS = ["crimson", "holly", "gold", "tan"] as const;
 
-function detectiveCard(d: DetectiveView, i: number): string {
+/** A graduate's certificate to print, share card to save and, once a head elf has set it, the graduates' video (Plan
+ *  2c-2), across the foot of their card. Only on a graduate's card, and only addresses on this site: the video's own
+ *  link is reached through Detective HQ's address for it (ruling F10). Several graduates can each have a certificate
+ *  and a card, so those two say whose they are to a screen reader alone. Nothing at all when there is no link to draw,
+ *  so with December's doors off (when the view holds no address) a graduate's card is exactly what it was. */
+function graduateLinks(d: DetectiveView, name: string, videoUrl: string | null | undefined): string {
+  if (d.graduate !== true) return "";
+  const certificate = sitePath(d.certificateUrl);
+  const share = sitePath(d.shareUrl);
+  const video = sitePath(videoUrl);
+  const links = [
+    certificate ? `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${certificate}">Print the certificate<span class="sr-only"> for ${name}</span></a>` : "",
+    share ? `<a class="elf-btn elf-btn--s" href="${share}" download>Save the share card<span class="sr-only"> for ${name}</span></a>` : "",
+    video ? `<a class="elf-btn elf-btn--s" href="${video}">Watch the graduates' video</a>` : "",
+  ].filter((link) => link !== "");
+  return links.length ? `<p class="elf-detective__graduate">${links.join(" ")}</p>` : "";
+}
+
+function detectiveCard(d: DetectiveView, i: number, videoUrl?: string | null): string {
   const name = escapeHtml(d.name);
   const elf = sitePath(d.elfUrl);
   const wardrobe = sitePath(d.wardrobeUrl) ?? "/";
@@ -336,7 +355,7 @@ function detectiveCard(d: DetectiveView, i: number): string {
       : line("On the public calendar this name shows as its first letter until our team has checked it.", "elf-detective__note")) +
     `<p class="elf-detective__actions"><a class="elf-btn elf-btn--holly elf-btn--s" href="${wardrobe}">Dress the elf</a>` +
     `${presents > 0 ? ` <span class="elf-chip elf-chip--new elf-new">${presentsWords(presents)}</span>` : ""}</p>` +
-    `</div></article>`
+    `</div>${graduateLinks(d, name, videoUrl)}</article>`
   );
 }
 
@@ -399,7 +418,7 @@ export function renderHqPage(view: HqView): string {
   <section class="section elf-hq-team" aria-labelledby="elf-team-heading">
     <div class="wrap">
       ${headingStrip({ text: "Your detectives", tag: "h2", back: "holly", id: "elf-team-heading" })}
-      <div class="elf-detectives">${view.detectives.map(detectiveCard).join("")}</div>
+      <div class="elf-detectives">${view.detectives.map((d, i) => detectiveCard(d, i, view.videoUrl)).join("")}</div>
       ${sitePath(view.addDetectiveUrl) ? `<p class="elf-add-detective"><a class="elf-btn" href="${sitePath(view.addDetectiveUrl)}">Add a detective</a></p>` : ""}
     </div>
   </section>

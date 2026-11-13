@@ -104,6 +104,10 @@ export interface DetectiveView {
   /** How many costumes are waiting in the wardrobe as presents to open. */
   newThings: number;
   wardrobeUrl: string;
+  /** A graduate's certificate to print, `/elf/hq/certificate/${id}`, and share card to save, `/elf/hq/share/${id}.png`
+   *  (Plan 2c-2): while December's doors are on, for a detective who has done all 24 doors only; null otherwise. */
+  certificateUrl: string | null;
+  shareUrl: string | null;
 }
 
 /** Today's case, for a family. Built from the door's state at the moment the page is drawn. */
@@ -228,6 +232,10 @@ export interface HqView {
    *  and `open` whether they still are. `detectives` are the family's graduates only (all 24 doors done), each by
    *  name as the family sees it, with its entry page (`/elf/hq/entry/${id}`) and whether its picture is in. */
   grandPrize: { closesAt: Date; open: boolean; detectives: { name: string; url: string; sent: boolean }[] } | null;
+  /** The graduates' video (Plan 2c-2): while December's doors are on and a head elf has set its link, Detective HQ's
+   *  own address for it, `/elf/hq/video`, which sends a graduate's family on to the link (ruling F10: every link on a
+   *  family's page is on this site); null otherwise. Drawn on a graduate's card only. */
+  videoUrl: string | null;
 }
 
 /** The page where a family sends in a graduate's picture for the grand prize (Plan 2c-2), from Detective HQ. The

@@ -1,6 +1,6 @@
 import { isDoor } from "../../src/elf/calendar";
 import { ELF_NAMES } from "../../src/elf/names";
-import type { CalendarView, ClaimWin, DoorView, EntryView, GoView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
+import type { CalendarView, ClaimWin, DetectiveView, DoorView, EntryView, GoView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
 
 /** The page a family sees after scanning the poster at an invented shop. Signed in, two detectives,
  *  and the shop's door still shut on the calendar unless told otherwise. */
@@ -84,6 +84,8 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
       frame: "candy",
       newThings: 2,
       wardrobeUrl: "/elf/hq/wardrobe/d1",
+      certificateUrl: null,
+      shareUrl: null,
     },
     look: { sibling: "sister", skin: "s3", hair: "ginger", hairStyle: "bunches", costume: "reindeer", scene: "largs", friend: "robin", frame: "candy", glasses: "specs-gold", bow: null },
     state: { doors: [1, 2, 3, 4, 5, 6] },
@@ -194,6 +196,8 @@ export function hqView(over: Partial<HqView> = {}): HqView {
         frame: null,
         newThings: 3,
         wardrobeUrl: "/elf/hq/wardrobe/d1",
+        certificateUrl: null,
+        shareUrl: null,
       },
       {
         id: "d2",
@@ -209,6 +213,8 @@ export function hqView(over: Partial<HqView> = {}): HqView {
         frame: null,
         newThings: 0,
         wardrobeUrl: "/elf/hq/wardrobe/d2",
+        certificateUrl: null,
+        shareUrl: null,
       },
     ],
     today: {
@@ -244,8 +250,41 @@ export function hqView(over: Partial<HqView> = {}): HqView {
     guessUrl: "/elf/hq/guess",
     // No grand prize section before Christmas Eve (Plan 2c-2), unless told otherwise.
     grandPrize: null,
+    // No graduates' video (Plan 2c-2), unless told otherwise.
+    videoUrl: null,
     ...over,
   };
+}
+
+/** Ruby once she has done all 24 doors (Plan 2c-2): a Graduate, with her certificate to print and her share card
+ *  to save, unless told otherwise. */
+export function graduateDetective(over: Partial<DetectiveView> = {}): DetectiveView {
+  return {
+    ...hqView().detectives[0],
+    rank: "Graduate",
+    doorsDone: 24,
+    next: null,
+    graduate: true,
+    certificateUrl: "/elf/hq/certificate/11",
+    shareUrl: "/elf/hq/share/11.png",
+    ...over,
+  };
+}
+
+/** Detective HQ at 6pm on Christmas Eve (Plan 2c-2): door 24 snowed in, the grand prize entries closed at 5pm,
+ *  Ruby a Graduate with her certificate and share card, Leo still at 23 doors, and the graduates' video that a
+ *  head elf set, unless told otherwise. */
+export function graduateHqView(over: Partial<HqView> = {}): HqView {
+  const base = hqView();
+  return hqView({
+    now: at("2026-12-24T18:00:00.000Z"),
+    detectives: [graduateDetective(), { ...base.detectives[1], rank: "Senior Detective", doorsDone: 23, next: { rank: "Graduate", toGo: 1 } }],
+    today: { ...base.today!, door: 24, state: "snow", clues: [], nextClueAt: null, revealAt: null, canGuess: false },
+    nextClueAt: null,
+    grandPrize: grandPrize({ open: false, detectives: [{ name: "Detective Ruby Tinselfoot", url: "/elf/hq/entry/11", sent: true }] }),
+    videoUrl: "/elf/hq/video",
+    ...over,
+  });
 }
 
 /** Detective HQ's grand prize section at 10:30am on Christmas Eve (Plan 2c-2): the entries close at 5pm, and

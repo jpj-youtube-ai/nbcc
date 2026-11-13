@@ -5,6 +5,7 @@ import { listElfDoors } from "../db/elf-doors";
 import { claimSend, familiesStillToEmail, familiesToSweep, markSendFailed, markSent, type ClueFamily } from "../db/elf-sends";
 import { lastAlert, listHeadElves, oldestWaitingPhotoAt, recordAlert } from "../db/elf-alerts";
 import { countPhotosWaiting, deleteExpiredPhotoFiles, oldestWaitingPhotoDoor } from "../db/elf-photos";
+import { deleteExpiredGrandPrizeEntries } from "../db/elf-grand-prize";
 import { sendElfClue, sendElfFindAlert, sendElfMorning, sendElfPhotoAlert, sendElfPlaceReminder, sendElfProud, type FundraiseEmailMessage } from "../clients/email";
 import { sendText, type SmsMessage } from "../clients/sms";
 import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
@@ -38,7 +39,8 @@ import { clockWords } from "./words";
 // NBCC Elf Detective School wave 2: the elf worker. Everything that goes on time in December without a
 // developer: the clue email to every family at clue 1, the reminder to each place at 9am, the 8am Elf HQ
 // email and the find alert to head elves, the photo alerts by email and text, the proud moments a
-// detective earns any way, and the clear out of every photo from 31 January. Design:
+// detective earns any way, and the clear out of every photo and every grand prize entry from 31 January
+// after its December. Design:
 // docs/superpowers/specs/2026-11-10-elf-detective-wave-2-design.md ("Emails in wave 2", "Alerts").
 //
 // It ticks every 30 seconds in the app, on the newsletter sender's pattern (src/newsletter/send-worker.ts),
@@ -99,6 +101,8 @@ export interface ElfWorkerDeps {
   markSendFailed: (kind: string, key: string, error: string) => Promise<void>;
   sendText: (msg: SmsMessage) => Promise<"sent" | "stubbed">;
   deleteExpiredPhotoFiles: (now: Date) => Promise<number>;
+  /** The grand prize entries and their pictures, from 31 January after their December (Plan 2c-2). */
+  deleteExpiredGrandPrizeEntries: (now: Date) => Promise<number>;
   send: { clue: Sender; reminder: Sender; morning: Sender; findAlert: Sender; photoAlert: Sender; proud: Sender };
 }
 
@@ -132,6 +136,7 @@ export function realElfDeps(): ElfWorkerDeps {
     markSendFailed,
     sendText: (msg) => sendText(msg),
     deleteExpiredPhotoFiles,
+    deleteExpiredGrandPrizeEntries,
     send: {
       clue: sendElfClue,
       reminder: sendElfPlaceReminder,
@@ -685,7 +690,7 @@ async function sendDue(due: Due, t: Tick): Promise<void> {
  * One tick at `at`, in order, each part on its own: first the sends this task sent but could not mark;
  * then snow in what cannot run (December's doors on only); then whatever is due (the clue emails, the
  * reminders, the morning email, the find alerts, the sweep); then the photo alert; last, the clear out of
- * every photo past its 31 January.
+ * every photo past its 31 January, and then of every grand prize entry past its own, its picture with it.
  */
 export async function runElfTick(at: Date, deps: ElfWorkerDeps): Promise<void> {
   await markUnmarked(deps);
@@ -730,6 +735,7 @@ export async function runElfTick(at: Date, deps: ElfWorkerDeps): Promise<void> {
   }
   await part("photo alert", () => photoAlert(at, settings.year, deps));
   await part("clear out", () => deps.deleteExpiredPhotoFiles(at));
+  await part("grand prize clear out", () => deps.deleteExpiredGrandPrizeEntries(at));
 }
 
 // ---- the timer ------------------------------------------------------------------------------------------------

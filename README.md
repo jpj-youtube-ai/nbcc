@@ -12178,10 +12178,11 @@ family's sheet in Head Elf HQ. It is never public, never in an email to anyone e
 line. The rules' **Keeping everyone safe** says "The mobile number you give when you enrol is only for
 ringing the grand prize winner, and we delete it at the end of January." That
 is the only place the site says what is deleted when: the join form asks the grown up to agree to the
-rules. The end of January clear out, still to be built before 31 January 2027, must take
-`elf_families.mobile` with it, and (Plan 2c-2) every grand prize entry and its picture
+rules. The end of January clear out of the families' details, still to be built before 31 January 2027,
+must take `elf_families.mobile` with it, and (Plan 2c-2) the families' `emails_token` and
+`emails_stopped_at` with the rest of their details. Every grand prize entry and its picture
 (`elf_grand_prize_entries`, `elf_grand_prize_files`, whose pictures are never in the backups, so deleted
-means gone), and the families' `emails_token` and `emails_stopped_at` with the rest of their details (see
+means gone) already goes: the worker deletes it from 31 January after its December, on every tick (see
 **Christmas Eve and the grand prize**, January).
 
 **An email that has already paid (TASK-614).** Enrolling again without signing in, the server emails a
@@ -12527,13 +12528,13 @@ sender's pattern: started from `src/index.ts` (never from `createApp`), with a g
 has another beside it in the same task, and `unref` so it never holds the process open. Each part of a
 tick is on its own (one that fails is logged with its message only, never a place, a clue, a word or a
 number) and the rest go on. Nothing goes to a family or about a real door unless Elf Detective School and
-December's doors are both on; the photo alert (the practice door plays it) and the clear out run either
+December's doors are both on; the photo alert (the practice door plays it) and the clear outs run either
 way. In order, a tick: marks sent anything this task sent but could not mark; snows in the doors that
 cannot run (`markAutomaticSnowDays`), so a snow day never waits for the first calendar visitor; reads the
 doors; sends what `dueNow` says is due (the clue email for six hours from clue 1, 25 families a tick; the
 place's reminder from 9am to noon on its day, to the place's email; the 8am email; each found door's
 find alert; the sweep, every ten minutes), never for a snowed in door or the practice door; then the
-photo alert; last, the clear out.
+photo alert; last, the clear outs: the photos', then the grand prize entries'.
 
 - **Claimed once, tried three times.** Every send is claimed in `elf_sends` by its kind and key before it
   goes (`claimSend`: `INSERT ... ON CONFLICT (kind, key) DO UPDATE ... WHERE sent_at IS NULL AND attempts < 3
@@ -12557,7 +12558,15 @@ photo alert; last, the clear out.
   each photo's December, its bytes row is deleted and its row reads deleted, so the log keeps its lines. A
   photo's December is its year; a practice photo belongs to the December it was sent in, one sent in
   January before the 31st to the December before, and one sent on or after 31 January to the coming
-  December, so no practice photo is past its clear out the moment it is sent.
+  December, so no practice photo is past its clear out the moment it is sent (`decemberOf` and
+  `clearOutFrom` in `src/elf/calendar.ts`, the one rule for both clear outs).
+- **The grand prize clear out** (`deleteExpiredGrandPrizeEntries`, every tick, Plan 2c-2): from 31 January
+  after the December an entry's picture came in for, the entry is deleted in one transaction, and its picture
+  goes with it (`elf_grand_prize_files` is `ON DELETE CASCADE`), the winner's mark too. Its December is worked
+  out from its `sent_at` by the practice photos' rule, never from its `year`: in production an entry is sent on
+  Christmas Eve of its year, so the answer is the same, and in BDD, played in last year's December, a picture
+  sent today belongs to the coming December, so the worker ticking on the real clock never deletes it in the
+  middle of a scenario.
 - **The tick hook.** `POST /api/admin/elf/worker/tick { at }` (section `elf`: edit) runs one tick at the
   moment given, outside production only (404 in production, for anyone). It is how the BDD plays a tick
   at midday, so quiet hours never bite; the claims keep it and the task's own timer from sending
@@ -12925,12 +12934,13 @@ pictures are kept apart so the nightly backup leaves them out, as photos are (`B
 `src/backup/plan.ts`: the table is dumped empty and recorded as 0 rows); the entries themselves are backed up,
 so a restored entry has no picture until its family sends one again.
 
-**January.** The end of January clear out, still to be built before 31 January 2027, must take every grand
-prize entry and its picture (`elf_grand_prize_entries`, `elf_grand_prize_files`), and the families'
-`emails_token` and `emails_stopped_at` with the rest of their details (see **The grown up's mobile** above).
-The entry page promises "it is deleted at the end of January". The pictures are never in the backups, so
-deleted means gone. No worker clear out for the entries is built here: in BDD last year's 31 January has
-always passed, so a ticking worker would delete a scenario's pictures between its steps. The year rollover
+**January.** The entry page promises "it is deleted at the end of January", and it is: from 31 January after
+their December, on every worker tick, `deleteExpiredGrandPrizeEntries` deletes every grand prize entry
+(`elf_grand_prize_entries`), its picture with it (`elf_grand_prize_files`, `ON DELETE CASCADE`) and the
+winner's mark, working the December out from when the picture came in (see **The worker**, The grand prize
+clear out). The pictures are never in the backups, so deleted means gone. The families' `emails_token` and
+`emails_stopped_at` stay with the end of January clear out of the families' details, still to be built before
+31 January 2027, with the rest of their details (see **The grown up's mobile** above). The year rollover
 needs nothing: a closing time is for its own Christmas Eve only, and when `elf_settings.year` moves on, a
 stored moment from before that year's Christmas Eve begins reads as 5pm on the new one, so last year's time
 never closes next year's entries before they open. The graduates' video link stays until a head elf changes
@@ -12938,7 +12948,7 @@ it.
 
 **Tests.** `test/unit/elf-grand-prize.test.ts` (the rules: the window, door 24's 4pm, the refusal and the
 warning, the week before, the stale closing), `elf-db-grand-prize` (the store: one entry a detective, its bytes
-replaced, the year lock), `elf-grand-prize-migration`, `elf-routes-grand-prize` (every family route, at 10:30am,
+replaced, the year lock, the clear out from 31 January), `elf-grand-prize-migration`, `elf-routes-grand-prize` (every family route, at 10:30am,
 4:59:59pm and 5pm on Christmas Eve, and each with December's doors off, even through the preview link),
 `elf-page-entry`, `elf-js-entry` and `admin-elf-prize-js` (jsdom), `elf-page-emails`, `admin-elf-prize`,
 `dockerfile-share-card-fonts` and `check-share-card`, with `elf-calendar`, `elf-catch-up`, `elf-views`,
@@ -12952,9 +12962,11 @@ sends a picture and sends it again (one entry, its bytes replaced), fetches it a
 (404), opens the certificate and the share card, gives a mobile with a picture, reads the entries, is refused a
 winner while they are open, saves the closing time (4:30pm refused, 5pm saved and checked by SQL from the year)
 and the video link, then marks one winner and another, and is refused a picture once they have closed. Of the
-two more scenarios, one stops the emails from the link's page and starts them again in Detective HQ, and the
-other runs the worker a minute after door 7's first clue (worked out from the year and door 7's own evening):
-one clue email to the family that never stopped, none to the one that did. No step compares the real clock
+three more scenarios, one stops the emails from the link's page and starts them again in Detective HQ; one
+runs the worker a minute after door 7's first clue (worked out from the year and door 7's own evening): one
+clue email to the family that never stopped, none to the one that did; and one sends two pictures, moves one
+to two years ago by SQL from the database's own clock, and runs the worker at midday today: that entry and its
+picture are gone, and the one sent today is still there. No step compares the real clock
 with a date written in a feature, and none looks at Detective HQ's grand prize section, whose window runs on
 the real clock.
 

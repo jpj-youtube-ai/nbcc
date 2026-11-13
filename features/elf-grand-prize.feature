@@ -139,3 +139,39 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" runs the elf worker a minute after door 7's first clue
     Then once the request has finished, 1 "elfClue" email went to "clue.prize.elf.bdd@example.com"
     And once the request has finished, 0 "elfClue" emails went to "quiet.prize.elf.bdd@example.com"
+
+  # The end of January clear out, as the entry page promises: from 31 January after the December its picture came in
+  # for, the elf worker's tick deletes an entry, and its picture with it. Played in last year's December, whose doors
+  # are over. A picture sent today belongs to the coming December, so it is kept whenever this runs, and the worker
+  # ticking on the real clock never deletes it mid scenario; one a step moves to two years ago, by SQL from the
+  # database's own clock, is always past its clear out. The worker is then run at midday today, so no step compares
+  # the real clock with a date written here.
+  Scenario: The elf worker deletes a grand prize entry and its picture from the end of January after its December
+    Given the school's year is last year, whose December is over
+    And "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" has opened the doors list
+    And door 7 is ready to run at "The Example Bakehouse" in "Snowford", with the prize "A pretend sledge"
+    And door 7's tag word is "SNOWBALL 472"
+    And December's doors are switched on
+    And "old.prize.elf.bdd@example.com" has already enrolled "Ruby Tinselfoot" and paid
+    And the paying browser comes back from Stripe
+    And it is sent to Detective HQ, signed in
+    And that browser is the family "old.prize.elf.bdd@example.com"
+    And "new.prize.elf.bdd@example.com" has already enrolled "Leo Frostwhistle" and paid
+    And the paying browser comes back from Stripe
+    And it is sent to Detective HQ, signed in
+    And that browser is the family "new.prize.elf.bdd@example.com"
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" runs the elf worker at midday on 1 February this year
+    Then every door but door 7 is snowed in
+    When the family "old.prize.elf.bdd@example.com" types the word "SNOWBALL 472" at door 7
+    Then the word wins, and the card says "You're first!"
+    When the family "new.prize.elf.bdd@example.com" types the word "snowball 472" at door 7
+    Then the word is a visit, and the card says "Door 7 done!"
+    Given the grand prize entries close an hour from now
+    When the family "old.prize.elf.bdd@example.com" sends its detective's picture for the grand prize
+    Then the game answers 201
+    When the family "new.prize.elf.bdd@example.com" sends its detective's picture for the grand prize
+    Then the game answers 201
+    Given the grand prize picture of the family "old.prize.elf.bdd@example.com" came in two years ago
+    When "alex.prize.admin.bdd@example.com" with password "Elf-Prize-Admin-1" runs the elf worker at "12:00" today, London time
+    Then the family "old.prize.elf.bdd@example.com" has no grand prize entry, and its picture has gone too
+    And the family "new.prize.elf.bdd@example.com" has one grand prize entry, with its picture

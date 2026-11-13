@@ -6,8 +6,10 @@ import {
   DEFAULT_CLOSING_TIME,
   DEFAULT_SCHOOL_CLUE_TIME,
   LAST_REVEAL_TIME,
+  clearOutFrom,
   closingInstant,
   clueTimeFor,
+  decemberOf,
   dayKind,
   defaultClueTime,
   doorDate,
@@ -303,5 +305,33 @@ describe("a door's evening", () => {
     expect(closesTooSoon(23, null, "15:01")).toBe(false);
     expect(closesTooSoon(24, "17:00", "15:30")).toBe(false);
     expect(closesTooSoon(24, "15:00", "11:00")).toBe(false);
+  });
+});
+
+// The end of January clear out (Plan 2c-2's final review, issue 2): what a family sends belongs to a December, and
+// goes from 31 January after it. The one rule for a practice photo (src/db/elf-photos.ts) and a grand prize entry
+// (src/db/elf-grand-prize.ts), worked out from when it was sent. January in London is on GMT, so its midnight is
+// midnight UTC.
+describe("the December something sent belongs to, and its clear out", () => {
+  const at = (iso: string) => new Date(iso);
+
+  it("puts something sent in January before the 31st in the December before", () => {
+    expect(decemberOf(at("2027-01-01T00:00:00Z"))).toBe(2026);
+    expect(decemberOf(at("2027-01-15T10:00:00Z"))).toBe(2026);
+    expect(decemberOf(at("2027-01-30T23:59:59Z"))).toBe(2026);
+  });
+
+  it("puts anything sent from 31 January on in the December of its own year, so nothing is past its clear out the moment it is sent", () => {
+    expect(decemberOf(at("2027-01-31T00:00:00Z"))).toBe(2027);
+    expect(decemberOf(at("2026-11-13T12:00:00Z"))).toBe(2026);
+    expect(decemberOf(at("2026-12-24T16:59:59Z"))).toBe(2026);
+    expect(decemberOf(at("2026-12-31T23:59:59Z"))).toBe(2026);
+    // A summer night in London is an hour ahead of UTC; it is still that year's.
+    expect(decemberOf(at("2026-06-30T23:30:00Z"))).toBe(2026);
+  });
+
+  it("clears a December out from midnight as 31 January after it begins", () => {
+    expect(clearOutFrom(2026).toISOString()).toBe("2027-01-31T00:00:00.000Z");
+    expect(clearOutFrom(2025).toISOString()).toBe("2026-01-31T00:00:00.000Z");
   });
 });

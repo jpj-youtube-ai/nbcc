@@ -93,11 +93,11 @@ describe("the migration for the grand prize", () => {
     expect(options.constraints).toEqual({ unique: ["year", "detective_id"] });
   });
 
-  it("says on the entries that they are never public and that the clear out must take them", () => {
+  it("says on the entries that they are never public and that the worker's clear out deletes them after January", () => {
     const [, , options] = made("elf_grand_prize_entries");
     expect(options.comment).toContain("never public");
-    expect(options.comment).toContain("end of January");
-    expect(options.comment).toContain("clear out, which must take");
+    expect(options.comment).toContain("Deleted from 31 January after their December by the elf worker's clear out.");
+    expect(options.comment).not.toContain("must take");
   });
 
   it("keeps one winner a year: unique on the year, only where a winner is marked", () => {

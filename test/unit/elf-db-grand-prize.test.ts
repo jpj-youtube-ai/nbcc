@@ -16,6 +16,7 @@ vi.mock("../../src/db/pool", () => ({
 import {
   WinnerTaken,
   countEntries,
+  deleteExpiredGrandPrizeEntries,
   entryPicture,
   familyEntries,
   familyHasMobile,
@@ -330,5 +331,81 @@ describe("markWinner", () => {
     expect(err).not.toBeInstanceOf(WinnerTaken);
     expect((err as Error).message).toBe("boom");
     expect(sqls()).toContain("ROLLBACK");
+  });
+});
+
+// ---- the end of January clear out (the final review, issue 2) ------------------------------------------
+
+// The entry page promises a family that its picture "is deleted at the end of January". From 31 January after the
+// December an entry's picture came in for, the worker's tick deletes the entry, and its picture goes with it
+// (elf_grand_prize_files is ON DELETE CASCADE), the winner's mark too. The December is worked out from when the picture
+// came in, by the rule a practice photo's clear out uses (decemberOf), never from the entry's year: BDD plays last
+// year's December, and a picture sent today belongs to the coming December, so a ticking worker never deletes it in
+// the middle of a scenario.
+describe("deleteExpiredGrandPrizeEntries", () => {
+  const READ = /^SELECT id, sent_at FROM elf_grand_prize_entries$/;
+  const DELETE = /^DELETE FROM elf_grand_prize_entries WHERE id = ANY\(\$1::int\[\]\) RETURNING id$/;
+  /** The entries as the database holds them (with their year too, which the clear out must not go by), and a delete
+   *  that answers the ids it was given. */
+  function held(rows: { id: number; year: number; sent_at: Date }[]) {
+    clientQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const s = flat(sql);
+      if (/^SELECT\b.*\bFROM elf_grand_prize_entries\b/.test(s)) return { rows, rowCount: rows.length };
+      if (DELETE.test(s)) {
+        const ids = (params?.[0] as number[]) ?? [];
+        return { rows: ids.map((id) => ({ id })), rowCount: ids.length };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+  }
+  /** Sent on Christmas Eve 2026, the year the entries are for. */
+  const ON_THE_DAY = { id: 21, year: 2026, sent_at: at("2026-12-24T16:30:00Z") };
+
+  it("keeps an entry sent on Christmas Eve 2026 until the last second of 30 January 2027, writing nothing", async () => {
+    held([ON_THE_DAY]);
+    expect(await deleteExpiredGrandPrizeEntries(at("2027-01-30T23:59:59Z"))).toBe(0);
+    expect(sent(/^DELETE/)).toBe(false);
+    expect(sqls()).toContain("COMMIT");
+  });
+
+  it("deletes it from midnight as 31 January 2027 begins, in the transaction that read it, and says how many went", async () => {
+    held([ON_THE_DAY, { id: 22, year: 2026, sent_at: at("2026-12-24T10:15:00Z") }]);
+    expect(await deleteExpiredGrandPrizeEntries(at("2027-01-31T00:00:00Z"))).toBe(2);
+    const s = sqls();
+    expect(s[0]).toBe("BEGIN");
+    expect(indexOf(READ)).toBeGreaterThan(0);
+    expect(indexOf(DELETE)).toBeGreaterThan(indexOf(READ));
+    expect(call(DELETE)![1]).toEqual([[21, 22]]);
+    expect(s[s.length - 1]).toBe("COMMIT");
+    // The pictures go with their entries, so no statement of the clear out's own names them.
+    expect(sent(/elf_grand_prize_files/)).toBe(false);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes by when the picture came in, never by the entry's year", async () => {
+    // As BDD plays it: an entry for a December long over (last year's), sent today, belongs to the coming December.
+    held([{ id: 23, year: 2025, sent_at: at("2026-11-13T12:00:00Z") }]);
+    expect(await deleteExpiredGrandPrizeEntries(at("2027-01-30T12:00:00Z"))).toBe(0);
+    expect(sent(/^DELETE/)).toBe(false);
+    expect(await deleteExpiredGrandPrizeEntries(at("2027-01-31T00:00:00Z"))).toBe(1);
+  });
+
+  it("deletes only the entries past their clear out, and writes nothing when there are none", async () => {
+    held([ON_THE_DAY, { id: 30, year: 2027, sent_at: at("2027-12-24T15:00:00Z") }]);
+    expect(await deleteExpiredGrandPrizeEntries(at("2027-02-01T12:00:00Z"))).toBe(1);
+    expect(call(DELETE)![1]).toEqual([[21]]);
+    clientQuery.mockClear();
+    held([]);
+    expect(await deleteExpiredGrandPrizeEntries(at("2027-02-01T12:00:00Z"))).toBe(0);
+    expect(sent(/^DELETE/)).toBe(false);
+  });
+
+  it("answers how many the database deleted, should another task have deleted some first", async () => {
+    held([ON_THE_DAY, { id: 22, year: 2026, sent_at: at("2026-12-24T10:15:00Z") }]);
+    const real = clientQuery.getMockImplementation()!;
+    clientQuery.mockImplementation(async (sql: string, params?: unknown[]) =>
+      DELETE.test(flat(sql)) ? { rows: [{ id: 22 }], rowCount: 1 } : real(sql, params),
+    );
+    expect(await deleteExpiredGrandPrizeEntries(at("2027-02-01T12:00:00Z"))).toBe(1);
   });
 });

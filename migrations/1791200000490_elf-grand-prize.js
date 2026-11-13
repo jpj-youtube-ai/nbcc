@@ -20,8 +20,9 @@
 //   elf_grand_prize_files    the pictures' bytes, kept apart so the nightly backup leaves them out, as
 //                            photos are (BACKUP_TABLE_DATA_LEFT_OUT in src/backup/plan.ts).
 //
-// The entries and their pictures go at the end of January, with the clear out still to be built,
-// which must take them.
+// The entries and their pictures go from 31 January after their December: the elf worker's clear
+// out deletes them on every tick (deleteExpiredGrandPrizeEntries, src/db/elf-grand-prize.ts), and a
+// picture goes with its entry (ON DELETE CASCADE).
 //
 // Additive: two new tables, and new columns that are empty or have a default, so code from before it,
 // which never names them, keeps working and a code rollback is safe (golden rule 2). down drops them;
@@ -73,7 +74,7 @@ exports.up = (pgm) => {
     {
       constraints: { unique: ["year", "detective_id"] },
       comment:
-        "Grand prize entries, one picture a detective a year: never public, seen only by its own family and by head elves. Deleted at the end of January by the clear out, which must take them.",
+        "Grand prize entries, one picture a detective a year: never public, seen only by its own family and by head elves. Deleted from 31 January after their December by the elf worker's clear out.",
     },
   );
   pgm.createIndex("elf_grand_prize_entries", "year", {

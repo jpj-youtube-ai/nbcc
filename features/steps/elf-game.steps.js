@@ -911,6 +911,35 @@ Then("the family {string} has one grand prize entry, with its picture", async fu
   assert.ok(Number(r.rows[0].size) > 0, "the entry has no picture");
 });
 
+// The end of January clear out (deleteExpiredGrandPrizeEntries, on every elf worker tick). An entry goes from 31
+// January after the December its picture came in for, worked out from sent_at. This moves the family's entry's picture
+// to two years ago, by SQL from the database's own clock, so its 31 January has passed whenever this runs; and says,
+// in the same statement, that the entry has its picture to lose. The entry is kept in the world by its id, so a later
+// step can look for its picture once the entry has gone.
+Given("the grand prize picture of the family {string} came in two years ago", async function (email) {
+  const r = await pool.query(
+    `UPDATE elf_grand_prize_entries e SET sent_at = now() - interval '2 years'
+       FROM elf_families f
+      WHERE f.id = e.family_id AND f.email = $1
+      RETURNING e.id, EXISTS (SELECT 1 FROM elf_grand_prize_files b WHERE b.entry_id = e.id) AS has_picture`,
+    [email],
+  );
+  assert.equal(r.rows.length, 1, `${email} has no one grand prize entry: ${JSON.stringify(r.rows)}`);
+  assert.equal(r.rows[0].has_picture, true, "the entry has no picture to clear out");
+  this.prizeClearedEntryId = Number(r.rows[0].id);
+});
+
+Then("the family {string} has no grand prize entry, and its picture has gone too", async function (email) {
+  const r = await pool.query(
+    "SELECT count(*)::int AS n FROM elf_grand_prize_entries e JOIN elf_families f ON f.id = e.family_id WHERE f.email = $1",
+    [email],
+  );
+  assert.equal(r.rows[0].n, 0, `${email} still has a grand prize entry`);
+  assert.ok(this.prizeClearedEntryId, "no step moved an entry's picture back");
+  const files = await pool.query("SELECT count(*)::int AS n FROM elf_grand_prize_files WHERE entry_id = $1", [this.prizeClearedEntryId]);
+  assert.equal(files.rows[0].n, 0, "the entry's picture is still there");
+});
+
 // ---- Head Elf HQ's side of the grand prize: the Grand prize part and Settings > The grand prize ----------
 //
 // The head elf's answers are kept whatever they are (asHeadElf above asserts a 200), so a step can see a 409.

@@ -258,6 +258,7 @@ function fakeDeps(over: Partial<ElfWorkerDeps> = {}, o: { clueFamilies?: ClueFam
     markSendFailed: sends.markSendFailed,
     sendText: vi.fn(async () => "stubbed" as const),
     deleteExpiredPhotoFiles: vi.fn(async () => 0),
+    deleteExpiredGrandPrizeEntries: vi.fn(async () => 0),
     send: { clue: sender("clue"), reminder: sender("reminder"), morning: sender("morning"), findAlert: sender("find"), photoAlert: sender("photo"), proud: sender("proud") },
     ...over,
   };
@@ -649,6 +650,27 @@ describe("each tick", () => {
     }
   });
 
+  // The final review, issue 2: the grand prize entries and their pictures go from 31 January after their December, as
+  // the entry page promises, by a part of their own beside the photos', on every tick.
+  it("clears expired grand prize entries away on every tick, with the tick's own time, doors on or off", async () => {
+    for (const settings of [ON, OFF]) {
+      const { deps, tick } = fakeDeps({ getSettings: vi.fn(async () => settings) });
+      await tick(SIX_05);
+      expect(deps.deleteExpiredGrandPrizeEntries).toHaveBeenCalledWith(SIX_05);
+    }
+  });
+
+  it("clears the grand prize entries away even when the photos' clear out fails", async () => {
+    const { deps, tick } = fakeDeps({
+      deleteExpiredPhotoFiles: vi.fn(async () => {
+        throw new Error("the photos could not be read");
+      }),
+    });
+    await tick(FIVE_31);
+    expect(deps.deleteExpiredGrandPrizeEntries).toHaveBeenCalledWith(FIVE_31);
+    expect(console.error).toHaveBeenCalledWith("elf worker clear out failed:", "the photos could not be read");
+  });
+
   it("never lets one part's failure stop the rest", async () => {
     const { deps, sent, tick } = fakeDeps({
       markAutomaticSnowDays: vi.fn(async () => {
@@ -677,6 +699,7 @@ describe("each tick", () => {
     await tick(FIVE_31);
     expect(deps.markAutomaticSnowDays).not.toHaveBeenCalled();
     expect(deps.deleteExpiredPhotoFiles).toHaveBeenCalledWith(FIVE_31);
+    expect(deps.deleteExpiredGrandPrizeEntries).toHaveBeenCalledWith(FIVE_31);
   });
 });
 

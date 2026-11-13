@@ -2,6 +2,7 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { inTransaction } from "./elf-practice";
 import type { MadePicture } from "./fundraiser-pictures";
+import { clearOutFrom, decemberOf } from "../elf/calendar";
 
 // NBCC Elf Detective School, Christmas Eve and the grand prize (Plan 2c-2): the store for the entries
 // (tables in migrations/1791200000490_elf-grand-prize.js). The rules are pure, in src/elf/grand-prize.ts;
@@ -224,4 +225,24 @@ export async function markWinner(year: number, id: number, actor: string): Promi
     if (isUniqueClash(err)) throw new WinnerTaken();
     throw err;
   }
+}
+
+// ---- the end of January clear out ------------------------------------------------------------------
+
+/** From 31 January after the December its picture came in for, every entry is deleted, as the entry page promises
+ *  ("it is deleted at the end of January"): its picture goes with it (elf_grand_prize_files is ON DELETE CASCADE, and
+ *  is never in the backups, so deleted means gone), and so does the winner's mark. The December is worked out from
+ *  sent_at by the rule a practice photo's clear out uses (decemberOf, src/elf/calendar.ts), never from the entry's
+ *  year: in production an entry is sent on Christmas Eve of its year, so the answer is the same, and in BDD, played
+ *  in last year's December, a picture sent today belongs to the coming December, so a ticking worker never deletes it
+ *  in the middle of a scenario. One transaction. Answers how many were deleted. Idempotent: it runs on every worker
+ *  tick. */
+export async function deleteExpiredGrandPrizeEntries(now: Date): Promise<number> {
+  return inTransaction(async (client) => {
+    const found = await client.query<{ id: number; sent_at: Date }>("SELECT id, sent_at FROM elf_grand_prize_entries");
+    const ids = found.rows.filter((r) => clearOutFrom(decemberOf(r.sent_at)).getTime() <= now.getTime()).map((r) => Number(r.id));
+    if (ids.length === 0) return 0;
+    const gone = await client.query<{ id: number }>("DELETE FROM elf_grand_prize_entries WHERE id = ANY($1::int[]) RETURNING id", [ids]);
+    return gone.rows.length;
+  });
 }

@@ -226,3 +226,26 @@ export function closesTooSoon(door: number, closesAt: string | null, clue3: stri
   if (!isClockTime(clue3)) return false;
   return minutesOf(closingTimeOr(door, closesAt)) - minutesOf(clue3) < 60;
 }
+
+// ---- the end of the season: the clear out at the end of January ------------------------------------
+
+const londonYearAndMonth = (d: Date): { year: number; month: number } => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "numeric" }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { year: Number(p.year), month: Number(p.month) };
+};
+
+/** The December something sent at `sentAt` belongs to, for the clear out at the end of January: one sent in
+ *  January before the 31st belongs to the December before, and anything else to the December of its own year in
+ *  London, so nothing is past its clear out the moment it is sent. The one rule for a practice photo
+ *  (src/db/elf-photos.ts) and a grand prize entry (src/db/elf-grand-prize.ts). January in London is on GMT, so its
+ *  midnight is midnight UTC. */
+export function decemberOf(sentAt: Date): number {
+  const { year, month } = londonYearAndMonth(sentAt);
+  return month === 1 && sentAt.getTime() < Date.UTC(year, 0, 31) ? year - 1 : year;
+}
+
+/** When the clear out takes what belongs to `december`: from 31 January after it, at midnight, which in London in
+ *  January is midnight UTC. */
+export function clearOutFrom(december: number): Date {
+  return new Date(Date.UTC(december + 1, 0, 31));
+}

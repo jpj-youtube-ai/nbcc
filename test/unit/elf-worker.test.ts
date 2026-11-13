@@ -511,10 +511,11 @@ describe("the morning email, at 8am on 7 December", () => {
     expect(text).toContain("Detective R. Tinselfoot found door 6's elf at 10:20am.");
     expect(text).toContain("3 photos waiting to be checked");
     expect(text).toContain("Door 7 of NBCC Elf Detective School opens tonight!");
-    expect(text).toContain("Door 6 is open! Detective R. Tinselfoot found Pip at The Example Mill, Snowford at 10:20am.");
+    expect(text).toContain("Door 6 is open! Detective R. Tinselfoot found Pip at 10:20am. Missed it? You can still crack the case in Detective HQ, with one guess.");
     expect(text).toContain("https://nbcc.example.org/admin");
-    // Today's place is never named before it is shown.
+    // Today's place is never named before it is shown, and (Plan 2c-1) the posts never name yesterday's either.
     expect(text).not.toContain("The Example Bakehouse");
+    expect(text).not.toContain("The Example Mill");
     expect(deps.finderParts).toHaveBeenCalledWith(2026, 6);
     expect(deps.markSent).toHaveBeenCalledWith("morning", "2026-12-07");
   });
@@ -538,6 +539,28 @@ describe("the morning email, at 8am on 7 December", () => {
     await tick(at("2026-12-07T08:00:30Z"));
     // The two head elves with alerts on, once each.
     expect(sentOf(sent, "morning").map((m) => m.to)).toEqual(["alex@example.org", "jo@example.org"]);
+  });
+
+  // Ruling F6: on Christmas Day the morning email still posts door 24, but having a go closed at midnight.
+  it("no longer offers a go in door 24's post on Christmas Day, and never names its place", async () => {
+    const facts: DoorFacts = {
+      clue1At: at("2026-12-24T10:00:00Z"),
+      clue2At: at("2026-12-24T10:30:00Z"),
+      clue3At: at("2026-12-24T11:00:00Z"),
+      revealAt: at("2026-12-24T11:30:00Z"),
+      closesAt: at("2026-12-24T16:00:00Z"),
+      foundAt: at("2026-12-24T10:20:00Z"),
+      snowDay: false,
+      goneHome: false,
+    };
+    const door24: DoorRun = { ...door6(), door: 24, facts, calendarAt: facts.clue1At };
+    const { sent, tick } = morning({ loadDoorRuns: vi.fn(async () => [door24]) });
+    await tick(at("2026-12-25T08:00:00Z"));
+    const text = sentOf(sent, "morning")[0].text;
+    expect(text).toContain("Door 24 is open! Detective R. Tinselfoot found Pip at 10:20am.");
+    expect(text).not.toContain("Missed it?");
+    expect(text).not.toContain("crack the case");
+    expect(text).not.toContain("The Example Mill");
   });
 });
 

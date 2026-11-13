@@ -8,7 +8,7 @@ import { countPhotosWaiting, deleteExpiredPhotoFiles, oldestWaitingPhotoDoor } f
 import { sendElfClue, sendElfFindAlert, sendElfMorning, sendElfPhotoAlert, sendElfPlaceReminder, sendElfProud, type FundraiseEmailMessage } from "../clients/email";
 import { sendText, type SmsMessage } from "../clients/sms";
 import { alertRecipients, photoAlertDue, type HeadElf } from "./alerts";
-import { closingShown } from "./catch-up";
+import { closingShown, goesOpen } from "./catch-up";
 import { elfTextsOn } from "./texts-on";
 import { doorInstant, doorOn, type Door } from "./calendar";
 import { doorPicture, doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
@@ -347,7 +347,16 @@ async function morningEmail(date: string, t: Tick): Promise<BuiltEmail> {
     const place =
       isOpen(state) && filled(yesterdayRun.placeName) && filled(yesterdayRun.placeTown) ? { name: yesterdayRun.placeName, town: yesterdayRun.placeTown } : null;
     yesterday = { door: yesterdayDoor, finders, foundAt: yesterdayRun.facts.foundAt, place, state, snow: yesterdayRun.facts.snowDay };
-    yesterdayWords = yesterdayPost({ door: yesterdayDoor, elfName: yesterdayRun.elfName, state, finders, foundAt: yesterdayRun.facts.foundAt, place });
+    // The post never names the place (Plan 2c-1), and offers a go only while having a go is open.
+    yesterdayWords = yesterdayPost({
+      door: yesterdayDoor,
+      elfName: yesterdayRun.elfName,
+      state,
+      finders,
+      foundAt: yesterdayRun.facts.foundAt,
+      goneHome: yesterdayRun.facts.goneHome,
+      goesOpen: goesOpen(t.year, t.at),
+    });
   }
 
   // A snow day has no door to post about.

@@ -9,8 +9,9 @@ import { clockWords } from "./words";
 //
 // "Tonight" only when the first clue is after midday; a morning clue is "today". A detective is
 // named only through detectiveNames, so a first name nobody has ticked shows as its first letter.
-// The yesterday post exists only once the place is public: it is null for a door whose finder has
-// not yet let the place be shown ("found-hidden"), for a snow day, and for a door with no place.
+// The yesterday post exists only once the door is open: it is null for a door whose finder has not yet
+// let the place be shown ("found-hidden"), and for a snow day. It never names the place, which a family
+// sees only once it has had its guess or been there (Plan 2c-1).
 
 const LONDON_HOUR = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hourCycle: "h23" });
 
@@ -27,23 +28,29 @@ export function doorPost(o: { door: Door; clue1At: Date; joinUrl: string }): str
   return `Door ${o.door} of NBCC Elf Detective School opens ${when}! The first clue comes out at ${clockWords(o.clue1At)} in Detective HQ, with two more across the ${rest}. Not a detective yet? Join at ${o.joinUrl}`;
 }
 
-/** The post about yesterday's door, or null while its place is not public. */
+/** The post about yesterday's door, or null unless the door is open. Who found the elf, or that nobody has yet
+ *  and its prize is still to be won (nobody did, once the elf has gone home: it can no longer be found); and,
+ *  while having a go is open (`goesOpen`: until Christmas Day, ruling F6), that a family that missed it can
+ *  still crack the case. A finder who cannot be named is "A detective", as on the calendar. */
 export function yesterdayPost(o: {
   door: Door;
   elfName: string;
   state: DoorState;
   finders: DetectiveNameParts[];
   foundAt: Date | null;
-  place: { name: string; town: string } | null;
+  goneHome: boolean;
+  goesOpen: boolean;
 }): string | null {
-  if (!isOpen(o.state) || !o.place) return null;
-  const where = `${o.place.name}, ${o.place.town}`;
+  if (!isOpen(o.state)) return null;
   const elf = o.elfName;
-  if (o.state === "found" && o.finders.length > 0 && o.foundAt) {
-    const by = detectiveNames(o.finders);
-    return `Door ${o.door} is open! ${by} found ${elf} at ${where} at ${clockWords(o.foundAt)}. ${elf} stays there all December: call in, type the word on the tag for a candy cane stamp, and add your picture to the door.`;
+  const missed = o.goesOpen ? " Missed it? You can still crack the case in Detective HQ, with one guess." : "";
+  if (o.state === "found") {
+    const by = detectiveNames(o.finders) || "A detective";
+    const at = o.foundAt ? clockWords(o.foundAt) : "";
+    return `Door ${o.door} is open! ${by} found ${elf}${at ? ` at ${at}` : ""}.${missed}`;
   }
-  return `Door ${o.door} is open! Nobody found ${elf} in time, so ${elf} is waiting at ${where}. The first detective to type the word on its tag wins the prize.`;
+  if (o.goneHome) return `Door ${o.door} is open! Nobody found ${elf} in time.${missed}`;
+  return `Door ${o.door} is open! Nobody has found ${elf} yet, so the first detective to find it still wins the prize.${missed}`;
 }
 
 /** The committed picture for a door's post, on the site's own address, or null for the mystery star. */

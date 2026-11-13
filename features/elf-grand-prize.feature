@@ -93,3 +93,28 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     Then the head elf's answer is a picture of type "image/jpeg", kept by no cache
     When the family "first.prize.elf.bdd@example.com" sends its detective's picture for the grand prize
     Then the game answers 409
+
+  # Stop these emails (ruling F16). The small link at the foot of each email that is not essential opens the
+  # family's own page, which asks: following the link changes nothing, and only its button stops the emails. Detective
+  # HQ then says so, and its own button starts them again. Played in next year's December with December's doors on,
+  # so nothing here reads a date.
+  Scenario: A family stops the emails from the link in one, and starts them again from Detective HQ
+    Given December's doors are switched on
+    And "emails.prize.elf.bdd@example.com" has already enrolled "Ruby Tinselfoot" and paid
+    And the paying browser comes back from Stripe
+    And it is sent to Detective HQ, signed in
+    And that browser is the family "emails.prize.elf.bdd@example.com"
+    When someone opens the link to stop the emails in an email to "emails.prize.elf.bdd@example.com"
+    Then the game answers 200
+    And the game page says "Stop the emails from Elf Detective School?"
+    And the family "emails.prize.elf.bdd@example.com" gets the emails
+    When someone presses the button on that page
+    Then the game answers 200
+    And the game page says "Done. We will not send you these emails any more."
+    And the family "emails.prize.elf.bdd@example.com" has stopped the emails, and the audit log says so
+    When the family "emails.prize.elf.bdd@example.com" opens "/elf/hq"
+    Then the game answers 200
+    And the game page says "You have stopped these emails."
+    When the family "emails.prize.elf.bdd@example.com" presses the button in Detective HQ's Your emails
+    Then the game answers 303
+    And the family "emails.prize.elf.bdd@example.com" gets the emails again, and the audit log says so

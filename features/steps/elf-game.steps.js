@@ -6,7 +6,8 @@ const sharp = require("sharp");
 // Steps for features/elf-game.feature: December's doors switched off, a real door shut until its day, and
 // a whole practice evening played through the preview link; and for features/elf-grand-prize.feature, a
 // graduate's picture sent in for the grand prize on Christmas Eve, and Head Elf HQ's side: the entries, the one
-// winner, and when the entries close and the graduates' video in Settings. The families come from the elf join steps
+// winner, and when the entries close and the graduates' video in Settings; and a family stopping the emails that are
+// not essential from the link in one, and starting them again from Detective HQ. The families come from the elf join steps
 // (features/steps/elf-join.steps.js, whose @elf-school hooks clear them, play every scenario in next
 // year's December with December's doors off, and clear the practice door); the staff from "an admin user
 // {string} with role {string} and password {string}" (features/steps/admin-api.steps.js, whose @admin
@@ -1050,4 +1051,86 @@ Then("the graduates' video is {string}", async function (url) {
 Then("there is no graduates' video", async function () {
   const r = await pool.query("SELECT graduate_video_url FROM elf_settings WHERE id = 1");
   assert.equal(r.rows[0].graduate_video_url, null);
+});
+
+// ---- the emails a family can stop (features/elf-grand-prize.feature, ruling F16) ---------------------------------
+//
+// The small link at the foot of a clue email, a promotion or a graduation opens the family's own page, found by the
+// token the database made for the family (elf_families.emails_token, read here by SQL). Following it changes
+// nothing: only the page's button does. Detective HQ has the same switch for the family signed in. Each button is
+// pressed as the page drew it: its own form, posted with the choice it holds. Whether the emails are stopped is read
+// by SQL, and so is the audit log's newest line about them. Nothing here reads a date.
+
+/** The family's own token for the link that stops its emails. */
+async function emailsTokenOf(email) {
+  const r = await pool.query("SELECT emails_token FROM elf_families WHERE email = $1", [email]);
+  assert.ok(r.rows[0], `no family ${email}`);
+  return r.rows[0].emails_token;
+}
+
+/** The first form a page draws after `marker`: where it posts, and the choice its hidden field holds. */
+function stoppedFormAfter(world, marker) {
+  const html = String(world.gameText);
+  const from = html.indexOf(marker);
+  assert.ok(from > -1, `no ${marker} in ${sentence(world)}`);
+  const form = /<form\b[^>]*\baction="([^"]+)"[^>]*>([\s\S]*?)<\/form>/.exec(html.slice(from));
+  assert.ok(form, `no form after ${marker} in ${sentence(world)}`);
+  const choice = /name="stopped" value="(yes|no)"/.exec(form[2]);
+  assert.ok(choice, `the form after ${marker} holds no choice: ${form[0]}`);
+  return { action: form[1], stopped: choice[1] };
+}
+
+/** A plain form posted as a family's browser (or as nobody) sends it, and the answer kept as asFamily keeps it. With
+ *  no Origin header, as the other posts here, it counts as from our own page. */
+async function postFormAs(world, family, path, fields) {
+  const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (family) headers.Cookie = cookiesOf(family);
+  const res = await fetch(`${BASE_URL}${path}`, { method: "POST", headers, redirect: "manual", body: new URLSearchParams(fields).toString() });
+  world.gameStatus = res.status;
+  world.gameType = res.headers.get("content-type") || "";
+  world.gameText = await res.text();
+  world.gameBody = null;
+}
+
+/** Whether the family has stopped the emails, and the audit log's newest line about them. */
+async function emailsOf(email) {
+  const f = await pool.query("SELECT id, emails_stopped_at FROM elf_families WHERE email = $1", [email]);
+  assert.ok(f.rows[0], `no family ${email}`);
+  const a = await pool.query(
+    "SELECT action, actor, data FROM audit_log WHERE entity = 'elf_family' AND entity_id = $1 AND action LIKE 'elf.emails.%' ORDER BY id DESC LIMIT 1",
+    [f.rows[0].id],
+  );
+  return { id: Number(f.rows[0].id), stopped: f.rows[0].emails_stopped_at !== null, audit: a.rows[0] ? { action: a.rows[0].action, actor: a.rows[0].actor, data: a.rows[0].data } : null };
+}
+
+When("someone opens the link to stop the emails in an email to {string}", async function (email) {
+  await asFamily(this, null, "GET", `/elf/emails/${await emailsTokenOf(email)}`);
+});
+
+When("someone presses the button on that page", async function () {
+  const form = stoppedFormAfter(this, "<main");
+  await postFormAs(this, null, form.action, { stopped: form.stopped });
+});
+
+When("the family {string} presses the button in Detective HQ's Your emails", async function (email) {
+  const form = stoppedFormAfter(this, 'class="section elf-hq-emails"');
+  assert.equal(form.action, "/api/elf/emails", `Detective HQ's switch posts to ${form.action}`);
+  await postFormAs(this, familyOf(this, email), form.action, { stopped: form.stopped });
+});
+
+Then("the family {string} gets the emails", async function (email) {
+  const now = await emailsOf(email);
+  assert.equal(now.stopped, false, `the emails of ${email} are stopped`);
+});
+
+Then("the family {string} has stopped the emails, and the audit log says so", async function (email) {
+  const now = await emailsOf(email);
+  assert.equal(now.stopped, true, `the emails of ${email} are not stopped`);
+  assert.deepEqual(now.audit, { action: "elf.emails.stopped", actor: "family", data: { familyId: now.id } });
+});
+
+Then("the family {string} gets the emails again, and the audit log says so", async function (email) {
+  const now = await emailsOf(email);
+  assert.equal(now.stopped, false, `the emails of ${email} are still stopped`);
+  assert.deepEqual(now.audit, { action: "elf.emails.started", actor: "family", data: { familyId: now.id } });
 });

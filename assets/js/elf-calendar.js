@@ -67,6 +67,8 @@
     // Each door the family can see that its own answer has not drawn yet, or that is opening while that answer
     // cannot be read: when it was first missed.
     var owed = {};
+    // Settles once the family's answer has been taken in and its own doors drawn (loadMarks); polls draw after it.
+    var ready = Promise.resolve();
     var failures = 0;
     var stopped = false;
     var ticker = null;
@@ -492,6 +494,9 @@
     // minute a door is given up on: a door the feed says has changed is then drawn as the calendar everyone
     // shares draws it, and either way it is not asked for again until it changes again.
     function missed(doors, changed) {
+      // A miss that lands once the family's own doors are no longer drawn (Christmas Day began while it was being
+      // asked for) is owed nothing, as nothing is owed then (redraw).
+      if (!mineOn()) return Promise.resolve();
       var t = now();
       var chain = Promise.resolve();
       doors.forEach(function (n) {
@@ -681,17 +686,22 @@
           if (feed.now) setSkew(feed.now);
           setTally(feed.found);
           setStatus(feed.status);
-          var changed = [];
-          var newer = {};
-          var list = feed.doors || [];
-          for (var i = 0; i < list.length; i++) {
-            var door = doorOf(list[i].door);
-            if (door && door.getAttribute("data-v") !== list[i].v) {
-              changed.push(Number(list[i].door));
-              newer[list[i].door] = list[i].v;
+          // While December's doors are on, no door is drawn until the family's answer is in: a poll begun as the page
+          // loads could otherwise put a shared door over one just drawn from the family's own answer. With them off
+          // there is no family's door to keep, and a poll draws at once, as it always has.
+          return (meDoorApi ? ready : Promise.resolve()).then(function () {
+            var changed = [];
+            var newer = {};
+            var list = feed.doors || [];
+            for (var i = 0; i < list.length; i++) {
+              var door = doorOf(list[i].door);
+              if (door && door.getAttribute("data-v") !== list[i].v) {
+                changed.push(Number(list[i].door));
+                newer[list[i].door] = list[i].v;
+              }
             }
-          }
-          return redraw(changed, newer);
+            return redraw(changed, newer);
+          });
         })
         .catch(function () {
           // No news is not an error anyone needs to see. Try again later, a little less often.
@@ -737,7 +747,9 @@
     });
     loop();
 
-    return { tick: tick, poll: poll, ready: loadMarks(), stop: stop };
+    // Set before any poll's answer can come back, so every poll draws after the family's answer is in.
+    ready = loadMarks();
+    return { tick: tick, poll: poll, ready: ready, stop: stop };
   }
 
   if (typeof module !== "undefined" && module.exports) {

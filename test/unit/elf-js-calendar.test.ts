@@ -40,6 +40,14 @@ let ownPhotos = new Map<number, ScrapPhoto[]>();
 let ownStatus = 200;
 /** The family's answer cannot be reached at all, as when the network fails for that one request. */
 let meOffline = false;
+/** Answers the pretend server holds back until the test lets them go, by address. */
+let held = new Map<string, Promise<void>>();
+/** Hold back the answer to `url`; the function returned lets it go. */
+function holdBack(url: string): () => void {
+  let letGo = () => {};
+  held.set(url, new Promise<void>((resolve) => (letGo = resolve)));
+  return () => letGo();
+}
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const door = (n: number) => $(`#door-${n}`);
@@ -108,7 +116,9 @@ function load(view: CalendarView = calendarView(AFTERNOON), hash = ""): Calendar
       const a = answer(url);
       return Promise.resolve({ ok: a.status >= 200 && a.status < 300, status: a.status, json: () => Promise.resolve(a.body) });
     };
-    return reply();
+    // An answer held back by the test comes once it is let go, as the server holds it then.
+    const wait = held.get(url);
+    return wait ? wait.then(reply) : reply();
   });
   cal = initCalendar(document, window, { now: () => clock }) as Calendar;
   return cal;
@@ -136,6 +146,7 @@ afterEach(() => {
   places = new Map();
   ownPhotos = new Map();
   ownStatus = 200;
+  held = new Map();
   meOffline = false;
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
 });
@@ -981,6 +992,46 @@ describe("a family's own places", () => {
     calls = [];
     await calendar.poll();
     expect(calls).toEqual(["/api/elf/calendar"]);
+  });
+
+  // From the review of Task 8, Minor 3: a poll begun as the page loads draws nothing until the family's answer is in,
+  // so its shared door can never land on top of the family's own.
+  it("never let a poll begun before the family's answer is in replace a door drawn from that answer", async () => {
+    places.set(7, CORNER);
+    me = meOn({ known: [7] });
+    const answerMe = holdBack("/api/elf/me");
+    const answerSharedSeven = holdBack("/api/elf/door/7");
+    const calendar = load(sharedSeven(SEVEN_05));
+    // Door 7 changes on the server, and a poll begins before the family's answer is in.
+    secondElfOnSeven();
+    const polled = calendar.poll();
+    await flush();
+    answerMe();
+    await calendar.ready;
+    expect(words(detail(7))).toContain("Corner Bakehouse");
+    answerSharedSeven();
+    await polled;
+    await flush();
+    expect(words(detail(7))).toContain("Corner Bakehouse");
+    expect(detail(7).querySelectorAll(".elf-collage figure").length).toBe(2);
+    expect(door(7).getAttribute("data-v")).toBe(doorVersion(server.doors[6], server.now));
+    expect(calls).not.toContain("/api/elf/door/7");
+  });
+
+  // Ruling F4 on Plan 2c-1: with December's doors off there is no family's door to keep, so a poll draws at once, as
+  // it always has, whether or not the family's answer is in.
+  it("draw a changed door at once with December's doors off, without waiting for the family's answer", async () => {
+    me = { status: 200, body: { doors: [], photos: [] } };
+    const answerMe = holdBack("/api/elf/me");
+    const calendar = load({ ...calendarView(AFTERNOON), doorsOn: false });
+    findDoorSeven();
+    const polled = calendar.poll();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(door(7).classList.contains("is-open")).toBe(true);
+    answerMe();
+    await polled;
+    await calendar.ready;
+    expect(calls).toEqual(["/api/elf/me", "/api/elf/calendar", "/api/elf/door/7"]);
   });
 
   // Ruling F15 on Plan 2c-1: door 5 as the calendar everyone shares draws it before Christmas Day, with no place and

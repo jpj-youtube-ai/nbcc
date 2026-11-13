@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DOOR_COUNT,
+  CHRISTMAS_EVE_CLOSING_TIME,
   DEFAULT_MORNING_CLUE_TIME,
   DEFAULT_CLOSING_TIME,
   DEFAULT_SCHOOL_CLUE_TIME,
@@ -216,9 +217,35 @@ describe("the moment a door's place closes", () => {
     expect(LAST_REVEAL_TIME).toBe("20:00");
     expect(closingInstant(SEASON, 24, "10:00", "23:00")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
     expect(closingInstant(SEASON, 24, "10:00", "00:30")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
-    expect(closingInstant(SEASON, 24, "10:00", null)?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", null)?.toISOString()).toBe("2026-12-24T16:00:00.000Z");
     expect(closingInstant(SEASON, 24, "10:00", "16:00")?.toISOString()).toBe("2026-12-24T16:00:00.000Z");
     expect(closingInstant(SEASON, 23, "22:00", "21:00")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+  });
+
+  // Plan 2c-2, ruling F2 (Jaimie, 12 November 2026: "I said 4pm for xmas eve"): places close early on
+  // Christmas Eve, so door 24's place closes at 4pm unless a head elf types its own time. A typed time
+  // still wins, earlier or later; only the 8pm cap above holds it back.
+  it("is 4pm on Christmas Eve when door 24 has no closing time, or one that is not a real time", () => {
+    expect(CHRISTMAS_EVE_CLOSING_TIME).toBe("16:00");
+    expect(closingInstant(SEASON, 24, "10:00", undefined)?.toISOString()).toBe("2026-12-24T16:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", "late")?.toISOString()).toBe("2026-12-24T16:00:00.000Z");
+    expect(closingInstant({ year: 2027 }, 24, "10:00", null)?.toISOString()).toBe("2027-12-24T16:00:00.000Z");
+  });
+
+  it("keeps a closing time typed on door 24, earlier or later than 4pm, under the 8pm cap", () => {
+    expect(closingInstant(SEASON, 24, "10:00", "15:00")?.toISOString()).toBe("2026-12-24T15:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", "18:00")?.toISOString()).toBe("2026-12-24T18:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", "23:00")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+  });
+
+  it("leaves every other door's place closing at 8pm when none is typed, the day before Christmas Eve too", () => {
+    expect(closingInstant(SEASON, 23, "10:00", null)?.toISOString()).toBe("2026-12-23T20:00:00.000Z");
+    expect(closingInstant(SEASON, 1, "17:30", null)?.toISOString()).toBe("2026-12-01T20:00:00.000Z");
+  });
+
+  it("closes door 24 at 8pm, the cap, when a head elf moves its clue to 4pm or later and types no closing time", () => {
+    expect(closingInstant(SEASON, 24, "16:00", null)?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "15:59", null)?.toISOString()).toBe("2026-12-24T16:00:00.000Z");
   });
 
   it("is nothing for a clue at or after 8pm on Christmas Eve, which cannot work and must be refused", () => {
@@ -262,9 +289,19 @@ describe("a door's evening", () => {
   });
 
   it("knows when a place closes too soon after clue 3", () => {
-    expect(closesTooSoon("19:30", "18:30")).toBe(false);
-    expect(closesTooSoon("19:29", "18:30")).toBe(true);
-    expect(closesTooSoon(null, "18:30")).toBe(false);
-    expect(closesTooSoon("17:00", "18:30")).toBe(true);
+    expect(closesTooSoon(7, "19:30", "18:30")).toBe(false);
+    expect(closesTooSoon(7, "19:29", "18:30")).toBe(true);
+    expect(closesTooSoon(7, null, "18:30")).toBe(false);
+    expect(closesTooSoon(7, "17:00", "18:30")).toBe(true);
+  });
+
+  // Ruling F2: door 24's place closes at 4pm when no time is typed, so that is the time to check against.
+  it("checks door 24 against 4pm when it has no closing time typed, and against a typed time when it has one", () => {
+    expect(closesTooSoon(24, null, "11:00")).toBe(false);
+    expect(closesTooSoon(24, null, "15:00")).toBe(false);
+    expect(closesTooSoon(24, null, "15:01")).toBe(true);
+    expect(closesTooSoon(23, null, "15:01")).toBe(false);
+    expect(closesTooSoon(24, "17:00", "15:30")).toBe(false);
+    expect(closesTooSoon(24, "15:00", "11:00")).toBe(false);
   });
 });

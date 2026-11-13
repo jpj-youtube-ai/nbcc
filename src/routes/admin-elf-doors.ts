@@ -145,7 +145,7 @@ async function sheetOf(year: number, d: DoorSetup, now: Date): Promise<DoorSheet
     // A door is ready without a picture of its own: every door has the same present.
     readiness: readinessOf(d),
     evening,
-    closesTooSoon: closesTooSoon(d.closesAt, evening.clue3),
+    closesTooSoon: closesTooSoon(d.door, d.closesAt, evening.clue3),
     picture: doorPicture(year, d.door),
     posterUrl: `${String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "")}/elf/p/${d.posterCode}`,
     clueOut,

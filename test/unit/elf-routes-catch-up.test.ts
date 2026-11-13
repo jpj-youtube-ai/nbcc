@@ -31,6 +31,8 @@ const game = vi.hoisted(() => ({
   doorPhotos: vi.fn(),
   approvedPhoto: vi.fn(),
   saveLateGuess: vi.fn(),
+  saveGuess: vi.fn(),
+  detectiveDoorsDone: vi.fn(),
 }));
 
 vi.mock("../../src/db/elf", () => db);
@@ -49,6 +51,7 @@ import { loadDoorRuns } from "../../src/db/elf-game";
 import type { FamilyKnowledge } from "../../src/elf/catch-up";
 import { ELF_NAMES } from "../../src/elf/names";
 import { doorDetail, doorTile } from "../../src/elf/pages/door";
+import { normalisePlaceName } from "../../src/elf/place-names";
 import type { Scrapbook } from "../../src/elf/scrapbook";
 import { calendarViewFor, familyDoorView } from "../../src/elf/views";
 import { at, callerAt, door3, door6, door7, doorsDoneFromRuns, FAMILY, FIVE_47, OFF, ON, PRACTICE_PASS, practiceRow, SEVEN_05, SIX_10, snowedIn, TOKEN } from "./elf-routes-fixtures";
@@ -115,6 +118,8 @@ beforeEach(() => {
   game.doorPhotos.mockResolvedValue([PHOTO]);
   game.approvedPhoto.mockResolvedValue({ mime: "image/jpeg", bytes: Buffer.from("the photo") });
   game.saveLateGuess.mockResolvedValue("saved");
+  game.saveGuess.mockResolvedValue(true);
+  game.detectiveDoorsDone.mockResolvedValue({ cracked: [], visited: [], snow: [] });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -276,6 +281,20 @@ describe("a family's own door", () => {
     const r = await call("GET", "/api/elf/me/door/7");
     expect(r.status).toBe(404);
     expect(r.data).toEqual({ error: "Not found" });
+    // It is the place that is missing: the family can see it, and the door was read.
+    expect(game.familyKnowledge).toHaveBeenCalled();
+    expect(doors.getElfDoor).toHaveBeenCalledWith(2026, 7);
+    expect(game.doorPhotos).not.toHaveBeenCalled();
+  });
+
+  // Rulings on Plan 2c-1, from Task 5's review: a place cleared to spaces is no place, as everywhere else.
+  it("is not found for an open door whose place is only spaces", async () => {
+    doors.getElfDoor.mockResolvedValue(foundDoor7({ placeName: "   ", placeTown: null }));
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    const r = await call("GET", "/api/elf/me/door/7");
+    expect(r.status).toBe(404);
+    expect(r.data).toEqual({ error: "Not found" });
+    expect(doors.getElfDoor).toHaveBeenCalledWith(2026, 7);
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
 
@@ -295,6 +314,7 @@ describe("a family's own door", () => {
     const practising = await call("GET", "/api/elf/me/door/7", { cookie: PRACTICE_PASS });
     expect(practising.status).toBe(404);
     expect(practising.data).toEqual({ error: "Not found" });
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
     expect(game.doorPhotos).not.toHaveBeenCalled();
   });
 
@@ -722,5 +742,270 @@ describe("having a go at a door", () => {
     expect(lines).toContain("connection lost");
     expect(lines).not.toContain("example bakehouse");
     logged.mockRestore();
+  });
+});
+
+// ---- Detective HQ catches up (Task 7) ------------------------------------------------------------
+
+describe("Detective HQ catching up", () => {
+  const hq = (cookie?: string | null) => call("GET", "/elf/hq", { cookie });
+  /** Doors 3 and 6, found on their days, are open beside door 7: doors 1, 2, 4 and 5 were snowed in. */
+  const withDoors3And6 = () => doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 4, 5]), door3(), door6(), foundDoor7()]);
+
+  it("offers a family that has done nothing at door 7 its one go, and never names the place", async () => {
+    const r = await hq();
+    expect(r.status).toBe(200);
+    expect(r.text).toContain("Case closed");
+    expect(r.text).toContain("You did not lock in a guess in time, but you can still crack this case, with one guess.");
+    expect(r.text).toContain('<a class="elf-btn elf-btn--crimson" href="/elf/hq/door/7">Have a go</a>');
+    for (const secret of ["Example Bakehouse", "Exampleton", "Example Bakes"]) expect(r.text).not.toContain(secret);
+    expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+  });
+
+  it("shows a family that guessed door 7 on the night how it went, where the elf was and when the place closes, with no go", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    const r = await hq();
+    expect(r.text).toContain("You cracked it!");
+    expect(r.text).toContain("Wigglepop was hiding at The Example Bakehouse.");
+    expect(r.text).toContain("The Example Bakehouse closes at 8:30pm today.");
+    expect(r.text).not.toContain('href="/elf/hq/door/7"');
+  });
+
+  it("shows a family whose detective typed door 7's tag word where the elf was, with no go", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [7] }));
+    const r = await hq();
+    expect(r.text).toContain("Wigglepop was hiding at The Example Bakehouse.");
+    expect(r.text).not.toContain('href="/elf/hq/door/7"');
+  });
+
+  it("says when the place closes under the clues while door 7 is hunted, without naming it", async () => {
+    vi.setSystemTime(SIX_10);
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 3, 4, 5, 6]), door7()]);
+    const r = await hq();
+    expect(r.text).toContain("The hiding place closes at 8:30pm today.");
+    expect(r.text).not.toContain("Example Bakehouse");
+  });
+
+  it("lists the other doors the family can still crack under today's case, newest first, never naming their places", async () => {
+    withDoors3And6();
+    const r = await hq();
+    expect(r.text).toContain("Doors you can still crack");
+    const six = r.text.indexOf('href="/elf/hq/door/6"');
+    expect(six).toBeGreaterThan(r.text.indexOf('id="elf-case-heading"'));
+    expect(r.text.indexOf('href="/elf/hq/door/3"')).toBeGreaterThan(six);
+    // Today's door is offered by today's case alone (ruling F9).
+    expect(r.text.match(/href="\/elf\/hq\/door\/7"/g)?.length).toBe(1);
+    for (const secret of ["Example Mill", "Example Bakehouse"]) expect(r.text).not.toContain(secret);
+  });
+
+  it("leaves a door off the list once the family has guessed it, rightly or wrongly, or been there", async () => {
+    withDoors3And6();
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [6], typed: [3] }));
+    const r = await hq();
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('href="/elf/hq/door/7"');
+    expect(r.text).not.toContain("Doors you can still crack");
+    expect(r.text).not.toMatch(/href="\/elf\/hq\/door\/[36]"/);
+  });
+
+  it("plays the practice door's go through the preview link, with December's doors off", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
+    const r = await hq(PRACTICE_PASS);
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('href="/elf/hq/door/0">Have a go</a>');
+    expect(r.text).not.toContain("The Example Office");
+    expect(r.text).not.toContain("Doors you can still crack");
+    expect(game.familyKnowledge).toHaveBeenCalledWith(0, 3);
+    expect(game.familyKnowledge).not.toHaveBeenCalledWith(2026, 3);
+  });
+
+  it("shows the practice door's place to a family that has had its practice guess, from the practice door's own rows", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
+    game.familyKnowledge.mockImplementation(async (year: number) => knowledge(year === 0 ? { guessed: [0] } : {}));
+    const r = await hq(PRACTICE_PASS);
+    expect(r.text).toContain("Tinsel was hiding at The Example Office.");
+    expect(r.text).not.toContain('href="/elf/hq/door/0"');
+  });
+
+  // Review Focus 5: with December's doors off, Detective HQ is exactly today's.
+  it("reads nothing of what the family has done with December's doors off, and draws no go, no list and no closing time", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    const r = await hq();
+    expect(r.status).toBe(200);
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+    for (const words of ["Have a go", "Doors you can still crack", "closes at"]) expect(r.text).not.toContain(words);
+  });
+
+  it("answers 500 with the game's words when what the family has done cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    const r = await hq();
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    logged.mockRestore();
+  });
+});
+
+// Ruling F7: a missed door's costume sends the family to Detective HQ only while it can still crack that door.
+describe("the wardrobe's missed doors", () => {
+  const wardrobe = () => call("GET", "/elf/hq/wardrobe/100");
+  /** How many costume notes say these words: each door brings two costumes. */
+  const notes = (html: string, words: string) => (html.match(new RegExp(`<span class="elf-wd-why" aria-hidden="true">${words}</span>`, "g")) ?? []).length;
+
+  it("sends each missed door the family can still crack to Detective HQ, and only a door it cannot to the place", async () => {
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 4, 5]), door3(), door6(), foundDoor7()]);
+    game.detectiveDoorsDone.mockResolvedValue({ cracked: [], visited: [], snow: [1, 2, 4, 5] });
+    const r = await wardrobe();
+    expect(r.status).toBe(200);
+    expect(notes(r.text, "Crack it in Detective HQ to catch up")).toBe(4);
+    expect(notes(r.text, "Visit the place to catch up")).toBe(0);
+    expect(game.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+    // Door 6 guessed on the night: the family knows its place, so its costumes say to visit.
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [6] }));
+    const guessed = await wardrobe();
+    expect(notes(guessed.text, "Crack it in Detective HQ to catch up")).toBe(2);
+    expect(notes(guessed.text, "Visit the place to catch up")).toBe(2);
+  });
+
+  it("reads nothing of what the family has done with December's doors off, and says to visit, as today", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    const r = await wardrobe();
+    expect(r.status).toBe(200);
+    expect(game.familyKnowledge).not.toHaveBeenCalled();
+    expect(r.text).not.toContain("Crack it in Detective HQ");
+    expect(notes(r.text, "Visit the place to catch up")).toBeGreaterThan(0);
+  });
+
+  it("answers 500 with the game's words when what the family has done cannot be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    const r = await wardrobe();
+    expect(r.status).toBe(500);
+    expect(r.text).toBe(WORDS);
+    logged.mockRestore();
+  });
+});
+
+// ---- the night's guess once a door is open (Task 7) ----------------------------------------------
+
+const guess = (door: unknown, text: unknown, cookie?: string | null) => call("POST", "/api/elf/guess", { json: { door, text }, cookie });
+const formGuess = (door: string, text: string, cookie?: string | null) => call("POST", "/api/elf/guess", { form: { door, text }, cookie });
+
+describe("a guess sent once the place is shown", () => {
+  it("tells a family with a guess at door 7 that it is locked in, sends it back to Detective HQ, and saves nothing", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    const r = await guess(7, "The Example Cafe");
+    expect(r.status).toBe(409);
+    expect(r.data).toEqual({ reason: "locked-in", message: "Your guess is locked in, and the hiding place is shown now.", goUrl: "/elf/hq" });
+    expect(game.saveGuess).not.toHaveBeenCalled();
+  });
+
+  it("sends a family with no guess at door 7 to have its one go there, never saving the guess as its go", async () => {
+    const r = await guess(7, "The Example Bakehouse");
+    expect(r.status).toBe(409);
+    expect(r.data).toEqual({ reason: "have-a-go", message: "The hiding place is shown now, so this is your one go at this door.", goUrl: "/elf/hq/door/7" });
+    expect(game.saveGuess).not.toHaveBeenCalled();
+    expect(game.saveLateGuess).not.toHaveBeenCalled();
+  });
+
+  it("sends the plain form back to Detective HQ, or to the go page", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [7] }));
+    const locked = await formGuess("7", "The Example Cafe");
+    expect(locked.status).toBe(303);
+    expect(locked.headers.get("location")).toBe("/elf/hq");
+    game.familyKnowledge.mockResolvedValue(knowledge());
+    const go = await formGuess("7", "The Example Cafe");
+    expect(go.status).toBe(303);
+    expect(go.headers.get("location")).toBe("/elf/hq/door/7");
+    expect(game.saveGuess).not.toHaveBeenCalled();
+  });
+
+  it("tells a family that has been to door 7 but never guessed that there is nothing to guess", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [7] }));
+    const r = await guess(7, "The Example Bakehouse");
+    expect(r.status).toBe(400);
+    expect(r.data).toEqual({ reason: "not-hunting", message: "There is nothing to guess at this door just now." });
+    // The plain form: Detective HQ drawn again, with the words in the case.
+    const form = await formGuess("7", "The Example Bakehouse");
+    expect(form.status).toBe(400);
+    expect(form.text).toContain('<p class="elf-guess__status is-error" role="status">There is nothing to guess at this door just now.</p>');
+    expect(game.saveGuess).not.toHaveBeenCalled();
+  });
+
+  it("tells a family its guess at a shut door has nothing to guess, never naming the door's elf", async () => {
+    const r = await guess(8, "The Example Cafe");
+    expect(r.status).toBe(400);
+    expect(r.data).toEqual({ reason: "not-hunting", message: "There is nothing to guess at this door just now." });
+    expect(r.text).not.toContain(ELF_NAMES[7]);
+    expect(game.saveGuess).not.toHaveBeenCalled();
+  });
+
+  it("plays the practice door through the preview link: a family with no practice guess is sent to have its go there", async () => {
+    db.getElfSettings.mockResolvedValue(OFF);
+    practice.getPractice.mockResolvedValue(practiceRow({ foundAt: SIX_10, foundFamilyId: 9 }));
+    const r = await guess(0, "the example office", PRACTICE_PASS);
+    expect(r.status).toBe(409);
+    expect(r.data).toMatchObject({ reason: "have-a-go", goUrl: "/elf/hq/door/0" });
+    expect(game.familyKnowledge).toHaveBeenCalledWith(0, 3);
+    expect(game.familyKnowledge).not.toHaveBeenCalledWith(2026, 3);
+    expect(game.saveGuess).not.toHaveBeenCalled();
+  });
+
+  // Carried from Task 2: the night's save never replaces a go, and then the family is never told it saved.
+  it("never says a guess was saved when the family's go was kept in its place", async () => {
+    vi.setSystemTime(SIX_10);
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 3, 4, 5, 6]), door7()]);
+    game.saveGuess.mockResolvedValue(false);
+    const r = await guess(7, "The Example Cafe");
+    expect(r.status).toBe(409);
+    expect(r.data).toEqual({ reason: "already", message: "You have already had your go at this door." });
+    expect(game.saveGuess).toHaveBeenCalledWith(2026, 7, 3, { text: "The Example Cafe", norm: normalisePlaceName("The Example Cafe") }, SIX_10);
+    const form = await formGuess("7", "The Example Cafe");
+    expect(form.status).toBe(409);
+    expect(form.text).toContain('<p class="elf-guess__status is-error" role="status">You have already had your go at this door.</p>');
+  });
+
+  it("answers 500 with the game's words when what the family has done cannot be read, and saves nothing", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    game.familyKnowledge.mockRejectedValue(new Error("connection lost"));
+    const r = await guess(7, "The Example Bakehouse");
+    expect(r.status).toBe(500);
+    expect(r.data).toEqual({ error: WORDS });
+    expect(game.saveGuess).not.toHaveBeenCalled();
+    expect(JSON.stringify(logged.mock.calls)).not.toContain("Example Bakehouse");
+    logged.mockRestore();
+  });
+});
+
+// Review Focus 3: a refusal names another open door only when the family can see that door's place, so it never
+// gives a place away. At 5:47pm door 7 is hunted, and door 3, found last Thursday, is open.
+describe("a guess naming another open door's place", () => {
+  beforeEach(() => {
+    vi.setSystemTime(FIVE_47);
+    doors.listElfDoors.mockResolvedValue([...snowedIn([1, 2, 4, 5, 6]), door3(), door7()]);
+  });
+
+  it("is saved like any other guess for a family that has neither guessed door 3 nor been there, and nothing says door 3", async () => {
+    const r = await guess(7, "The Old Example Mill");
+    expect(r.status).toBe(200);
+    expect(r.data).toEqual({ ok: true, text: "The Old Example Mill" });
+    expect(r.text).not.toContain("door 3");
+    expect(game.saveGuess).toHaveBeenCalledWith(2026, 7, 3, { text: "The Old Example Mill", norm: normalisePlaceName("The Old Example Mill") }, FIVE_47);
+  });
+
+  it("is refused, naming door 3, for a family that guessed door 3", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ guessed: [3] }));
+    const r = await guess(7, "The Old Example Mill");
+    expect(r.status).toBe(400);
+    expect(r.data).toEqual({ reason: "place-already-open", message: "That elf was already found behind door 3. Try again!", door: 3 });
+    expect(game.saveGuess).not.toHaveBeenCalled();
+  });
+
+  it("is refused, naming door 3, by either of its names, for a family whose detective has been to door 3", async () => {
+    game.familyKnowledge.mockResolvedValue(knowledge({ typed: [3] }));
+    expect((await guess(7, "Example Mill")).data).toMatchObject({ reason: "place-already-open", door: 3 });
+    expect(game.saveGuess).not.toHaveBeenCalled();
   });
 });

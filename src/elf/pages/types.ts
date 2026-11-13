@@ -120,7 +120,8 @@ export interface TodayView {
   /** When the place is shown, when that can be said: the staff reveal time while the hunt is on before
    *  it, and the real time once the elf is found before it. Null once the reveal time has passed with
    *  the elf still hiding (the place is then shown as soon as it is found), and once the door is open.
-   *  Never the place's closing time. */
+   *  Never the place's closing time as when the place is shown: when the place closes is said on its own,
+   *  through closesAt. */
   revealAt: Date | null;
   /** The guess the family typed, as typed, or null. */
   guess: { text: string; at: Date } | null;
@@ -129,10 +130,20 @@ export interface TodayView {
   /** Why the guess just typed was not taken, when it came from the form with no script; null otherwise.
    *  Drawn in the guess form's status line. */
   guessError: string | null;
-  /** How it ended, once the door is open: where the elf was, who found it (nobody yet for a revealed
-   *  door), and whether this family cracked the case. `by` names ANOTHER family's detectives, so
-   *  it is public too: it MUST come from detectiveNames, like DoorView.found.by. */
+  /** How it ended, once the door is open and the family can see the place (the one rule, knowsPlace in
+   *  src/elf/catch-up.ts: it has a guess at the door, or one of its detectives typed the tag word): where
+   *  the elf was, who found it (nobody yet for a revealed door), and whether this family cracked the case.
+   *  Null otherwise, so a go at today's door can never be cracked by reading Detective HQ. `by` names
+   *  ANOTHER family's detectives, so it is public too: it MUST come from detectiveNames, like
+   *  DoorView.found.by. */
   outcome: { place: string; by: string | null; at: Date | null; cracked: boolean } | null;
+  /** Where the family has its one go at this door (the go page, `/elf/hq/door/${n}`), while it may have
+   *  one (mayHaveAGo in src/elf/catch-up.ts): the door is open and the family has neither guessed it nor
+   *  been there. Null otherwise. */
+  goUrl: string | null;
+  /** On the door's own day, when its hiding place closes, until then (closingShown in
+   *  src/elf/catch-up.ts); null otherwise. */
+  closesAt: Date | null;
 }
 
 /** A door's page in Detective HQ for having a go (Plan 2c-1): a family that missed a door's evening
@@ -153,6 +164,8 @@ export interface GoView {
   /** Is the elf still waiting at its place with nobody having found it: shown unfound, and not gone home?
    *  Then the form asks where it is hiding, not where it was (ruling F8). */
   stillHiding: boolean;
+  /** Has the door's elf gone home? Then a door nobody found says nobody found its elf, with no "yet". */
+  goneHome: boolean;
   /** In "go" only: the clues the family has asked to see, clue 1 first, as Detective HQ's case draws
    *  them. Empty in the other stages. */
   clues: TodayView["clues"];
@@ -182,6 +195,10 @@ export interface HqView {
   today: TodayView | null;
   /** When the next clue comes out, for a day with no case of its own. */
   nextClueAt: Date | null;
+  /** The missed doors the family may still crack, newest first (doorsToCrack in src/elf/catch-up.ts): real
+   *  doors only, never the door today's case shows (ruling F9), and none while December's doors are off.
+   *  Each with its elf, when its clues came out (DoorRun.calendarAt) and its go page. */
+  toCrack: { door: Door; elfName: string; clueAt: Date; url: string }[];
   marks: FamilyMarks;
   calendarUrl: string;
   /** Where the guess form posts when there is no script. */
@@ -206,6 +223,10 @@ export interface WardrobeView {
   now: Date;
   /** Doors 1 to 24: each one's clue time (as the calendar has it) and its date, YYYY-MM-DD. */
   doorDays: { door: number; clueAt: Date; date: string }[];
+  /** The doors the family may still crack from Detective HQ (doorsToCrack in src/elf/catch-up.ts; ruling
+   *  F7): a missed door among them says to crack it there, and any other missed door to visit the place, as
+   *  before. None while December's doors are off, and none from Christmas Day. */
+  crackable: readonly number[];
   hqUrl: string;
   /** The calendar: where the school's logo in the bar leads. */
   calendarUrl: string;

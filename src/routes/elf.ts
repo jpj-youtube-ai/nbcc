@@ -28,7 +28,6 @@ import {
   doorPhotos,
   doorScrapbook,
   familyDoorsDone,
-  familyGuesses,
   familyHasWon,
   familyKnowledge,
   familyPhoto,
@@ -51,11 +50,11 @@ import {
   type FamilyRuns,
 } from "../db/elf-game";
 import { DOOR_COUNT, isDoor, type Door } from "../elf/calendar";
-import { decideGo, doorsKnown, doorsToCrack, knowsPlace, placesPublic, type FamilyKnowledge, type GoRefusal } from "../elf/catch-up";
+import { decideGo, doorsKnown, doorsToCrack, knowsPlace, mayHaveAGo, placesPublic, type FamilyKnowledge, type GoRefusal } from "../elf/catch-up";
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
 import { canGuess, cluesOut, doorState, isOpen, shownAt, type DoorState } from "../elf/doors";
 import { badgeWords } from "../elf/emails";
-import { decideGuess, type GuessRefusal, type SavedGuess } from "../elf/guess";
+import { decideGuess, type GuessRefusal } from "../elf/guess";
 import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
 import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
 import { goOutcomeWords, renderGoPage } from "../elf/pages/go";
@@ -582,22 +581,30 @@ function gameFailed(res: Response, what: string, err: unknown, json: boolean): R
   return json ? res.status(500).json({ error: words }) : res.status(500).type("text/plain").send(words);
 }
 
-/** The family's guesses by door: this year's while December's doors are on, and the practice door's
- *  (door 0) while a practice evening runs for this browser. */
-async function guessesFor(res: Response, runs: FamilyRuns, familyId: number): Promise<Map<number, SavedGuess>> {
+/** A family that has neither guessed nor been anywhere: what is read while December's doors are off. */
+const NOTHING_DONE: FamilyKnowledge = { guesses: new Map(), typed: new Set() };
+
+/** What the family has done, door by door (src/elf/catch-up.ts): its guesses, and the doors where one of its
+ *  detectives typed the tag word. This year's while December's doors are on, with the practice door's (door
+ *  0) merged in while a practice evening runs for this browser; with neither, nothing is read. */
+async function knowledgeFor(res: Response, runs: FamilyRuns, familyId: number): Promise<FamilyKnowledge> {
   const settings = settingsOf(res);
-  const guesses = new Map(settings.doorsOn ? await familyGuesses(settings.year, familyId) : []);
-  if (runs.practice) {
-    const practice = (await familyGuesses(0, familyId)).get(0);
-    if (practice) guesses.set(0, practice);
-  }
-  return guesses;
+  const [year, practice] = await Promise.all([
+    settings.doorsOn ? familyKnowledge(settings.year, familyId) : NOTHING_DONE,
+    runs.practice ? familyKnowledge(0, familyId) : NOTHING_DONE,
+  ]);
+  const guesses = new Map(year.guesses);
+  const typed = new Set(year.typed);
+  const practiceGuess = practice.guesses.get(0);
+  if (practiceGuess) guesses.set(0, practiceGuess);
+  if (practice.typed.has(0)) typed.add(0);
+  return { guesses, typed };
 }
 
-/** Detective HQ's view for a family, all read through runsFor: the family's guesses, each detective's
+/** Detective HQ's view for a family, all read through runsFor: what the family has done, each detective's
  *  doors done and, once today's door is found and its place shown, who found it (read for that one door
- *  only). `known` is the doors when the caller has just read them. */
-async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: FamilyRuns): Promise<HqView> {
+ *  only). `known` is the doors, and `knowledge` what the family has done, when the caller has just read them. */
+async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: FamilyRuns, knowledge?: FamilyKnowledge): Promise<HqView> {
   const settings = settingsOf(res);
   const runs = known ?? (await familyRuns(res, now));
   const todayRun = todayRunOf({ settings, now, runs });
@@ -605,13 +612,13 @@ async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: Fam
     if (!todayRun || todayRun.door === 0 || doorState(todayRun.facts, now) !== "found") return new Map();
     return new Map([[todayRun.door, await finderParts(todayRun.year, todayRun.door)]]);
   };
-  const [guesses, doorsDone, finders] = await Promise.all([
-    guessesFor(res, runs, family.id),
+  const [done, doorsDone, finders] = await Promise.all([
+    knowledge ?? knowledgeFor(res, runs, family.id),
     familyDoorsDone(settings.year, family.id, runs.runs, now),
     findersOfToday(),
   ]);
   // HQ draws no photos: the calendar's script reads the family's own from /api/elf/me.
-  return hqViewFor({ family, settings, now, runs, guesses, doorsDone, finders, photos: [] });
+  return hqViewFor({ family, settings, now, runs, guesses: done.guesses, typed: done.typed, doorsDone, finders, photos: [] });
 }
 
 export async function getHq(req: Request, res: Response): Promise<Response | void> {
@@ -636,8 +643,14 @@ export async function getWardrobe(req: Request, res: Response): Promise<Response
     const id = detectiveIdOf(req.params.detective);
     const detective = family.detectives.find((d) => d.id === id);
     if (!detective) return res.status(404).type("text/plain").send("Not found");
-    const doorsDone = await detectiveDoorsDone(settings.year, detective.id, (await familyRuns(res, now)).runs, now);
-    return await sendPage(req, res, renderWardrobePage(wardrobeViewFor({ detective, settings, now, doorsDone })));
+    const { runs } = await familyRuns(res, now);
+    const [doorsDone, knowledge] = await Promise.all([
+      detectiveDoorsDone(settings.year, detective.id, runs, now),
+      // What the family has done, for the missed doors it can still crack from Detective HQ (ruling F7): read
+      // only while December's doors are on, so with them off the wardrobe is exactly what it was.
+      settings.doorsOn ? familyKnowledge(settings.year, family.id) : NOTHING_DONE,
+    ]);
+    return await sendPage(req, res, renderWardrobePage(wardrobeViewFor({ detective, settings, now, doorsDone, runs, knowledge })));
   } catch (err) {
     return gameFailed(res, "wardrobe", err, false);
   }
@@ -887,9 +900,10 @@ export async function getMyDoor(req: Request, res: Response): Promise<Response |
     const shared = view.doors.find((d) => d.door === n);
     if (!shared || !isOpen(shared.state)) return notFound(res, true);
     if (!placesPublic(settings.year, now) && !(await knowsDoorPlace(settings.year, s.familyId, n, shared.state))) return notFound(res, true);
-    const run = await loadDoorRun(settings.year, n, now);
-    if (run.placeName === null) return notFound(res, true);
-    const mine = familyDoorView(shared, { place: { name: run.placeName, town: run.placeTown ?? "" }, photos: await doorPhotos(settings.year, n) });
+    // A place left empty, or cleared to spaces, is no place (doorPlaceOf), as everywhere else.
+    const place = doorPlaceOf(await loadDoorRun(settings.year, n, now));
+    if (!place) return notFound(res, true);
+    const mine = familyDoorView(shared, { place, photos: await doorPhotos(settings.year, n) });
     const ctx = { now: view.now, joinUrl: view.joinUrl, hqUrl: view.hqUrl };
     return res.json({ tile: doorTile(mine, view.now), detail: doorDetail(mine, ctx) });
   } catch (err) {
@@ -922,7 +936,11 @@ elfRouter.get("/api/elf/me/door/:n", schoolOn, doorsOn, getMyDoor);
 //                                          { outcome: "won" | "visited", html }, or { reason, message,
 //                                          triesLeft? } with 400 (409 for too early and gone home)
 //   POST   /api/elf/guess                  a typed guess, JSON { door, text } or the plain form:
-//                                          { ok: true, text }, or 400 { reason, message, door? }
+//                                          { ok: true, text }, or 400 { reason, message, door? }; once
+//                                          the place is shown, 409 { reason, message, goUrl }: "locked-in"
+//                                          back to Detective HQ, or "have-a-go" to the door's go page (the
+//                                          plain form goes there), and 409 { reason: "already", message }
+//                                          when the family's go was kept in place of the night's save
 //   POST   /api/elf/p/:code/photo          the family's photo for the door, JSON { mime, dataBase64,
 //                                          consent: true } (the bigger body parser is in src/app.ts):
 //                                          202 { status: "waiting", token }
@@ -936,8 +954,10 @@ elfRouter.get("/api/elf/me/door/:n", schoolOn, doorsOn, getMyDoor);
 //
 // Every one sits behind schoolOn and doorsOn. While December's doors are off the preview link opens
 // the practice door (door 0 of year 0) and nothing else. A family must be signed in for everything but
-// the poster page and the door's pictures, and every post must come from our own pages. Nothing here
-// writes a place, a clue or a tag word into a log, an error or a cache.
+// the poster page and a visiting detective's elf; a door's photo is open to everyone only from Christmas
+// Day until 1 January, and otherwise only to a signed in family that can see the door's place. Every post
+// must come from our own pages. Nothing here writes a place, a clue or a tag word into a log, an error or
+// a cache.
 
 /** A poster's code, and a photo's address: twelve characters of the poster alphabet (no l, o, 0 or 1). */
 const CODE_SHAPE = /^[a-km-np-z2-9]{12}$/;
@@ -1283,11 +1303,11 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
 }
 
 /** What to tell a family whose guess was refused. `elf` names the door's elf; `door` is the open door
- *  whose place was typed. */
+ *  whose place was typed, one whose place the family can see. */
 export function wordsForGuessRefusal(reason: GuessRefusal, elf: string, door?: number): string {
   switch (reason) {
     case "not-hunting":
-      return "Too late: the hiding place is shown now. Have a look at the calendar.";
+      return "There is nothing to guess at this door just now.";
     case "empty":
       return `Type where you think ${elf} is hiding.`;
     case "too-long":
@@ -1301,7 +1321,9 @@ export function wordsForGuessRefusal(reason: GuessRefusal, elf: string, door?: n
   }
 }
 
-/** A typed guess: where the family thinks the elf is hiding (src/elf/guess.ts). */
+/** A typed guess: where the family thinks the elf is hiding (src/elf/guess.ts). Once the place is shown a
+ *  guess is never saved as the family's go: a family with its guess is sent back to Detective HQ to see how
+ *  it did, and one that may still crack the case is sent to have its one go on the door's page. */
 export async function postGuess(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const json = wantsJson(req);
@@ -1319,24 +1341,41 @@ export async function postGuess(req: Request, res: Response): Promise<Response |
     if (!run) return notFound(res, json);
     // The plain form has no script to show the words: Detective HQ is drawn again with them in the guess
     // form's status line (or in the case, once there is no form to say it in).
-    const hqSaying = async (status: number, message: string): Promise<Response | void> => {
+    const hqSaying = async (status: number, message: string, knowledge?: FamilyKnowledge): Promise<Response | void> => {
       const family = await familyWithDetectives(s.familyId);
       if (!family) return res.redirect(303, "/elf/sign-in");
-      const view = await hqViewOf(res, family, now, runs);
+      const view = await hqViewOf(res, family, now, runs, knowledge);
       const today = view.today && view.today.door === run.door ? { ...view.today, guessError: message } : view.today;
       return sendPage(req, res.status(status), renderHqPage({ ...view, today }));
     };
     if (limited) return await hqSaying(429, ELF_TOO_MANY);
     const state = doorState(run.facts, now);
-    const openPlaces = runs.runs.flatMap((r) => (r.door !== 0 && isOpen(doorState(r.facts, now)) ? [{ door: r.door, names: r.names }] : []));
-    const decision = decideGuess({ doorState: state, openPlaces, hasGuess: false, mayHaveAGo: false }, body.text);
+    // What the family has done: whether it has a guess at this door or may have its go, and the open doors
+    // whose place it can see, the only places a refusal may name (Review Focus 3). Any other door's place is
+    // an ordinary guess, so a refusal never gives a place away.
+    const knowledge = await knowledgeFor(res, runs, s.familyId);
+    const guessed = knowledge.guesses.has(run.door);
+    const typed = knowledge.typed.has(run.door);
+    const known = new Set<number>(doorsKnown({ runs: runs.runs, knowledge, now }));
+    const openPlaces = runs.runs.flatMap((r) => (isDoor(r.door) && known.has(r.door) ? [{ door: r.door, names: r.names }] : []));
+    const decision = decideGuess(
+      { doorState: state, openPlaces, hasGuess: guessed, mayHaveAGo: mayHaveAGo({ year: run.year, state, guessed, typed, now }) },
+      body.text,
+    );
     if (!decision.ok) {
       // A door's elf is named only once the door can be guessed: until then its name stays a surprise.
       const message = wordsForGuessRefusal(decision.reason, canGuess(state) ? run.elfName : "the elf", decision.door);
+      // The place is shown: back to Detective HQ with its guess, or to the door's page for its one go.
+      const goUrl = decision.reason === "locked-in" ? "/elf/hq" : decision.reason === "have-a-go" ? `/elf/hq/door/${run.door}` : null;
+      if (goUrl) return json ? res.status(409).json({ reason: decision.reason, message, goUrl }) : res.redirect(303, goUrl);
       if (json) return res.status(400).json({ reason: decision.reason, message, ...(decision.door === undefined ? {} : { door: decision.door }) });
-      return await hqSaying(400, message);
+      return await hqSaying(400, message, knowledge);
     }
-    await saveGuess(run.year, run.door, s.familyId, { text: decision.text, norm: decision.norm }, now);
+    // The night's save never replaces the family's go (saveGuess): then nothing was saved, and it is told so.
+    if (!(await saveGuess(run.year, run.door, s.familyId, { text: decision.text, norm: decision.norm }, now))) {
+      const message = wordsForGoRefusal("already", run.elfName);
+      return json ? res.status(409).json({ reason: "already", message }) : await hqSaying(409, message, knowledge);
+    }
     return json ? res.status(200).json({ ok: true, text: decision.text }) : res.redirect(303, "/elf/hq");
   } catch (err) {
     return gameFailed(res, "guess", err, json);

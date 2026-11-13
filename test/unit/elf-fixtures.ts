@@ -93,6 +93,8 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
     // Monday 7 December 2026 at 3pm: door 7's clue is out at 5:30pm.
     now: at("2026-12-07T15:00:00.000Z"),
     doorDays: Array.from({ length: 24 }, (_, i) => ({ door: i + 1, clueAt: at(`2026-12-${pad(i + 1)}T17:30:00.000Z`), date: `2026-12-${pad(i + 1)}` })),
+    // No door Ruby's family can still crack from Detective HQ (Plan 2c-1), unless told otherwise.
+    crackable: [],
     hqUrl: "/elf/hq",
     calendarUrl: "/elf",
     saveUrl: "/elf/hq/wardrobe/d1",
@@ -221,8 +223,12 @@ export function hqView(over: Partial<HqView> = {}): HqView {
       canGuess: true,
       guessError: null,
       outcome: null,
+      goUrl: null,
+      closesAt: null,
     },
     nextClueAt: at("2026-12-08T17:30:00.000Z"),
+    // No missed door to crack (Plan 2c-1), unless told otherwise.
+    toCrack: [],
     marks: {
       doors: [
         { door: 1, cracked: true, visited: true, snow: false },
@@ -249,6 +255,7 @@ export function goView(over: Partial<GoView> = {}): GoView {
     found: { at: at("2026-12-07T17:47:00.000Z"), by: "Detective R. Tinselfoot" },
     stage: "go",
     stillHiding: false,
+    goneHome: false,
     clues: [{ n: 1, at: at("2026-12-07T17:30:00.000Z"), words: "I am hiding where the loaves cool.\nFollow your nose!", pictureUrl: null, pictureAlt: null }],
     nextUrl: "/elf/hq/door/7?clues=2",
     formUrl: "/elf/hq/door/7/go",

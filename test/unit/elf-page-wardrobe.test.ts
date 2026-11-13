@@ -248,6 +248,30 @@ describe("the paper wardrobe", () => {
     expect(page().querySelector("#wd-costume-tree")!.closest(".elf-wd-tile")!.querySelector(".elf-wd-why")).toBeNull();
   });
 
+  // Plan 2c-1, Task 7, with ruling F7: a family may not know a missed door's place, so while it can still crack
+  // the door from Detective HQ, the note sends it there; otherwise (it guessed, the doors are off, or it is
+  // Christmas Day or later) the note is as it was.
+  it("sends a missed door's costume to Detective HQ while the family can still crack that door", () => {
+    const note = (v: WardrobeView, id: string) => words(page(v).querySelector(`#wd-costume-${id}`)!.closest(".elf-wd-tile")!.querySelector(".elf-wd-why"));
+    const ninth = at("2026-12-09T09:00:00.000Z");
+    // The Christmas cracker is door 7's.
+    expect(note(wardrobeView({ now: ninth, crackable: [7] }), "cracker")).toBe("Crack it in Detective HQ to catch up");
+    expect(note(wardrobeView({ now: ninth, crackable: [8, 5] }), "cracker")).toBe("Visit the place to catch up");
+    expect(note(wardrobeView({ now: ninth, crackable: [] }), "cracker")).toBe("Visit the place to catch up");
+    // Today's door and a door still to come say what they said.
+    expect(note(wardrobeView({ crackable: [7] }), "cracker")).toBe("Crack today's door to open it");
+    expect(note(wardrobeView({ crackable: [24] }), "santa")).toBe("Opens with door 24");
+    // A screen reader hears it too.
+    const doc = page(wardrobeView({ now: ninth, crackable: [7] }));
+    expect(said(doc, choice(doc, "costume", "cracker"))).toBe("Christmas cracker, crack it in Detective HQ to catch up");
+  });
+
+  it("reads a list of doors to crack that is not one as none", () => {
+    const note = (v: WardrobeView) => words(page(v).querySelector("#wd-costume-cracker")!.closest(".elf-wd-tile")!.querySelector(".elf-wd-why"));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(note(wardrobeView({ now: at("2026-12-09T09:00:00.000Z"), crackable: "7" as any }))).toBe("Visit the place to catch up");
+  });
+
   it("puts each door's costumes on a card sheet, its number on a rosette, with its chip", () => {
     const doc = page();
     const doors = [...doc.querySelectorAll("#wd-costumes .elf-wd-door")];

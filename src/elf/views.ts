@@ -1,6 +1,6 @@
 import type { DoorRun, FamilyRuns } from "../db/elf-game";
 import { DEFAULT_MORNING_CLUE_TIME, DEFAULT_SCHOOL_CLUE_TIME, DOOR_COUNT, clueTimeFor, doorDate, doorInstant, isDoor, type Door } from "./calendar";
-import { closingShown, goesOpen, knowsPlace, mayHaveAGo, placesPublic } from "./catch-up";
+import { closingShown, doorsToCrack, goesOpen, knowsPlace, mayHaveAGo, placesPublic, type FamilyKnowledge } from "./catch-up";
 import { canGuess, cluesOut, doorState, isClaimable, isOpen, nextClueAt, openedAt, shownAt, type DoorFacts, type DoorState } from "./doors";
 import { badgeWords } from "./emails";
 import { factFor } from "./facts";
@@ -17,9 +17,9 @@ import type { CalendarView, DetectiveView, DoorView, FamilyMarks, GoView, HqView
 // NBCC Elf Detective School: what the database holds, turned into what the screens show. Pure: the
 // rows and the doors' runs come in, the views go out. Nothing is shown before its time: a place, a
 // scrapbook, the counts and the prize come only once a door is open (and on the calendar everyone
-// shares, a place and the photos only from Christmas Day until 1 January; on the go page, only once the
-// family may know it), a clue only once it is out, and a child is named only through detectiveName or
-// detectiveNames.
+// shares, a place and the photos only from Christmas Day until 1 January; on the go page and in Detective
+// HQ's case, only once the family may know it), a clue only once it is out, and a child is named only
+// through detectiveName or detectiveNames.
 // Unit tested in test/unit/elf-views.test.ts.
 
 export interface DetectiveRow {
@@ -86,7 +86,9 @@ function runForToday(runs: readonly DoorRun[], now: Date): DoorRun | null {
 /** When Detective HQ says the place is shown: the real time once the elf is found before its reveal,
  *  the staff reveal time while the hunt is on before it, and none once that has passed with the elf
  *  still hiding (the place is then shown as soon as the elf is found). Never the place's closing time,
- *  when an unfound elf's place is shown: a family is never told how late a place is open. */
+ *  when an unfound elf's place is shown: that would be wrong the moment the elf is found. When the place
+ *  closes is said on its own, on the door's own day (the spec's answer 5, through TodayView.closesAt and
+ *  closingShown in catch-up.ts). */
 function revealFor(facts: DoorFacts, state: DoorState, now: Date): Date | null {
   if (state === "found-hidden") return shownAt(facts);
   if ((state === "shut" || state === "hunting") && now.getTime() < facts.revealAt.getTime()) return facts.revealAt;
@@ -109,11 +111,19 @@ function cluesOutOf(run: DoorRun, now: Date): TodayView["clues"] {
     }));
 }
 
-function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>; finders: Map<Door, DetectiveNameParts[]> }): TodayView {
+/** Today's case for a family. How it ended comes only once the family can see the place (the one rule,
+ *  asked only of an open door), so a go at today's door can never be cracked by reading Detective HQ; until
+ *  then a family that may have a go is offered it. */
+function todayOf(
+  run: DoorRun,
+  o: { now: Date; guesses: ReadonlyMap<number, SavedGuess>; typed: ReadonlySet<number>; finders: Map<Door, DetectiveNameParts[]> },
+): TodayView {
   const state = doorState(run.facts, o.now);
   const guess = o.guesses.get(run.door) ?? null;
+  const guessed = guess !== null;
+  const typed = o.typed.has(run.door);
   let outcome: TodayView["outcome"] = null;
-  if (isOpen(state) && run.placeName !== null) {
+  if (isOpen(state) && knowsPlace({ state, guessed, typed }) && run.placeName !== null) {
     const found = state === "found" && run.facts.foundAt !== null;
     const finders = run.door === 0 ? [] : (o.finders.get(run.door) ?? []);
     outcome = {
@@ -136,6 +146,8 @@ function todayOf(run: DoorRun, o: { now: Date; guesses: Map<number, SavedGuess>;
     // Only the guess route sets this, when the form sent with no script was refused.
     guessError: null,
     outcome,
+    goUrl: mayHaveAGo({ year: run.year, state, guessed, typed, now: o.now }) ? `/elf/hq/door/${run.door}` : null,
+    closesAt: closingShown(run, o.now),
   };
 }
 
@@ -166,12 +178,15 @@ export function marksOf(runs: readonly DoorRun[], family: FamilyRow, doorsDone: 
   return { doors, photos };
 }
 
+/** Detective HQ's view. `guesses` and `typed` are what the family has done (FamilyKnowledge in catch-up.ts):
+ *  this year's while December's doors are on, and the practice door's while a practice runs for this browser. */
 export function hqViewFor(o: {
   family: FamilyRow;
   settings: ElfSettings;
   now: Date;
   runs: FamilyRuns;
-  guesses: Map<number, SavedGuess>;
+  guesses: ReadonlyMap<number, SavedGuess>;
+  typed: ReadonlySet<number>;
   doorsDone: Map<number, DoorsDone>;
   finders: Map<Door, DetectiveNameParts[]>;
   photos: FamilyMarks["photos"];
@@ -180,6 +195,13 @@ export function hqViewFor(o: {
   // With December's doors off, HQ is wave 1: no case today unless a practice run is going, and, as wave
   // 1's HQ did, a countdown to door 1's first clue and to nothing after it.
   const todayRun = todayRunOf(o);
+  // The missed doors the family may still crack: none with December's doors off, and never the door today's
+  // case already offers (ruling F9).
+  const toCrack: HqView["toCrack"] = o.settings.doorsOn
+    ? doorsToCrack({ runs: real, knowledge: { guesses: o.guesses, typed: o.typed }, now: o.now }).flatMap((r) =>
+        isDoor(r.door) && r.door !== todayRun?.door ? [{ door: r.door, elfName: r.elfName, clueAt: r.calendarAt, url: `/elf/hq/door/${r.door}` }] : [],
+      )
+    : [];
   const start = firstClueAt(o.settings.year);
   const next = o.settings.doorsOn
     ? real
@@ -195,6 +217,7 @@ export function hqViewFor(o: {
     detectives: o.family.detectives.map((d) => detectiveViewFor(d, o.doorsDone.get(d.id) ?? NO_DOORS)),
     today: todayRun ? todayOf(todayRun, o) : null,
     nextClueAt: next ?? null,
+    toCrack,
     marks: marksOf(real, o.family, o.doorsDone, o.photos, o.now),
     calendarUrl: "/elf",
     guessUrl: "/api/elf/guess",
@@ -266,6 +289,7 @@ export function goViewFor(o: {
     found: foundAt !== null && foundAt.getTime() <= now.getTime() ? { at: foundAt, by: detectiveNames(finders) || "A detective" } : null,
     stage,
     stillHiding: stillHidingAt(run, state),
+    goneHome: run.facts.goneHome,
     clues,
     nextUrl: clues.length < out.length ? `/elf/hq/door/${run.door}?clues=${clues.length + 1}` : null,
     formUrl: `/elf/hq/door/${run.door}/go`,
@@ -277,7 +301,16 @@ export function goViewFor(o: {
   };
 }
 
-export function wardrobeViewFor(o: { detective: DetectiveRow; settings: ElfSettings; now: Date; doorsDone: DoorsDone }): WardrobeView {
+/** The wardrobe's view. `runs` and `knowledge` are the doors and what the family has done there, for the doors
+ *  it may still crack from Detective HQ (ruling F7): none while December's doors are off. */
+export function wardrobeViewFor(o: {
+  detective: DetectiveRow;
+  settings: ElfSettings;
+  now: Date;
+  doorsDone: DoorsDone;
+  runs: readonly DoorRun[];
+  knowledge: FamilyKnowledge;
+}): WardrobeView {
   const { state } = earned(o.doorsDone);
   const doorDays = [];
   for (let n = 1; n <= DOOR_COUNT; n += 1) doorDays.push({ door: n, clueAt: clueAtOf(o.settings, n as Door), date: doorDate(o.settings, n as Door) });
@@ -290,6 +323,7 @@ export function wardrobeViewFor(o: { detective: DetectiveRow; settings: ElfSetti
     made: o.detective.look !== null && o.detective.look !== undefined,
     now: o.now,
     doorDays,
+    crackable: o.settings.doorsOn ? doorsToCrack({ runs: o.runs, knowledge: o.knowledge, now: o.now }).map((r) => r.door) : [],
     hqUrl: "/elf/hq",
     calendarUrl: "/elf",
     saveUrl: "/api/elf/look",

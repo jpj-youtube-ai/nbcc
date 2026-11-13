@@ -70,6 +70,21 @@ const everyoneStamped = posterView({ open: true, claimable: false, detectives: p
 const twoClues = [today.clues[0], { n: 2 as const, at: at("2026-12-07T18:00:00.000Z"), words: "Practice clue 2: it has a lid.", pictureUrl: "/elf/hq/clue/7/2.jpg", pictureAlt: "A pretend drawing of a lid" }];
 /** Plan 2c-1, Task 6: door 7's go page with two clues showing, one with its picture. */
 const goingTwo = goView({ clues: twoClues, nextUrl: "/elf/hq/door/7?clues=3" });
+/** Plan 2c-1, Task 7: door 7's case at 7:05pm for a family that may still have a go: its place shown since
+ *  7pm and closing at 8pm. */
+const mayGo = hqView({
+  now: at("2026-12-07T19:05:00.000Z"),
+  today: { ...today, state: "found", canGuess: false, clues: [], nextClueAt: null, revealAt: null, goUrl: "/elf/hq/door/7", closesAt: at("2026-12-07T20:00:00.000Z") },
+});
+/** Plan 2c-1, Task 7: the missed doors the family can still crack, under today's case with the hunt on and the
+ *  place's closing time. */
+const toCrack = hqView({
+  today: { ...today, closesAt: at("2026-12-07T20:00:00.000Z") },
+  toCrack: [
+    { door: 5, elfName: "Sprout", clueAt: at("2026-12-05T10:00:00.000Z"), url: "/elf/hq/door/5" },
+    { door: 3, elfName: "Pudding", clueAt: at("2026-12-03T17:30:00.000Z"), url: "/elf/hq/door/3" },
+  ],
+});
 
 /** Every screen in every state, as [what it is, the page]. */
 const PAGES: [string, string][] = [
@@ -95,6 +110,9 @@ const PAGES: [string, string][] = [
   ["HQ, place shown", renderHqPage(hqView({ today: { ...today, state: "revealed", canGuess: false, outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
   ["HQ, no door today", renderHqPage(hqView({ now: at("2026-11-20T10:00:00.000Z"), today: null, nextClueAt: at("2026-12-01T17:30:00.000Z") }))],
   ["HQ, all over", renderHqPage(hqView({ now: at("2026-12-26T10:00:00.000Z"), today: null, nextClueAt: null }))],
+  ["HQ, have a go at today's door", renderHqPage(mayGo)],
+  ["HQ, doors you can still crack", renderHqPage(toCrack)],
+  ["HQ, found and cracked, with the place's closing time", renderHqPage(hqView({ today: { ...today, state: "found", canGuess: false, guess: { text: "The Bookshop", at: at("2026-12-07T17:45:00.000Z") }, outcome, closesAt: at("2026-12-07T20:00:00.000Z") } }))],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
@@ -336,6 +354,10 @@ describe("data that tries to break out of the page", () => {
     ["calendar, a scrapbook's photos", renderCalendarPage(poisoned(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...opened })))],
     ["calendar, an open door's go", renderCalendarPage(poisoned(calendarView(at("2026-12-07T21:30:00.000Z"), { state: "revealed", ...forEveryoneElse })))],
     ["HQ, two clues out", renderHqPage(poisoned(hqView({ now: at("2026-12-07T18:10:00.000Z"), today: { ...today, clues: twoClues, nextClueAt: at("2026-12-07T18:30:00.000Z") } })))],
+    ["HQ, have a go at today's door", renderHqPage(poisoned(mayGo))],
+    ["HQ, doors you can still crack", renderHqPage(poisoned(toCrack))],
+    // Poisoned, a door's go is not on this site, so the list is not drawn at all: here its go stays ours.
+    ["HQ, a door to crack with its elf named in markup", renderHqPage({ ...poisoned(toCrack), toCrack: toCrack.toCrack.map((d) => ({ ...d, elfName: POISON })) })],
     ["poster", renderPosterPage(poisoned(posterView({ open: true, claimable: true })))],
     ["poster, your photo", renderPosterPage(poisoned(posterView({ open: true, claimable: false, yourPhoto: { token: "k3m9p2x7w4qa", status: "approved" } })))],
     ["poster, a claim that won", renderPosterPage(poisoned(posterView({ open: true, claimable: false })), { form: "word", ok: true, outcome: "won", win: poisoned(claimWin()) })],

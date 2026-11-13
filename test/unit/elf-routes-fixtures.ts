@@ -88,10 +88,17 @@ export const door3 = (): DoorSetup => ({
   foundFamilyId: 9,
 });
 
-/** The given doors (1 to 6), snowed in on their days: every door has its row once December's doors are
- *  on, and one that could not run is snowed in at its first clue. Doors 1 to 5 unless told otherwise. */
+/** One letter of the poster alphabet for each door, 1 to 24, repeated to make a snowed in door's poster code. */
+const SNOW_CODES = "bcdfghjkmnpqrstvwxyz2345";
+
+/** The given doors, any of 1 to 24, snowed in on their days: every door has its row once December's doors
+ *  are on, and one that could not run is snowed in at its first clue. Doors 1 to 5 unless told otherwise. */
 export const snowedIn = (snowed: readonly Door[] = [1, 2, 3, 4, 5]): DoorSetup[] =>
-  snowed.map((d) => ({ ...emptyDoor(d, "bcdfgh"[d - 1].repeat(12)), snowDayAt: at(`2026-12-0${d}T10:00:00.000Z`), snowDayBy: "automatic" }));
+  snowed.map((d) => ({
+    ...emptyDoor(d, SNOW_CODES[d - 1].repeat(12)),
+    snowDayAt: at(`2026-12-${String(d).padStart(2, "0")}T10:00:00.000Z`),
+    snowDayBy: "automatic",
+  }));
 
 /** A practice evening a head elf started at 5:58pm, its clues three minutes apart. */
 export const practiceRow = (over: Record<string, unknown> = {}) => ({

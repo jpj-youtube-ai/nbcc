@@ -549,6 +549,8 @@
 .elf-clue .elf-clue__words { margin: 0; font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem); line-height: 1.55; overflow-wrap: break-word; }
 .elf-clue__pic { display: block; max-width: 100%; height: auto; margin: 12px 0 0; border-radius: 3px; box-shadow: 0 2px 3px rgba(58, 0, 0, 0.25); }
 .elf-case .elf-ladder__next { margin: 0 0 4px; color: var(--holly-dark); font-weight: 600; }
+/* When the hiding place closes, on the door's own day (Plan 2c-1): under the clues, before the guess. */
+.elf-case .elf-ladder__closes { margin: 10px 0 4px; color: var(--maroon); font-weight: 600; }
 
 /* The guess: one box to type the place in, cut into the note. The site gives every form a card of its
    own; this one already sits on the note. */
@@ -609,6 +611,19 @@
   .elf-detectives { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .elf-detective__frame { width: 118px; padding: 10px; }
 }
+
+/* Doors you can still crack (Plan 2c-1), under today's case: a card sheet for each missed door, newest
+   first, with its number in the hand, its day and its elf, and a go. The words wrap before the button drops
+   under them, and the cards sit two across once there is room. */
+.elf-page .section.elf-hq-crack { padding-block: clamp(30px, 5vw, 64px) clamp(8px, 2vw, 16px); }
+.elf-hq-crack .elf-strip { font-size: clamp(1.6rem, 1.35rem + 1.2vw, 2.2rem); }
+.elf-hq-crack .lede { margin-top: 12px; }
+.elf-crack { list-style: none; margin: clamp(16px, 3vw, 24px) 0 0; padding: 0; display: grid; gap: 26px; }
+.elf-crack__door { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-right: 8px; padding: 16px 20px; color: var(--slate); }
+.elf-crack__door h3 { margin: 0; font-family: var(--elf-hand); font-size: 1.6rem; line-height: 1; color: var(--crimson); }
+.elf-crack__door p { margin: 0; overflow-wrap: anywhere; }
+.elf-crack__door .elf-btn { margin-left: auto; }
+@media (min-width: 720px) { .elf-crack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* The family's marks: all 24 doors, small, each a square of paper; holly once it is done. */
 .elf-hq-marks .lede { margin-top: 12px; }

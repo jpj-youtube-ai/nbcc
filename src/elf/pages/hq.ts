@@ -1,6 +1,6 @@
 import { DOOR_COUNT } from "../calendar";
 import { FRAMES } from "../wardrobe";
-import { clockWords, countdownWords, longDayWords, sleepsUntil, things } from "../words";
+import { clockWords, countdownWords, dayWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
 import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
@@ -13,7 +13,9 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // Three things, in the order a family wants them: today's case (on a taped note: the clue ladder, one
 // note a clue as each comes out, and the family's typed guess), their detectives (each on a card
 // sheet: their elf in its frame, rank and progress), and the marks they have collected. It is private,
-// so it shows first names in full and is never listed by search engines.
+// so it shows first names in full and is never listed by search engines. While December's doors are on
+// (Plan 2c-1), a family that missed today's evening is offered its one go once the place is shown, and the
+// other missed doors it can still crack are listed under today's case.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
 // script only saves the guess without leaving the page, and fetches the page again when the next
@@ -72,6 +74,12 @@ function clueLadder(today: TodayView, now: Date): string {
   return notes;
 }
 
+/** On the door's own day, when the hiding place closes, under the clue ladder and without naming it (the
+ *  spec's answer 5); nothing without a closing time to say. */
+function closesLine(today: TodayView): string {
+  return real(today.closesAt) ? line(`The hiding place closes at ${clockWords(today.closesAt)} today.`, "elf-ladder__closes") : "";
+}
+
 /** Why a guess sent with no script was not taken (the server's words), as a status line, or nothing. */
 function guessErrorLine(today: TodayView): string {
   return typeof today.guessError === "string" && today.guessError !== ""
@@ -98,7 +106,8 @@ function guessForm(today: TodayView, guessUrl: string): string {
   );
 }
 
-/** How a door that has opened turned out for this family. */
+/** How a door that has opened turned out for a family that can see its place, and on the door's own day when
+ *  the place closes. */
 function outcomeHtml(today: TodayView): string {
   const outcome = today.outcome;
   if (!outcome) return "";
@@ -120,7 +129,19 @@ function outcomeHtml(today: TodayView): string {
     : guess
       ? line(`Your guess was ${guess}. Not this time, but there is a new clue tomorrow.`, "elf-case__verdict")
       : line("You did not lock in a guess for this one. There is a new clue tomorrow.", "elf-case__verdict");
-  return where + verdict + line("Visit the hiding place and scan its poster to collect your candy cane.", "elf-case__hint");
+  const closes = real(today.closesAt) ? line(`${place} closes at ${clockWords(today.closesAt)} today.`, "elf-case__hint") : "";
+  return where + verdict + line("Visit the hiding place and scan its poster to collect your candy cane.", "elf-case__hint") + closes;
+}
+
+/** A family that cannot see the place yet, once it is shown, and may still crack the case: its one go (Plan
+ *  2c-1), in place of how the case turned out. Only a go on this site is offered. */
+function goCard(today: TodayView): string {
+  const go = sitePath(today.goUrl);
+  if (!go) return "";
+  return (
+    line("You did not lock in a guess in time, but you can still crack this case, with one guess.") +
+    `<p><a class="elf-btn elf-btn--crimson" href="${go}">Have a go</a></p>`
+  );
 }
 
 function caseCard(view: HqView): string {
@@ -164,18 +185,52 @@ function caseCard(view: HqView): string {
       head +
       `<h2 id="elf-case-heading">${today.state === "hunting" ? "The hunt is on!" : `${escapeHtml(today.elfName)} has been found!`}</h2>` +
       clueLadder(today, view.now) +
+      closesLine(today) +
       guessForm(today, view.guessUrl)
     );
   }
   if (today.state === "snow") {
     return head + `<h2 id="elf-case-heading">Snow day</h2>` + line(`${escapeHtml(today.elfName)} got snowed in. This door counts as done for everyone.`) + refused;
   }
+  // The place is shown: how it turned out for a family that can see it, or its one go for a family that may
+  // still crack the case.
   return (
     head +
     `<h2 id="elf-case-heading">${today.state === "found" ? "Case closed" : `${escapeHtml(today.elfName)} is still out there`}</h2>` +
     refused +
-    outcomeHtml(today)
+    (today.outcome ? outcomeHtml(today) : goCard(today))
   );
+}
+
+/** The missed doors the family may still crack (Plan 2c-1), newest first, each on a card sheet: its number,
+ *  its day, its elf and its go. Only a go on this site is drawn, and with none the list is not on the page
+ *  at all, so with December's doors off Detective HQ is exactly what it was. */
+function crackSection(view: HqView): string {
+  const doors = (Array.isArray(view.toCrack) ? view.toCrack : []).flatMap((d) => {
+    const go = sitePath(d.url);
+    return go ? [{ ...d, go }] : [];
+  });
+  if (!doors.length) return "";
+  const items = doors
+    .map(
+      (d, i) =>
+        `<li class="elf-crack__door elf-card elf-card--${SHEETS[i % SHEETS.length]}">` +
+        `<h3>Door ${count(d.door)}</h3>` +
+        (real(d.clueAt) ? `<p>${dayWords(d.clueAt)}</p>` : "") +
+        `<p>${escapeHtml(d.elfName)}</p>` +
+        `<a class="elf-btn elf-btn--crimson elf-btn--s" href="${d.go}">Have a go</a>` +
+        `</li>`,
+    )
+    .join("");
+  return `
+
+  <section class="section elf-hq-crack" aria-labelledby="elf-crack-heading">
+    <div class="wrap">
+      ${headingStrip({ text: "Doors you can still crack", tag: "h2", back: "gold", id: "elf-crack-heading" })}
+      <p class="lede">Missed a door? Crack its case here, with one guess. You get the same three clues, one at a time.</p>
+      <ul class="elf-crack">${items}</ul>
+    </div>
+  </section>`;
 }
 
 /** The costumes waiting in the wardrobe, as presents (draft words for Jaimie). */
@@ -272,7 +327,7 @@ export function renderHqPage(view: HqView): string {
         ${caseCard(view)}
       </div>
     </div>
-  </section>
+  </section>${crackSection(view)}
 
   <section class="section elf-hq-team" aria-labelledby="elf-team-heading">
     <div class="wrap">

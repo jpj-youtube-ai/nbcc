@@ -43,6 +43,14 @@ describe("the go page", () => {
     expect(words(page(goView({ found: null, stillHiding: true })).querySelector(".elf-go__found"))).toBe("Nobody has found Twinkle yet.");
   });
 
+  // Rulings on Plan 2c-1, from Task 6's review: "yet" would promise a find that can no longer happen.
+  it("says nobody found the elf, with no yet, once it has gone home unfound", () => {
+    expect(words(page(goView({ found: null, goneHome: true })).querySelector(".elf-go__found"))).toBe("Nobody found Twinkle.");
+    expect(words(page(goDoneView({ verdict: "wrong", goneHome: true }, { found: null, goneHome: true })).querySelector(".elf-go__found"))).toBe("Nobody found Twinkle.");
+    // A found elf that has gone home is still found.
+    expect(words(page(goView({ goneHome: true })).querySelector(".elf-go__found"))).toBe("Found by Detective R. Tinselfoot at 5:47pm.");
+  });
+
   it("calls the practice door the practice door, with its chip, and never door 0", () => {
     const doc = page(goView({ door: 0, practice: true, nextUrl: "/elf/hq/door/0?clues=2", formUrl: "/elf/hq/door/0/go", closesAt: null }));
     expect(doc.title).toBe("The practice door | Night Before Christmas Campaign");

@@ -39,10 +39,11 @@ export function goOutcomeWords(o: { elfName: string; verdict: Outcome["verdict"]
   );
 }
 
-/** Who found the elf, and when, or that nobody has yet. */
+/** Who found the elf, and when; or that nobody has yet, or, once the elf has gone home, that nobody did. */
 function foundLine(view: GoView): string {
   const found = view.found;
-  if (!found) return line(`Nobody has found ${escapeHtml(view.elfName)} yet.`, "elf-go__found");
+  const elf = escapeHtml(view.elfName);
+  if (!found) return line(view.goneHome === true ? `Nobody found ${elf}.` : `Nobody has found ${elf} yet.`, "elf-go__found");
   const at = real(found.at) ? ` at ${clockWords(found.at)}` : "";
   return line(`${icon("rosette", 16)} Found by ${escapeHtml(found.by)}${at}.`, "elf-go__found");
 }

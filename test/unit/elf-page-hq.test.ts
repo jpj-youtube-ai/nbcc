@@ -109,7 +109,7 @@ describe("the clue ladder", () => {
   });
 
   // Final review, Important 2: once the reveal time has passed with the elf still hiding, the place is
-  // shown the moment the elf is found (or at closing, which a family is never told).
+  // shown the moment the elf is found (or at closing, which is said on its own line, as below).
   it("says the hiding place is shown as soon as the elf is found, once the reveal time has passed", () => {
     const doc = page(today({ clues: [CLUE_1, CLUE_2, CLUE_3], nextClueAt: null, revealAt: null }, { now: at("2026-12-07T19:20:00.000Z") }));
     expect(words(doc.querySelector(".elf-ladder__next"))).toBe("The hiding place is shown as soon as the elf is found.");
@@ -162,10 +162,10 @@ describe("the guess", () => {
 
   it("still says why a guess was not taken where the case has no form any more (the place is shown now)", () => {
     const outcome = { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: false };
-    const doc = page(today({ state: "found", canGuess: false, outcome, guessError: "Too late: the hiding place is shown now. Have a look at the calendar." }));
+    const doc = page(today({ state: "found", canGuess: false, outcome, guessError: "There is nothing to guess at this door just now." }));
     expect(doc.querySelector("form.elf-guess")).toBeNull();
     const status = doc.querySelector(".elf-case .elf-guess__status.is-error")!;
-    expect(words(status)).toBe("Too late: the hiding place is shown now. Have a look at the calendar.");
+    expect(words(status)).toBe("There is nothing to guess at this door just now.");
     expect(status.getAttribute("role")).toBe("status");
     // And nothing at all when there is nothing to say.
     expect(page(today({ state: "found", canGuess: false, outcome })).querySelector(".elf-guess__status")).toBeNull();
@@ -227,6 +227,119 @@ describe("how an open door turned out", () => {
       "Nobody found Bauble in time. Bauble is still waiting at The Toy Shop, Snowford, and the first detective to type the word on its tag still wins the prize.",
     );
     expect(words(card)).not.toContain("Found first by");
+  });
+});
+
+// Plan 2c-1, Task 7: Detective HQ catches up. At 7:05pm door 7's place has been shown since 7pm, and it closes
+// at 8pm. A family that can see the place sees how the case turned out; one that may have a go is offered it.
+const SEVEN_05 = at("2026-12-07T19:05:00.000Z");
+const EIGHT = at("2026-12-07T20:00:00.000Z");
+/** An open door's case: no clue ladder, no countdown and no guess. */
+const OPEN: Partial<TodayView> = { canGuess: false, clues: [], nextClueAt: null, revealAt: null };
+const MAY_GO = today({ ...OPEN, state: "found", outcome: null, goUrl: "/elf/hq/door/7", closesAt: EIGHT }, { now: SEVEN_05 });
+
+describe("today's case for a family that may still have a go", () => {
+  it("offers its one go in place of how the case turned out, under the case's own heading", () => {
+    const card = page(MAY_GO).querySelector(".elf-case")!;
+    expect(words(card.querySelector("h2"))).toBe("Case closed");
+    expect(words(card)).toContain("You did not lock in a guess in time, but you can still crack this case, with one guess.");
+    const go = card.querySelector('a[href="/elf/hq/door/7"]')!;
+    expect(words(go)).toBe("Have a go");
+    expect(go.className).toBe("elf-btn elf-btn--crimson");
+    expect(words(card)).not.toContain("You did not lock in a guess for this one.");
+    expect(words(card)).not.toContain("Visit the hiding place");
+    expect(card.querySelector("form")).toBeNull();
+  });
+
+  it("keeps the heading of a door shown with nobody found", () => {
+    const card = page(today({ ...MAY_GO.today!, state: "revealed" }, { now: SEVEN_05 })).querySelector(".elf-case")!;
+    expect(words(card.querySelector("h2"))).toBe("Bauble is still out there");
+    expect(words(card.querySelector('a[href="/elf/hq/door/7"]'))).toBe("Have a go");
+  });
+
+  it("offers no go beside how the case turned out", () => {
+    const outcome = { place: "Corner Bakehouse", by: "Detective R. Tinselfoot", at: at("2026-12-07T17:47:00.000Z"), cracked: false };
+    const doc = page(today({ ...OPEN, state: "found", outcome, goUrl: null }, { now: SEVEN_05 }));
+    expect(doc.querySelector('a[href^="/elf/hq/door/"]')).toBeNull();
+    expect(words(doc.querySelector(".elf-case"))).not.toContain("Have a go");
+  });
+
+  it("offers a go only on this site", () => {
+    const doc = page(today({ ...MAY_GO.today!, goUrl: "https://elsewhere.example/go" }, { now: SEVEN_05 }));
+    expect(doc.querySelector('.elf-case a[href^="https:"]')).toBeNull();
+    expect(words(doc.querySelector(".elf-case"))).not.toContain("Have a go");
+  });
+});
+
+describe("when the hiding place closes", () => {
+  it("says so under the clue ladder while the hunt is on", () => {
+    const doc = page(today({ closesAt: EIGHT }));
+    expect(words(doc.querySelector(".elf-case .elf-ladder__closes"))).toBe("The hiding place closes at 8pm today.");
+    // Under the clues, before the guess.
+    expect(doc.querySelector(".elf-ladder__closes ~ form.elf-guess")).not.toBeNull();
+  });
+
+  it("says so while the elf is found with the place still hidden", () => {
+    const doc = page(today({ state: "found-hidden", clues: [CLUE_1, CLUE_2], nextClueAt: CLUE_3.at, closesAt: EIGHT }, { now: SIX_10 }));
+    expect(words(doc.querySelector(".elf-ladder__closes"))).toBe("The hiding place closes at 8pm today.");
+  });
+
+  it("names the place under how the case turned out, for a family that can see it", () => {
+    const outcome = { place: "Corner Bakehouse", by: "Detective R. Tinselfoot", at: at("2026-12-07T17:47:00.000Z"), cracked: true };
+    const card = page(today({ ...OPEN, state: "found", outcome, closesAt: EIGHT }, { now: SEVEN_05 })).querySelector(".elf-case")!;
+    expect(words(card)).toContain("Corner Bakehouse closes at 8pm today.");
+    expect(words(card)).not.toContain("The hiding place closes");
+  });
+
+  it("says nothing of closing without a closing time", () => {
+    const outcome = { place: "Corner Bakehouse", by: null, at: null, cracked: false };
+    for (const v of [hqView(), ALL_OUT, today({ ...OPEN, state: "revealed", outcome }, { now: SEVEN_05 })]) {
+      expect(words(page(v).querySelector(".elf-case"))).not.toContain("closes at");
+    }
+  });
+});
+
+describe("the doors a family can still crack", () => {
+  const TO_CRACK: HqView["toCrack"] = [
+    { door: 5, elfName: "Sprout", clueAt: at("2026-12-05T10:00:00.000Z"), url: "/elf/hq/door/5" },
+    { door: 3, elfName: "Pudding", clueAt: at("2026-12-03T17:30:00.000Z"), url: "/elf/hq/door/3" },
+  ];
+
+  it("come straight after today's case, under a gold strip, with what having a go is", () => {
+    const doc = page(hqView({ toCrack: TO_CRACK }));
+    const sections = [...doc.querySelectorAll("main > section")];
+    const crack = doc.querySelector("main > section.elf-hq-crack")!;
+    expect(sections.indexOf(crack)).toBe(sections.indexOf(doc.querySelector("main > section.elf-hq-case")!) + 1);
+    const strip = crack.querySelector("h2")!;
+    expect(words(strip)).toBe("Doors you can still crack");
+    expect(strip.classList.contains("elf-strip--gold")).toBe(true);
+    expect(crack.getAttribute("aria-labelledby")).toBe(strip.id);
+    expect(words(crack)).toContain("Missed a door? Crack its case here, with one guess. You get the same three clues, one at a time.");
+  });
+
+  it("give each door its number, its day, its elf and a go, newest first", () => {
+    const doors = [...page(hqView({ toCrack: TO_CRACK })).querySelectorAll(".elf-crack > .elf-crack__door")];
+    expect(doors.map((d) => words(d.querySelector("h3")))).toEqual(["Door 5", "Door 3"]);
+    expect(words(doors[0])).toContain("Sat 5 Dec");
+    expect(words(doors[0])).toContain("Sprout");
+    expect(words(doors[1])).toContain("Thu 3 Dec");
+    expect(words(doors[1])).toContain("Pudding");
+    const go = doors[0].querySelector('a[href="/elf/hq/door/5"]')!;
+    expect(words(go)).toBe("Have a go");
+    expect(go.classList.contains("elf-btn")).toBe(true);
+    expect(doors[1].querySelector('a[href="/elf/hq/door/3"]')).not.toBeNull();
+  });
+
+  it("are not on the page when there are none", () => {
+    const doc = page();
+    expect(doc.querySelector(".elf-hq-crack, .elf-crack")).toBeNull();
+    expect(words(doc.querySelector("main"))).not.toContain("Doors you can still crack");
+  });
+
+  it("leave out a door whose go is not on this site, and the whole list when none is", () => {
+    const off = [{ ...TO_CRACK[0], url: "https://elsewhere.example/5" }, TO_CRACK[1]];
+    expect([...page(hqView({ toCrack: off })).querySelectorAll(".elf-crack__door h3")].map((h) => words(h))).toEqual(["Door 3"]);
+    expect(page(hqView({ toCrack: [off[0]] })).querySelector(".elf-hq-crack")).toBeNull();
   });
 });
 

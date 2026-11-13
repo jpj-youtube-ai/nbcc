@@ -22,9 +22,12 @@ interface SettingsRow {
   preview_hash?: string | null;
   place_phone?: string | null;
   doors_on?: boolean;
+  grand_prize_closes_at?: Date | null;
+  graduate_video_url?: string | null;
 }
 
-const SETTINGS_SQL = "SELECT school_on, year, entry_from_pence, entry_suggested_pence, preview_hash, place_phone, doors_on FROM elf_settings WHERE id = 1";
+const SETTINGS_SQL =
+  "SELECT school_on, year, entry_from_pence, entry_suggested_pence, preview_hash, place_phone, doors_on, grand_prize_closes_at, graduate_video_url FROM elf_settings WHERE id = 1";
 
 function settingsFrom(row: SettingsRow | undefined): ElfSettings {
   if (!row) return { ...ELF_DEFAULTS };
@@ -36,6 +39,8 @@ function settingsFrom(row: SettingsRow | undefined): ElfSettings {
     previewHash: row.preview_hash ?? null,
     placePhone: row.place_phone ?? null,
     doorsOn: row.doors_on === true,
+    grandPrizeClosesAt: row.grand_prize_closes_at ?? null,
+    graduateVideoUrl: row.graduate_video_url ?? null,
   };
 }
 
@@ -77,6 +82,8 @@ const SETTING_COLUMNS = {
   entrySuggestedPence: "entry_suggested_pence",
   placePhone: "place_phone",
   doorsOn: "doors_on",
+  grandPrizeClosesAt: "grand_prize_closes_at",
+  graduateVideoUrl: "graduate_video_url",
 } as const;
 
 /** Change some settings, with the row locked, and say so in the audit log. The admin route checks

@@ -151,6 +151,12 @@ const QUIET: HeadElf = { userId: 3, name: "Kim Example", email: "kim@example.org
 const RUBY = { id: 100, firstName: "Ruby", surname: "Tinselfoot", nameApproved: false, badgeNumber: 427, look: null, fresh: [], favourites: [] };
 const SAM_FAMILY = { id: 3, grownUpName: "Sam Example", email: "sam@example.org", detectives: [RUBY] };
 
+/** Each family's own token for the link that stops its emails (Plan 2c-2), as the database makes them: invented. */
+const TOKEN_3 = "0123456789abcdef0123456789abcd03";
+const TOKEN_4 = "0123456789abcdef0123456789abcd04";
+/** A family's own page for stopping the emails, as the worker links it. */
+const stopPage = (token: string) => `https://nbcc.example.org/elf/emails/${token}`;
+
 interface Sent {
   kind: string;
   name: string | null;
@@ -353,6 +359,30 @@ describe("the clue email, at 5:31pm on 7 December", () => {
     expect(claimsOf(deps, "clue").filter((k) => k === "2026-7:11")).toHaveLength(1);
     // The note was tried at the start of every tick after the first.
     expect((deps.markSent as Mock).mock.calls.filter((c) => c[0] === "clue" && c[1] === "2026-7:11")).toHaveLength(3);
+  });
+
+  // Plan 2c-2, Task 7: each clue email ends with the link to that family's own page for stopping the emails. A family
+  // that has stopped them is never listed (familiesStillToEmail's SQL, test/unit/elf-db-sends.test.ts).
+  it("ends each family's email with the link to its own page for stopping the emails", async () => {
+    const tokens = ["0123456789abcdef0123456789abcd11", "0123456789abcdef0123456789abcd12", "0123456789abcdef0123456789abcd13"];
+    const { sent, tick } = fakeDeps({ loadDoorRuns: vi.fn(async () => [door7()]) }, { clueFamilies: families.map((f, i) => ({ ...f, emailsToken: tokens[i] })) });
+    await tick(FIVE_31);
+    const clues = sentOf(sent, "clue");
+    expect(clues).toHaveLength(3);
+    clues.forEach((c, i) => {
+      expect(c.text).toContain(`Stop these emails: ${stopPage(tokens[i])}`);
+      expect(c.html).toContain(`href="${stopPage(tokens[i])}"`);
+      for (const other of tokens.filter((t) => t !== tokens[i])) expect(c.text + c.html).not.toContain(other);
+    });
+  });
+
+  it("makes no link from a token that is not one", async () => {
+    const { sent, tick } = fakeDeps({ loadDoorRuns: vi.fn(async () => [door7()]) }, { clueFamilies: [{ ...families[0], emailsToken: "../admin?x=1" }] });
+    await tick(FIVE_31);
+    const [mail] = sentOf(sent, "clue");
+    expect(mail.text).toContain("Pretend clue one");
+    expect(mail.text + mail.html).not.toContain("Stop these emails");
+    expect(mail.text + mail.html).not.toContain("/elf/emails/");
   });
 
   it("never sends a first clue that has neither words nor a picture", async () => {
@@ -894,6 +924,56 @@ describe("the sweep", () => {
     expect(sentOf(sent, "proud")).toEqual([]);
   });
 
+  // Plan 2c-2, Task 7 (Review Focus 3, ruling F17): a family that has stopped the emails gets no promotion and no
+  // graduation. Each moment is claimed and marked sent with no email, so starting the emails again never sends one it
+  // missed. The control: the same moment, on the same sweeps, for a family that never stopped them is emailed, ending
+  // with the link to its own page for stopping them.
+  describe("for a family that has stopped the emails", () => {
+    const SIX_DOORS = { cracked: [1, 2, 3, 4, 5, 6], visited: [], snow: [] };
+    const LEO = { id: 200, firstName: "Leo", surname: "Frostwhistle", nameApproved: true, badgeNumber: 428, look: null, fresh: [], favourites: [] };
+    const ALEX_FAMILY = { id: 4, grownUpName: "Alex Example", email: "alex@example.org", detectives: [LEO], emailsStopped: false, emailsToken: TOKEN_4 };
+    /** Family 3 with the emails stopped while `stopped.now` says so, and family 4, which never stopped them. */
+    const twoFamilies = (done: { cracked: number[]; visited: number[]; snow: number[] }) => {
+      const stopped = { now: true };
+      const made = sweeping(new Map(), {
+        familiesToSweep: vi.fn(async () => [3, 4]),
+        familyWithDetectives: vi.fn(async (id: number) => (id === 3 ? { ...SAM_FAMILY, emailsStopped: stopped.now, emailsToken: TOKEN_3 } : id === 4 ? ALEX_FAMILY : null)),
+        familyDoorsDone: vi.fn(async (_year: number, id: number) => new Map([[id === 3 ? 100 : 200, done]])),
+      });
+      return { ...made, stopped };
+    };
+
+    it("claims its promotion and marks it sent with no email, never sends it once the emails start again, and emails it to a family that never stopped them", async () => {
+      const { deps, sent, sends, stopped, tick } = twoFamilies(SIX_DOORS);
+      await tick(FIVE_31);
+      expect(claimsOf(deps, "proud")).toEqual(["2026:rank:100:Junior Detective", "2026:rank:200:Junior Detective"]);
+      expect(sends.row("proud", "2026:rank:100:Junior Detective")!.sentAt).not.toBeNull();
+      const proud = sentOf(sent, "proud");
+      expect(proud.map((m) => [m.to, m.subject])).toEqual([["alex@example.org", "Detective Leo Frostwhistle is now a Junior Detective"]]);
+      expect(proud[0].text).toContain(`Stop these emails: ${stopPage(TOKEN_4)}`);
+      expect(proud[0].html).toContain(`href="${stopPage(TOKEN_4)}"`);
+      // The family starts the emails again. The next sweep, eleven minutes on, when a claim that was never marked
+      // could be taken again, sends nothing for the moment it missed.
+      stopped.now = false;
+      await tick(at("2026-12-07T17:42:00Z"));
+      expect(claimsOf(deps, "sweep")).toEqual(["2026:2994441", "2026:2994442"]);
+      expect(claimsOf(deps, "proud").filter((k) => k === "2026:rank:100:Junior Detective")).toHaveLength(2);
+      expect(sentOf(sent, "proud")).toHaveLength(1);
+      expect(sent.map((m) => m.to)).not.toContain("sam@example.org");
+    });
+
+    it("claims every new rank and the graduation, each marked sent with no email, while a family that never stopped them hears of the graduation", async () => {
+      const ALL = Array.from({ length: 24 }, (_, i) => i + 1);
+      const { deps, sent, sends, tick } = twoFamilies({ cracked: [], visited: [], snow: ALL });
+      await tick(FIVE_31);
+      const sams = ["2026:rank:100:Junior Detective", "2026:rank:100:Detective", "2026:rank:100:Senior Detective", "2026:grad:100"];
+      expect(claimsOf(deps, "proud").filter((k) => k.includes(":100"))).toEqual(sams);
+      for (const key of sams) expect(sends.row("proud", key)!.sentAt, key).not.toBeNull();
+      expect(sentOf(sent, "proud").map((m) => [m.to, m.subject])).toEqual([["alex@example.org", "Detective Leo Frostwhistle has graduated!"]]);
+      expect(sentOf(sent, "proud")[0].text).toContain(`Stop these emails: ${stopPage(TOKEN_4)}`);
+    });
+  });
+
   it("goes on to the next family when one cannot be read", async () => {
     const { sent, tick } = sweeping(new Map([[100, { cracked: [1, 2, 3, 4, 5, 6], visited: [], snow: [] }]]), {
       familiesToSweep: vi.fn(async () => [2, 3]),
@@ -914,10 +994,40 @@ describe("the proud moments after a word", () => {
     year: 2026,
     door: 7,
     elfName: "Pip",
-    family: { id: 3, grownUpName: "Sam Example", email: "sam@example.org" },
+    family: { id: 3, grownUpName: "Sam Example", email: "sam@example.org", emailsStopped: false, emailsToken: TOKEN_3 },
     won: true,
     stamped: [{ id: 100, name: "Detective Ruby Tinselfoot", doorsDone: { cracked: [], visited: [7], snow: [] } }],
     ...over,
+  });
+  /** Ruby's sixth door, the word at door 7: a promotion to Junior Detective. */
+  const SIXTH: WordMoment["stamped"] = [{ id: 100, name: "Detective Ruby Tinselfoot", doorsDone: { cracked: [1, 2, 3], visited: [4, 5, 7], snow: [] } }];
+
+  // Plan 2c-2, Task 7: the won email always goes, and has no link to stop the emails; a promotion ends with one.
+  it("ends a promotion with the link to the family's own page for stopping the emails, and the won email with none", async () => {
+    const { deps, sent } = fakeDeps();
+    await sendProudMoments(moment({ stamped: SIXTH }), deps);
+    const [won, promoted] = sentOf(sent, "proud");
+    expect([won.subject, promoted.subject]).toEqual(["You found Pip!", "Detective Ruby Tinselfoot is now a Junior Detective"]);
+    expect(won.text + won.html).not.toContain("Stop these emails");
+    expect(promoted.text).toContain(`Stop these emails: ${stopPage(TOKEN_3)}`);
+    expect(promoted.html).toContain(`href="${stopPage(TOKEN_3)}"`);
+  });
+
+  it("still sends the won email to a family that has stopped the emails, and claims its promotion with no email", async () => {
+    const { deps, sent, sends } = fakeDeps();
+    await sendProudMoments(moment({ family: { ...moment().family, emailsStopped: true }, stamped: SIXTH }), deps);
+    expect(claimsOf(deps, "proud")).toEqual(["2026:won:3:7", "2026:rank:100:Junior Detective"]);
+    expect(sentOf(sent, "proud").map((m) => [m.to, m.subject])).toEqual([["sam@example.org", "You found Pip!"]]);
+    expect(sends.row("proud", "2026:won:3:7")!.sentAt).not.toBeNull();
+    expect(sends.row("proud", "2026:rank:100:Junior Detective")!.sentAt).not.toBeNull();
+  });
+
+  it("sends a promotion from a word with no link when the family has no token to link", async () => {
+    const { deps, sent } = fakeDeps();
+    await sendProudMoments(moment({ won: false, family: { ...moment().family, emailsToken: null }, stamped: SIXTH }), deps);
+    const [promoted] = sentOf(sent, "proud");
+    expect(promoted.subject).toBe("Detective Ruby Tinselfoot is now a Junior Detective");
+    expect(promoted.text + promoted.html).not.toContain("Stop these emails");
   });
 
   it("claims the won key for a win and sends the won email, naming every detective stamped", async () => {

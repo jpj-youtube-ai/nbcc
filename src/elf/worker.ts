@@ -13,7 +13,17 @@ import { elfTextsOn } from "./texts-on";
 import { doorInstant, doorOn, type Door } from "./calendar";
 import { doorSeason, emptyDoor, readinessOf, READY_WORDS, type DoorSetup } from "./door-setup";
 import { doorState, isOpen } from "./doors";
-import { buildElfClueEmail, buildElfFindAlertEmail, buildElfMorningEmail, buildElfPhotoAlertEmail, buildElfPlaceReminderEmail, buildElfProudEmail, ELF_PHOTO_TEXT, type BuiltEmail } from "./emails";
+import {
+  buildElfClueEmail,
+  buildElfFindAlertEmail,
+  buildElfMorningEmail,
+  buildElfPhotoAlertEmail,
+  buildElfPlaceReminderEmail,
+  buildElfProudEmail,
+  ELF_PHOTO_TEXT,
+  EMAILS_TOKEN,
+  type BuiltEmail,
+} from "./emails";
 import { factFor } from "./facts";
 import { familyDetectiveName, type DetectiveNameParts } from "./names";
 import { doorPost, postPicture, yesterdayPost } from "./posts";
@@ -163,6 +173,13 @@ const messageFor = (to: string, mail: BuiltEmail, from: string): FundraiseEmailM
 
 const sendId = (kind: string, key: string): string => `${kind} ${key}`;
 
+/** The address that ends a family's clue email and its promotions and graduations (Plan 2c-2): its own page for
+ *  stopping the emails, GET /elf/emails/:token. Null for a token that is not one, and the email then goes without
+ *  the link. */
+function stopUrlOf(deps: ElfWorkerDeps, token: string | null | undefined): string | null {
+  return typeof token === "string" && EMAILS_TOKEN.test(token) ? `${deps.siteOrigin}/elf/emails/${token}` : null;
+}
+
 /** Claims a send for this task: true only when this task should send it. A send this task has already sent
  *  but not yet marked is never claimed again from here. Never throws. */
 async function claim(deps: ElfWorkerDeps, kind: string, key: string): Promise<boolean> {
@@ -289,7 +306,8 @@ async function clueEmails(due: Due, door: Door, run: DoorRun, t: Tick): Promise<
         hqUrl: `${t.deps.siteOrigin}/elf/hq`,
         fact: factFor(door),
         giveUrl: `${t.deps.siteOrigin}/donate`,
-        stopUrl: null,
+        // A family that has stopped the emails is never listed (familiesStillToEmail): each listed one gets its link.
+        stopUrl: stopUrlOf(t.deps, f.emailsToken),
       });
       await t.deps.send.clue(f.grownUpName, messageFor(f.email, mail, t.deps.from));
     });
@@ -413,11 +431,13 @@ async function findAlert(due: Due, door: Door, run: DoorRun, t: Tick): Promise<v
 /** A detective's proud moments not yet claimed, each claimed as ("proud", `${year}:${key}`). Only the highest
  *  new one is emailed to the family: a run of snow days can bring several ranks at once, and the family hears
  *  once, about the newest (graduating above every rank); the lower ones are claimed and marked without an
- *  email. If the email fails, its own claim is tried again ten minutes on. */
+ *  email. If the email fails, its own claim is tried again ten minutes on. A family that has stopped the emails
+ *  (Plan 2c-2) has every new moment claimed and marked with no email at all, so starting them again never sends
+ *  one it missed; the email to any other family ends with the link to its own page for stopping them. */
 async function sendMoments(
   deps: ElfWorkerDeps,
   year: number,
-  family: { grownUpName: string; email: string },
+  family: { grownUpName: string; email: string; emailsStopped?: boolean; emailsToken?: string | null },
   detectiveName: string,
   moments: ProudMoment[],
 ): Promise<void> {
@@ -425,7 +445,9 @@ async function sendMoments(
   for (const m of moments) if (await claim(deps, "proud", `${year}:${m.key}`)) fresh.push(m);
   const top = fresh[fresh.length - 1];
   if (!top) return;
-  for (const m of fresh) if (m !== top) await noteSent(deps, "proud", `${year}:${m.key}`);
+  const quiet = family.emailsStopped === true;
+  for (const m of fresh) if (m !== top || quiet) await noteSent(deps, "proud", `${year}:${m.key}`);
+  if (quiet) return;
   await sendClaimed(deps, "proud", `${year}:${top.key}`, async () => {
     const mail = buildElfProudEmail({
       kind: top.kind,
@@ -434,7 +456,7 @@ async function sendMoments(
       ...(top.rank ? { rank: top.rank } : {}),
       hqUrl: `${deps.siteOrigin}/elf/hq`,
       giveUrl: `${deps.siteOrigin}/donate`,
-      stopUrl: null,
+      stopUrl: stopUrlOf(deps, family.emailsToken),
     });
     await deps.send.proud(family.grownUpName, messageFor(family.email, mail, deps.from));
   });
@@ -506,12 +528,14 @@ async function sweep(due: Due, t: Tick): Promise<void> {
   });
 }
 
-/** A word that counted (src/routes/elf.ts, after recordWord): what it gave, for the proud moments. */
+/** A word that counted (src/routes/elf.ts, after recordWord): what it gave, for the proud moments. The family's
+ *  switch for the emails and its token come from its FamilyRow (Plan 2c-2): a family that has stopped the emails
+ *  still gets the won email, and nothing else. */
 export interface WordMoment {
   year: number;
   door: Door | 0;
   elfName: string;
-  family: { id: number; grownUpName: string; email: string };
+  family: { id: number; grownUpName: string; email: string; emailsStopped: boolean; emailsToken: string | null };
   /** Did this word win the door's elf? */
   won: boolean;
   /** The detectives the word stamped, each with their doors done once the word counts: without this door

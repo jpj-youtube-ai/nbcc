@@ -1312,12 +1312,13 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
     // then, no promotion and no new things: the "It counts from" line says when it counts.
     const later = result.countsFrom.getTime() > now.getTime();
     // What the word gave, for the proud moments: each detective it stamped, with this door counted only
-    // once the visit counts (the sweep sends a promotion that comes from later).
+    // once the visit counts (the sweep sends a promotion that comes from later). With the family's switch for the
+    // emails and its token (Plan 2c-2): one that has stopped the emails gets the won email alone.
     const moment = (): WordMoment => ({
       year,
       door,
       elfName: run.elfName,
-      family: { id: family.id, grownUpName: family.grownUpName, email: family.email },
+      family: { id: family.id, grownUpName: family.grownUpName, email: family.email, emailsStopped: family.emailsStopped === true, emailsToken: family.emailsToken ?? null },
       won: result.won,
       stamped: result.stamped.flatMap((id) => {
         const d = family.detectives.find((x) => x.id === id);

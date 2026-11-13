@@ -103,7 +103,7 @@ import { clockWords } from "../elf/words";
 import { elfPng, elfPngKey, inTurn } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, MOBILE_WORDS, parseJoin } from "../elf/join";
-import { FESTIVE_SURNAMES, familyDetectiveName, type DetectiveNameParts } from "../elf/names";
+import { FESTIVE_SURNAMES, detectiveName, familyDetectiveName, type DetectiveNameParts } from "../elf/names";
 import { renderJoinPage } from "../elf/pages/join";
 import { ELF_BAR_START } from "../elf/pages/shell";
 import { renderSignInPage, renderWelcomePage } from "../elf/pages/sign-in";
@@ -1968,6 +1968,30 @@ function picturesBusy(res: Response): Response {
   return res.status(503).type("text/plain").send("Busy. Please try again in a moment.");
 }
 
+/** How many share cards are kept: the last ones made, so a graduate's family pressing again and again never fills the
+ *  picture queue for everyone else (Plan 2c-2's final review, issue 12). */
+export const SHARE_CARDS_KEPT = 32;
+/** The last share cards made, by everything a card is drawn from (shareCardKey), and nothing else of a family: when
+ *  full, the oldest goes. In this task's memory only. */
+const shareCards = new Map<string, Buffer>();
+
+/** For tests: no share card kept. */
+export function resetShareCards(): void {
+  shareCards.clear();
+}
+
+/** Everything a share card is drawn from: the elf as its look and wardrobe draw it (elfPngKey, at the card's 340
+ *  wide), the name as the public sees it (detectiveName of the parts with staff's tick, never the raw first name), the
+ *  rank, the doors done and the year. */
+function shareCardKey(o: { look: unknown; state: WardrobeState; name: string; rank: Rank; doorsDone: number; year: number }): string {
+  return JSON.stringify([elfPngKey(o.look, o.state, 340), o.name, o.rank, o.doorsDone, o.year]);
+}
+
+function keepShareCard(key: string, card: Buffer): void {
+  shareCards.set(key, card);
+  if (shareCards.size > SHARE_CARDS_KEPT) shareCards.delete(shareCards.keys().next().value as string);
+}
+
 /** The share card as a PNG, drawn by sharp from its SVG (the October plan's Stage B), or null when too many pictures
  *  are already waiting. It takes its turn with the elves' pictures (inTurn, src/elf/elf-png.ts), so the one small
  *  task never makes two at once. sharp is loaded the first time, never as the app starts, and by then elfPng has made
@@ -2029,15 +2053,19 @@ export async function getShareCard(req: Request, res: Response): Promise<Respons
     if (!own || !own.graduate) return notFound(res);
     const { detective, doors } = own;
     const progress = progressOf(doors);
-    const elf = await elfPng(detective.look, wardrobeState(doors), 340);
-    if (!elf) return picturesBusy(res);
+    const state = wardrobeState(doors);
     // The name in its parts, with staff's tick, never familyDetectiveName's: the card works out the public form itself.
-    const svg = shareCardSvg(
-      { detective: { firstName: detective.firstName, surname: detective.surname, approved: detective.nameApproved }, rank: progress.rank, doorsDone: progress.doorsDone, year: settings.year },
-      pngData(elf),
-    );
-    const card = await shareCardPng(svg);
-    if (!card) return picturesBusy(res);
+    const name = { firstName: detective.firstName, surname: detective.surname, approved: detective.nameApproved };
+    const key = shareCardKey({ look: detective.look, state, name: detectiveName(name), rank: progress.rank, doorsDone: progress.doorsDone, year: settings.year });
+    // A card made already is sent as it was, with no elf or card made again; a busy answer keeps nothing.
+    let card = shareCards.get(key) ?? null;
+    if (!card) {
+      const elf = await elfPng(detective.look, state, 340);
+      if (!elf) return picturesBusy(res);
+      card = await shareCardPng(shareCardSvg({ detective: name, rank: progress.rank, doorsDone: progress.doorsDone, year: settings.year }, pngData(elf)));
+      if (!card) return picturesBusy(res);
+      keepShareCard(key, card);
+    }
     res.setHeader("Content-Disposition", 'inline; filename="elf-detective-school-graduate.png"');
     return sendPicture(res, { mime: "image/png", bytes: card }, "private, no-store");
   } catch (err) {

@@ -73,7 +73,17 @@ vi.mock("../../src/routes/api", () => ({ currentCardFee: async () => ({ percentB
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", ADMIN_SESSION_SECRET: "s", PORTAL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
 
 import sharp from "sharp";
-import { elfPhotoBodyGuard, elfRouter, ELF_ENTRY_POST_PATH, ELF_PHOTO_POST_PATH, PHOTO_ADDRESS_TRIES, PHOTO_TRIES, resetElfLimits, resetPublicCalendar } from "../../src/routes/elf";
+import {
+  elfPhotoBodyGuard,
+  elfRouter,
+  ELF_ENTRY_POST_PATH,
+  ELF_PHOTO_POST_PATH,
+  PHOTO_ADDRESS_TRIES,
+  PHOTO_TRIES,
+  resetElfLimits,
+  resetPublicCalendar,
+  resetShareCards,
+} from "../../src/routes/elf";
 import { PICTURE_JSON_BODY_LIMIT } from "../../src/routes/fundraiser-pictures";
 import { ELF_PNG_QUEUE_MAX, inTurn } from "../../src/elf/elf-png";
 import { MOBILE_WORDS } from "../../src/elf/join";
@@ -131,6 +141,7 @@ beforeEach(() => {
   spies.shareCardSvg?.mockClear();
   resetPublicCalendar();
   resetElfLimits();
+  resetShareCards();
   db.getElfSettings.mockResolvedValue(ON);
   db.findElfSession.mockResolvedValue({ familyId: 3 });
   db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? FAMILY : null));
@@ -681,6 +692,76 @@ describe("a graduate's share card", () => {
     expect(r.status).toBe(500);
     expect(r.text).toBe(WORDS);
     logged.mockRestore();
+  });
+
+  // The final review, issue 12: a graduate's family pressing again and again could fill the picture queue and make
+  // other families' elves answer busy. The last 32 cards are kept, by everything a card is drawn from, so a press for a
+  // card already made makes nothing. Nothing else of a family is kept.
+  describe("kept for a while", () => {
+    const share = () => call("GET", `/elf/hq/share/${RUBY}.png`);
+    /** Family 3 with Ruby changed. */
+    const rubyIs = (over: Record<string, unknown>) =>
+      db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? { ...FAMILY, detectives: FAMILY.detectives.map((d) => (d.id === RUBY ? { ...d, ...over } : d)) } : null));
+    /** A look the wardrobe draws, all 24 doors done. */
+    const lookOf = (sibling: string, skin: string, hair: string) => ({ sibling, skin, hair, hairStyle: "short", costume: null, scene: "village", friend: null, frame: null, glasses: null, bow: null });
+
+    it("makes the card once however often it is pressed, and sends the same picture each time", async () => {
+      const first = await share();
+      const again = await share();
+      expect([first.status, again.status]).toEqual([200, 200]);
+      expect(again.bytes.equals(first.bytes)).toBe(true);
+      expect(again.headers.get("content-type")).toBe("image/png");
+      expect(again.headers.get("cache-control")).toBe("private, no-store");
+      expect(again.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(again.headers.get("content-disposition")).toBe('inline; filename="elf-detective-school-graduate.png"');
+      expect(png.elfPng).toHaveBeenCalledTimes(1);
+      expect(spies.shareCardSvg).toHaveBeenCalledTimes(1);
+    });
+
+    it("makes it again for a changed look", async () => {
+      await share();
+      const look = lookOf("brother", "s2", "brown");
+      rubyIs({ look });
+      expect((await share()).status).toBe(200);
+      expect(png.elfPng).toHaveBeenCalledTimes(2);
+      expect(png.elfPng).toHaveBeenLastCalledWith(look, { doors: [...EVERY_DOOR] }, 340);
+      expect(spies.shareCardSvg).toHaveBeenCalledTimes(2);
+    });
+
+    // The card is kept by the name as the public sees it: one staff untick after a card was made is never sent in full.
+    it("makes it again when staff untick the first name, so a name in full is never sent from a card kept with it", async () => {
+      await share();
+      rubyIs({ nameApproved: false });
+      expect((await share()).status).toBe(200);
+      expect(spies.shareCardSvg).toHaveBeenCalledTimes(2);
+      expect(String(spies.shareCardSvg.mock.results[1].value)).toContain(">Detective R. Tinselfoot<");
+    });
+
+    it("keeps nothing when the picture maker is busy, and makes the card at the next press", async () => {
+      png.elfPng.mockResolvedValueOnce(null);
+      expect((await share()).status).toBe(503);
+      expect((await share()).status).toBe(200);
+      expect((await share()).status).toBe(200);
+      expect(png.elfPng).toHaveBeenCalledTimes(2);
+      expect(spies.shareCardSvg).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the last 32 cards, letting the oldest go first", async () => {
+      const looks = ["sister", "brother"].flatMap((sibling) => ["s1", "s2", "s3", "s4", "s5"].flatMap((skin) => ["dark", "brown", "ginger", "blonde", "black"].map((hair) => lookOf(sibling, skin, hair)))).slice(0, 33);
+      for (const look of looks) {
+        rubyIs({ look });
+        expect((await share()).status).toBe(200);
+      }
+      expect(spies.shareCardSvg).toHaveBeenCalledTimes(33);
+      // The newest 32 are kept, the second look's among them...
+      rubyIs({ look: looks[1] });
+      await share();
+      expect(spies.shareCardSvg).toHaveBeenCalledTimes(33);
+      // ...and the first, the oldest, has gone, so it is made again.
+      rubyIs({ look: looks[0] });
+      await share();
+      expect(spies.shareCardSvg).toHaveBeenCalledTimes(34);
+    }, 60_000);
   });
 });
 

@@ -12895,7 +12895,12 @@ the link, **Watch the graduates' video**, only while December's doors are on.
   sees them (`approved: nameApproved`): a first name staff have not ticked shows as its first letter. sharp is
   loaded the first time a card is made, never as the app starts, and the card takes its turn with the elves'
   pictures (`inTurn` in `src/elf/elf-png.ts`); a full queue, like `elfPng` busy on the certificate, is 503 with
-  `Retry-After: 2`.
+  `Retry-After: 2`. The last 32 cards made are kept in the task's memory (`SHARE_CARDS_KEPT`), by everything a
+  card is drawn from (`shareCardKey`: the elf as its look and wardrobe draw it, the name as the public sees it,
+  never the raw first name, the rank, the doors done and the year), so a family pressing again and again is
+  sent the card it already has and never fills the picture queue for others; a changed look, or a name staff
+  tick or untick, makes a new card. When full the oldest goes; a busy answer keeps nothing, and nothing else of
+  a family is kept.
 - **The image's fonts.** A picture drawn on the server can only use the fonts the server has, and the runtime
   image had none, so the Dockerfile's first `apt-get install` gains `fontconfig` (how sharp finds a font) and
   `fonts-dejavu-core` (DejaVu Sans and Serif). Two checks in `pr.yml`'s image job prove it in the built image:

@@ -5,7 +5,8 @@
 This is every sentence a family, a place or a head elf reads that wave 2 added or changed: Plan 2a (the
 game and the family screens, merged switched off) and Plan 2b (the photo check, alerts, the emails, the
 worker and Finds), and the prints as Plan 1 (the Doors page) changed them. Every sentence is taken from
-the code as it is on 11 November 2026, so what you tick is what goes live.
+the code as it is on 11 November 2026 (parts 1 to 9) and 13 November 2026 (part 10), so what you tick is
+what goes live.
 
 Part 10 adds catching up on missed doors (Plan 2c-1): a family that missed a door's evening can crack it
 later from home, so a door's place is shown only to a family that has had its guess at that door or been
@@ -19,7 +20,7 @@ How to read it:
 - Words in *italics* change from door to door or from family to family. Every name, place, prize, number
   and time here is invented: the finder Detective R. Tinselfoot, the grown up Sam Example, the head elf
   Alex Example, the place Corner Bakehouse, Snowford, and door 7 (Monday 7 December: clues at 5:30pm,
-  6pm and 6:30pm, the place shown at 7pm), whose elf is Bauble.
+  6pm and 6:30pm, the answer shown at 7pm), whose elf is Bauble.
 - *(doors on)* after a heading means everything under it shows only once December's doors are switched
   on; after one sentence, it means that sentence does. Head elves also see these on the practice door,
   through the preview link. Everything else can be seen now by whoever it is for.
@@ -29,9 +30,22 @@ How to read it:
 - A few sentences were written for wave 1 but can only be seen in December, so you have never seen them
   on the site. They are here too, marked *(wave 1's words)*, so nothing reaches families unseen.
 - A sentence struck through, ~~like this~~, no longer shows anywhere: it has no box to tick, and part 10
-  has the words that replaced it.
+  (or, for the door pictures, the note on the same present just below) has the words that replaced it.
 - The questions that are still open are at the end: part 10's own at the end of part 10, and the rest
   under Questions for Jaimie.
+
+## Every door has the same present (approved, and already live)
+
+Every door now has one standard present, cut out of card like the old star, so no door has a picture of
+its own and no door pictures are made. Jaimie approved it on 13 November 2026 ("yes put the present live
+with those lines"), and it is already live. Its two family lines are already approved, so their boxes are
+ticked:
+
+- [x] A shut door's note, with December's doors off too: Every door has a prize for the first detective to find its elf. Can you guess what it is? (It said "Look at the shape cut out of the door. Can you guess the prize?")
+- [x] The scrapbook behind a found door *(doors on)*: *Detective R. Tinselfoot* won this door's prize: *a box of paints*. (It said "won the prize cut into this door".)
+
+So the two lines about door pictures are struck through: the posts in the 8am email (part 7) and the door
+picture in Doors (part 9).
 
 ## 1. The calendar and the scrapbook
 
@@ -88,7 +102,7 @@ place.
 - [ ] At the top: Door *7* · *Monday 7 December*, then the place: *Corner Bakehouse, Snowford*
 - [ ] Beside the paper rosette: **Found**
 - [ ] Found by ***Detective R. Tinselfoot*** at *5:47pm*
-- [ ] *Detective R. Tinselfoot* won the prize cut into this door: *a box of paints*.
+- ~~*Detective R. Tinselfoot* won the prize cut into this door: *a box of paints*.~~ Replaced, approved and live: see Every door has the same present, before part 1.
 - [ ] Nobody found it: Nobody found *Bauble* in time, so here is the hiding place. *Bauble* is still there, and the first detective to type the word on its tag wins the prize.
 - [ ] Nobody found it, and its elf has gone home: Nobody found *Bauble* in time, so here is the hiding place.
 - [ ] *31* families cracked this case (or: 1 family cracked this case; Nobody cracked this case)
@@ -388,7 +402,7 @@ Every one is in Admin > Get involved > All emails, under Elf Detective School, w
 
 ### The two posts, in the 8am email *(doors on)*
 
-Each with its door's picture once the door pictures are made.
+~~Each with its door's picture once the door pictures are made.~~ Gone: every door has the same present, so the posts go without a picture (see Every door has the same present, before part 1).
 
 - [ ] An evening door: Door *8* of NBCC Elf Detective School opens tonight! The first clue comes out at *5:30pm* in Detective HQ, with two more across the evening. Not a detective yet? Join at *https://nbcc.scot/elf*
 - [ ] A morning door: Door *5* of NBCC Elf Detective School opens today! The first clue comes out at *10am* in Detective HQ, with two more across the morning. Not a detective yet? Join at *https://nbcc.scot/elf*
@@ -516,7 +530,7 @@ From NBCC, to head elves with alerts on and a mobile number, once texts are swit
 ### Doors: the two sentences that differ from the mockup
 
 - [ ] Under the prize: A prize must not point at the place giving it. (The mockup said: Choose a prize that does not point at the place giving it.)
-- [ ] For a door picture not made yet: Not made yet. It is made from the prize list. (The mockup said: Door picture not made yet.)
+- ~~For a door picture not made yet: Not made yet. It is made from the prize list. (The mockup said: Door picture not made yet.)~~ Gone: every door has the same present, so the door's sheet shows the present, with "Every door has the same present." (see Every door has the same present, before part 1).
 
 ### Doors and Finds: names that count, fixed at midnight
 
@@ -675,7 +689,8 @@ photo is on the calendar for everyone, and having a go closes.
   detective in the family (the candy cane stamp, the gold seal and the elf on the door stay with the
   detective who went). Neither adds any words: only the counts change.
 - There are no pictures to approve here. Door pictures are not being made: every door carries the same
-  present, cut out of card like the star (Jaimie, 12 November), which comes in its own small change.
+  present, cut out of card like the star (Jaimie, 12 November), which is already live (see Every door
+  has the same present, before part 1).
 
 ### The calendar for everyone else
 
@@ -714,8 +729,8 @@ The scrapbook behind an open door:
 Have a go is on every open door until Christmas Day. Not signed in, it leads to signing in. A signed in
 family that can still crack the door sees it too, and its own line under the scrapbook stays hidden. The
 row of photos is left out, and "Everyone who found this elf, with *3 pictures*" counts the elves only. A
-found door still names its prize, as in part 1: "*Detective R. Tinselfoot* won the prize cut into this
-door: *a box of paints*." (see the questions below).
+found door still names its prize, in the present's words before part 1: "*Detective R. Tinselfoot* won
+this door's prize: *a box of paints*." (see the questions below).
 
 ### Having a go: a missed door's own page in Detective HQ
 
@@ -864,7 +879,7 @@ Today's door, and yesterday:
 - **A.** From Christmas Day, yesterday's post stops saying "Missed it? You can still crack the case in Detective HQ, with one guess.", because having a go closes on Christmas Day. But the rules page goes on saying "Missed a door on the night? You can still crack its case later in Detective HQ, with one guess." for as long as December's doors are on, Christmas Day included: should the rules say that having a go ends on Christmas Day?
 - **B.** On Christmas Eve, door 24's clue email says "If you miss today's hunt, you can still crack this case later in Detective HQ, with one guess.", where "later" then means only until midnight: should door 24's email say so?
 - **C.** The calendar's found elf now says "You find out whether you cracked it at 7pm." (in the news, for a screen reader and on the door's note) in place of "The hiding place is shown at 7pm.", because the place is shown then only to a family that has had its guess; the clue email and Detective HQ say the same: are these the words you want?
-- **D.** Once a found door opens, the calendar everyone shares names its prize ("Detective R. Tinselfoot won the prize cut into this door: a box of paints."), and a prize staff chose to show off is on its door before then, while its place stays hidden from everyone else until Christmas Day. So a prize must never name or point at the business giving it: "a cake from The Example Bakehouse" would give the answer away. Doors already says under the prize "A prize must not point at the place giving it.": is that enough of a warning for head elves?
+- **D.** Once a found door opens, the calendar everyone shares names its prize ("Detective R. Tinselfoot won this door's prize: a box of paints."), and a prize staff chose to show off is on its door before then, while its place stays hidden from everyone else until Christmas Day. So a prize must never name or point at the business giving it: "a cake from The Example Bakehouse" would give the answer away. Doors already says under the prize "A prize must not point at the place giving it.": is that enough of a warning for head elves?
 - **E.** Today's door shown with nobody found, if its elf had gone home, says "Nobody found today's elf in time. You can crack the case in Detective HQ." under the title "Bauble is still waiting": should that title change too, for example to "Bauble has gone home", as Detective HQ says? (Head Elf HQ allows gone home only after a door's day, so families should not see it.)
 - **F.** From Christmas Day, a go sent by a family that has already guessed that door is told "Having a go closed on Christmas Day." rather than "You have already had your go at this door." (on the page itself the family just sees how its guess went): both are true; is that the one you want?
 

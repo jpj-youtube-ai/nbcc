@@ -168,8 +168,9 @@ describe("the clue email", () => {
 
 // Plan 2c-1, Task 9: a family sees a door's place only once it has had its guess or been there, so the clue
 // email no longer says when the place "is shown". It says when the family finds out whether it cracked the
-// case, when the place closes on its day (a closing time typed in Doors), and that a missed hunt can still be
-// cracked later in Detective HQ. Door 7 is a Monday evening; door 5 a Saturday morning.
+// case, when the place closes on its day (a closing time typed in Doors, or door 24's 4pm when none is typed: Plan
+// 2c-2, ruling F4), and that a missed hunt can still be cracked later in Detective HQ. Door 7 is a Monday evening;
+// door 5 a Saturday morning.
 describe("the clue email, on finding out and catching up", () => {
   const SIX = new Date("2026-12-07T18:00:00.000Z");
   const SIX_30 = new Date("2026-12-07T18:30:00.000Z");
@@ -204,8 +205,9 @@ describe("the clue email, on finding out and catching up", () => {
     expect(e.html.toLowerCase()).not.toContain("tonight");
   });
 
-  // Ruling F13: with no closing time typed the place still closes, at the 8pm a door falls back to, so the
-  // family may find out later than the reveal; and a closing time not given at all reads as none.
+  // Ruling F13: with no closing time typed the place still closes, at the time a door falls back to (8pm, or 4pm on
+  // Christmas Eve, whose clues say it), so the family may find out later than the reveal; and a closing time not
+  // given at all reads as none.
   it("says nothing of closing with no closing time, and that the family may find out later", () => {
     const notGiven: Record<string, unknown> = {
       grownUpName: "Sam Example",

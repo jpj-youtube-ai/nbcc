@@ -846,6 +846,24 @@ When("the family {string} asks for the grand prize picture of the detective of {
   await asFamily(this, familyOf(this, email), "GET", `/elf/hq/entry/${await detectiveIdOf(owner)}/picture.jpg`);
 });
 
+// A graduate's certificate (GET /elf/hq/certificate/:detective), a sheet to print with the elf drawn on the server, and
+// their share card (GET /elf/hq/share/:detective.png), a picture drawn on the server, for the first detective of the
+// family `email`. The certificate is dated the day it is printed, so nothing here reads a date.
+When("the family {string} opens its detective's graduate certificate", { timeout: 20 * 1000 }, async function (email) {
+  await asFamily(this, familyOf(this, email), "GET", `/elf/hq/certificate/${await detectiveIdOf(email)}`);
+});
+
+When("the family {string} asks for its detective's share card", { timeout: 20 * 1000 }, async function (email) {
+  await asFamily(this, familyOf(this, email), "GET", `/elf/hq/share/${await detectiveIdOf(email)}.png`);
+});
+
+Then("the game answers {int} with a sheet to print saying {string}", function (status, words) {
+  assert.equal(this.gameStatus, status, sentence(this));
+  assert.equal(String(this.gameType).split(";")[0].trim(), "text/html", sentence(this));
+  assert.ok(String(this.gameText).includes("Print or save as PDF"), `expected a sheet to print in ${sentence(this)}`);
+  assert.ok(String(this.gameText).includes(words), `expected "${words}" in ${sentence(this)}`);
+});
+
 // Every family is enrolled with a mobile (features/steps/elf-join.steps.js): this one is taken off again, as a
 // family that enrolled before one was asked for has none.
 Given("the family {string} has no mobile number", async function (email) {

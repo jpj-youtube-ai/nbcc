@@ -51,6 +51,11 @@ Feature: Elf Detective School on Christmas Eve: the grand prize
     Then the game answers 200 with a picture of type "image/jpeg"
     When the family "second.prize.elf.bdd@example.com" asks for the grand prize picture of the detective of "first.prize.elf.bdd@example.com"
     Then the game answers 404
+    # A graduate's certificate, a sheet to print, and their share card, a picture drawn on the server.
+    When the family "first.prize.elf.bdd@example.com" opens its detective's graduate certificate
+    Then the game answers 200 with a sheet to print saying "Graduate Elf Detective"
+    When the family "first.prize.elf.bdd@example.com" asks for its detective's share card
+    Then the game answers 200 with a picture of type "image/png"
     Given the family "second.prize.elf.bdd@example.com" has no mobile number
     When the family "second.prize.elf.bdd@example.com" sends its detective's picture for the grand prize
     Then the game answers 400

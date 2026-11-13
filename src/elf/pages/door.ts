@@ -42,7 +42,9 @@ export interface DoorContext {
   hqUrl: string;
 }
 
-const CARVING_LINE = "Look at the shape cut out of the door. Can you guess the prize?";
+/** A shut door's invitation to guess its prize. Every door has the same present (12 November 2026), so the
+ *  shape no longer hints at it; the same words show with December's doors off, as the present does. */
+const CARVING_LINE = "Every door has a prize for the first detective to find its elf. Can you guess what it is?";
 
 /** How the guess works, in one line: the calendar's second step says it too. A guess counts until the
  *  hiding place is shown, not until the elf is found. */
@@ -104,15 +106,15 @@ export function doorLabel(d: DoorView, now: Date): string {
   return `Door ${d.door}, shut. Clue out ${dayWords(d.clueAt)} at ${clockWords(d.clueAt)}.${big}`;
 }
 
-/** The prize's shape, cut out of card and laid on the door. With no shape of its own, a door has the
- *  mystery star, which the stylesheet supplies. */
+/** The shape cut out of card and laid on the door. With no shape of its own (and none has one), a door
+ *  has the present every door has, which the stylesheet supplies. */
 function carving(d: DoorView): string {
   const shape = sitePath(d.shapeUrl);
   const style = shape ? ` style="--shape:url('${shape}')"` : "";
   return `<span class="elf-carve"${style} aria-hidden="true"><span class="elf-carve__hi"></span><span class="elf-carve__lo"></span></span>`;
 }
 
-/** A snow day's face: a paper snowflake, cut out of card the way a prize's shape is (the stylesheet
+/** A snow day's face: a paper snowflake, cut out of card the way the present is (the stylesheet
  *  supplies its shape: no picture). */
 const snowflake = (): string =>
   `<span class="elf-carve elf-snowflake" aria-hidden="true"><span class="elf-carve__hi"></span><span class="elf-carve__lo"></span></span>`;
@@ -161,8 +163,8 @@ function foot(kind: DoorKind, d: DoorView, now: Date): string {
 const MARKS = `<span class="elf-door__marks" aria-hidden="true"></span>`;
 
 /** The room behind an open door: its number, up to three of the elves that found it (elves only,
- *  never a photo), its place, and how many pictures the scrapbook holds. With no elf yet, the prize's
- *  shape in gold. */
+ *  never a photo), its place, and how many pictures the scrapbook holds. With no elf yet, the present
+ *  in gold. */
 function room(d: DoorView): string {
   const elves = d.collage
     .map((url) => sitePath(url))
@@ -364,7 +366,7 @@ function prizeLine(d: DoorView): string {
   if (!prize || !d.found) return "";
   return (
     `<p class="elf-book__prize"><span class="elf-book__cut" aria-hidden="true">${carving(d)}</span>` +
-    `<span>${escapeHtml(d.found.by)} won the prize cut into this door: ${escapeHtml(prize)}.</span></p>`
+    `<span>${escapeHtml(d.found.by)} won this door's prize: ${escapeHtml(prize)}.</span></p>`
   );
 }
 

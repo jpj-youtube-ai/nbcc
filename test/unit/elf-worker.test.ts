@@ -123,7 +123,7 @@ function door6(over: { facts?: Partial<DoorFacts> } = {}): DoorRun {
   };
 }
 
-/** Door 7's setup in Doors: everything done except its door picture, which none has in a test. */
+/** Door 7's setup in Doors: everything done, so it is ready (no door needs a picture of its own). */
 const door7Setup = (over: Partial<DoorSetup> = {}): DoorSetup => ({
   ...emptyDoor(7, CODE),
   placeName: "The Example Bakehouse",
@@ -482,7 +482,7 @@ describe("the morning email, at 8am on 7 December", () => {
       ...over,
     });
 
-  it("goes once to every head elf with alerts on: today's door and what it still needs, yesterday's finder by the public name, the photos and the posts", async () => {
+  it("goes once to every head elf with alerts on: today's door and whether it is ready, yesterday's finder by the public name, the photos and the posts", async () => {
     const { deps, sent, tick } = morning();
     await tick(EIGHT);
     expect(claimsOf(deps, "morning")).toEqual(["2026-12-07"]);
@@ -490,7 +490,9 @@ describe("the morning email, at 8am on 7 December", () => {
     expect(mails.map((m) => m.to)).toEqual(["alex@example.org", "jo@example.org"]);
     const text = mails[0].text;
     expect(mails[0].subject).toBe("Elf HQ: Monday 7 December");
-    expect(text).toContain("Door 7 is NOT ready: the door picture. Fix it in Doors before 5:30pm, or it becomes a snow day.");
+    // Everything is in for door 7, and a door needs no picture of its own: every door has the same present.
+    expect(text).toContain("Door 7 is ready. The first clue comes out at 5:30pm.");
+    expect(text).not.toContain("door picture");
     expect(text).toContain("Detective R. Tinselfoot found door 6's elf at 10:20am.");
     expect(text).toContain("3 photos waiting to be checked");
     expect(text).toContain("Door 7 of NBCC Elf Detective School opens tonight!");
@@ -500,6 +502,13 @@ describe("the morning email, at 8am on 7 December", () => {
     expect(text).not.toContain("The Example Bakehouse");
     expect(deps.finderParts).toHaveBeenCalledWith(2026, 6);
     expect(deps.markSent).toHaveBeenCalledWith("morning", "2026-12-07");
+  });
+
+  it("says what today's door still needs when it is not ready", async () => {
+    const { sent, tick } = morning({ listDoors: vi.fn(async () => [door7Setup({ droppedOffAt: null })]) });
+    await tick(EIGHT);
+    const text = sentOf(sent, "morning")[0].text;
+    expect(text).toContain("Door 7 is NOT ready: dropped off. Fix it in Doors before 5:30pm, or it becomes a snow day.");
   });
 
   it("calls a snowed in door a snow day, today and yesterday, with no post for either", async () => {

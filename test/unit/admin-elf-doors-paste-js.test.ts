@@ -110,6 +110,8 @@ function page(answers: Record<string, Answer | Answer[]> = {}) {
 
 const doorsPart = () => document.querySelector<HTMLElement>('#elfHq [role=tabpanel][data-tab="doors"]')!;
 const sheetEl = () => doorsPart().querySelector<HTMLElement>(".hq-door-sheet")!;
+/** The status line under the level select's tools (the prize list, the list of places, paste). */
+const toolsLine = () => doorsPart().querySelector<HTMLElement>(".hq-door-tools > .hq-status")!;
 const button = (within: ParentNode, words: string) => [...within.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent!.trim() === words);
 const clueBox = (n: number) => sheetEl().querySelector<HTMLTextAreaElement>(`#hqDoor-clue${n}`)!;
 const partOf = (key: string) => sheetEl().querySelector<HTMLElement>(`[data-part="${key}"]`)!;
@@ -464,7 +466,15 @@ describe("the level select tools", () => {
     button(doorsPart(), "Copy the prize list")!.click();
     await flush();
     expect(writeText).toHaveBeenCalledWith("Door 7: A wooden sledge");
-    expect(doorsPart().textContent).toContain("Copied. Send it to Claude for the door pictures.");
+    // Every door has the same present: the list goes to nobody for pictures.
+    expect(toolsLine().textContent).toBe("Copied.");
+  });
+
+  it("says what the prize list and the list of places are for", async () => {
+    await openDoor7();
+    expect(doorsPart().querySelector(".hq-door-tools > .hq-hint")!.textContent).toBe(
+      "The prize list is every door's prize, to copy. The list of places is for staff only: it names every place and its day.",
+    );
   });
 
   it("shows the list in a read only box when the clipboard is refused", async () => {
@@ -643,7 +653,7 @@ describe("fixes after the first review", () => {
     const blob = await item.data["text/plain"];
     expect(blob.size).toBe("Door 7: A wooden sledge".length);
     expect(writeText).not.toHaveBeenCalled();
-    expect(doorsPart().textContent).toContain("Copied. Send it to Claude for the door pictures.");
+    expect(toolsLine().textContent).toBe("Copied.");
   });
 
   it("falls back to writeText when the ClipboardItem write is refused", async () => {

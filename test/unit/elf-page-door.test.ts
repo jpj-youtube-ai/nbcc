@@ -279,13 +279,13 @@ describe("a door on the board", () => {
     }
   });
 
-  it("carves the mystery star when no shape has been uploaded, and the shape when one has", () => {
+  it("carves the stylesheet's present when a door has no shape of its own, and the shape when one has", () => {
     expect(dom(doorTile(door(), NOW)).querySelector(".elf-carve")!.getAttribute("style")).toBeNull();
     const shaped = dom(doorTile(door({ shapeUrl: "/elf/shape/9.png?v=3" }), NOW)).querySelector(".elf-carve")!;
     expect(shaped.getAttribute("style")).toBe("--shape:url('/elf/shape/9.png?v=3')");
   });
 
-  it("falls back to the mystery star for a shape address that is not one of the site's own", () => {
+  it("falls back to the stylesheet's present for a shape address that is not one of the site's own", () => {
     for (const bad of ["https://example.com/x.png", "//example.com/x.png", "/a.png');background:url('/b", "javascript:alert(1)", ""]) {
       expect(dom(doorTile(door({ shapeUrl: bad }), NOW)).querySelector(".elf-carve")!.getAttribute("style"), bad).toBeNull();
     }
@@ -378,7 +378,7 @@ describe("an open door on the board", () => {
     expect(tile.querySelector(".elf-carve")).toBeNull();
   });
 
-  it("shows the prize's shape behind a revealed door with no elves yet, and that the elf is still here", () => {
+  it("shows the present behind a revealed door with no elves yet, and that the elf is still here", () => {
     const tile = dom(doorTile(REVEALED, NOW));
     expect(tile.querySelector("a")!.classList.contains("is-open")).toBe(true);
     expect(tile.querySelector(".elf-room .elf-carve")).not.toBeNull();
@@ -448,12 +448,17 @@ describe("a door's detail", () => {
     }
   });
 
-  it("tells a shut door's day and time, and invites a guess at the shape cut out of the door", () => {
+  // Every door has the same present (12 November 2026), so the shape no longer hints at a door's prize: the
+  // line invites a guess at the prize itself, the same with December's doors off, as the present shows then too.
+  it("tells a shut door's day and time, and invites a guess at its prize", () => {
+    const LINE = "Every door has a prize for the first detective to find its elf. Can you guess what it is?";
     const said = text(doorDetail(door(), CTX));
     expect(said).toContain("Door 9");
     expect(said).toContain("Still shut");
     expect(said).toContain("Clue out Wed 9 Dec at 5:30pm");
-    expect(said).toContain("Look at the shape cut out of the door. Can you guess the prize?");
+    expect(said).toContain(LINE);
+    expect(said).not.toContain("shape cut out");
+    expect(text(doorDetail(door({ doorsOn: false }), CTX))).toContain(LINE);
   });
 
   it("shows a big prize on a paper chip, and its way to the clue on a torn paper button", () => {
@@ -554,11 +559,13 @@ describe("an open door's scrapbook", () => {
 
   // The coordinator's ruling: once its elf is found, the prize is named on every door, whether or not
   // staff ticked Show it off.
-  it("names the prize cut into the door once its elf is found, with or without Show it off", () => {
+  // Every door has the same present (12 November 2026), so the prize is this door's, not a shape cut into it.
+  it("names this door's prize once its elf is found, with or without Show it off", () => {
     expect(FOUND.bigPrize).toBe(false);
-    expect(words(book())).toContain("Detectives Finn Hollyhunt and Mia Gingersnap won the prize cut into this door: A pretend family trip to the pantomime.");
-    expect(words(book({ ...FOUND, prize: "A pretend sledge." }))).toContain("won the prize cut into this door: A pretend sledge.");
-    expect(words(book({ ...FOUND, prize: null }))).not.toContain("won the prize");
+    expect(words(book())).toContain("Detectives Finn Hollyhunt and Mia Gingersnap won this door's prize: A pretend family trip to the pantomime.");
+    expect(words(book({ ...FOUND, prize: "A pretend sledge." }))).toContain("won this door's prize: A pretend sledge.");
+    expect(words(book())).not.toContain("cut into this door");
+    expect(words(book({ ...FOUND, prize: null }))).not.toContain("won this door's prize");
   });
 
   it("puts everyone who found the elf in a row first, one polaroid each with its detective name, the finders first with the rosette", () => {

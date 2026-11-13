@@ -184,7 +184,7 @@ Feature: Elf Detective School in December: the doors, and a practice evening pla
     Then the game answers 200 with a picture of type "image/png"
     When someone signed out reads door 7 on the calendar until it says "FOUND FIRST!"
     Then door 7's scrapbook shows "Detective R. Tinselfoot" first, then "Detective L. Frostwhistle"
-    And door 7 on the calendar says "Detective R. Tinselfoot won the prize cut into this door: A pretend sledge."
+    And door 7 on the calendar says "Detective R. Tinselfoot won this door's prize: A pretend sledge."
     And door 7 on the calendar says "1 family cracked this case"
     And door 7 on the calendar says "2 have been there since"
     And door 2 on the calendar says "got snowed in"

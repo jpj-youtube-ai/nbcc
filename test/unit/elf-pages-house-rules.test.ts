@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { waveOneRuns } from "../../src/db/elf-game";
 import { calendarViewFor } from "../../src/elf/views";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
+import { renderEmailsPage } from "../../src/elf/pages/emails";
 import { renderEntryPage } from "../../src/elf/pages/entry";
 import { renderGoPage } from "../../src/elf/pages/go";
 import { renderHqPage } from "../../src/elf/pages/hq";
@@ -19,7 +20,7 @@ import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { CalendarView } from "../../src/elf/pages/types";
-import { AFTERNOON, at, calendarView, claimWin, entryView, goDoneView, goOutcome, goView, graduateHqView, grandPrize, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
+import { AFTERNOON, at, calendarView, claimWin, emailsView, entryView, goDoneView, goOutcome, goView, graduateHqView, grandPrize, hqEmails, hqView, posterView, visitWin, wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the house rules every elf screen must keep.
 //
@@ -138,6 +139,9 @@ const PAGES: [string, string][] = [
   ["HQ, the grand prize with no graduate yet", renderHqPage({ ...theGrandPrize, grandPrize: grandPrize({ detectives: [] }) })],
   ["HQ, a graduate", renderHqPage(aGraduate)],
   ["HQ, a graduate with no graduates' video set", renderHqPage({ ...aGraduate, videoUrl: null })],
+  // Plan 2c-2, Task 7: the family's switch for the emails that are not essential, last on Detective HQ.
+  ["HQ, your emails on", renderHqPage(hqView({ emails: hqEmails() }))],
+  ["HQ, your emails stopped", renderHqPage({ ...aGraduate, emails: hqEmails({ stopped: true }) })],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
@@ -178,6 +182,9 @@ const PAGES: [string, string][] = [
   ["entry, a picture in", renderEntryPage(pictureIn)],
   ["entry, closed", renderEntryPage(entryView({ open: false }))],
   ["entry, closed with a picture in", renderEntryPage({ ...pictureIn, open: false })],
+  // Plan 2c-2, Task 7: the page the link to stop the emails opens.
+  ["the emails link, on", renderEmailsPage(emailsView())],
+  ["the emails link, stopped", renderEmailsPage(emailsView({ stopped: true }))],
 ];
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");

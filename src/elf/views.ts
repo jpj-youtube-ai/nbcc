@@ -91,6 +91,10 @@ export function detectiveViewFor(d: DetectiveRow, doorsDone: DoorsDone, doorsOn 
  *  this address sends a graduate's family on to the video's link (getGraduateVideo in src/routes/elf.ts). */
 export const GRADUATE_VIDEO_PATH = "/elf/hq/video";
 
+/** Where Detective HQ's switch for the emails that are not essential posts (Plan 2c-2): postEmails in
+ *  src/routes/elf.ts, for the signed in family. */
+export const EMAILS_SWITCH_PATH = "/api/elf/emails";
+
 /** The graduates' video's link that a head elf saved (Plan 2c-2), when it is an https link; null otherwise, and then
  *  Detective HQ shows no video link and its address is not found. One rule for both. */
 export function graduateVideoOf(settings: Pick<ElfSettings, "graduateVideoUrl">): string | null {
@@ -285,6 +289,9 @@ export function hqViewFor(o: {
     grandPrize: grandPrizeOf(o, detectives),
     // With December's doors off, no family sees anything new: no video link.
     videoUrl: o.settings.doorsOn && graduateVideoOf(o.settings) ? GRADUATE_VIDEO_PATH : null,
+    // Nor the switch for the emails, which only go while December's doors are on. A family row built by hand, with
+    // no switch read, has the emails on.
+    emails: o.settings.doorsOn ? { stopped: o.family.emailsStopped === true, url: EMAILS_SWITCH_PATH } : null,
   };
 }
 

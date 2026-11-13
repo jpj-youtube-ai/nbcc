@@ -236,6 +236,10 @@ export interface HqView {
    *  own address for it, `/elf/hq/video`, which sends a graduate's family on to the link (ruling F10: every link on a
    *  family's page is on this site); null otherwise. Drawn on a graduate's card only. */
   videoUrl: string | null;
+  /** The family's switch for the emails that are not essential (Plan 2c-2): whether it has stopped them, and where
+   *  the switch posts (`/api/elf/emails`, signed in). Null while December's doors are off, and then Detective HQ has
+   *  no emails section. Drawn last on the page. */
+  emails: { stopped: boolean; url: string } | null;
 }
 
 /** The page where a family sends in a graduate's picture for the grand prize (Plan 2c-2), from Detective HQ. The

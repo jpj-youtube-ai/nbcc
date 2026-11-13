@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import type { DetectiveView, HqView, TodayView } from "../../src/elf/pages/types";
-import { at, graduateDetective, graduateHqView, grandPrize, hqView } from "./elf-fixtures";
+import { at, graduateDetective, graduateHqView, grandPrize, hqEmails, hqView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: Detective HQ, a family's own page. Every family, detective, clue and
 // business here is invented (see elf-fixtures.ts).
@@ -515,6 +515,78 @@ describe("the grand prize", () => {
 
   it("draws nothing when its closing time is not a real time, rather than a sentence with a gap in it", () => {
     expect(prizeOf(page(hqView({ grandPrize: grandPrize({ closesAt: new Date(Number.NaN) }) })))).toBeNull();
+  });
+});
+
+// Plan 2c-2, Task 7: the family's switch for the emails that are not essential, last on the page (ruling F15), while
+// December's doors are on. A plain form, so it works with no script.
+describe("your emails", () => {
+  const emailsOf = (doc: Document) => doc.querySelector("main > section.elf-hq-emails");
+  const ALWAYS = "Sign in codes, payment receipts and the email when your family finds an elf first always come.";
+  /** The section's form: where it posts, what its hidden field sends, and its button's words. */
+  const formOf = (doc: Document) => {
+    const form = emailsOf(doc)!.querySelector<HTMLFormElement>("form")!;
+    return {
+      method: form.getAttribute("method"),
+      action: form.getAttribute("action"),
+      stopped: form.querySelector<HTMLInputElement>('input[type="hidden"][name="stopped"]')!.value,
+      button: words(form.querySelector('button[type="submit"]')),
+    };
+  };
+
+  it("comes last, after today's case, the grand prize, the doors still to crack, your detectives and your marks, under its strip", () => {
+    const TO_CRACK: HqView["toCrack"] = [{ door: 23, elfName: "Sprout", clueAt: at("2026-12-23T17:30:00.000Z"), url: "/elf/hq/door/23" }];
+    const doc = page(hqView({ grandPrize: grandPrize(), toCrack: TO_CRACK, emails: hqEmails() }));
+    const order = [...doc.querySelectorAll("main > section")].map((s) => [...s.classList].find((c) => c.startsWith("elf-hq-")));
+    expect(order).toEqual(["elf-hq-top", "elf-hq-case", "elf-hq-prize", "elf-hq-crack", "elf-hq-team", "elf-hq-marks", "elf-hq-emails"]);
+    const strip = emailsOf(doc)!.querySelector("h2")!;
+    expect(words(strip)).toBe("Your emails");
+    expect(strip.classList.contains("elf-strip")).toBe(true);
+    expect(emailsOf(doc)!.getAttribute("aria-labelledby")).toBe(strip.id);
+  });
+
+  it("says what is emailed, with the button to stop it, and what always comes", () => {
+    const doc = page(hqView({ emails: hqEmails() }));
+    expect(words(emailsOf(doc)!.querySelector(".lede"))).toBe("We email you when each door's first clue comes out, and when a detective is promoted or graduates.");
+    expect(formOf(doc)).toEqual({ method: "post", action: "/api/elf/emails", stopped: "yes", button: "Stop these emails" });
+    expect(words(emailsOf(doc)!.querySelector(".elf-emails__always"))).toBe(ALWAYS);
+  });
+
+  it("says the emails are stopped and that everything is still here, with the button to start them again", () => {
+    const doc = page(hqView({ emails: hqEmails({ stopped: true }) }));
+    expect(words(emailsOf(doc)!.querySelector(".lede"))).toBe("You have stopped these emails. Everything is still here in Detective HQ.");
+    expect(formOf(doc)).toEqual({ method: "post", action: "/api/elf/emails", stopped: "no", button: "Start them again" });
+    expect(words(emailsOf(doc)!.querySelector(".elf-emails__always"))).toBe(ALWAYS);
+    expect(words(emailsOf(doc))).not.toContain("We email you");
+  });
+
+  it("is not on the page without a switch in the view, so Detective HQ is exactly what it was", () => {
+    const before = renderHqPage(hqView());
+    // A view from before Plan 2c-2's switch, with no emails at all.
+    const older: Partial<HqView> = hqView();
+    delete older.emails;
+    expect(renderHqPage(older as HqView)).toBe(before);
+    expect(before).not.toContain("elf-hq-emails");
+    expect(words(page(hqView()).querySelector("main"))).not.toContain("Your emails");
+  });
+
+  it("is not on the page when the switch's address is not on this site", () => {
+    for (const url of ["https://elsewhere.example/api/elf/emails", "//elsewhere.example/x", "javascript:alert(1)"]) {
+      const html = renderHqPage(hqView({ emails: hqEmails({ url }) }));
+      expect(html, url).not.toContain("elf-hq-emails");
+      expect(html, url).not.toContain("elsewhere");
+    }
+  });
+
+  it("reads a stopped that is not true as on", () => {
+    expect(formOf(page(hqView({ emails: { stopped: "yes" as unknown as boolean, url: "/api/elf/emails" } }))).button).toBe("Stop these emails");
+  });
+
+  it("is styled as the page's other sections are, with its form drawn as no card of its own", () => {
+    const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+    expect(css).toMatch(/\.elf-page \.section\.elf-hq-emails \{[^}]*padding/);
+    expect(css).toMatch(/\.elf-hq-emails \.elf-strip \{[^}]*font-size/);
+    expect(css).toMatch(/form\.elf-emails \{[^}]*background:\s*none/);
   });
 });
 

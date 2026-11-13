@@ -1,5 +1,6 @@
 import { isDoor } from "../../src/elf/calendar";
 import { ELF_NAMES } from "../../src/elf/names";
+import type { EmailsView } from "../../src/elf/pages/emails";
 import type { CalendarView, ClaimWin, DetectiveView, DoorView, EntryView, GoView, HqView, PosterView, VisitWin, WardrobeView } from "../../src/elf/pages/types";
 
 /** The page a family sees after scanning the poster at an invented shop. Signed in, two detectives,
@@ -252,8 +253,21 @@ export function hqView(over: Partial<HqView> = {}): HqView {
     grandPrize: null,
     // No graduates' video (Plan 2c-2), unless told otherwise.
     videoUrl: null,
+    // No emails switch (Plan 2c-2: only while December's doors are on), unless told otherwise.
+    emails: null,
     ...over,
   };
+}
+
+/** Detective HQ's switch for the emails that are not essential (Plan 2c-2): on, unless told otherwise. */
+export function hqEmails(over: Partial<NonNullable<HqView["emails"]>> = {}): NonNullable<HqView["emails"]> {
+  return { stopped: false, url: "/api/elf/emails", ...over };
+}
+
+/** The page a family's link to stop the emails opens (Plan 2c-2): the emails on, the page just opened, its button
+ *  posting to the link's own address with an invented token, unless told otherwise. */
+export function emailsView(over: Partial<EmailsView> = {}): EmailsView {
+  return { stopped: false, said: null, postUrl: "/elf/emails/0123456789abcdef0123456789abcdef", ...over };
 }
 
 /** Ruby once she has done all 24 doors (Plan 2c-2): a Graduate, with her certificate to print and her share card

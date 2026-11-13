@@ -70,6 +70,7 @@ import { elfPhotoBodyGuard, elfRouter, ELF_ENTRY_POST_PATH, ELF_PHOTO_POST_PATH,
 import { PICTURE_JSON_BODY_LIMIT } from "../../src/routes/fundraiser-pictures";
 import { ELF_PNG_QUEUE_MAX, inTurn } from "../../src/elf/elf-png";
 import { MOBILE_WORDS } from "../../src/elf/join";
+import { hqViewFor } from "../../src/elf/views";
 import { tinyJpeg } from "./fixtures/tiny-jpeg";
 import { at, callerAt, CODE, door7, doorsDoneFromRuns, EVE_10_30, EVERY_DOOR, FAMILY, OFF, ON, PRACTICE_PASS, practiceRow, snowedIn, type Ask } from "./elf-routes-fixtures";
 
@@ -89,6 +90,8 @@ const EVE_EVE = at("2026-12-23T23:59:00.000Z");
 const WORDS = "Something went wrong just now. Please try again in a few minutes.";
 const THANKS = "Thank you! Detective Ruby Tinselfoot's picture is in. You can change it until 5pm on Christmas Eve.";
 const CLOSED = "Grand prize entries closed at 5pm on Christmas Eve.";
+/** Family 3's own token for the link that stops its emails (Task 7), as the database makes them: invented. */
+const EMAILS_TOKEN = "0123456789abcdef0123456789abcdef";
 /** Family 3's detectives: Ruby and Leo, whose first name staff have not ticked yet. Detective 999 is another family's. */
 const RUBY = 100;
 const LEO = 101;
@@ -731,6 +734,40 @@ describe("Detective HQ's graduates", () => {
   });
 });
 
+// ---- the emails a family can stop: Detective HQ's switch (Task 7) -----------------------------------------------
+
+describe("Detective HQ's switch for the emails", () => {
+  it("is last on the page while December's doors are on, posting to the signed in switch", async () => {
+    const r = await call("GET", "/elf/hq");
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('class="section elf-hq-emails"');
+    expect(r.text).toContain("We email you when each door's first clue comes out, and when a detective is promoted or graduates.");
+    expect(r.text).toContain('<form class="elf-emails" method="post" action="/api/elf/emails">');
+    expect(r.text).toContain('<input type="hidden" name="stopped" value="yes" />');
+    expect(r.text.indexOf("elf-hq-emails")).toBeGreaterThan(r.text.indexOf("elf-hq-marks"));
+  });
+
+  it("says the emails are stopped for a family that has stopped them, and never puts the family's own token on the page", async () => {
+    db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? { ...FAMILY, emailsStopped: true, emailsToken: EMAILS_TOKEN } : null));
+    const r = await call("GET", "/elf/hq");
+    expect(r.text).toContain("You have stopped these emails. Everything is still here in Detective HQ.");
+    expect(r.text).toContain('<input type="hidden" name="stopped" value="no" />');
+    expect(r.text).toContain("Start them again");
+    expect(r.text).not.toContain(EMAILS_TOKEN);
+  });
+
+  // Review Focus 5: the switch is in Detective HQ's view only while December's doors are on.
+  it("is in hqViewFor's view only while December's doors are on, read from the family's row", () => {
+    const view = (settings: typeof ON, family: typeof FAMILY & { emailsStopped?: boolean }) =>
+      hqViewFor({ family, settings, now: EVE_10_30, runs: { runs: [], practice: null }, guesses: new Map(), typed: new Set(), doorsDone: new Map(), finders: new Map(), photos: [], entries: new Map() });
+    expect(view(ON, { ...FAMILY, emailsStopped: true }).emails).toEqual({ stopped: true, url: "/api/elf/emails" });
+    expect(view(ON, { ...FAMILY, emailsStopped: false }).emails).toEqual({ stopped: false, url: "/api/elf/emails" });
+    // A family row built by hand, with no switch read, has the emails on.
+    expect(view(ON, FAMILY).emails).toEqual({ stopped: false, url: "/api/elf/emails" });
+    expect(view(OFF, { ...FAMILY, emailsStopped: true }).emails).toBeNull();
+  });
+});
+
 // ---- with December's doors off (Review Focus 5) ------------------------------------------------------------
 
 describe("with December's doors off", () => {
@@ -783,6 +820,16 @@ describe("with December's doors off", () => {
     expect(r.status).toBe(200);
     expect(r.text).toContain("All 24 doors done");
     for (const gone of ["/elf/hq/certificate/", "/elf/hq/share/", "/elf/hq/video", "elf-detective__graduate"]) expect(r.text, gone).not.toContain(gone);
+  });
+
+  // Task 7: no emails switch in Detective HQ, even for a browser with the preview link.
+  it("has no emails switch in Detective HQ, with or without the preview link", async () => {
+    db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? { ...FAMILY, emailsStopped: true, emailsToken: EMAILS_TOKEN } : null));
+    for (const cookie of [undefined, PRACTICE_PASS]) {
+      const r = await call("GET", "/elf/hq", { cookie });
+      expect(r.status).toBe(200);
+      for (const gone of ["elf-hq-emails", "Your emails", "/api/elf/emails", "Stop these emails", "Start them again"]) expect(r.text, gone).not.toContain(gone);
+    }
   });
 });
 

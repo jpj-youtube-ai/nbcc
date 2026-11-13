@@ -672,6 +672,15 @@
 @media (min-width: 640px) { .elf-marks { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 @media (min-width: 981px) { .elf-marks { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
 
+/* Your emails (Plan 2c-2), last on Detective HQ while December's doors are on: what is emailed, the one button to
+   stop it or start it again, and what always comes. The site gives every form a card of its own; this one, here
+   and on the page its emails' link opens, is only its button. */
+.elf-page .section.elf-hq-emails { padding-block: clamp(16px, 3vw, 32px) clamp(8px, 2vw, 16px); }
+.elf-hq-emails .elf-strip { font-size: clamp(1.6rem, 1.35rem + 1.2vw, 2.2rem); }
+.elf-hq-emails .lede { margin-top: 12px; }
+form.elf-emails { margin: 16px 0 0; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+.elf-hq-emails .elf-emails__always { margin-top: 14px; }
+
 /* =================================================================
    HAVING A GO: a missed door's own page in Detective HQ (Plan 2c-1)
    ================================================================= */
@@ -727,6 +736,19 @@
 .elf-entry__promise::before { content: ""; position: absolute; left: 12px; top: 10px; width: 30px; height: 29px; background: url(/assets/img/elf/paper/deco/holly.webp) center / contain no-repeat; filter: drop-shadow(0 1px 1px rgba(58, 0, 0, 0.3)); }
 .elf-entry__promise::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-grain-light) 0 0 / 384px, var(--holly-soft); background-blend-mode: multiply; -webkit-mask: var(--elf-tear-fine-b); mask: var(--elf-tear-fine-b); }
 .elf-entry__back { max-width: 760px; margin: clamp(18px, 3vw, 26px) auto 0; text-align: center; }
+
+/* =================================================================
+   THE EMAILS A FAMILY CAN STOP (Plan 2c-2): the page the link in an email opens
+   ================================================================= */
+
+/* The top, centred as Detective HQ's is: Elf Detective School's label over the title strip. */
+.elf-emails-top .wrap { text-align: center; }
+
+/* The page on a note taped to the page, as today's case is in Detective HQ (the note is an .elf-case too, so its
+   words, button and small print look the same): where the emails stand, or what the button has just done, then
+   the button and what always comes. */
+.elf-emails-page { padding-bottom: clamp(8px, 2vw, 20px); }
+.elf-emails-note .elf-emails__said { color: var(--holly-dark); font-weight: 600; }
 
 /* =================================================================
    THE WARDROBE: dressing an elf, in paper (mockup 6, approved by Jaimie on 4 November 2026)

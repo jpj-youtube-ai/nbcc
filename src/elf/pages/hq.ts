@@ -1,6 +1,7 @@
 import { DOOR_COUNT } from "../calendar";
 import { FRAMES } from "../wardrobe";
 import { clockWords, countdownWords, dayWords, findOutWhenFoundWords, findOutWords, longDayWords, sleepsUntil, things } from "../words";
+import { ALWAYS_COME_WORDS } from "./emails";
 import { candyCane, icon } from "./icons";
 import { headingStrip, titleStrip } from "./paper";
 import { count, elfPage, escapeHtml, line, real, sitePath } from "./shell";
@@ -17,7 +18,8 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 // (Plan 2c-1), a family that missed today's evening is offered its one go once the place is shown, and the
 // other missed doors it can still crack are listed under today's case. From Christmas Eve (Plan 2c-2) the
 // grand prize comes between the two: each graduate's picture to send in, until the entries close. A graduate's
-// card then offers their certificate to print, their share card to save and the graduates' video.
+// card then offers their certificate to print, their share card to save and the graduates' video. Last, while
+// December's doors are on, the family's switch for the emails that are not essential.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
 // script only saves the guess without leaving the page, and fetches the page again when the next
@@ -301,6 +303,35 @@ function prizeSection(view: HqView): string {
   </section>`;
 }
 
+/** The family's switch for the emails that are not essential (Plan 2c-2), last on the page (ruling F15): what is
+ *  emailed and the button to stop it, or that the emails are stopped and the button to start them again, and under
+ *  both what always comes. A plain form that posts to this site, so it works with no script. With no switch in the
+ *  view (December's doors off), or one whose address is not on this site, the section is not on the page at all, so
+ *  Detective HQ is exactly what it was. */
+function emailsSection(view: HqView): string {
+  const emails = view.emails;
+  if (!emails || typeof emails !== "object") return "";
+  const post = sitePath(emails.url);
+  if (!post) return "";
+  const stopped = emails.stopped === true;
+  const lede = stopped
+    ? "You have stopped these emails. Everything is still here in Detective HQ."
+    : "We email you when each door's first clue comes out, and when a detective is promoted or graduates.";
+  return `
+
+  <section class="section elf-hq-emails" aria-labelledby="elf-hq-emails-heading">
+    <div class="wrap">
+      ${headingStrip({ text: "Your emails", tag: "h2", back: "tan", id: "elf-hq-emails-heading" })}
+      <p class="lede">${lede}</p>
+      <form class="elf-emails" method="post" action="${post}">
+        <input type="hidden" name="stopped" value="${stopped ? "no" : "yes"}" />
+        <button class="elf-btn" type="submit">${stopped ? "Start them again" : "Stop these emails"}</button>
+      </form>
+      ${line(ALWAYS_COME_WORDS, "elf-hint elf-emails__always")}
+    </div>
+  </section>`;
+}
+
 /** The costumes waiting in the wardrobe, as presents (draft words for Jaimie). */
 function presentsWords(n: number): string {
   return n === 1 ? "A present to open" : n === 2 ? "Two presents to open" : `${n} presents to open`;
@@ -430,7 +461,7 @@ export function renderHqPage(view: HqView): string {
       ${marksBoard(view.marks)}
       <p><a class="elf-btn" href="${calendar}">See the calendar</a></p>
     </div>
-  </section>`;
+  </section>${emailsSection(view)}`;
 
   return elfPage({
     title: "Detective HQ",

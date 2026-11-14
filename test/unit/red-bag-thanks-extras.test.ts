@@ -1002,8 +1002,15 @@ describe("the site's visit counter never learns the name, or anything made from 
     const sent: string[] = [];
     Object.defineProperty(navigator, "sendBeacon", { configurable: true, value: (_u: string, body: string) => (sent.push(String(body)), true) });
     vi.stubGlobal("fetch", (_u: string, o: { body?: string }) => void sent.push(String(o?.body)));
+    // pulse.js sends a made up visitor id with every ping: 16 letters and digits, 0 to 9 and a to f, drawn at random.
+    // It is set here to all a, the id that must never be taken for a picture's bytes.
+    const random = vi.spyOn(window.crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(b: T): T => {
+      (b as unknown as Uint8Array).fill(0xaa);
+      return b;
+    });
     start({ kept: gift(10000), canvas: true });
     new Function(readFileSync(resolve(ROOT, "assets/js/pulse.js"), "utf8"))();
+    random.mockRestore();
     const save = $<HTMLAnchorElement>("[data-rb-share-save]");
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
       this.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -1022,7 +1029,10 @@ describe("the site's visit counter never learns the name, or anything made from 
       expect(c.l).toMatch(/^(0000000\d-made-up-id|thank-you)$/);
     }
     const all = sent.join(" ");
-    expect(all).not.toMatch(/Fern|Maplewood|Juniper|filled|Red Bag|PNG:|base64|data:|AAAA/i);
+    expect(all).toContain('"v":"aaaaaaaaaaaaaaaa"');
+    expect(all).not.toMatch(/Fern|Maplewood|Juniper|filled|Red Bag|PNG:|base64|data:/i);
+    // A picture's bytes written out as base64: there case matters, and a run of empty bytes is capital A, never a.
+    expect(all).not.toMatch(/AAAA/);
     delete (navigator as unknown as Record<string, unknown>).sendBeacon;
     vi.unstubAllGlobals();
   });

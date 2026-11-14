@@ -7191,6 +7191,40 @@ CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 4 GB
 (`NODE_OPTIONS=--max-old-space-size=4096`). With these screen tests added, three workers ran out at
 Node's default of about 2 GB and the run failed with 872 of 875 files passed.
 
+## Admin: the kit, one look for every screen (2026-11-14)
+
+Jaimie: "look at what we've done with the overview, with donations... and bring everything up to that
+level." The Overview, Donations and Get involved each carry the Donations look in a stylesheet of their
+own. For the twenty or so screens left, the look lives once, in a kit, and a screen opts in. Design:
+`docs/superpowers/specs/2026-11-14-admin-refresh-design.md`.
+
+- **`assets/css/admin-kit.css`**, loaded after `admin.css` and `admin-overview.css` (it uses that file's
+  `--ov-` colours). A screen takes the look by adding the class `ak` to its
+  `<section class="admin-view">`. Inside it the admin's old shared pieces are redrawn (the title and its
+  one plain sentence, `.admin-btn` and the public site's `.btn`, `.admin-seg`, `.admin-table`, `.admin-pill`, `.admin-dl`, fields, the
+  pager, `.admin-empty`, `.admin-action-status`, `.admin-fold`), and the `.ak-` parts are there to build
+  with: tiles (`.ak-tiles`), cards (`.ak-card`, `.ak-panel`), a card that is a button (`.ak-row`), a card
+  that opens where it is (`.ak-item`), marks (`.ak-mark`), facts (`.ak-facts`), notices (`.ak-notice`),
+  folds (`.ak-fold`), labelled filter groups (`.ak-filters`) and a bar of parts with one showing at a
+  time (`.ak-parts`). A screen without the class is untouched, so the screens with a design of their own
+  never see it.
+- **A table on a phone**: give the table the class `ak-cards` and each row is a card below 860px, every
+  cell on its own line with its column's name in front (`data-label`, which `AdminKit.labelCells(table)`
+  writes from the headings after the rows are drawn). `ak-cards__lead` on the cell that names the row
+  puts it at the head of the card.
+- **`assets/js/admin/kit.js`** (`window.AdminKit`, loaded before `app.js`): `labelCells`, `wireParts`
+  (the bar of parts: arrows, Home and End move along it, and pressing one brings its part into view),
+  `toCsv` and `downloadCsv` (a spreadsheet made in the browser from what is on the screen; a cell that
+  would run as a formula in Excel is kept as words), `copyText` and `plural`.
+- **Each area's own sheet** sits on top of the kit for what only that area needs:
+  `admin-giving.css`, `admin-supporters.css`, `admin-records.css`, `admin-content.css`,
+  `admin-outreach.css`, `admin-settings.css` and
+  `admin-newsletter.css`.
+- **House rules**, pinned in `test/unit/admin-kit.test.ts`: every rule is named through
+  `.admin-view.ak` or starts `.ak-`; no `!important`; nothing scrolls inside a box or sideways; motion
+  only under `prefers-reduced-motion: no-preference`, moving only `transform` and `opacity`; 44px for
+  anything pressed and 16px words in a field (an iPhone zooms in on anything smaller).
+
 ## Admin > Get involved, laid out so someone new can find their way (2026-11-13)
 
 Jaimie: the tab, and a sign up once opened, was "one big long scrolling list with lots of boxes and

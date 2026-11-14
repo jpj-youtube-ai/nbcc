@@ -19,10 +19,22 @@
          (2026-11-12). After admin.css so it wins on order alone, with no !important. -->
     <link rel="stylesheet" href="/assets/css/admin-overview.css" />
     <link rel="stylesheet" href="/assets/css/admin-get-involved.css" />
+    <!-- The kit: one set of parts in the Donations look for every other screen (a view opts in with
+         the class ak), then each area's own sheet on top of it. After admin.css and
+         admin-overview.css, so they win on order alone. -->
+    <link rel="stylesheet" href="/assets/css/admin-kit.css" />
+    <link rel="stylesheet" href="/assets/css/admin-giving.css" />
+    <link rel="stylesheet" href="/assets/css/admin-supporters.css" />
+    <link rel="stylesheet" href="/assets/css/admin-records.css" />
+    <link rel="stylesheet" href="/assets/css/admin-content.css" />
+    <link rel="stylesheet" href="/assets/css/admin-outreach.css" />
+    <link rel="stylesheet" href="/assets/css/admin-settings.css" />
+    <link rel="stylesheet" href="/assets/css/admin-newsletter.css" />
     <!-- Admin > Giving > Donations, the gift log: its own stylesheet (.gl-) and script, which draws
          the cards app.js asks for, so it loads before app.js. -->
     <link rel="stylesheet" href="/assets/css/admin-donations.css" />
     <script defer src="/assets/js/admin/helpers.js"></script>
+    <script defer src="/assets/js/admin/kit.js"></script>
     <script defer src="/assets/js/admin/gift-log.js"></script>
     <script defer src="/assets/js/admin/paste-prose.js"></script>
     <script defer src="/assets/js/admin/app.js"></script>

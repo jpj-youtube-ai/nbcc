@@ -1,0 +1,302 @@
+/* NBCC admin: the kit. One set of parts in the Donations look, for every screen that has not had a
+ * design of its own (2026-11-14). Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md.
+ * Jaimie: "look at what we've done with the overview, with donations... and bring everything up to
+ * that level."
+ *
+ * How a screen uses it: its <section class="admin-view"> also carries the class ak. Inside it the
+ * admin's old shared pieces (the title, .admin-btn, .admin-seg, .admin-table, .admin-pill, fields,
+ * the pager, the empty and loading lines) are drawn in the Donations look, and the .ak- parts below
+ * are there to build with: tiles, cards, a card that opens in place, a bar of parts, facts, notices.
+ * A screen without the class is untouched, so the screens with a design of their own (Overview,
+ * Donations, Get involved, Head Elf HQ, Fill a Red Bag, Santa Sleigh, the Festive Ball) never see it.
+ *
+ * The look, by value, from the --ov- colours admin-overview.css sets on .admin-body: NBCC's own
+ * colours and fonts, chunky pieces with a deep maroon ink edge and a hard shadow that presses in,
+ * roomy, plain words, cards rather than tables on a phone.
+ *
+ * House rules (test/unit/admin-kit.test.ts): every selector starts .admin-view.ak or .ak- (or is
+ * .admin-body, for the colours); no !important; nothing scrolls inside a box or sideways; no side
+ * stripes or gradient text; motion only for someone happy with it, moving only transform and
+ * opacity; every button and field at least 44px tall. Loaded after admin.css and admin-overview.css,
+ * so it wins on order and on being named through the view. A phone is below 860px. */
+
+.admin-body {
+  --ov-warm: #FFF8EA;
+  --ov-gold: #D9A93E;
+  --ov-holly-dark: #123C12;
+  --ov-on-dark-soft: #F3D5CC;
+  --ov-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.admin-view.ak { color: var(--ov-text); }
+.admin-view.ak :focus-visible { outline: 3px solid var(--ov-gold-ink); outline-offset: 3px; }
+
+/* ---- the title: what the screen is called, then one plain sentence saying what it is for ---- */
+.admin-view.ak h2 { margin: 0 0 6px; font-family: var(--ov-head); font-weight: 800; font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.4rem); line-height: 1.05; letter-spacing: -0.01em; color: var(--ov-maroon); }
+.admin-view.ak .admin-view-intro, .ak-lede { margin: 0 0 22px; max-width: 62ch; color: var(--ov-soft); font-size: 0.95rem; line-height: 1.5; text-wrap: pretty; }
+.admin-view.ak .admin-subhead, .ak-h3 { margin: 30px 0 12px; font-family: var(--ov-head); font-weight: 800; font-size: 1.3rem; line-height: 1.15; color: var(--ov-maroon); }
+.admin-view.ak .admin-help, .ak-hint { margin: 2px 0 12px; max-width: 65ch; font-size: 0.9rem; line-height: 1.5; color: var(--ov-soft); text-wrap: pretty; }
+.ak-stack { display: grid; gap: 22px; min-width: 0; }
+.ak-stack > * { margin-top: 0; margin-bottom: 0; }
+/* A heading inside a list, as the gift log's days: words, then a dashed rule to the edge. */
+.ak-group { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-family: inherit; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ov-soft); }
+.ak-group::after { content: ""; flex: 1; min-width: 24px; border-top: 2px dashed var(--ov-rule); }
+
+/* ---- buttons ---- */
+.admin-view.ak .admin-btn, .ak-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 0; padding: 8px 18px;
+  border: var(--ov-line); border-radius: 14px; background: var(--ov-holly); box-shadow: var(--ov-pop);
+  color: var(--ov-on-dark); font: inherit; font-size: 0.95rem; font-weight: 600; line-height: 1.2; text-align: center; text-decoration: none; cursor: pointer;
+}
+.admin-view.ak .admin-btn:hover, .ak-btn:hover { background: var(--ov-holly-dark); }
+.admin-view.ak .admin-btn:active, .ak-btn:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+.admin-view.ak .admin-btn:disabled, .ak-btn:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
+.admin-view.ak .admin-btn[hidden], .ak-btn[hidden] { display: none; }
+/* Not the main thing to press here: the same piece on the card colour. */
+.admin-view.ak .ak-btn--plain { background: var(--ov-card); color: var(--ov-ink); }
+.admin-view.ak .ak-btn--plain:hover { background: var(--ov-hover); }
+.admin-view.ak .ak-btn--danger { background: var(--ov-card); color: var(--ov-crimson); }
+.admin-view.ak .ak-btn--danger:hover { background: var(--ov-blush); }
+.admin-view.ak .admin-btn--small { min-height: 44px; padding: 6px 14px; font-size: 0.88rem; box-shadow: 2px 3px 0 var(--ov-ink); }
+.admin-view.ak .admin-link { min-height: 44px; padding: 0 2px; color: var(--ov-maroon); font-size: 0.9rem; text-underline-offset: 4px; }
+.admin-view.ak .admin-link:hover { color: var(--ov-crimson); }
+.admin-view.ak .admin-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: 0 0 14px; padding: 0 14px 0 10px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.9rem; font-weight: 600; }
+.admin-view.ak .admin-back:hover { background: var(--ov-hover); color: var(--ov-ink); }
+.admin-view.ak .admin-back:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+/* The public site's pill button (.btn, with its arrow) is on many admin screens. In the look it is the
+   same chunky piece: .btn-primary is the main thing to press, .btn-ghost and a bare .btn the others. */
+.admin-view.ak .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 0; padding: 8px 18px; border: var(--ov-line); border-radius: 14px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-ink); font: inherit; font-size: 0.95rem; font-weight: 600; line-height: 1.2; text-align: center; text-decoration: none; cursor: pointer; }
+.admin-view.ak .btn::after { content: none; }
+.admin-view.ak .btn:hover { background: var(--ov-hover); color: var(--ov-ink); transform: none; }
+.admin-view.ak .btn:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+.admin-view.ak .btn:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
+.admin-view.ak .btn[hidden] { display: none; }
+.admin-view.ak .btn-primary, .admin-view.ak .btn-holly { background: var(--ov-holly); color: var(--ov-on-dark); }
+.admin-view.ak .btn-primary:hover, .admin-view.ak .btn-holly:hover { background: var(--ov-holly-dark); color: var(--ov-on-dark); }
+.ak-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+/* What a button does, said under it. */
+.ak-says { display: block; max-width: 62ch; margin: 6px 0 0; font-size: 0.86rem; line-height: 1.45; color: var(--ov-soft); }
+
+/* ---- a choice of one: the old segmented bar, as pills that press in ---- */
+.admin-view.ak .admin-segmented { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: none; }
+.admin-view.ak .admin-seg { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 16px; border: var(--ov-thin); border-radius: 999px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.9rem; font-weight: 600; white-space: normal; }
+.admin-view.ak .admin-seg:hover:not(.is-active) { background: var(--ov-hover); }
+.admin-view.ak .admin-seg.is-active, .admin-view.ak .admin-seg[aria-pressed="true"] { background: var(--ov-maroon); color: var(--ov-on-dark); transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+.admin-view.ak .admin-seg:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+/* Filters in labelled groups: the label to the left on a laptop, above on a phone. */
+.ak-filters { display: grid; gap: 14px; margin: 0 0 20px; }
+.ak-filter-group { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); align-items: start; gap: 8px 16px; }
+.ak-filter-label { margin: 10px 0 0; font-family: var(--ov-head); font-size: 1.02rem; font-weight: 700; color: var(--ov-ink); }
+
+/* ---- tiles: a count, its name, and a line saying what it means ---- */
+.ak-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 12px; margin: 0 0 22px; padding: 0; list-style: none; }
+.ak-tile {
+  display: grid; align-content: start; gap: 2px; min-width: 0; min-height: 92px; margin: 0; padding: 12px 14px 12px;
+  border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop);
+  color: var(--ov-text); font: inherit; text-align: left; white-space: normal;
+}
+.ak-tile__n { font-family: var(--ov-head); font-weight: 800; font-size: 1.75rem; line-height: 1.05; color: var(--ov-ink); font-variant-numeric: lining-nums tabular-nums; overflow-wrap: anywhere; }
+.ak-tile__name { font-weight: 700; font-size: 0.92rem; line-height: 1.25; color: var(--ov-ink); overflow-wrap: anywhere; }
+.ak-tile__says { font-size: 0.8rem; line-height: 1.35; color: var(--ov-soft); overflow-wrap: anywhere; }
+.ak-tile__says:empty { display: none; }
+.ak-tile--urgent .ak-tile__n { color: var(--ov-crimson); }
+/* A tile that is a button: it filters, or takes you somewhere. */
+button.ak-tile, a.ak-tile { cursor: pointer; text-decoration: none; }
+button.ak-tile:hover:not(.is-active), a.ak-tile:hover { background: var(--ov-hover); }
+button.ak-tile:active, a.ak-tile:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+.ak-tile.is-active { background: var(--ov-maroon); border-color: var(--ov-ink); transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+.ak-tile.is-active .ak-tile__n, .ak-tile.is-active .ak-tile__name { color: var(--ov-on-dark); }
+.ak-tile.is-active .ak-tile__says { color: var(--ov-on-dark-soft); }
+/* Nothing waiting: the tile steps back, so the ones with something in them are what you see. */
+.ak-tile.is-none:not(.is-active) { box-shadow: none; border-color: var(--ov-rule); }
+.ak-tile.is-none:not(.is-active) .ak-tile__n { color: var(--ov-soft); }
+/* The old stats row, as tiles that are not buttons. */
+.admin-view.ak .admin-stats { gap: 12px; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); }
+.admin-view.ak .admin-stat { padding: 12px 14px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+.admin-view.ak .admin-stat .n { font-family: var(--ov-head); font-size: 1.75rem; line-height: 1.05; color: var(--ov-ink); font-variant-numeric: lining-nums tabular-nums; }
+.admin-view.ak .admin-stat .l { margin-top: 4px; font-size: 0.86rem; line-height: 1.35; color: var(--ov-soft); }
+.admin-view.ak .admin-stat.warn .n { color: var(--ov-crimson); }
+.admin-view.ak .admin-stat.is-unavailable .n { font-family: inherit; font-size: 1rem; color: var(--ov-soft); }
+
+/* ---- cards ---- */
+.ak-card { min-width: 0; padding: 16px 18px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+.ak-card > :first-child { margin-top: 0; }
+.ak-card > :last-child { margin-bottom: 0; }
+/* The big one: a form, or the filters. */
+.ak-panel { min-width: 0; padding: clamp(16px, 2.4vw, 26px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+.ak-panel > :first-child { margin-top: 0; }
+.ak-panel > :last-child { margin-bottom: 0; }
+/* Inside another card: no shadow of its own. */
+.ak-card--flat { border: var(--ov-thin); box-shadow: none; background: var(--ov-warm); }
+.ak-list { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+/* A card that IS the button: it opens something, and a chevron says so. */
+.ak-row { position: relative; display: grid; gap: 3px; width: 100%; min-width: 0; min-height: 48px; margin: 0; padding: 12px 42px 12px 16px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-text); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.ak-row:hover { background: var(--ov-hover); }
+.ak-row::after { content: ""; position: absolute; top: 50%; right: 16px; width: 9px; height: 9px; border-top: 3px solid var(--ov-ink); border-right: 3px solid var(--ov-ink); transform: translateY(-50%) rotate(45deg); }
+.ak-row:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+.ak-row__name { font-weight: 600; font-size: 1.02rem; line-height: 1.25; color: var(--ov-ink); overflow-wrap: anywhere; }
+.ak-row__meta { font-size: 0.86rem; line-height: 1.4; color: var(--ov-soft); overflow-wrap: anywhere; }
+/* A card that opens where it is: its face is the button, the rest sits under it in the same card. */
+.ak-item { min-width: 0; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+.ak-item.is-open { box-shadow: var(--ov-pop-lg); }
+.ak-item__face { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; gap: 6px 12px; width: 100%; margin: 0; padding: 14px 14px 14px 16px; border: 0; border-radius: 15px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ak-item__face:hover { background: var(--ov-hover); }
+.ak-item.is-open .ak-item__face { border-radius: 15px 15px 0 0; }
+.ak-item__face:focus-visible { outline-offset: -5px; }
+.ak-item__main { display: grid; gap: 4px; min-width: 0; }
+.ak-item__name { font-family: var(--ov-head); font-weight: 700; font-size: 1.05rem; line-height: 1.2; color: var(--ov-ink); overflow-wrap: anywhere; }
+.ak-item__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 0.88rem; line-height: 1.4; color: var(--ov-soft); overflow-wrap: anywhere; }
+.ak-item__chev { position: relative; justify-self: end; width: 30px; height: 30px; border: var(--ov-thin); border-radius: 50%; background: var(--ov-card); }
+.ak-item__chev::before { content: ""; position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border: solid var(--ov-maroon); border-width: 0 2.5px 2.5px 0; transform: translate(-50%, -70%) rotate(45deg); }
+.ak-item__face[aria-expanded="true"] .ak-item__chev { background: var(--ov-maroon); }
+.ak-item__face[aria-expanded="true"] .ak-item__chev::before { border-color: var(--ov-on-dark); transform: translate(-50%, -30%) rotate(225deg); }
+.ak-item__more { display: grid; gap: 16px; padding: 16px 16px 18px; border-top: 2px dashed var(--ov-rule); border-radius: 0 0 15px 15px; background: var(--ov-warm); }
+.ak-item__more[hidden] { display: none; }
+
+/* ---- marks: a word in a pill saying what state something is in ---- */
+.admin-view.ak .admin-pill, .ak-mark { display: inline-flex; align-items: center; max-width: 100%; padding: 1px 9px; border: 2px solid currentColor; border-radius: 999px; background: var(--ov-card); color: var(--ov-maroon); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em; line-height: 1.5; text-transform: uppercase; overflow-wrap: anywhere; }
+.admin-view.ak .ak-mark--ok, .admin-view.ak .admin-pill--paid, .admin-view.ak .admin-pill--active, .admin-view.ak .admin-pill.is-replied, .admin-view.ak .admin-pill.is-public { color: var(--ov-holly); background: var(--ov-holly-soft); }
+.admin-view.ak .ak-mark--wait, .admin-view.ak .admin-pill--pending, .admin-view.ak .admin-pill--past_due, .admin-view.ak .admin-pill--partial { color: var(--ov-gold-ink); background: var(--ov-gold-soft); }
+.admin-view.ak .ak-mark--bad, .admin-view.ak .admin-pill--failed, .admin-view.ak .admin-pill.is-new { color: var(--ov-crimson); background: var(--ov-blush); }
+.admin-view.ak .ak-mark--quiet, .admin-view.ak .admin-pill--refunded, .admin-view.ak .admin-pill--lapsed, .admin-view.ak .admin-pill--cancelled, .admin-view.ak .admin-pill.is-internal { color: var(--ov-soft); background: var(--ov-card); }
+
+/* ---- facts: a name and its value, in two columns ---- */
+.admin-view.ak .admin-dl, .ak-facts { display: grid; grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr); gap: 6px 16px; max-width: 640px; margin: 0; }
+.admin-view.ak .admin-dl { padding: 16px 18px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+.admin-view.ak .admin-dl dt, .ak-facts dt { align-self: baseline; font-size: 0.86rem; font-weight: 400; letter-spacing: 0; line-height: 1.4; text-transform: none; color: var(--ov-soft); }
+.admin-view.ak .admin-dl dd, .ak-facts dd { margin: 0; font-size: 0.95rem; font-weight: 500; line-height: 1.4; color: var(--ov-text); overflow-wrap: anywhere; }
+
+/* ---- fields ---- */
+.admin-view.ak :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]), select, textarea) {
+  min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card);
+  box-shadow: inset 2px 3px 0 rgba(58, 11, 11, 0.08); color: var(--ov-text); font: inherit; font-size: 1rem;
+}
+.admin-view.ak :where(input, select, textarea):focus { border-color: var(--ov-ink); outline: 3px solid var(--ov-gold-ink); outline-offset: 2px; }
+.admin-view.ak :where(select) { cursor: pointer; }
+.admin-view.ak :where(input[type="checkbox"], input[type="radio"]) { width: 22px; height: 22px; accent-color: var(--ov-maroon); }
+.admin-view.ak .admin-field label, .ak-field > span, .ak-field > label { display: block; margin: 0 0 6px; font-family: var(--ov-head); font-weight: 700; font-size: 0.95rem; line-height: 1.2; color: var(--ov-ink); }
+.ak-field { display: grid; align-content: start; min-width: 0; }
+.ak-field :where(input, select, textarea) { width: 100%; min-width: 0; }
+.ak-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 14px 16px; }
+.admin-view.ak .admin-check { min-height: 44px; gap: 10px; font-size: 0.95rem; }
+.admin-view.ak .admin-edit { max-width: 560px; padding: clamp(16px, 2.4vw, 24px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+.admin-view.ak .admin-inline-filter { flex-wrap: wrap; font-size: 0.92rem; color: var(--ov-ink); }
+.admin-view.ak .admin-search-form { flex-wrap: wrap; }
+.admin-view.ak .admin-search-form input { flex: 1 1 200px; min-width: 0; }
+
+/* ---- what happened: the line under a button ---- */
+.admin-view.ak .admin-action-status, .ak-status { margin: 12px 0 0; font-weight: 600; color: var(--ov-holly); overflow-wrap: anywhere; }
+.admin-view.ak .admin-action-status:empty, .ak-status:empty { margin: 0; }
+.admin-view.ak .admin-action-status.is-error, .ak-status.is-error { color: var(--ov-crimson); font-weight: 700; }
+.admin-view.ak .admin-action-status.is-ok, .ak-status.is-ok { color: var(--ov-holly); }
+/* The Thank you screen's row of controls, status line and pills are borrowed by many screens. */
+.admin-view.ak .ty-controls { gap: 10px 12px; font-size: 0.95rem; color: var(--ov-text); }
+.admin-view.ak .ty-controls input[type="text"] { width: 6rem; min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); color: var(--ov-text); font-size: 1rem; }
+.admin-view.ak .ty-status { margin: 12px 0 0; font-size: 0.95rem; font-weight: 600; color: var(--ov-soft); overflow-wrap: anywhere; }
+.admin-view.ak .ty-status:empty { margin: 0; min-height: 0; }
+.admin-view.ak .ty-status.is-ok { color: var(--ov-holly); }
+.admin-view.ak .ty-status.is-error { color: var(--ov-crimson); font-weight: 700; }
+.admin-view.ak .ty-pill { padding: 1px 9px; border: 2px solid currentColor; border-radius: 999px; background: var(--ov-card); color: var(--ov-maroon); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em; line-height: 1.5; text-transform: uppercase; }
+.admin-view.ak .ty-pill-ready { color: var(--ov-holly); background: var(--ov-holly-soft); }
+.admin-view.ak .ty-pill-thanked, .admin-view.ak .ty-pill-blocked { color: var(--ov-soft); background: var(--ov-card); }
+.admin-view.ak .ty-pill-ga { color: var(--ov-gold-ink); background: var(--ov-gold-soft); }
+.admin-view.ak .ty-field label { margin: 0 0 6px; font-family: var(--ov-head); font-weight: 700; font-size: 0.95rem; line-height: 1.2; color: var(--ov-ink); }
+.admin-view.ak .ty-field input, .admin-view.ak .ty-field textarea, .admin-view.ak .ty-field select { min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); color: var(--ov-text); font-size: 1rem; }
+/* Nothing here yet, still fetching, or could not be read: a dashed box, never a bare line of grey. */
+.admin-view.ak .admin-empty, .admin-view.ak .admin-unavailable, .ak-empty { margin: 0; padding: 24px 20px; border: 2.5px dashed var(--ov-rule); border-radius: 18px; background: var(--ov-warm); color: var(--ov-soft); font-size: 0.96rem; line-height: 1.5; text-align: center; }
+.admin-view.ak .admin-loading { color: var(--ov-soft); }
+/* Something worth knowing before you go on. */
+.ak-notice { display: grid; gap: 6px; margin: 0 0 18px; padding: 12px 16px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-gold-soft); color: var(--ov-ink); font-size: 0.94rem; line-height: 1.5; }
+.ak-notice[hidden] { display: none; }
+.ak-notice--bad { background: var(--ov-blush); }
+.ak-notice--ok { background: var(--ov-holly-soft); }
+.ak-notice > :first-child { margin-top: 0; }
+.ak-notice > :last-child { margin-bottom: 0; }
+
+/* ---- tables: a framed ledger on a laptop ---- */
+/* Clip, unlike auto, is not a scrolling box: the corners still clip and nothing scrolls sideways. A
+   browser too old for clip keeps visible. Cells already wrap (admin.css, TASK-442). */
+.admin-view.ak .admin-table-wrap { overflow: visible; overflow: clip; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+.admin-view.ak .admin-table { font-size: 0.92rem; }
+.admin-view.ak .admin-table th { padding: 12px 14px; border-bottom: 2px solid var(--ov-ink); background: var(--ov-warm); color: var(--ov-ink); font-family: var(--ov-head); font-size: 0.92rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.admin-view.ak .admin-table td { padding: 12px 14px; border-bottom: 1px solid var(--ov-rule); vertical-align: middle; }
+.admin-view.ak .admin-table tbody tr:hover { background: var(--ov-hover); }
+.admin-view.ak .admin-table tbody tr:last-child td { border-bottom: 0; }
+
+/* ---- the pager ---- */
+.admin-view.ak .admin-pager { flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 18px; }
+.admin-view.ak .admin-page-btn { min-height: 44px; padding: 8px 18px; border: var(--ov-line); border-radius: 14px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-maroon); font: inherit; font-weight: 600; }
+.admin-view.ak .admin-page-btn:hover:not(:disabled) { background: var(--ov-hover); }
+.admin-view.ak .admin-page-btn:active:not(:disabled) { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+.admin-view.ak .admin-page-btn:disabled { box-shadow: none; }
+.admin-view.ak .admin-page-info { color: var(--ov-soft); }
+
+/* ---- something folded away: a card whose heading opens it ---- */
+.admin-view.ak .admin-fold, .admin-view.ak .admin-guide, .ak-fold { margin: 0 0 14px; border: var(--ov-thin); border-radius: 16px; background: var(--ov-card); }
+.admin-view.ak .admin-fold > summary, .admin-view.ak .admin-guide > summary, .ak-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 10px 16px; border-radius: 14px; color: var(--ov-ink); font-family: var(--ov-head); font-size: 1.02rem; font-weight: 700; line-height: 1.25; cursor: pointer; list-style: none; }
+.admin-view.ak .admin-fold > summary::-webkit-details-marker, .admin-view.ak .admin-guide > summary::-webkit-details-marker, .ak-fold > summary::-webkit-details-marker { display: none; }
+.admin-view.ak .admin-fold > summary::after, .admin-view.ak .admin-guide > summary::after, .ak-fold > summary::after { content: ""; flex: none; width: 9px; height: 9px; margin-right: 4px; border: solid var(--ov-maroon); border-width: 0 2.5px 2.5px 0; transform: translateY(-3px) rotate(45deg); }
+.admin-view.ak .admin-fold[open] > summary::after, .admin-view.ak .admin-guide[open] > summary::after, .ak-fold[open] > summary::after { transform: translateY(2px) rotate(225deg); }
+.admin-view.ak .admin-fold > summary:hover, .admin-view.ak .admin-guide > summary:hover, .ak-fold > summary:hover { background: var(--ov-hover); }
+.admin-view.ak .admin-fold[open] > summary, .admin-view.ak .admin-guide[open] > summary, .ak-fold[open] > summary { border-bottom: 2px dashed var(--ov-rule); border-radius: 14px 14px 0 0; }
+.ak-fold__body, .admin-view.ak .admin-guide-body { padding: 14px 16px 16px; }
+.ak-fold__body > :first-child { margin-top: 0; }
+.ak-fold__body > :last-child { margin-bottom: 0; }
+
+/* ---- a long screen in parts: a bar of buttons, one part showing at a time ---- */
+/* Pinned under the menu while you work down a long part, as the Festive Ball's sections bar is. */
+.ak-parts { position: sticky; top: 60px; z-index: 12; display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; padding: 12px 0; background: var(--tint); border-bottom: 2px solid var(--ov-ink); }
+.ak-part-btn { position: relative; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; margin: 0; padding: 8px 16px; border: var(--ov-thin); border-radius: 999px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.9rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ak-part-btn:hover:not([aria-pressed="true"]) { background: var(--ov-hover); }
+.ak-part-btn[aria-pressed="true"] { background: var(--ov-maroon); color: var(--ov-on-dark); transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+.ak-part-btn:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+/* Something in this part is waiting for you. */
+.ak-part-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ov-crimson); box-shadow: 0 0 0 2px var(--ov-card); }
+.ak-part-dot[hidden] { display: none; }
+.ak-part-btn[aria-pressed="true"] .ak-part-dot { background: #FFB3BE; box-shadow: 0 0 0 2px var(--ov-maroon); }
+.ak-part { min-width: 0; scroll-margin-top: 136px; }
+.ak-part[hidden] { display: none; }
+.ak-part-intro { margin: 0; padding: 16px 0 14px; max-width: 72ch; color: var(--ov-soft); font-size: 0.94rem; line-height: 1.5; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .admin-view.ak .admin-btn, .ak-btn, .admin-view.ak .btn, .admin-view.ak .admin-seg, .ak-tile, .ak-row, .ak-part-btn, .admin-view.ak .admin-page-btn, .admin-view.ak .admin-back { transition: transform 0.12s var(--ov-ease); }
+  .ak-item__chev::before { transition: transform 0.22s var(--ov-ease); }
+  .ak-item__more:not([hidden]) { animation: ak-open 0.26s var(--ov-ease); }
+  @keyframes ak-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+}
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  .ak-filter-group { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .ak-filter-label { margin: 0; }
+  .ak-tiles, .admin-view.ak .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ak-tile { min-height: 0; padding: 10px 12px; }
+  .ak-tile__n, .admin-view.ak .admin-stat .n { font-size: 1.4rem; }
+  .admin-view.ak .admin-dl, .ak-facts { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .admin-view.ak .admin-dl dd, .ak-facts dd { margin: 0 0 10px; }
+  /* Three across and not pinned: pinned, two rows would sit on a third of the screen. Pressing one
+     brings you back to the bar (AdminKit.wireParts). */
+  .ak-parts { position: static; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 0; }
+  .ak-part-btn { justify-content: center; padding: 8px 6px; white-space: normal; text-align: center; line-height: 1.2; font-size: 0.84rem; }
+  .ak-part { scroll-margin-top: 76px; }
+  /* A table marked ak-cards is a card per row here: each cell on its own line, its column's name
+     in front of it (data-label; AdminKit.labelCells writes them from the headings). */
+  .admin-view.ak .admin-table-wrap:has(.ak-cards) { border: 0; border-radius: 0; background: none; box-shadow: none; }
+  .admin-view.ak .ak-cards, .admin-view.ak .ak-cards tbody, .admin-view.ak .ak-cards tr, .admin-view.ak .ak-cards td { display: block; width: auto; }
+  .admin-view.ak .ak-cards thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .admin-view.ak .ak-cards tr { margin: 0 0 12px; padding: 12px 14px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+  .admin-view.ak .ak-cards tbody tr:hover { background: var(--ov-card); }
+  .admin-view.ak .ak-cards td { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 2px 12px; align-items: baseline; padding: 4px 0; border: 0; text-align: left; }
+  /* A pill or a button in a cell keeps its own width, and is not stretched across the card. */
+  .admin-view.ak .ak-cards td > * { justify-self: start; }
+  .admin-view.ak .ak-cards td::before { content: attr(data-label); font-size: 0.8rem; line-height: 1.4; color: var(--ov-soft); }
+  .admin-view.ak .ak-cards td:not([data-label]), .admin-view.ak .ak-cards td[data-label=""] { grid-template-columns: minmax(0, 1fr); }
+  .admin-view.ak .ak-cards td:not([data-label])::before, .admin-view.ak .ak-cards td[data-label=""]::before { content: none; }
+  .admin-view.ak .ak-cards td:empty { display: none; }
+  /* The cell that names the row leads its card, in the heading face, with no label in front. */
+  .admin-view.ak .ak-cards td.ak-cards__lead { grid-template-columns: minmax(0, 1fr); padding-bottom: 6px; font-family: var(--ov-head); font-weight: 700; font-size: 1.08rem; line-height: 1.2; color: var(--ov-ink); }
+  .admin-view.ak .ak-cards td.ak-cards__lead::before { content: none; }
+}
+@media (max-width: 420px) {
+  .ak-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

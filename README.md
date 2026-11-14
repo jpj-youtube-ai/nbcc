@@ -6947,6 +6947,16 @@ or a webhook replay would otherwise fire hundreds.
 and keeps its token in `localStorage` rather than `sessionStorage`. Without both, iOS evicting a
 backgrounded app would mean a 2am notification opening onto a password box instead of the donation.
 
+The pinned app also leaves a **copy of its token in `sessionStorage`**, at sign in and each time it
+opens signed in already (`shareToken` in `assets/js/admin/app.js`). The screens with a file of their
+own (Head Elf HQ, Santa Sleigh, Fill a Red Bag, sponsor pledges, event tickets, All emails) read the
+token from `sessionStorage` and nowhere else. Without the copy they asked with no token, were told
+401 and reloaded the page to sign in again, and the app, still signed in, opened the same screen
+again: an endless reload, which is how Elf Detective School froze on a phone on 14 November 2026
+(Santa Sleigh and Fill a Red Bag did the same). Signing out empties both. A new screen with its own
+file should read the token the same way; `test/unit/admin-phone-app-screens.test.ts` runs the real
+admin as the pinned app against a server that refuses anything but the session it handed out.
+
 **Config.** `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, both SSM parameters created holding
 `REPLACE_ME` and pasted in out of band (the generation recipe is in `.env.example`). They are
 deliberately NOT required in production: until both are real, `pushIsConfigured()` is false, the

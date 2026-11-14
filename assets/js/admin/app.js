@@ -133,6 +133,21 @@
     } catch (e) {
       /* a phone with storage blocked still works for this one session */
     }
+    shareToken(t);
+  }
+  // The screens with a file of their own (Head Elf HQ, Santa Sleigh, Fill a Red Bag, sponsor
+  // pledges, event tickets, All emails) each read the token from sessionStorage, where a tab has
+  // always kept it. The pinned app keeps its own in localStorage, so it leaves them a copy: at
+  // sign in, and each time the app opens signed in already. Without one they asked with no token,
+  // were told 401 and reloaded the page to sign in again; the app was still signed in and opened
+  // the same screen again, so the page reloaded for ever. That is how Elf Detective School froze
+  // on a phone (14 Nov 2026). In a tab the copy is the token itself. clearToken() empties both.
+  function shareToken(t) {
+    try {
+      if (t && sessionStorage.getItem(TOKEN_KEY) !== t) sessionStorage.setItem(TOKEN_KEY, t);
+    } catch (e) {
+      /* no copy: those screens send you to sign in again */
+    }
   }
   function clearToken() {
     try {
@@ -16459,8 +16474,11 @@
 
   // ---- boot: restore an in-tab session ----
   var claims = H.parseClaims(token());
-  if (claims && typeof claims.exp === "number" && claims.exp > Date.now()) showApp(claims);
-  else {
+  if (claims && typeof claims.exp === "number" && claims.exp > Date.now()) {
+    // The pinned app opened again: the screens with a file of their own need their copy (shareToken).
+    shareToken(token());
+    showApp(claims);
+  } else {
     clearToken();
     showLogin();
   }

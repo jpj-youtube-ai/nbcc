@@ -1140,41 +1140,117 @@ export interface AdminAuditRow {
   entity_id: number | null;
   data: unknown;
   created_at: Date;
+  /** The member of staff's own name, when who did it is still one of the team. */
+  actor_name?: string | null;
+  /** For a line about one of the team (entity "user"): their name and email, while they are on it. */
+  about_name?: string | null;
+  about_email?: string | null;
 }
 
-// Read the append-only audit trail, newest first, optionally scoped to an entity and/or entity id,
-// with a bounded page. Returns the page plus the total matching count.
-export async function listAuditLog(opts: {
+export interface AuditLogQuery {
   limit?: number;
   offset?: number;
   entity?: string;
   entityId?: number;
-}): Promise<{ results: AdminAuditRow[]; total: number }> {
-  const { limit, offset } = clampPage(opts.limit, opts.offset);
+  /** Several entities at once: one part of the admin (Donations is donation, donor, declaration…). */
+  entities?: string[];
+  /** One member of staff, by their email. */
+  actor?: string;
+  /** Only what staff did: nothing written by Stripe, a visitor to the website or an automatic job. */
+  staffOnly?: boolean;
+  /** UK calendar days, YYYY-MM-DD. Anything else is ignored. */
+  from?: string;
+  to?: string;
+  /** A word to look for in what was done, to what, by whom, and in what the line recorded. */
+  q?: string;
+  /** Also count the matching lines by entity and list the staff in the log (the screen's tiles and its list of people). */
+  withSummary?: boolean;
+}
+
+// Staff stamp their lines "admin:<email>"; a few older routes stamp the bare email. Everything else
+// ("stripe", "system:schedule", "organiser:<email>", "family") is not a member of staff.
+const AUDIT_STAFF = `(a.actor LIKE 'admin:%' OR (a.actor LIKE '%@%' AND a.actor NOT LIKE '%:%'))`;
+const AUDIT_STAFF_EMAIL = `lower(CASE WHEN a.actor LIKE 'admin:%' THEN substr(a.actor, 7) ELSE a.actor END)`;
+
+// The WHERE clause for the audit trail. Every value is a bound parameter; the only words that reach
+// the SQL are this file's own. `withEntities` false leaves the entities out, for the counts by
+// entity, which say what choosing each part would give.
+function auditWhere(opts: AuditLogQuery, withEntities: boolean): { sql: string; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
-  if (opts.entity) {
-    params.push(opts.entity);
-    where.push(`entity = $${params.length}`);
+  const arg = (v: unknown): string => {
+    params.push(v);
+    return `$${params.length}`;
+  };
+  if (opts.entity) where.push(`a.entity = ${arg(opts.entity)}`);
+  if (opts.entityId != null) where.push(`a.entity_id = ${arg(opts.entityId)}`);
+  if (withEntities && opts.entities && opts.entities.length) where.push(`a.entity = ANY(${arg(opts.entities)})`);
+  const actor = typeof opts.actor === "string" ? opts.actor.trim().toLowerCase() : "";
+  if (actor) {
+    const at = arg(actor);
+    where.push(`lower(a.actor) IN ('admin:' || ${at}::text, ${at}::text)`);
   }
-  if (opts.entityId != null) {
-    params.push(opts.entityId);
-    where.push(`entity_id = $${params.length}`);
+  if (opts.staffOnly) where.push(AUDIT_STAFF);
+  const from = ukDateArg(opts.from);
+  const to = ukDateArg(opts.to);
+  if (from) where.push(`(a.created_at AT TIME ZONE 'Europe/London')::date >= ${arg(from)}::date`);
+  if (to) where.push(`(a.created_at AT TIME ZONE 'Europe/London')::date <= ${arg(to)}::date`);
+  const word = searchPattern(opts.q);
+  if (word) {
+    const at = arg(word);
+    where.push(`(a.action ILIKE ${at} OR a.entity ILIKE ${at} OR a.actor ILIKE ${at} OR a.data::text ILIKE ${at})`);
   }
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", params };
+}
+
+// Read the append-only audit trail, newest first, with a bounded page: optionally one entity and
+// record (a record's own history), or the Audit screen's filters (part of the admin, who, UK dates,
+// a word, staff only). Returns the page plus the total matching count. Each line also says who did
+// it by name, and who it is about when that is one of the team, so the screen can say "Fern changed
+// Sam's role" rather than two email addresses and a number. Donors and sign ups are not named here:
+// the Audit can be given to someone who may not open Donations.
+export async function listAuditLog(
+  opts: AuditLogQuery,
+): Promise<{ results: AdminAuditRow[]; total: number; counts?: Record<string, number>; people?: { email: string; name: string | null }[] }> {
+  const { limit, offset } = clampPage(opts.limit, opts.offset);
+  const filter = auditWhere(opts, true);
   const totalRes = await pool.query<{ count: number }>(
-    `SELECT count(*)::int AS count FROM audit_log ${whereSql}`,
-    params,
+    `SELECT count(*)::int AS count FROM audit_log a ${filter.sql}`,
+    filter.params,
   );
   const res = await pool.query<AdminAuditRow>(
-    `SELECT id, actor, action, entity, entity_id, data, created_at
-       FROM audit_log
-       ${whereSql}
-      ORDER BY id DESC
+    `SELECT a.id, a.actor, a.action, a.entity, a.entity_id, a.data, a.created_at,
+            (SELECT u.full_name FROM users u WHERE lower(u.email) = ${AUDIT_STAFF_EMAIL} LIMIT 1) AS actor_name,
+            (SELECT u.full_name FROM users u WHERE a.entity = 'user' AND u.id = a.entity_id) AS about_name,
+            (SELECT u.email FROM users u WHERE a.entity = 'user' AND u.id = a.entity_id) AS about_email
+       FROM audit_log a
+       ${filter.sql}
+      ORDER BY a.id DESC
       LIMIT ${limit} OFFSET ${offset}`,
-    params,
+    filter.params,
   );
-  return { results: res.rows, total: totalRes.rows[0].count };
+  const out: { results: AdminAuditRow[]; total: number; counts?: Record<string, number>; people?: { email: string; name: string | null }[] } = {
+    results: res.rows,
+    total: totalRes.rows[0].count,
+  };
+  if (opts.withSummary) {
+    const open = auditWhere(opts, false);
+    const grouped = await pool.query<{ entity: string; count: number }>(
+      `SELECT a.entity, count(*)::int AS count FROM audit_log a ${open.sql} GROUP BY a.entity`,
+      open.params,
+    );
+    const counts: Record<string, number> = {};
+    for (const row of grouped.rows) if (row.entity) counts[row.entity] = Number(row.count) || 0;
+    out.counts = counts;
+    const people = await pool.query<{ email: string; name: string | null }>(
+      `SELECT p.email, (SELECT u.full_name FROM users u WHERE lower(u.email) = p.email LIMIT 1) AS name
+         FROM (SELECT DISTINCT ${AUDIT_STAFF_EMAIL} AS email FROM audit_log a WHERE ${AUDIT_STAFF}) p
+        ORDER BY p.email
+        LIMIT 200`,
+    );
+    out.people = people.rows.filter((p) => p.email).map((p) => ({ email: p.email, name: p.name ?? null }));
+  }
+  return out;
 }
 
 export interface DunningRow {

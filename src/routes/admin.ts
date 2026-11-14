@@ -2339,14 +2339,45 @@ export async function getAdminClaimBatchExport(req: Request, res: Response): Pro
 }
 
 // GET /api/admin/audit?limit&offset&entity&entityId — the append-only governance trail. Viewer+.
+// The Audit screen's filters, all optional (the admin refresh, 2026-11-14):
+//   entities  a comma-separated list of entity names: one part of the admin
+//   actor     one member of staff, by email
+//   staff=1   only what staff did (nothing by Stripe, a visitor or an automatic job)
+//   from, to  UK calendar days, YYYY-MM-DD
+//   q         a word to look for
+//   summary=1 also `counts` (lines by entity, for the tiles) and `people` (the staff in the log)
+// Each is handed to listAuditLog as a plain value and bound there; nothing typed reaches the SQL.
+const AUDIT_ENTITY_NAME = /^[a-z_]{1,60}$/;
+const AUDIT_ENTITIES_MAX = 40;
 export async function getAdminAuditLog(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "audit", "view"))) return;
   try {
     const { limit, offset } = pageArgs(req);
-    const entity = typeof req.query.entity === "string" ? req.query.entity : undefined;
+    const text = (key: string): string | undefined => (typeof req.query[key] === "string" ? (req.query[key] as string) : undefined);
+    const entity = text("entity");
     const entityIdNum = Number(req.query.entityId);
     const entityId = Number.isInteger(entityIdNum) ? entityIdNum : undefined;
-    return res.status(200).json(await listAuditLog({ limit, offset, entity, entityId }));
+    const entities = (text("entities") || "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter((name) => AUDIT_ENTITY_NAME.test(name))
+      .slice(0, AUDIT_ENTITIES_MAX);
+    const on = (key: string): boolean => text(key) === "1" || text(key) === "true";
+    return res.status(200).json(
+      await listAuditLog({
+        limit,
+        offset,
+        entity,
+        entityId,
+        entities: entities.length ? entities : undefined,
+        actor: (text("actor") || "").slice(0, 320) || undefined,
+        staffOnly: on("staff"),
+        from: text("from"),
+        to: text("to"),
+        q: text("q"),
+        withSummary: on("summary"),
+      }),
+    );
   } catch (err) {
     console.error("admin audit list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

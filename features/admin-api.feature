@@ -106,6 +106,23 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
       | /api/admin/audit                 |
       | /api/admin/subscriptions/dunning |
 
+  # The Audit screen's filters (the admin refresh, 2026-11-14): one part of the admin, who did it,
+  # UK dates, a word, staff only, and the summary for its tiles. Read by a Viewer, as the trail is.
+  Scenario Outline: a Viewer can filter the audit trail
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    When I GET the admin path "<path>" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+
+    Examples:
+      | path                                                                                    |
+      | /api/admin/audit?entities=donation,donor&staff=1&from=2026-11-01&to=2026-11-30&q=refund |
+      | /api/admin/audit?actor=viewer.admin.bdd@example.com&summary=1                           |
+      | /api/admin/audit?entities=user&q=100%25_off&offset=50&summary=1                         |
+
+  Scenario: the audit trail's filters reject a missing token with 401
+    When I GET the admin path "/api/admin/audit?entities=donation&q=refund&summary=1" without a token
+    Then the admin response status should be 401
+
   Scenario Outline: the dashboard lists reject a missing token with 401
     When I GET the admin path "<path>" without a token
     Then the admin response status should be 401

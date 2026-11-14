@@ -196,23 +196,30 @@ export const ABOUT_NBCC_SHORT = "NBCC is a volunteer led charity here all year f
 export const QUESTIONS_HEADING = "Got any questions?";
 export const QUESTIONS_LINE = "We'd love to hear from you. Give us a ring or drop us a line, whichever suits you.";
 
-// One of the two equal tiles. A table cell, because a mail client's idea of a flex box is none at
-// all. The value wraps rather than overflows, so a long address still fits a phone.
+// One of the two equal tiles: a block of at most 264 pixels, so two sit side by side in the 540 pixels
+// of a wide email, and on a phone, where side by side each had about 110 pixels and the address broke
+// inside itself, they go one above the other, each as wide as the panel. No media query, which many
+// mail apps ignore: the blocks wrap by themselves. The value may still wrap as a last resort rather
+// than run out of its tile, but nothing tells it to break inside a word.
 const questionsTile = (label: string, href: string, value: string): string =>
-  `<td width="50%" style="padding:4px;text-align:center;vertical-align:top"><div style="background:${CREAM};border-radius:10px;padding:12px 8px">` +
+  `<div style="display:inline-block;width:100%;max-width:264px;vertical-align:top"><div style="padding:4px"><div style="background:${CREAM};border-radius:10px;padding:12px 8px">` +
   `<div style="font-family:${BODY_FONT};font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">${label}</div>` +
-  `<div style="font-family:${BODY_FONT};font-size:18px;font-weight:800;color:${MAROON};margin-top:2px;overflow-wrap:anywhere;word-break:break-word">` +
-  `<a href="${esc(href)}" style="color:${MAROON};text-decoration:none">${esc(value)}</a></div></div></td>`;
+  `<div style="font-family:${BODY_FONT};font-size:18px;font-weight:800;color:${MAROON};margin-top:2px;overflow-wrap:break-word">` +
+  `<a href="${esc(href)}" style="color:${MAROON};text-decoration:none">${esc(value)}</a></div></div></div></div>`;
 
-/** "Got any questions?": a tan panel with a call tile and an email tile side by side. */
+/** "Got any questions?": a tan panel with a call tile and an email tile, side by side where there is room and one
+ *  above the other on a phone. Outlook on Windows ignores a block's most width, so it gets the two tiles in the two
+ *  halves of a table, in comments only it reads. */
 export const questionsBox = (contactEmail: string): string =>
   `<div style="background:${TAN_SOFT};border-radius:12px;padding:18px 20px;margin:24px 0 8px;text-align:center">` +
   `<p style="margin:0 0 4px;font-family:${HEAD};font-size:19px;font-weight:800;color:${MAROON}">${QUESTIONS_HEADING}</p>` +
   `<p style="margin:0 0 12px;font-family:${BODY_FONT};font-size:13px;color:${SLATE}">${QUESTIONS_LINE}</p>` +
-  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
+  `<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="50%" valign="top"><![endif]-->` +
   questionsTile("Call us", PHONE_HREF, PHONE_DISPLAY) +
+  `<!--[if mso]></td><td width="50%" valign="top"><![endif]-->` +
   questionsTile("Email us", `mailto:${contactEmail}`, contactEmail) +
-  `</tr></table></div>`;
+  `<!--[if mso]></td></tr></table><![endif]-->` +
+  `</div>`;
 
 /** The questions box in a plain text part: the same words, the number and the address. */
 export const questionsText = (contactEmail: string): string =>

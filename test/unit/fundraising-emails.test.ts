@@ -68,18 +68,29 @@ function expectSignedWithQuestions(mail: { html: string; text: string }, line: s
 describe("the questions box", () => {
   const html = questionsBox("events@nbcc.scot");
 
-  it("asks, then offers a call and an email side by side, equally", () => {
+  it("asks, then offers a call and an email, equally", () => {
     expect(html).toContain("Got any questions?");
     expect(html).toContain("We'd love to hear from you. Give us a ring or drop us a line, whichever suits you.");
-    expect(html).toContain('<table role="presentation"');
     expect(html).toContain("Call us");
     expect(html).toContain(`<a href="${PHONE_HREF}"`);
     expect(html).toContain(`>${PHONE_DISPLAY}</a>`);
     expect(html).toContain("Email us");
     expect(html).toContain('<a href="mailto:events@nbcc.scot"');
     // The two tiles are the same: same width, size and weight.
-    expect(html.match(/<td width="50%"/g)).toHaveLength(2);
     expect(html.match(/font-size:18px;font-weight:800/g)).toHaveLength(2);
+  });
+
+  // Side by side, each tile had about 110 pixels of a phone's width, so the address broke inside itself ("events@nb",
+  // then "cc.scot"). Each tile is now a block of at most 264 pixels: two sit side by side in the 540 pixels of a wide
+  // email, and on a phone they go one above the other, each as wide as the panel, with room for the whole address.
+  it("puts the two tiles side by side where there is room, and one above the other on a phone", () => {
+    expect(html.match(/<div style="display:inline-block;width:100%;max-width:264px;vertical-align:top">/g)).toHaveLength(2);
+    // Nothing tells the address or the number to break inside a word.
+    expect(html).not.toMatch(/overflow-wrap:anywhere|word-break/);
+    // Outlook on Windows ignores a block's most width, so it gets two halves of a table, in comments only it reads.
+    expect(html).toContain('<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="50%" valign="top"><![endif]-->');
+    expect(html).toContain('<!--[if mso]></td><td width="50%" valign="top"><![endif]-->');
+    expect(html).toContain("<!--[if mso]></td></tr></table><![endif]-->");
   });
 
   it("escapes the address it is given", () => {

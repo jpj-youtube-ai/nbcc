@@ -9520,7 +9520,10 @@ kind on the Email audit. Built in `src/fundraising/emails.ts`, sent by `src/fund
 TASK-497 gave them the wording Jaimie signed off on 2026-10-02: warmer, with a signed close (a
 friendly line above "NBCC Team", `signOff` in `src/email/brand.ts`) and then a **"Got any
 questions?"** box with "Call us" (01292 811 015, a `tel:` link) and "Email us" (the events inbox, a
-`mailto:` link) side by side, equally prominent (`questionsBox`). The staff summary has the sign off
+`mailto:` link), equally prominent (`questionsBox`): side by side where the email has room, and one
+above the other on a phone, so the number and the address each stay on one line (each tile is a block
+of at most 264 pixels, which wraps by itself with no media query; Outlook on Windows gets two table
+halves in comments only it reads). The staff summary has the sign off
 ("Go team!") but no box. The plain text part of each carries the same words, the questions (phone
 and email) and the sign off. Plain English, no dashes, every stored value escaped.
 

@@ -100,9 +100,24 @@ export async function insertThankYouSent(client: PoolClient, input: ThankYouInpu
 }
 
 // Record a sent letter and its audit-trail entry atomically.
-export async function recordThankYouSent(input: ThankYouInput): Promise<number> {
+//
+// `send` (admin refresh, 2026-11-14) is the email itself, run INSIDE the transaction: after the row
+// is written (the email carries a link signed from the row's id, so the id has to exist first) and
+// before the audit entry and the commit. If it throws, everything is rolled back and the error is
+// rethrown, so a letter whose email did not go leaves nothing behind: no row in the history, no
+// audit entry saying one was sent, and the donor not marked thanked. It used to be recorded first
+// and emailed afterwards, with a failed send swallowed, so the screen said "Sent" for a letter that
+// never left. One connection is held for the length of one email; the pool has five.
+export async function recordThankYouSent(
+  input: ThankYouInput,
+  send?: (id: number) => Promise<void>,
+): Promise<number> {
   return writeWithAudit(
-    (client) => insertThankYouSent(client, input),
+    async (client) => {
+      const id = await insertThankYouSent(client, input);
+      if (send) await send(id);
+      return id;
+    },
     (id) => ({
       actor: `admin:${input.sentBy}`,
       action: "thank_you.sent",
@@ -165,6 +180,11 @@ export interface ThankYouEligibleDonor {
   anonymous: boolean;
   alreadyThanked: boolean;
   lastThankedAt: string | null;
+  /** What they have given, after refunds, in gifts made since their last letter. Null when they
+   *  have never been thanked (there is no "since"). */
+  givenSinceThankedPence: number | null;
+  /** How many paid gifts that is. Null when they have never been thanked. */
+  giftsSinceThanked: number | null;
   sendState: SendState; // ready | no_email | opted_out
 }
 
@@ -180,6 +200,8 @@ interface EligibleDonorDbRow {
   max_amount: string | number; // MAX() can come back as a string from pg
   gift_aided: boolean;
   last_thanked_at: Date | null;
+  since_thanked_pence: string | number; // SUM() and COUNT() come back as strings from pg
+  since_thanked_gifts: string | number;
 }
 
 // Donors whose largest single PAID gift is >= thresholdPence, most generous first.
@@ -191,11 +213,20 @@ export async function listThankYouEligible(thresholdPence: number): Promise<Than
             dn.email, dn.thankyou_consent, dn.anonymous,
             MAX(d.amount_pence) AS max_amount,
             BOOL_OR(d.gift_aid) AS gift_aided,
-            (SELECT MAX(sent_at) FROM thank_you_sent ty WHERE ty.donor_id = dn.id) AS last_thanked_at
+            lt.last_thanked_at,
+            -- What has come in since their last letter: only gifts made after it, and only what
+            -- was kept of each after any refund. Nothing at all when they have never been thanked
+            -- (a comparison with NULL is never true).
+            COALESCE(SUM(d.amount_pence - d.refunded_amount_pence) FILTER (WHERE d.created_at > lt.last_thanked_at), 0) AS since_thanked_pence,
+            COUNT(*) FILTER (WHERE d.created_at > lt.last_thanked_at) AS since_thanked_gifts
        FROM donors dn
        -- TASK-501: money an organiser paid in for their fundraiser is not a gift of theirs.
        JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid' AND NOT d.paid_in_by_organiser
-      GROUP BY dn.id, dn.full_name, dn.business_name, dn.donor_type, dn.email, dn.thankyou_consent, dn.anonymous
+       LEFT JOIN LATERAL (
+         SELECT MAX(ty.sent_at) AS last_thanked_at FROM thank_you_sent ty WHERE ty.donor_id = dn.id
+       ) lt ON true
+      GROUP BY dn.id, dn.full_name, dn.business_name, dn.donor_type, dn.email, dn.thankyou_consent, dn.anonymous,
+               lt.last_thanked_at
      HAVING MAX(d.amount_pence) >= $1
       ORDER BY MAX(d.amount_pence) DESC, dn.id ASC`,
     [thresholdPence],
@@ -209,6 +240,8 @@ export async function listThankYouEligible(thresholdPence: number): Promise<Than
     anonymous: r.anonymous,
     alreadyThanked: r.last_thanked_at !== null,
     lastThankedAt: r.last_thanked_at ? r.last_thanked_at.toISOString() : null,
+    givenSinceThankedPence: r.last_thanked_at !== null ? Number(r.since_thanked_pence) || 0 : null,
+    giftsSinceThanked: r.last_thanked_at !== null ? Number(r.since_thanked_gifts) || 0 : null,
     // TASK-291: a donor who stopped the newsletter can still be thanked, and vice versa.
     sendState: deriveSendState({ email: r.email, emailConsent: r.thankyou_consent }),
   }));

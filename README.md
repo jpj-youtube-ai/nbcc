@@ -7217,7 +7217,8 @@ own. For the twenty or so screens left, the look lives once, in a kit, and a scr
   `toCsv` and `downloadCsv` (a spreadsheet made in the browser from what is on the screen; a cell that
   would run as a formula in Excel is kept as words), `copyText` and `plural`.
 - **Each area's own sheet** sits on top of the kit for what only that area needs:
-  `admin-giving.css`, `admin-records.css`, `admin-content.css`, `admin-settings.css` and
+  `admin-giving.css`, `admin-supporters.css`, `admin-records.css`, `admin-content.css`,
+  `admin-outreach.css`, `admin-settings.css` and
   `admin-newsletter.css`.
 - **House rules**, pinned in `test/unit/admin-kit.test.ts`: every rule is named through
   `.admin-view.ak` or starts `.ak-`; no `!important`; nothing scrolls inside a box or sideways; motion

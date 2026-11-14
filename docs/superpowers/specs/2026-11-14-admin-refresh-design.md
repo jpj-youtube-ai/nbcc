@@ -90,7 +90,8 @@ uses), and `assets/js/admin/kit.js` (`window.AdminKit`), loaded before `app.js`.
 cell that would run as a formula in Excel is kept as words), `copyText(text)`, `plural(n, one, many)`.
 
 Each area has a sheet of its own on top of the kit, for what only it needs: `admin-giving.css`,
-`admin-records.css`, `admin-content.css`, `admin-settings.css`, `admin-newsletter.css`.
+`admin-supporters.css`, `admin-records.css`, `admin-content.css`, `admin-outreach.css`,
+`admin-settings.css`, `admin-newsletter.css`.
 
 ## The areas
 

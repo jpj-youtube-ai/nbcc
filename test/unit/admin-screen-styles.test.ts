@@ -70,7 +70,12 @@ describe("no screen loses its styles", () => {
     // The Donations gift log's classes (gl-) are in admin.html and live in its own stylesheet, as
     // Head Elf HQ's do, so that stylesheet is read too.
     // The Overview, Contact and phone menu (ov-, ct-, pm-) have theirs too, since 2026-11-12.
-    const sheets = adminCss + read("assets/css/styles.css") + read("assets/css/admin-donations.css") + read("assets/css/admin-overview.css");
+    // The kit (ak-) and each area's sheet on top of it, since 2026-11-14.
+    const areaSheets = ["kit", "giving", "supporters", "records", "content", "outreach", "settings", "newsletter"]
+      .map((name) => read(`assets/css/admin-${name}.css`))
+      .join("");
+    const sheets =
+      adminCss + read("assets/css/styles.css") + read("assets/css/admin-donations.css") + read("assets/css/admin-overview.css") + areaSheets;
     for (const m of sheets.matchAll(/\.(-?[a-z_][\w-]*)/gi)) styledNames.add(m[1]);
     const families = new Map<string, { used: number; styled: number }>();
     for (const name of new Set([...classNames(html), ...classNames(appSrc)])) {

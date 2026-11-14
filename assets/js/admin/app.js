@@ -10933,53 +10933,537 @@
       });
   }
 
-  // ---- supporters ticker (REQ-003 · TASK-178) ----
-  // Admin-curated list shown scrolling under the site nav. List (Viewer+) + add/toggle/delete
-  // (Editor+, server-enforced). Wired once (tickerWired); the table's actions are delegated.
+  // ---- Partners (the supporters ticker: REQ-003, TASK-178; in the kit's look, 2026-11-14) ----
+  // The names that scroll under the site's menu and are listed on the Supporters page. Anyone who can
+  // see the screen can read the list; adding, showing, hiding, renaming, putting first and removing
+  // need ticker:edit (the server checks too).
+  //
+  // About 390 names, so the list is read once, filtered and searched in the browser, and drawn a
+  // hundred cards at a time. A press answers in the card that was pressed, and the card stays where
+  // it is: what is listed is only worked out again when a tile, the order or the search changes, so
+  // a partner switched on under "Hidden" does not vanish from under the thumb.
   var tickerWired = false;
-  function tickerStatus(msg, cls) {
-    var s = el("tickerStatus");
-    if (!s) return;
-    s.className = "ty-status" + (cls ? " " + cls : "");
-    s.textContent = msg || "";
+  var TK_STEP = 100; // how many cards are drawn at a time
+  var TK_STRIP = 30; // how many names the strip shows before "Show all"
+  var tkRows = []; // every partner, in the website's order
+  var tkById = {};
+  var tkLoaded = false;
+  var tkFilter = "all"; // the tile that is pressed: showing, hidden or all
+  var tkSort = "site"; // site (the website's order) or newest
+  var tkQuery = "";
+  var tkListed = []; // the ids listed now, in the order they are listed
+  var tkLimit = TK_STEP; // how many of those are drawn
+  var tkOpenId = null; // the card whose Rename, Put first and Remove are open
+  var tkStripAll = false;
+  var tkBusy = {}; // partner id -> true while a change to it is on its way
+  function tkSay(node, msg, kind) {
+    if (!node) return;
+    node.classList.remove("is-ok", "is-error");
+    if (kind) node.classList.add(kind);
+    node.textContent = msg || "";
   }
-  function tickerTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No partners yet. Add one above.</p>';
-    var body = rows
-      .map(function (r) {
-        var state = r.active
-          ? '<span class="ty-pill ty-pill-ready">Showing</span>'
-          : '<span class="ty-pill ty-pill-blocked">Hidden</span>';
-        var actions = canWrite
-          ? '<button class="admin-link" type="button" data-ticker-edit="' + r.id + '" data-ticker-name="' + H.escapeHtml(r.name) + '">Edit</button>' +
-            ' · <button class="admin-link" type="button" data-ticker-toggle="' + r.id + '" data-active="' + (r.active ? "1" : "0") + '">' +
-            (r.active ? "Hide" : "Show") + "</button>" +
-            ' · <button class="admin-link ty-del" type="button" data-ticker-delete="' + r.id + '" data-ticker-name="' + H.escapeHtml(r.name) + '">Delete</button>'
-          : "";
-        return "<tr><td>" + H.escapeHtml(r.name) + "</td><td>" + state + "</td><td>" + actions + "</td></tr>";
-      })
-      .join("");
+  function tickerStatus(msg, cls) {
+    tkSay(el("tickerStatus"), msg, cls);
+  }
+  function tkIndex() {
+    tkById = {};
+    tkRows.forEach(function (r) { tkById[r.id] = r; });
+  }
+  // The website's order (src/db/ticker.ts): the number a name was put at, then A to Z.
+  function tkSortRows() {
+    tkRows.sort(function (a, b) {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      var an = String(a.name).toLowerCase();
+      var bn = String(b.name).toLowerCase();
+      return an < bn ? -1 : an > bn ? 1 : a.id - b.id;
+    });
+  }
+  function tkMatches(r, q) {
+    if (!q) return true;
+    return String(r.name).toLowerCase().indexOf(q) !== -1 || H.partnerKey(r.name).indexOf(H.partnerKey(q)) !== -1;
+  }
+  // The partner already on the list under this name, if there is one.
+  function tkTwin(name) {
+    var key = H.partnerKey(name);
+    if (!key) return null;
+    for (var i = 0; i < tkRows.length; i++) if (H.partnerKey(tkRows[i].name) === key) return tkRows[i];
+    return null;
+  }
+  // What is listed, from the tile, the search and the order. Only here: a change to one partner
+  // leaves the list as it stands.
+  function tkPick() {
+    var q = tkQuery.toLowerCase();
+    var rows = tkRows.filter(function (r) {
+      if (tkFilter === "showing" && !r.active) return false;
+      if (tkFilter === "hidden" && r.active) return false;
+      return tkMatches(r, q);
+    });
+    if (tkSort === "newest") {
+      rows.sort(function (a, b) {
+        var at = String(a.createdAt || "");
+        var bt = String(b.createdAt || "");
+        return at < bt ? 1 : at > bt ? -1 : b.id - a.id;
+      });
+    }
+    tkListed = rows.map(function (r) { return r.id; });
+    tkLimit = TK_STEP;
+    tkOpenId = null;
+  }
+  function tkPartners(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+  function tkDrawTiles() {
+    var showing = tkRows.filter(function (r) { return r.active; }).length;
+    var counts = { showing: showing, hidden: tkRows.length - showing, all: tkRows.length };
+    Array.prototype.forEach.call(doc.querySelectorAll("#tickerTiles [data-ticker-filter]"), function (b) {
+      var key = b.getAttribute("data-ticker-filter");
+      var on = key === tkFilter;
+      b.querySelector(".ak-tile__n").textContent = tkLoaded ? String(counts[key]) : "";
+      b.classList.toggle("is-active", on);
+      b.classList.toggle("is-none", tkLoaded && counts[key] === 0);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    el("tickerCount").textContent = tkLoaded ? tkRows.length + " total · " + showing + " showing" : "";
+  }
+  // The strip under the site's menu, as words: the names that are showing, in the website's order.
+  function tkDrawPreview() {
+    var box = el("tickerPreview");
+    if (!box) return;
+    if (!tkLoaded) { box.innerHTML = ""; return; }
+    var showing = tkRows.filter(function (r) { return r.active; });
+    if (!showing.length) {
+      box.innerHTML = '<p class="admin-empty">No partner is showing on the website yet.' +
+        (canEdit("ticker") ? " Switch one on in the list below." : "") + "</p>";
+      return;
+    }
+    var some = tkStripAll ? showing : showing.slice(0, TK_STRIP);
+    box.innerHTML =
+      '<p class="pt-strip"><span class="pt-strip__label">Partners</span>' +
+      some.map(function (r) { return '<span class="pt-strip__name">' + H.escapeHtml(r.name) + "</span>"; }).join("") +
+      "</p>" +
+      (showing.length > some.length
+        ? '<p class="pt-strip__rest">and ' + (showing.length - some.length) + ' more. <button class="admin-link" type="button" id="tickerStripAll">Show all ' +
+          showing.length + " names</button></p>"
+        : "");
+  }
+  function tkDrawListed() {
+    var line = el("tickerListed");
+    if (!line) return;
+    line.textContent = "";
+    if (!tkLoaded || !tkRows.length) return;
+    var total = tkListed.length;
+    var q = tkQuery;
+    var text;
+    if (!total && q) {
+      var who = tkFilter === "showing" ? "No partner showing on the website" : tkFilter === "hidden" ? "No hidden partner" : "No partner";
+      text = who + ' matches "' + q + '".';
+      var everywhere = tkFilter === "all" ? 0 : tkRows.filter(function (r) { return tkMatches(r, q.toLowerCase()); }).length;
+      if (everywhere) {
+        line.textContent = text + " " + everywhere + " on the whole list " + (everywhere === 1 ? "does" : "do") + ". ";
+        var all = doc.createElement("button");
+        all.type = "button";
+        all.className = "admin-link";
+        all.id = "tickerSearchAll";
+        all.textContent = "Look at the whole list";
+        line.appendChild(all);
+        return;
+      }
+      if (tkFilter === "all") text += " Try part of the name.";
+    } else if (!total) {
+      text = tkFilter === "showing" ? "No partner is showing on the website yet." : "No partner is hidden.";
+    } else if (q) {
+      text = tkPartners(total, "partner matches", "partners match") + ' "' + q + '"' +
+        (tkFilter === "showing" ? " among those showing on the website" : tkFilter === "hidden" ? " among those hidden" : "") + ".";
+    } else {
+      text = tkPartners(total, "partner", "partners") +
+        (tkFilter === "showing" ? " showing on the website." : tkFilter === "hidden" ? " hidden." : " on the list.");
+    }
+    if (total > tkLimit) text += " The first " + tkLimit + " are listed.";
+    line.textContent = text;
+  }
+  function tkStateHtml(r, canWrite) {
+    var word = r.active ? "Showing" : "Hidden";
+    if (!canWrite) return '<span class="ak-mark ' + (r.active ? "ak-mark--ok" : "ak-mark--quiet") + '">' + word + "</span>";
+    // A switch, named by the partner and by the word on it, so "Showing" is what is seen and said.
     return (
-      '<table class="admin-table"><thead><tr><th>Partner</th><th>Status</th><th></th></tr></thead><tbody>' +
-      body +
-      "</tbody></table>"
+      '<button type="button" class="pt-switch" role="switch" aria-checked="' + (r.active ? "true" : "false") + '" data-ticker-toggle="' + r.id +
+      '" aria-labelledby="tkName' + r.id + " tkWord" + r.id + '">' +
+      '<span class="pt-switch__track" aria-hidden="true"><span class="pt-switch__knob"></span></span>' +
+      '<span class="pt-switch__word" id="tkWord' + r.id + '">' + word + "</span></button>"
     );
+  }
+  function tkMetaHtml(r) {
+    return (
+      (r.sortOrder < 0 ? '<span class="ak-mark ak-mark--wait">First</span> ' : "") +
+      (r.createdAt ? "Added " + H.escapeHtml(H.longDate(r.createdAt)) : "")
+    );
+  }
+  function tkCardHtml(r, canWrite) {
+    return (
+      '<li class="pt-card" data-ticker-card="' + r.id + '">' +
+      '<div class="pt-card__face"><div class="pt-card__main">' +
+      '<span class="pt-card__name" id="tkName' + r.id + '">' + H.escapeHtml(r.name) + "</span>" +
+      '<span class="pt-card__meta">' + tkMetaHtml(r) + "</span></div>" +
+      tkStateHtml(r, canWrite) + "</div>" +
+      '<p class="ty-status pt-card__said" data-ticker-said role="status"></p>' +
+      (canWrite
+        ? '<button type="button" class="pt-card__open" data-ticker-more="' + r.id + '" aria-expanded="false">Rename or remove</button>' +
+          '<div class="pt-card__more" data-ticker-more-body hidden></div>'
+        : "") +
+      "</li>"
+    );
+  }
+  // The rest of a card, drawn when it is opened: with 390 partners it is not worth drawing 390 times.
+  function tkMoreHtml(r) {
+    var inputId = "tickerRename" + r.id;
+    return (
+      '<form class="pt-act" data-ticker-rename="' + r.id + '" autocomplete="off">' +
+      '<div class="ak-field"><label for="' + inputId + '">Name</label>' +
+      '<input id="' + inputId + '" type="text" maxlength="120" value="' + H.escapeHtml(r.name) + '" /></div>' +
+      '<div class="pt-act__go"><button class="admin-btn ak-btn--plain" type="submit">Save the name</button>' +
+      '<span class="ak-says">Changes how the name reads on the website, straight away.</span></div></form>' +
+      '<div class="pt-act pt-act__go">' +
+      (r.sortOrder < 0
+        ? '<button class="admin-btn ak-btn--plain" type="button" data-ticker-first="' + r.id + '" data-ticker-to="0">Back to its usual place</button>' +
+          '<span class="ak-says">Puts this name back among the others, in A to Z order.</span>'
+        : '<button class="admin-btn ak-btn--plain" type="button" data-ticker-first="' + r.id + '">Put first</button>' +
+          '<span class="ak-says">Moves this name to the front of the names that scroll across the website. The others stay in A to Z order.</span>') +
+      "</div>" +
+      '<div class="pt-act pt-act__go">' +
+      '<button class="admin-btn ak-btn--danger" type="button" data-ticker-remove="' + r.id + '">Remove from the list</button>' +
+      '<span class="ak-says">Takes the name off the list and off the website for good. To keep it for later, hide it instead.</span>' +
+      '<div class="ak-notice ak-notice--bad pt-ask" data-ticker-remove-ask hidden>' +
+      "<p>Remove “" + H.escapeHtml(r.name) + "” from the partners list? This cannot be undone.</p>" +
+      '<div class="ak-actions"><button class="admin-btn ak-btn--danger" type="button" data-ticker-remove-yes="' + r.id + '">Yes, remove it</button>' +
+      '<button class="admin-btn ak-btn--plain" type="button" data-ticker-remove-no>No, keep it</button></div></div>' +
+      "</div>"
+    );
+  }
+  function tkCardsHtml(ids) {
+    var canWrite = canEdit("ticker");
+    return ids
+      .map(function (id) { return tkById[id] ? tkCardHtml(tkById[id], canWrite) : ""; })
+      .join("");
+  }
+  function tkDrawMoreButton() {
+    var more = el("tickerMore");
+    var left = tkListed.length - tkLimit;
+    more.hidden = left <= 0;
+    if (left > 0) more.textContent = "Show " + Math.min(TK_STEP, left) + " more";
+  }
+  function tkDrawList() {
+    var wrap = el("tickerTable");
+    if (!tkRows.length) {
+      wrap.innerHTML = '<p class="admin-empty">No partners yet.' + (canEdit("ticker") ? " Add one above." : "") + "</p>";
+      el("tickerMore").hidden = true;
+      return;
+    }
+    var cards = tkCardsHtml(tkListed.slice(0, tkLimit));
+    wrap.innerHTML = cards ? '<ul class="ak-list pt-list">' + cards + "</ul>" : "";
+    tkDrawMoreButton();
+  }
+  // The next hundred go on the end: the cards already there, and one that is open, are left alone.
+  function tkShowMore() {
+    var list = doc.querySelector("#tickerTable .pt-list");
+    if (!list) return;
+    var from = tkLimit;
+    tkLimit += TK_STEP;
+    list.insertAdjacentHTML("beforeend", tkCardsHtml(tkListed.slice(from, tkLimit)));
+    tkDrawMoreButton();
+    tkDrawListed();
+    // The button may have gone: the keyboard goes on to the first card it brought.
+    var first = tkListed[from] !== undefined ? tkCard(tkListed[from]) : null;
+    var next = first ? first.querySelector("button") : null;
+    if (next && el("tickerMore").hidden) next.focus({ preventScroll: true });
+  }
+  function tkDrawAll() {
+    tkDrawTiles();
+    tkDrawPreview();
+    tkDrawListed();
+    tkDrawList();
+    tkDrawDupes();
+  }
+  function tkCard(id) {
+    return doc.querySelector('#tickerTable [data-ticker-card="' + id + '"]');
+  }
+  function tkCardSay(id, msg, kind) {
+    var card = tkCard(id);
+    if (card) tkSay(card.querySelector("[data-ticker-said]"), msg, kind);
+  }
+  // One change to one partner. True when the server did it, false when it did not, and null when the
+  // session has ended: the sign in screen is already up and there is nothing to say.
+  function tkWrite(method, id, body) {
+    var opts = { method: method };
+    if (body) {
+      opts.headers = { "Content-Type": "application/json" };
+      opts.body = JSON.stringify(body);
+    }
+    return authFetch("/api/admin/ticker" + (id === null ? "" : "/" + encodeURIComponent(id)), opts).then(
+      function (res) { return !!res.ok; },
+      function (err) { return err && err.message === "unauthorized" ? null : false; },
+    );
+  }
+  // Shows or hides one partner, and brings everything that counts it up to date: the tiles, the
+  // strip, its own switch if its card is drawn, and "Already on the list".
+  function tkSetActive(id, active) {
+    return tkWrite("PATCH", id, { active: active }).then(function (ok) {
+      var r = tkById[id];
+      if (!ok || !r) return ok;
+      r.active = active;
+      var card = tkCard(id);
+      var sw = card && card.querySelector("[data-ticker-toggle]");
+      if (sw) {
+        sw.setAttribute("aria-checked", active ? "true" : "false");
+        sw.querySelector(".pt-switch__word").textContent = active ? "Showing" : "Hidden";
+      }
+      tkDrawTiles();
+      tkDrawPreview();
+      tkDrawDupes();
+      return ok;
+    });
+  }
+  function tkToggle(sw) {
+    var id = sw.getAttribute("data-ticker-toggle");
+    if (tkBusy[id]) return; // a second press while the first is on its way is not sent
+    var makeActive = sw.getAttribute("aria-checked") !== "true";
+    tkBusy[id] = true;
+    sw.setAttribute("aria-busy", "true");
+    tkCardSay(id, "");
+    tkSetActive(id, makeActive).then(function (ok) {
+      delete tkBusy[id];
+      sw.removeAttribute("aria-busy");
+      if (ok === null) return;
+      if (ok) tkCardSay(id, makeActive ? "Showing on the website now." : "Hidden from the website now.", "is-ok");
+      else tkCardSay(id, "Could not " + (makeActive ? "show" : "hide") + " that partner. Please try again.", "is-error");
+    });
+  }
+  function tkOpenMore(btn) {
+    var id = btn.getAttribute("data-ticker-more");
+    var card = tkCard(id);
+    var body = card && card.querySelector("[data-ticker-more-body]");
+    var r = tkById[id];
+    if (!body || !r) return;
+    var open = btn.getAttribute("aria-expanded") !== "true";
+    // One card open at a time, so there is one Remove on the screen.
+    if (open && tkOpenId !== null && String(tkOpenId) !== String(id)) {
+      var was = tkCard(tkOpenId);
+      if (was) {
+        was.classList.remove("is-open");
+        was.querySelector("[data-ticker-more]").setAttribute("aria-expanded", "false");
+        var wasBody = was.querySelector("[data-ticker-more-body]");
+        wasBody.hidden = true;
+        wasBody.innerHTML = "";
+      }
+    }
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    card.classList.toggle("is-open", open);
+    body.hidden = !open;
+    body.innerHTML = open ? tkMoreHtml(r) : "";
+    tkOpenId = open ? id : null;
+  }
+  function tkRename(form) {
+    var id = form.getAttribute("data-ticker-rename");
+    var r = tkById[id];
+    var input = form.querySelector("input");
+    var next = (input.value || "").trim();
+    if (!r || tkBusy[id]) return;
+    if (!next) { tkCardSay(id, "Type a name first.", "is-error"); return; }
+    if (next === r.name) { tkCardSay(id, "That is the name it already has.", ""); return; }
+    var twin = tkTwin(next);
+    if (twin && String(twin.id) !== String(id)) { tkCardSay(id, "“" + twin.name + "” is already on the list.", "is-error"); return; }
+    tkBusy[id] = true;
+    tkCardSay(id, "Saving…");
+    tkWrite("PATCH", id, { name: next }).then(function (ok) {
+      delete tkBusy[id];
+      if (ok === null) return;
+      if (!ok) { tkCardSay(id, "Could not rename that partner. Please try again.", "is-error"); return; }
+      r.name = next;
+      tkSortRows();
+      var card = tkCard(id);
+      if (card) {
+        card.querySelector(".pt-card__name").textContent = next;
+        input.value = next;
+        var ask = card.querySelector("[data-ticker-remove-ask] p");
+        if (ask) ask.textContent = "Remove “" + next + "” from the partners list? This cannot be undone.";
+      }
+      tkDrawPreview();
+      tkCardSay(id, "Saved.", "is-ok");
+    });
+  }
+  // Put first, and the way back. The server's sortOrder: lower comes first, and every name starts at
+  // 0, so one below the lowest is the front and 0 is back among the rest.
+  function tkPutFirst(btn) {
+    var id = btn.getAttribute("data-ticker-first");
+    var r = tkById[id];
+    if (!r || tkBusy[id]) return;
+    var back = btn.getAttribute("data-ticker-to") === "0";
+    var lowest = tkRows.reduce(function (low, x) { return Math.min(low, x.sortOrder); }, 0);
+    var to = back ? 0 : lowest - 1;
+    tkBusy[id] = true;
+    btn.setAttribute("aria-busy", "true");
+    tkCardSay(id, "");
+    tkWrite("PATCH", id, { sortOrder: to }).then(function (ok) {
+      delete tkBusy[id];
+      btn.removeAttribute("aria-busy");
+      if (ok === null) return;
+      if (!ok) { tkCardSay(id, "Could not move that partner. Please try again.", "is-error"); return; }
+      r.sortOrder = to;
+      tkSortRows();
+      tkDrawPreview();
+      var card = tkCard(id);
+      if (card) {
+        card.querySelector(".pt-card__meta").innerHTML = tkMetaHtml(r);
+        var body = card.querySelector("[data-ticker-more-body]");
+        var held = doc.activeElement === btn;
+        if (body && !body.hidden) body.innerHTML = tkMoreHtml(r);
+        // The button that was pressed has been drawn again as its opposite: the keyboard stays on it.
+        var again = card.querySelector("[data-ticker-first]");
+        if (held && again) again.focus({ preventScroll: true });
+      }
+      tkCardSay(id, back ? "Back in its usual place." : r.active ? "First on the website now." : "It will be first on the website once it is showing.", "is-ok");
+    });
+  }
+  function tkRemove(id) {
+    var r = tkById[id];
+    if (!r || tkBusy[id]) return;
+    tkBusy[id] = true;
+    tkCardSay(id, "Removing…");
+    tkWrite("DELETE", id, null).then(function (ok) {
+      delete tkBusy[id];
+      if (ok === null) return;
+      if (!ok) { tkCardSay(id, "Could not remove that partner. Please try again.", "is-error"); return; }
+      tkRows = tkRows.filter(function (x) { return String(x.id) !== String(id); });
+      tkIndex();
+      if (String(tkOpenId) === String(id)) tkOpenId = null;
+      // Where the card was, so nothing below it jumps and the keyboard has somewhere to be.
+      var card = tkCard(id);
+      if (card) {
+        card.classList.remove("is-open");
+        card.classList.add("is-gone");
+        card.innerHTML = '<p class="pt-card__gone" role="status">“' + H.escapeHtml(r.name) + "” was removed from the list.</p>";
+        card.setAttribute("tabindex", "-1");
+        card.focus({ preventScroll: true });
+      }
+      tkDrawTiles();
+      tkDrawPreview();
+      tkDrawDupes();
+    });
+  }
+  // "Already on the list", as a new name is typed: up to six partners whose name holds what has been
+  // typed so far, each with where it stands, and Show it for one that is hidden.
+  function tkDrawDupes() {
+    var box = el("tickerDupes");
+    var input = el("tickerName");
+    if (!box || !input) return;
+    var q = (input.value || "").trim().toLowerCase();
+    var found = tkLoaded && q.length >= 3 ? tkRows.filter(function (r) { return tkMatches(r, q); }) : [];
+    if (!found.length) { box.innerHTML = ""; return; }
+    var canWrite = canEdit("ticker");
+    box.innerHTML =
+      '<div class="ak-notice pt-dupes"><p class="pt-dupes__title">Already on the list</p><ul class="pt-dupes__list">' +
+      found.slice(0, 6).map(function (r) {
+        return (
+          '<li><span class="pt-dupes__name">' + H.escapeHtml(r.name) + "</span> " +
+          '<span class="ak-mark ' + (r.active ? "ak-mark--ok" : "ak-mark--quiet") + '">' + (r.active ? "Showing" : "Hidden") + "</span>" +
+          (!r.active && canWrite ? ' <button class="admin-btn admin-btn--small ak-btn--plain" type="button" data-ticker-show="' + r.id + '">Show it</button>' : "") +
+          "</li>"
+        );
+      }).join("") +
+      "</ul>" +
+      (found.length > 6 ? '<p class="pt-dupes__rest">and ' + (found.length - 6) + " more. Find them in the list below.</p>" : "") +
+      "</div>";
+  }
+  function tkAddOne(e) {
+    e.preventDefault();
+    var input = el("tickerName");
+    var name = (input.value || "").trim();
+    if (!name) { tickerStatus("Type the partner's name first.", "is-error"); return; }
+    var twin = tkTwin(name);
+    if (twin) {
+      tickerStatus("“" + twin.name + "” is already on the list. " +
+        (twin.active ? "It is showing on the website." : "It is hidden: press Show it to put it on the website."), "is-error");
+      tkDrawDupes();
+      return;
+    }
+    tickerStatus("Adding…");
+    tkWrite("POST", null, { name: name }).then(function (ok) {
+      if (ok === null) return;
+      if (!ok) { tickerStatus("Could not add that partner. Please try again.", "is-error"); return; }
+      input.value = "";
+      tickerStatus("Added. “" + name + "” is showing on the website now.", "is-ok");
+      loadTicker();
+    });
+  }
+  // Several at once, one name a line, one request a name (there is nothing on the server for a batch).
+  // A name already on the list, or twice in the box, is left out; one the server would not take stays
+  // in the box to try again.
+  function tkAddMany() {
+    var box = el("tickerMany");
+    var say = el("tickerManyStatus");
+    var go = el("tickerManyAdd");
+    var seen = {};
+    var fresh = [];
+    var known = [];
+    (box.value || "").split(/\r?\n/).forEach(function (line) {
+      var name = line.trim();
+      var key = H.partnerKey(name);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      if (tkTwin(name)) known.push(name);
+      else fresh.push(name);
+    });
+    var total = fresh.length + known.length;
+    if (!total) { tkSay(say, "Type the names first, one on each line.", "is-error"); return; }
+    if (total > 200) { tkSay(say, "That is more than 200 names. Please add them a batch at a time.", "is-error"); return; }
+    var added = [];
+    var failed = [];
+    go.disabled = true;
+    function next(i) {
+      if (i >= fresh.length) return Promise.resolve(true);
+      tkSay(say, "Adding " + (i + 1) + " of " + fresh.length + "…");
+      return tkWrite("POST", null, { name: fresh[i] }).then(function (ok) {
+        if (ok === null) return null;
+        (ok ? added : failed).push(fresh[i]);
+        return next(i + 1);
+      });
+    }
+    next(0).then(function (done) {
+      go.disabled = false;
+      if (done === null) return;
+      tkSay(
+        say,
+        "Added " + added.length + " of " + total + "." +
+          (known.length ? " Already on the list, so left out: " + known.join(", ") + "." : "") +
+          (failed.length ? " Could not add: " + failed.join(", ") + ". Please try those again." : ""),
+        failed.length ? "is-error" : "is-ok",
+      );
+      box.value = failed.join("\n");
+      if (added.length) loadTicker();
+    });
   }
   function loadTicker() {
     tickerWire();
-    var canWrite = canEdit("ticker");
     el("tickerTable").innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/ticker")
+    return authFetch("/api/admin/ticker")
       .then(okJson)
       .then(function (d) {
-        var rows = d.results || [];
-        el("tickerTable").innerHTML = tickerTable(rows, canWrite);
-        var showing = rows.filter(function (r) { return r.active; }).length;
-        el("tickerCount").textContent = rows.length + " total · " + showing + " showing";
+        tkRows = d.results || [];
+        tkLoaded = true;
+        tkIndex();
+        tkPick();
+        tkDrawAll();
       })
       .catch(function () {
-        el("tickerTable").innerHTML = '<p class="admin-empty">Could not load supporters.</p>';
-        el("tickerCount").textContent = "";
+        tkRows = [];
+        tkLoaded = false;
+        tkIndex();
+        tkListed = [];
+        tkDrawTiles();
+        tkDrawPreview();
+        tkDrawListed();
+        tkDrawDupes();
+        el("tickerMore").hidden = true;
+        el("tickerTable").innerHTML = unavailableHtml("Could not load the partners. Please try again.");
       });
   }
   function tickerWire() {
@@ -10987,74 +11471,98 @@
     tickerWired = true;
     var canWrite = canEdit("ticker");
     el("tickerAdd").hidden = !canWrite;
-    el("tickerForm").addEventListener("submit", function (e) {
-      e.preventDefault();
-      var name = (el("tickerName").value || "").trim();
-      if (!name) return;
-      tickerStatus("Adding…");
-      authFetch("/api/admin/ticker", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name }),
-      })
-        .then(function (res) {
-          if (!res.ok) throw new Error("add failed");
-          el("tickerName").value = "";
-          tickerStatus("Added.", "is-ok");
-          loadTicker();
-        })
-        .catch(function () {
-          tickerStatus("Could not add that supporter.", "is-error");
-        });
+    el("tickerAddPanel").hidden = !canWrite;
+    el("tickerForm").addEventListener("submit", tkAddOne);
+    el("tickerName").addEventListener("input", tkDrawDupes);
+    bindClick("tickerManyAdd", tkAddMany);
+    bindClick("tickerMore", tkShowMore);
+    function listAgain() {
+      tkPick();
+      tkDrawTiles();
+      tkDrawListed();
+      tkDrawList();
+    }
+    el("tickerTiles").addEventListener("click", function (e) {
+      var tile = e.target && e.target.closest ? e.target.closest("[data-ticker-filter]") : null;
+      if (!tile) return;
+      tkFilter = tile.getAttribute("data-ticker-filter");
+      listAgain();
     });
-    el("tickerTable").addEventListener("click", function (e) {
+    el("tickerSort").addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-ticker-sort]") : null;
+      if (!b) return;
+      tkSort = b.getAttribute("data-ticker-sort");
+      Array.prototype.forEach.call(el("tickerSort").querySelectorAll("[data-ticker-sort]"), function (x) {
+        x.classList.toggle("is-active", x === b);
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
+      });
+      listAgain();
+    });
+    el("tickerSearch").addEventListener("input", function () {
+      tkQuery = (el("tickerSearch").value || "").trim();
+      listAgain();
+    });
+    // "Look at the whole list", offered when the search found nothing under this tile.
+    el("tickerListed").addEventListener("click", function (e) {
+      if (!e.target || e.target.id !== "tickerSearchAll") return;
+      tkFilter = "all";
+      listAgain();
+      el("tickerSearch").focus({ preventScroll: true });
+    });
+    el("tickerPreview").addEventListener("click", function (e) {
+      if (!e.target || e.target.id !== "tickerStripAll") return;
+      tkStripAll = true;
+      tkDrawPreview();
+    });
+    // Show it, beside a hidden partner under "Already on the list".
+    el("tickerDupes").addEventListener("click", function (e) {
+      var show = e.target && e.target.closest ? e.target.closest("[data-ticker-show]") : null;
+      if (!show) return;
+      var id = show.getAttribute("data-ticker-show");
+      var r = tkById[id];
+      if (!r || tkBusy[id]) return;
+      tkBusy[id] = true;
+      tickerStatus("");
+      tkSetActive(id, true).then(function (ok) {
+        delete tkBusy[id];
+        if (ok === null) return;
+        if (ok) tickerStatus("“" + r.name + "” is showing on the website now.", "is-ok");
+        else tickerStatus("Could not show that partner. Please try again.", "is-error");
+      });
+    });
+    var table = el("tickerTable");
+    table.addEventListener("submit", function (e) {
+      var form = e.target && e.target.closest ? e.target.closest("[data-ticker-rename]") : null;
+      if (!form) return;
+      e.preventDefault();
+      tkRename(form);
+    });
+    table.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
-      // Rename (TASK-262): PATCH accepts a name (supporterUpdateSchema), so this fixes a typo in
-      // place instead of delete-and-re-add, which would lose the row's sort_order and audit trail.
-      // prompt() pre-fills the current name and matches the confirm() used by Delete below.
-      var edit = t.closest("[data-ticker-edit]");
-      if (edit) {
-        var current = edit.getAttribute("data-ticker-name") || "";
-        var next = window.prompt("Partner name", current);
-        if (next === null) return; // cancelled
-        next = next.trim();
-        if (!next || next === current) return; // empty or unchanged — nothing to do
-        tickerStatus("Saving…");
-        authFetch("/api/admin/ticker/" + edit.getAttribute("data-ticker-edit"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: next }),
-        })
-          .then(function (res) {
-            if (!res.ok) throw new Error("rename failed");
-            tickerStatus("Saved.", "is-ok");
-            loadTicker();
-          })
-          .catch(function () {
-            tickerStatus("Could not rename that partner.", "is-error");
-          });
+      var sw = t.closest("[data-ticker-toggle]");
+      if (sw) return tkToggle(sw);
+      var more = t.closest("[data-ticker-more]");
+      if (more) return tkOpenMore(more);
+      var first = t.closest("[data-ticker-first]");
+      if (first) return tkPutFirst(first);
+      var remove = t.closest("[data-ticker-remove]");
+      if (remove) {
+        // Asked in the page, under the button that was pressed, not in a browser box.
+        var ask = remove.parentNode.querySelector("[data-ticker-remove-ask]");
+        ask.hidden = false;
+        ask.querySelector("[data-ticker-remove-no]").focus({ preventScroll: true });
         return;
       }
-      var toggle = t.closest("[data-ticker-toggle]");
-      if (toggle) {
-        var makeActive = toggle.getAttribute("data-active") === "0";
-        authFetch("/api/admin/ticker/" + toggle.getAttribute("data-ticker-toggle"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ active: makeActive }),
-        })
-          .then(function (res) { if (res.ok) loadTicker(); })
-          .catch(function () {});
+      var no = t.closest("[data-ticker-remove-no]");
+      if (no) {
+        var asked = no.closest("[data-ticker-remove-ask]");
+        asked.hidden = true;
+        asked.parentNode.querySelector("[data-ticker-remove]").focus({ preventScroll: true });
         return;
       }
-      var del = t.closest("[data-ticker-delete]");
-      if (del) {
-        if (!window.confirm('Remove "' + (del.getAttribute("data-ticker-name") || "this partner") + '" from the partners list?')) return;
-        authFetch("/api/admin/ticker/" + del.getAttribute("data-ticker-delete"), { method: "DELETE" })
-          .then(function (res) { if (res.ok) loadTicker(); })
-          .catch(function () {});
-      }
+      var yes = t.closest("[data-ticker-remove-yes]");
+      if (yes) return tkRemove(yes.getAttribute("data-ticker-remove-yes"));
     });
   }
 

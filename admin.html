@@ -1339,18 +1339,69 @@
 
             <!-- Partners: the admin-curated list shown scrolling under the site nav (labelled
                  "Partners") and listed on the Supporters page. -->
-            <section class="admin-view" id="view-ticker" aria-labelledby="ticker-heading" hidden>
+            <!-- In the kit's look (2026-11-14, docs/superpowers/specs/2026-11-14-admin-refresh-content.md):
+                 tiles that filter, a card a partner with one switch, and every press answered in the
+                 card that was pressed. About 390 names, so app.js filters in the browser and draws a
+                 hundred at a time. -->
+            <section class="admin-view ak" id="view-ticker" aria-labelledby="ticker-heading" hidden>
               <h2 id="ticker-heading">Partners</h2>
-              <p class="admin-view-intro">Add the businesses and people who are ongoing partners. Active ones scroll across the top of every page (just under the navigation, labelled “Partners”) and appear in the Partners list on the Supporters page. Changes appear on the site immediately.</p>
-              <form id="tickerForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Partner name
-                  <input id="tickerName" type="text" maxlength="120" placeholder="e.g. Ayrshire Bakery" style="width:220px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="tickerAdd">Add partner</button>
-                <span class="ty-count" id="tickerCount" aria-live="polite"></span>
-              </form>
-              <p class="ty-status" id="tickerStatus" role="status" aria-live="polite"></p>
-              <div class="admin-table-wrap" id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="admin-view-intro">Choose which partners' names show on the website. A name that is showing scrolls across the top of every page, just under the menu (labelled “Partners”), and is listed on the Supporters page. A change shows on the website straight away.</p>
+              <div class="ak-tiles pt-tiles" id="tickerTiles" role="group" aria-label="Which partners to list">
+                <button type="button" class="ak-tile" data-ticker-filter="showing" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Showing</span><span class="ak-tile__says">On the website now</span></button>
+                <button type="button" class="ak-tile" data-ticker-filter="hidden" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Hidden</span><span class="ak-tile__says">Not on the website</span></button>
+                <button type="button" class="ak-tile is-active" data-ticker-filter="all" aria-pressed="true"><span class="ak-tile__n"></span><span class="ak-tile__name">All</span><span class="ak-tile__says">Every partner</span></button>
+              </div>
+              <!-- Adding: editors only (app.js hides the panel from someone who may only look). -->
+              <div class="ak-panel pt-add" id="tickerAddPanel">
+                <h3 class="ak-h3 pt-add__title">Add a partner</h3>
+                <form id="tickerForm" class="pt-add__form" autocomplete="off">
+                  <div class="ak-field pt-add__name">
+                    <label for="tickerName">Partner name</label>
+                    <input id="tickerName" type="text" maxlength="120" placeholder="e.g. Ayrshire Bakery" />
+                  </div>
+                  <button class="admin-btn" type="submit" id="tickerAdd">Add partner</button>
+                </form>
+                <p class="ak-says">Adds the name to the list and shows it on the website straight away.</p>
+                <div id="tickerDupes" aria-live="polite"></div>
+                <p class="ty-status" id="tickerStatus" role="status" aria-live="polite"></p>
+                <details class="ak-fold pt-many" id="tickerManyFold">
+                  <summary>Add several at once</summary>
+                  <div class="ak-fold__body">
+                    <div class="ak-field">
+                      <label for="tickerMany">The names, one on each line</label>
+                      <textarea id="tickerMany" rows="5"></textarea>
+                    </div>
+                    <p class="pt-many__go"><button class="admin-btn ak-btn--plain" type="button" id="tickerManyAdd">Add these names</button>
+                      <span class="ak-says">Adds each name and shows it on the website straight away. A name already on the list is left out.</span></p>
+                    <p class="ty-status" id="tickerManyStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+              </div>
+              <details class="ak-fold pt-preview" id="tickerPreviewFold">
+                <summary><span class="pt-preview__title">How it looks on the website</span> <span class="pt-count" id="tickerCount" aria-live="polite"></span></summary>
+                <div class="ak-fold__body">
+                  <p class="ak-hint">The names that are showing, in the order they scroll across the top of every page. On the Supporters page the same names are listed A to Z.</p>
+                  <div id="tickerPreview" aria-live="polite"></div>
+                  <p class="pt-preview__link"><a class="admin-link" href="/supporters#partners" target="_blank" rel="noopener">See the Supporters page</a></p>
+                </div>
+              </details>
+              <h3 class="ak-h3" id="ticker-list-heading">The list</h3>
+              <div class="pt-tools">
+                <div class="ak-field pt-tools__search">
+                  <label for="tickerSearch">Find a partner</label>
+                  <input id="tickerSearch" type="search" placeholder="Part of the name" autocomplete="off" />
+                </div>
+                <div class="pt-tools__order">
+                  <span class="pt-tools__label" id="tickerSortLabel">Order</span>
+                  <div class="admin-segmented" role="group" aria-labelledby="tickerSortLabel" id="tickerSort">
+                    <button class="admin-seg is-active" type="button" data-ticker-sort="site" aria-pressed="true">Website order</button>
+                    <button class="admin-seg" type="button" data-ticker-sort="newest" aria-pressed="false">Newest first</button>
+                  </div>
+                </div>
+              </div>
+              <p class="pt-listed" id="tickerListed" role="status" aria-live="polite"></p>
+              <div id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="pt-more"><button class="admin-btn ak-btn--plain" type="button" id="tickerMore" hidden>Show more</button></p>
             </section>
 
             <!-- Get involved: the old Events (TASK-453) and Fundraising (TASK-495) tabs as one tab with five

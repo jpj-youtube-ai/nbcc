@@ -178,7 +178,7 @@ const panels: Panel[] = [
     unavailable: "Could not load this.", okBody: { funnel: {}, money: {} },
     okText: "Nothing to report yet." },
   { name: "Supporters ticker", view: "ticker", path: "/api/admin/ticker", target: "tickerTable",
-    unavailable: "Could not load supporters.", okText: "No partners yet." },
+    unavailable: "Could not load the partners.", okText: "No partners yet." },
   { name: "Ball: holds", view: "ball", path: "/api/admin/ball/holds", target: "ballHolds",
     unavailable: "Could not load holds.", okText: "Nothing is held back." },
   { name: "Ball: bookings", view: "ball", path: "/api/admin/ball/bookings", target: "ballBookings",

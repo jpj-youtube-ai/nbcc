@@ -99,6 +99,27 @@
     return (map && map[value]) || String(value);
   }
 
+  // Stories and Partners (2026-11-14): a date as people say it, "3 November 2026", on the day it
+  // was in the UK. Empty for nothing or for something that is not a date.
+  function longDate(value) {
+    if (!value) return "";
+    var d = value instanceof Date ? value : new Date(value);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
+  }
+
+  // Partners (2026-11-14): whether two partner names are the same name, so one already on the list
+  // is not added twice. Capitals, spacing, "&" for "and" and the small marks (a full stop after Ltd,
+  // an apostrophe) do not make a different name; anything else does.
+  function partnerKey(name) {
+    return String(name == null ? "" : name)
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[.,'’`]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   // TASK-241 (admin donations list): one display label + state for a donation's payment, combining
   // payment_status ('pending'/'paid'/'failed') with the separately-tracked refunded_amount_pence. A
   // pending/failed gift shows that state; a settled gift shows Refunded (refund >= amount), Partly
@@ -174,6 +195,8 @@
     fmtDate: fmtDate,
     consentAge: consentAge,
     storyLabel: storyLabel,
+    longDate: longDate,
+    partnerKey: partnerKey,
     paymentLabel: paymentLabel,
     subscriptionStateLabel: subscriptionStateLabel,
     SIGNERS: SIGNERS,

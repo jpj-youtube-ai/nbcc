@@ -78,6 +78,42 @@ export const outreachCreateSchema = z.object({
 
 export type OutreachCreateInput = z.infer<typeof outreachCreateSchema>;
 
+/**
+ * A box on the change form: absent means "leave it as it is", empty means "clear it". The add
+ * form's optionalText cannot tell those apart, which is right for adding and wrong for changing.
+ */
+const changedText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => (v.length === 0 ? null : v))
+    .nullable()
+    .optional();
+
+/**
+ * What the change form on a business's page may send (admin refresh, 2026-11-14). The same pieces
+ * and the same limits as the add form. NOT here, on purpose: the kind of business, where the
+ * details came from and how a sole trader agreed. Who may be emailed turns on those three.
+ */
+export const outreachUpdateSchema = z.object({
+  businessName: z.string().trim().min(2, "the business needs a name").max(200).optional(),
+  contactName: changedText(120),
+  contactEmail: z
+    .union([z.literal("").transform(() => null), z.string().trim().toLowerCase().email().max(200)])
+    .nullable()
+    .optional(),
+  contactPhone: changedText(40),
+  warmIntro: changedText(400),
+  tags: changedText(400),
+  owner: changedText(120),
+  ownerEmail: changedText(200),
+  /** As on the add form: the volunteer has seen the matches and says this is a different business. */
+  acknowledgedMatches: z.boolean().optional(),
+});
+
+export type OutreachUpdateInput = z.infer<typeof outreachUpdateSchema>;
+
 export const outreachOutcomeSchema = z.object({
   outcome: z.enum(OUTCOMES),
   // Only meaningful with "not this year", which is the outcome worth more than a decline - but

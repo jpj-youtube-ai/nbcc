@@ -250,3 +250,72 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     And the outreach business should have been emailed
     When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the outreach response status should be 409
+
+  # Admin refresh (2026-11-14): putting the details of a business right once it is on the list.
+  # Until this there was no way to change anything, so a business added without an address could
+  # never be written to. Editor+, like every other change here.
+  Scenario: a Viewer cannot change the details of a business
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And the business "Zzbdd Stonework" was added without an email address
+    When I change the business email to "hello@zzbddstonework.example" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the outreach response status should be 403
+    And the outreach business should have no email address
+
+  Scenario: an Editor adds the missing address, and it is written to the audit log
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Stonework" was added without an email address
+    When I change the business email to "Hello@ZzbddStonework.example" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach business email should be "hello@zzbddstonework.example"
+    And an audit_log row for action "outreach.details_changed" by actor "editor.admin.bdd@example.com" exists
+
+  Scenario: an address that is not one is refused
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Stonework" was added without an email address
+    When I change the business email to "not an address" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 400
+    And the outreach business should have no email address
+
+  # The checked mark is about one number. A different number has not been checked.
+  Scenario: a changed phone number has to be checked against the register again
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Paving" was added with email "hello@zzbddpaving.example"
+    And the business phone number "01632 960100" has been checked against the register
+    When I change the business phone to "01632 960200" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach business should have no TPS check
+
+  Scenario: the same phone number, typed with different spaces, keeps its check
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Paving" was added with email "hello@zzbddpaving.example"
+    And the business phone number "01632 960100" has been checked against the register
+    When I change the business phone to "01632960100" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the TPS check should be recorded against "bdd@example.com"
+
+  # A decline is an instruction. Changing a name must not be a way round it, in either direction.
+  Scenario: a business cannot be renamed to one that told us no, until a volunteer says it is a different firm
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Bakery" told us not to contact them again
+    And the business "Zzbdd Cakes" was added with email "hello@zzbddcakes.example"
+    When I change the business name to "Zzbdd Bakery Ltd" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 409
+    When I change the business name to "Zzbdd Bakery Ltd" acknowledging the matches as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+
+  Scenario: a business that told us no keeps its name
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Carpets" was added with email "hello@zzbddcarpets.example"
+    When I record the outcome "declined" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I change the business name to "Zzbdd Rugs" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 409
+
+  # The list used to stop at the newest 200, and its counts with it.
+  Scenario: the list says how many businesses there are altogether, however many it was asked for
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd First" was added with email "hello@zzbddfirst.example"
+    And the business "Zzbdd Second" was added with email "hello@zzbddsecond.example"
+    When I ask for 1 business from the outreach list as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach list should hold 1 business
+    And the outreach list should count at least 2 businesses altogether

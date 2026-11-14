@@ -96,11 +96,26 @@ describe("someone who was interested", () => {
     expect(need({ outcome: "no_reply", outcomeAt: daysAgo(9), sentAt: daysAgo(30) })).toBeNull();
   });
 
-  it("offers the phone number where there is one", () => {
-    const withPhone = need({ outcome: "interested", outcomeAt: daysAgo(9), contactPhone: "01292 811015" })!;
-    expect(withPhone.action).toContain("01292 811015");
+  // Admin refresh (2026-11-14): the number used to be offered whether or not anybody had checked it
+  // against the Telephone Preference Service register, while the business page hid it until
+  // somebody had. The list follows the page now: the stricter rule.
+  it("offers the phone number once it has been checked against the register", () => {
+    const checked = need({
+      outcome: "interested", outcomeAt: daysAgo(9), contactPhone: "01632 960123", ctpsCheckedAt: daysAgo(3),
+    })!;
+    expect(checked.action).toBe("Call 01632 960123");
     const without = need({ outcome: "interested", outcomeAt: daysAgo(9), contactPhone: null })!;
     expect(without.action).not.toMatch(/call/i);
+  });
+
+  it("never shows a number nobody has checked, and says to check it first", () => {
+    const unchecked = need({ outcome: "interested", outcomeAt: daysAgo(9), contactPhone: "01632 960123" })!;
+    expect(unchecked.action).not.toContain("01632");
+    expect(unchecked.action).toBe("Check their number against the register, then call");
+    const never = need({
+      outcome: "interested", outcomeAt: daysAgo(9), contactPhone: "01632 960123", ctpsCheckedAt: null,
+    })!;
+    expect(never.action).not.toContain("01632");
   });
 
   // Straight after they replied is too soon to chase; a week later is about right.

@@ -103,7 +103,12 @@ import {
   setOutreachOutcome,
   addOutreachNote,
   listOutreachNotes,
+  listOutreachForCounts,
+  latestOutreachNotes,
+  getOutreachSupporter,
+  updateOutreachDetails,
 } from "../db/outreach";
+import { buildListCounts } from "../outreach/list-counts";
 import { buildOutreachEmail } from "../outreach/invitation-email";
 import { buildOutreachNudge } from "../outreach/nudge-email";
 import { sendOutreachInvitation } from "../clients/email";
@@ -120,7 +125,7 @@ import {
 } from "../outreach/reports";
 import { similarity, normaliseBusinessName } from "../outreach/matching";
 import { parsePastedBusinesses, summarisePaste, parseTags } from "../outreach/paste";
-import { outreachCreateSchema } from "../outreach/model";
+import { outreachCreateSchema, outreachUpdateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry, countUnanswered } from "../db/contact";
 import { repliedSummary, waitingLabel } from "../contact/enquiry-summary";
@@ -2773,11 +2778,31 @@ export async function postAdminOutreach(req: Request, res: Response): Promise<Re
   }
 }
 
-// GET /api/admin/outreach — the list behind the landing counts.
+// GET /api/admin/outreach?limit=&offset= — the list, a page at a time, newest first.
+//
+// It used to send the newest 200 and nothing else, and the screen counted what it was sent, so on
+// a longer list both the list and its counts went quietly wrong (admin refresh, 2026-11-14). Now:
+// `results` is the page asked for (200 unless told otherwise, 500 at most), each with its latest
+// note; `total` is how many businesses there are; `counts` is worked out over every one of them,
+// not the page (src/outreach/list-counts.ts), with "mine" meaning whoever is signed in.
 export async function getAdminOutreach(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  const claims = await authorizeSection(req, res, "outreach", "view");
+  if (!claims) return;
+  // A whole number or the default: "lots" and "1.5" are not a page anybody asked for.
+  const whole = (v: unknown, fallback: number) => {
+    const n = typeof v === "string" && /^\d+$/.test(v) ? Number(v) : NaN;
+    return Number.isSafeInteger(n) ? n : fallback;
+  };
+  const limit = Math.min(Math.max(whole(req.query.limit, 200), 1), 500);
+  const offset = whole(req.query.offset, 0);
   try {
-    return res.status(200).json({ results: await listOutreach() });
+    const [rows, all] = await Promise.all([listOutreach(limit, offset), listOutreachForCounts()]);
+    const latest = await latestOutreachNotes(rows.map((r) => r.id));
+    return res.status(200).json({
+      results: rows.map((r) => ({ ...r, latestNote: latest.get(r.id) ?? null })),
+      total: all.length,
+      counts: buildListCounts(all, claims.email),
+    });
   } catch (err) {
     console.error("outreach list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
@@ -2887,7 +2912,11 @@ export async function getAdminOutreachOne(req: Request, res: Response): Promise<
   try {
     const [business, notes] = await Promise.all([getOutreach(id), listOutreachNotes(id)]);
     if (!business) return res.status(404).json({ error: "Unknown business" });
-    return res.status(200).json({ business, notes });
+    // What to do next, by the very rule that fills the to do list, so the page and the list can
+    // never say different things about one business; and the supporter it became, by name, when
+    // a volunteer has linked one (admin refresh, 2026-11-14).
+    const supporter = business.donorId ? await getOutreachSupporter(business.donorId) : null;
+    return res.status(200).json({ business, notes, todo: whatIsNeeded(business, new Date()), supporter });
   } catch (err) {
     console.error("outreach read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
@@ -3167,7 +3196,110 @@ export async function postAdminOutreachCtps(req: Request, res: Response): Promis
   }
 }
 
+// PATCH /api/admin/outreach/:id — change a business's details (admin refresh, 2026-11-14).
+//
+// Until this there was no way to correct anything once a business was added, so a "No address" row
+// on the to do list ("Find an address, or give them a call") could never be cleared. Editor+, like
+// every other change here, and audited.
+//
+// What may change: name, contact, email, phone, who knows them, who looks after them, tags. A box
+// that is not sent is left as it is; one sent empty is cleared. What may NOT: the kind of
+// business, where the details came from, how a sole trader agreed, and anything about what has
+// been sent. Who may be emailed turns on those, and this route must not be a way round them.
+//
+// Two rules ride along:
+// - Do not contact. A new name or email goes through the same matcher as a new business. If the
+//   change newly matches a business that said no, it is refused until the volunteer says it is a
+//   different business, exactly as on the add form. And a business that itself said no keeps its
+//   name and email: those are what the matcher knows it by, so changing them would hide the no.
+// - The Telephone Preference Service check. The checked mark is about one number. A different
+//   number clears it, so the new one is hidden until somebody has checked it.
+export async function patchAdminOutreach(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "outreach", "edit");
+  if (!claims) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+
+  const parsed = outreachUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const field = String(parsed.error.issues[0]?.path[0] ?? "");
+    const error =
+      field === "businessName"
+        ? "The business needs a name"
+        : field === "contactEmail"
+          ? "That email address does not look right"
+          : "One of those is too long";
+    return res.status(400).json({ error, details: parsed.error.issues });
+  }
+  const sent = parsed.data;
+
+  try {
+    const business = await getOutreach(id);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+
+    // Absent means "as it was". Tags arrive as the one box of words the add form uses.
+    const pick = <T>(value: T | undefined, was: T): T => (value === undefined ? was : value);
+    const next = {
+      businessName: pick(sent.businessName, business.businessName),
+      contactName: pick(sent.contactName, business.contactName),
+      contactEmail: pick(sent.contactEmail, business.contactEmail),
+      contactPhone: pick(sent.contactPhone, business.contactPhone),
+      warmIntro: pick(sent.warmIntro, business.warmIntro),
+      owner: pick(sent.owner, business.owner),
+      ownerEmail: pick(sent.ownerEmail, business.ownerEmail),
+      tags: sent.tags === undefined ? business.tags : parseTags(sent.tags ?? ""),
+    };
+
+    const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+    const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => !same(next[k], business[k]));
+    // Nothing different: nothing to write, and nothing worth a line in the audit log.
+    if (changed.length === 0) return res.status(200).json({ business });
+
+    const identityChanged = changed.includes("businessName") || changed.includes("contactEmail");
+    if (identityChanged && business.outcome === "declined") {
+      return res.status(409).json({
+        error: "This business asked us not to contact them again, so its name and email address are kept as they are",
+      });
+    }
+    if (identityChanged) {
+      const known = (await listKnownBusinesses()).filter((k) => k.id !== id);
+      const refusals = (candidate: { businessName: string; contactEmail: string | null }) =>
+        findMatches(candidate, known).filter((m) => m.source === "declined");
+      // Only what this change brings: a similar name that was acknowledged when the business was
+      // added is not asked about again every time somebody corrects its email address. Keyed by
+      // how sure the match is as well as which business it is, so a name that merely looked like
+      // one that said no, and is now changed to exactly that name, is asked about again.
+      const key = (m: { id: number; confidence: string }) => `${m.id}:${m.confidence}`;
+      const before = new Set(refusals(business).map(key));
+      const fresh = refusals(next).filter((m) => !before.has(key(m)));
+      if (fresh.length > 0 && sent.acknowledgedMatches !== true) {
+        return res.status(409).json({ error: "This business has told us not to contact them again", matches: fresh });
+      }
+    }
+
+    // The same number retyped with different spaces is the same number. Anything else is not.
+    const digits = (v: string | null) => (v ?? "").replace(/\s+/g, "");
+    const tpsCheckCleared = digits(next.contactPhone) !== digits(business.contactPhone);
+
+    const row = await updateOutreachDetails(id, next, tpsCheckCleared);
+    if (!row) return res.status(404).json({ error: "Unknown business" });
+    await recordAudit({
+      actor: claims.email,
+      action: "outreach.details_changed",
+      entity: "business_outreach",
+      entityId: id,
+      // Which details, not what they were or are: the audit log is not a second copy of the list.
+      data: { businessName: row.businessName, changed, tpsCheckCleared },
+    });
+    return res.status(200).json({ business: row });
+  } catch (err) {
+    console.error("outreach details failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/outreach/:id", getAdminOutreachOne);
+adminRouter.patch("/api/admin/outreach/:id", patchAdminOutreach);
 adminRouter.get("/api/admin/outreach/:id/disclosure", getAdminOutreachDisclosure);
 adminRouter.post("/api/admin/outreach/:id/ctps", postAdminOutreachCtps);
 // POST /api/admin/outreach/:id/nudge — the one follow-up.

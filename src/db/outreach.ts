@@ -217,6 +217,101 @@ export async function listOutreach(limit = 200, offset = 0): Promise<OutreachRow
 }
 
 /**
+ * Three columns of every business, for the counts on the screen (admin refresh, 2026-11-14). The
+ * list is sent a page at a time, so counting what was sent went wrong past the first page; the
+ * counting itself is the pure rule in src/outreach/list-counts.ts.
+ */
+export async function listOutreachForCounts(): Promise<
+  { outcome: string | null; sentAt: string | null; ownerEmail: string | null }[]
+> {
+  const res = await pool.query(`SELECT outcome, sent_at, owner_email FROM business_outreach`);
+  return res.rows.map((r) => ({
+    outcome: (r.outcome as string) ?? null,
+    sentAt: (r.sent_at as string) ?? null,
+    ownerEmail: (r.owner_email as string) ?? null,
+  }));
+}
+
+/** The newest note on each of these businesses, keyed by the business. One query for the page. */
+export async function latestOutreachNotes(
+  ids: number[],
+): Promise<Map<number, { body: string; author: string; createdAt: string }>> {
+  const latest = new Map<number, { body: string; author: string; createdAt: string }>();
+  if (ids.length === 0) return latest;
+  const res = await pool.query(
+    `SELECT DISTINCT ON (outreach_id) outreach_id, author, body, created_at
+       FROM business_outreach_notes
+      WHERE outreach_id = ANY($1::int[])
+      ORDER BY outreach_id, created_at DESC`,
+    [ids],
+  );
+  for (const r of res.rows) {
+    latest.set(Number(r.outreach_id), { body: r.body, author: r.author, createdAt: r.created_at });
+  }
+  return latest;
+}
+
+/** The donor a business became, by the name a volunteer would know it by. Null when it has gone. */
+export async function getOutreachSupporter(donorId: number): Promise<{ id: number; name: string } | null> {
+  const res = await pool.query(
+    `SELECT id, COALESCE(NULLIF(business_name, ''), full_name) AS name FROM donors WHERE id = $1`,
+    [donorId],
+  );
+  return res.rows[0] ? { id: Number(res.rows[0].id), name: String(res.rows[0].name ?? "") } : null;
+}
+
+/** What a volunteer may put right about a business once it is on the list. */
+export interface OutreachDetails {
+  businessName: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  warmIntro: string | null;
+  owner: string | null;
+  ownerEmail: string | null;
+  tags: string[];
+}
+
+/**
+ * Change a business's details (admin refresh, 2026-11-14).
+ *
+ * `clearTpsCheck` is set when the phone number changed. The checked mark says "somebody checked
+ * THIS number against the Telephone Preference Service register", so it cannot outlive the
+ * number: it is cleared in the same statement, and the new number is hidden until it is checked.
+ *
+ * Deliberately not here: the kind of business, where the details came from and how a sole trader
+ * agreed to hear from us. Who may be emailed turns on those, and they are not details to tidy.
+ */
+export async function updateOutreachDetails(
+  id: number,
+  d: OutreachDetails,
+  clearTpsCheck: boolean,
+): Promise<OutreachRow | null> {
+  const res = await pool.query(
+    `UPDATE business_outreach
+        SET business_name = $2, contact_name = $3, contact_email = $4, contact_phone = $5,
+            warm_intro = $6, owner = $7, owner_email = $8, tags = $9,
+            ctps_checked_at = CASE WHEN $10::boolean THEN NULL ELSE ctps_checked_at END,
+            ctps_checked_by = CASE WHEN $10::boolean THEN NULL ELSE ctps_checked_by END
+      WHERE id = $1
+      RETURNING ${ROW_COLUMNS}`,
+    [
+      id,
+      d.businessName,
+      d.contactName,
+      d.contactEmail ? d.contactEmail.toLowerCase() : null,
+      d.contactPhone,
+      d.warmIntro,
+      d.owner,
+      d.ownerEmail,
+      d.tags,
+      clearTpsCheck,
+    ],
+  );
+  return res.rows[0] ? toRow(res.rows[0]) : null;
+}
+
+/**
  * Record that somebody checked this number against the TPS register (TASK-412).
  *
  * Once only: a second confirmation would overwrite the name and date of the person who actually

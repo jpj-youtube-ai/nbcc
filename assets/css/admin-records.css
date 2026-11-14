@@ -1,0 +1,6 @@
+/* NBCC admin: the records: Audit, Email audit, Search, Notifications and Analytics, in the kit's look (assets/css/admin-kit.css).
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md.
+ *
+ * Only what the kit does not already give these screens. The kit's house rules hold here too: no
+ * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
+ * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */

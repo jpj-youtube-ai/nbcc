@@ -76,12 +76,17 @@ describe("the kit's stylesheet keeps the house rules", () => {
       expect(at, start).toBeGreaterThan(-1);
       return noComments.slice(at, noComments.indexOf("}", at));
     };
-    [".admin-view.ak .admin-btn, .ak-btn {", ".admin-view.ak .admin-seg {", ".ak-part-btn {", ".admin-view.ak .admin-page-btn {", ".admin-view.ak .admin-back {"].forEach(
+    [".admin-view.ak .admin-btn, .ak-btn {", ".admin-view.ak .btn {", ".admin-view.ak .admin-seg {", ".ak-part-btn {", ".admin-view.ak .admin-page-btn {", ".admin-view.ak .admin-back {"].forEach(
       (start) => expect(rule(start)).toMatch(/min-height:\s*4[4-9]px/),
     );
     expect(rule(".admin-view.ak :where(input:not(")).toMatch(/min-height:\s*46px/);
     // 16px or more in a field, or an iPhone zooms the page in when it is tapped.
     expect(rule(".admin-view.ak :where(input:not(")).toContain("font-size: 1rem");
+  });
+
+  it("draws the public site's pill button as the look's own, with no arrow", () => {
+    expect(noComments).toContain('.admin-view.ak .btn::after { content: none; }');
+    expect(noComments).toContain(".admin-view.ak .btn-primary, .admin-view.ak .btn-holly { background: var(--ov-holly);");
   });
 
   it("pins the bar of parts on a laptop and lets it sit in the page on a phone", () => {

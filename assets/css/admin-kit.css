@@ -63,6 +63,16 @@
 .admin-view.ak .admin-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: 0 0 14px; padding: 0 14px 0 10px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.9rem; font-weight: 600; }
 .admin-view.ak .admin-back:hover { background: var(--ov-hover); color: var(--ov-ink); }
 .admin-view.ak .admin-back:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+/* The public site's pill button (.btn, with its arrow) is on many admin screens. In the look it is the
+   same chunky piece: .btn-primary is the main thing to press, .btn-ghost and a bare .btn the others. */
+.admin-view.ak .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 0; padding: 8px 18px; border: var(--ov-line); border-radius: 14px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-ink); font: inherit; font-size: 0.95rem; font-weight: 600; line-height: 1.2; text-align: center; text-decoration: none; cursor: pointer; }
+.admin-view.ak .btn::after { content: none; }
+.admin-view.ak .btn:hover { background: var(--ov-hover); color: var(--ov-ink); transform: none; }
+.admin-view.ak .btn:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+.admin-view.ak .btn:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
+.admin-view.ak .btn[hidden] { display: none; }
+.admin-view.ak .btn-primary, .admin-view.ak .btn-holly { background: var(--ov-holly); color: var(--ov-on-dark); }
+.admin-view.ak .btn-primary:hover, .admin-view.ak .btn-holly:hover { background: var(--ov-holly-dark); color: var(--ov-on-dark); }
 .ak-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
 /* What a button does, said under it. */
 .ak-says { display: block; max-width: 62ch; margin: 6px 0 0; font-size: 0.86rem; line-height: 1.45; color: var(--ov-soft); }
@@ -179,6 +189,19 @@ button.ak-tile:active, a.ak-tile:active { transform: translate(2px, 3px); box-sh
 .admin-view.ak .admin-action-status:empty, .ak-status:empty { margin: 0; }
 .admin-view.ak .admin-action-status.is-error, .ak-status.is-error { color: var(--ov-crimson); font-weight: 700; }
 .admin-view.ak .admin-action-status.is-ok, .ak-status.is-ok { color: var(--ov-holly); }
+/* The Thank you screen's row of controls, status line and pills are borrowed by many screens. */
+.admin-view.ak .ty-controls { gap: 10px 12px; font-size: 0.95rem; color: var(--ov-text); }
+.admin-view.ak .ty-controls input[type="text"] { width: 6rem; min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); color: var(--ov-text); font-size: 1rem; }
+.admin-view.ak .ty-status { margin: 12px 0 0; font-size: 0.95rem; font-weight: 600; color: var(--ov-soft); overflow-wrap: anywhere; }
+.admin-view.ak .ty-status:empty { margin: 0; min-height: 0; }
+.admin-view.ak .ty-status.is-ok { color: var(--ov-holly); }
+.admin-view.ak .ty-status.is-error { color: var(--ov-crimson); font-weight: 700; }
+.admin-view.ak .ty-pill { padding: 1px 9px; border: 2px solid currentColor; border-radius: 999px; background: var(--ov-card); color: var(--ov-maroon); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em; line-height: 1.5; text-transform: uppercase; }
+.admin-view.ak .ty-pill-ready { color: var(--ov-holly); background: var(--ov-holly-soft); }
+.admin-view.ak .ty-pill-thanked, .admin-view.ak .ty-pill-blocked { color: var(--ov-soft); background: var(--ov-card); }
+.admin-view.ak .ty-pill-ga { color: var(--ov-gold-ink); background: var(--ov-gold-soft); }
+.admin-view.ak .ty-field label { margin: 0 0 6px; font-family: var(--ov-head); font-weight: 700; font-size: 0.95rem; line-height: 1.2; color: var(--ov-ink); }
+.admin-view.ak .ty-field input, .admin-view.ak .ty-field textarea, .admin-view.ak .ty-field select { min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); color: var(--ov-text); font-size: 1rem; }
 /* Nothing here yet, still fetching, or could not be read: a dashed box, never a bare line of grey. */
 .admin-view.ak .admin-empty, .admin-view.ak .admin-unavailable, .ak-empty { margin: 0; padding: 24px 20px; border: 2.5px dashed var(--ov-rule); border-radius: 18px; background: var(--ov-warm); color: var(--ov-soft); font-size: 0.96rem; line-height: 1.5; text-align: center; }
 .admin-view.ak .admin-loading { color: var(--ov-soft); }
@@ -236,7 +259,7 @@ button.ak-tile:active, a.ak-tile:active { transform: translate(2px, 3px); box-sh
 .ak-part-intro { margin: 0; padding: 16px 0 14px; max-width: 72ch; color: var(--ov-soft); font-size: 0.94rem; line-height: 1.5; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .admin-view.ak .admin-btn, .ak-btn, .admin-view.ak .admin-seg, .ak-tile, .ak-row, .ak-part-btn, .admin-view.ak .admin-page-btn, .admin-view.ak .admin-back { transition: transform 0.12s var(--ov-ease); }
+  .admin-view.ak .admin-btn, .ak-btn, .admin-view.ak .btn, .admin-view.ak .admin-seg, .ak-tile, .ak-row, .ak-part-btn, .admin-view.ak .admin-page-btn, .admin-view.ak .admin-back { transition: transform 0.12s var(--ov-ease); }
   .ak-item__chev::before { transition: transform 0.22s var(--ov-ease); }
   .ak-item__more:not([hidden]) { animation: ak-open 0.26s var(--ov-ease); }
   @keyframes ak-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }

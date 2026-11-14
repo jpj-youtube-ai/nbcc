@@ -7201,7 +7201,7 @@ own. For the twenty or so screens left, the look lives once, in a kit, and a scr
 - **`assets/css/admin-kit.css`**, loaded after `admin.css` and `admin-overview.css` (it uses that file's
   `--ov-` colours). A screen takes the look by adding the class `ak` to its
   `<section class="admin-view">`. Inside it the admin's old shared pieces are redrawn (the title and its
-  one plain sentence, `.admin-btn`, `.admin-seg`, `.admin-table`, `.admin-pill`, `.admin-dl`, fields, the
+  one plain sentence, `.admin-btn` and the public site's `.btn`, `.admin-seg`, `.admin-table`, `.admin-pill`, `.admin-dl`, fields, the
   pager, `.admin-empty`, `.admin-action-status`, `.admin-fold`), and the `.ak-` parts are there to build
   with: tiles (`.ak-tiles`), cards (`.ak-card`, `.ak-panel`), a card that is a button (`.ak-row`), a card
   that opens where it is (`.ak-item`), marks (`.ak-mark`), facts (`.ak-facts`), notices (`.ak-notice`),

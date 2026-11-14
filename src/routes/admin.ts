@@ -17,6 +17,9 @@ import {
   listAwaitingDeclarationDonations,
   listGasdsDeadlineDonations,
   markGasdsClaimed,
+  unmarkGasdsClaimed,
+  listGasdsClaimedLately,
+  listClaimBatchDonations,
   listDeclarationsDueReview,
   listDonations,
   listClaimBatches,
@@ -1951,9 +1954,25 @@ export async function postAdminAssignBatchDonations(req: Request, res: Response)
   return res.status(200).json({ assigned, failed });
 }
 
+// GET /api/admin/claim-batches/:id/donations (admin refresh, 2026-11-14): the donations in one batch,
+// for the Claims screen to show in place when a batch is opened. A read → Viewer and up, as the
+// other Claims lists are. Changes nothing: taking a donation out of a batch is not offered.
+export async function getAdminClaimBatchDonations(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "claims", "view"))) return;
+  const id = claimBatchId(req, res);
+  if (id == null) return;
+  try {
+    return res.status(200).json({ results: await listClaimBatchDonations(id) });
+  } catch (err) {
+    console.error("admin claim-batch donations list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.post("/api/admin/claim-batches", postAdminCreateClaimBatch);
 adminRouter.get("/api/admin/claims/eligible", getAdminEligibleForClaim);
 adminRouter.post("/api/admin/claim-batches/:id/donations", postAdminAssignBatchDonations);
+adminRouter.get("/api/admin/claim-batches/:id/donations", getAdminClaimBatchDonations);
 
 // --- Admin retention + awaiting-declaration queues (REQ-046/REQ-049 · TASK-110) -----------------
 // Two read-only admin queues (Viewer and up): declarations whose HMRC six-year retention window is
@@ -1984,7 +2003,10 @@ export async function getAdminAwaitingDeclaration(req: Request, res: Response): 
 export async function getAdminGasdsDeadline(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "gasds", "view"))) return;
   try {
-    return res.status(200).json({ results: await listGasdsDeadlineDonations() });
+    // ?all=1 (admin refresh, 2026-11-14): every small donation not yet claimed, not only those near
+    // or past the deadline. Without it the answer is as it always was.
+    const all = req.query?.all === "1";
+    return res.status(200).json({ results: await listGasdsDeadlineDonations(new Date(), { all }) });
   } catch (err) {
     console.error("admin gasds-deadline queue failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
@@ -2043,8 +2065,41 @@ export async function getAdminGasdsPool(req: Request, res: Response): Promise<Re
   }
 }
 
+// Undo a GASDS "claimed" mark (admin refresh, 2026-11-14) — Editor+, as marking is. Clears
+// gasds_claimed_at so the gifts come back onto the deadline queue, and writes its own audit row
+// (gasds.unclaimed). Body: { donationIds: number[] }.
+export async function postAdminUnmarkGasdsClaimed(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "gasds", "edit");
+  if (!claims) return;
+  const parsed = gasdsMarkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid GASDS undo request", details: parsed.error.flatten() });
+  }
+  try {
+    const result = await unmarkGasdsClaimed(parsed.data.donationIds, actorOf(claims));
+    return res.status(200).json({ unclaimed: result.unclaimedIds.length, unclaimedIds: result.unclaimedIds });
+  } catch (err) {
+    console.error("admin gasds unmark-claimed failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/queues/gasds-claimed (admin refresh, 2026-11-14): the latest marks, who made them
+// and when, and which of their donations an Undo would clear. Read-only, Viewer+.
+export async function getAdminGasdsClaimed(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "gasds", "view"))) return;
+  try {
+    return res.status(200).json({ results: await listGasdsClaimedLately() });
+  } catch (err) {
+    console.error("admin gasds-claimed list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/queues/gasds-deadline", getAdminGasdsDeadline);
 adminRouter.post("/api/admin/queues/gasds-deadline/mark-claimed", postAdminMarkGasdsClaimed);
+adminRouter.post("/api/admin/queues/gasds-deadline/unmark-claimed", postAdminUnmarkGasdsClaimed);
+adminRouter.get("/api/admin/queues/gasds-claimed", getAdminGasdsClaimed);
 adminRouter.get("/api/admin/queues/gasds-pool", getAdminGasdsPool);
 adminRouter.get("/api/admin/queues/declaration-review", getAdminDeclarationReview);
 

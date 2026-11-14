@@ -32,6 +32,39 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     And the admin response field "claimed" should be "1"
     And the GASDS gift is marked claimed
 
+  Scenario: an Editor undoes a GASDS mark from what was marked lately
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the admin donor has a GASDS-eligible small gift collected "2019-05-01"
+    When the admin marks the GASDS gift claimed as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I GET the admin queue "gasds-claimed" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the latest GASDS mark can still undo the gift
+    When the admin undoes the GASDS mark as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the admin response field "unclaimed" should be "1"
+    And the GASDS gift is no longer marked claimed
+    When I GET the admin queue "gasds-claimed" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the latest GASDS mark has nothing left to undo
+
+  Scenario: a Viewer cannot undo a GASDS mark
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And the admin donor has a GASDS-eligible small gift collected "2019-05-01"
+    When the admin marks the GASDS gift claimed as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And the admin undoes the GASDS mark as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 403
+    And the GASDS gift is marked claimed
+
+  Scenario: a small gift far from its deadline is listed only when every unclaimed one is asked for
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And the admin donor has a GASDS-eligible small gift collected "2099-05-01"
+    When I GET the admin path "/api/admin/queues/gasds-deadline" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+    And the admin results do not include the GASDS gift
+    When I GET the admin path "/api/admin/queues/gasds-deadline?all=1" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+    And the admin results include the GASDS gift flagged "later"
+
   Scenario: an Editor corrects a donor's declaration address (amend, not revise)
     Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
     And the admin donor has an active Gift Aid declaration
@@ -82,6 +115,7 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
       | awaiting-declaration |
       | gasds-deadline       |
       | declaration-review   |
+      | gasds-claimed        |
 
   Scenario Outline: the admin queues reject a missing token with 401
     When I GET the admin queue "<queue>" without a token
@@ -93,6 +127,7 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
       | awaiting-declaration |
       | gasds-deadline       |
       | declaration-review   |
+      | gasds-claimed        |
 
   Scenario Outline: a Viewer can read the dashboard lists (REQ-066)
     Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
@@ -142,3 +177,15 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     When I export the claim batch to CSV as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the admin response status should be 200
     And the exported CSV has at least 1 data row
+    When I GET the donations in the claim batch as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the claim batch lists the eligible donation
+
+  Scenario: a Viewer can see the donations in a claim batch, and nobody can without signing in
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And an open claim batch
+    When I GET the donations in the claim batch as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+    And the claim batch lists no donations
+    When I GET the donations in the claim batch without a token
+    Then the admin response status should be 401

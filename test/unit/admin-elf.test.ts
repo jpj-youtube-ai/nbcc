@@ -5,9 +5,10 @@ import { resolve } from "node:path";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
 // numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf, dbAlerts, dbPhotos, sms, mailer, worker } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors, dbPractice, dbGame, pictureOf, dbAlerts, dbPhotos, dbPrize, sms, mailer, worker } = vi.hoisted(() => ({
   worker: { runElfTick: vi.fn(), realElfDeps: vi.fn() },
   dbPhotos: { countPhotosWaiting: vi.fn() },
+  dbPrize: { countEntries: vi.fn() },
   dbAlerts: { listHeadElves: vi.fn(), setMyAlerts: vi.fn(), lastAlert: vi.fn(), recordAlert: vi.fn() },
   sms: { sendText: vi.fn(), on: true },
   mailer: { sendElfTestAlert: vi.fn() },
@@ -39,6 +40,7 @@ vi.mock("../../src/db/elf-practice", () => dbPractice);
 vi.mock("../../src/db/elf-game", () => dbGame);
 vi.mock("../../src/db/elf-alerts", () => dbAlerts);
 vi.mock("../../src/db/elf-photos", () => dbPhotos);
+vi.mock("../../src/db/elf-grand-prize", () => dbPrize);
 vi.mock("../../src/clients/sms", () => ({ sendText: sms.sendText, get smsConfigured() { return sms.on; } }));
 vi.mock("../../src/clients/email", () => mailer);
 // The elf worker's tick hook runs the worker's own tick; here it is watched, never run.
@@ -123,12 +125,13 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame), ...Object.values(dbAlerts), ...Object.values(dbPhotos), sms.sendText, ...Object.values(mailer), ...Object.values(worker)]) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors), ...Object.values(dbPractice), ...Object.values(dbGame), ...Object.values(dbAlerts), ...Object.values(dbPhotos), ...Object.values(dbPrize), sms.sendText, ...Object.values(mailer), ...Object.values(worker)]) f.mockReset();
   sms.on = true;
   pictureOf.mockReset();
   pictureOf.mockReturnValue(null);
   dbGame.familyWordTries.mockResolvedValue([]);
   dbPhotos.countPhotosWaiting.mockResolvedValue(0);
+  dbPrize.countEntries.mockResolvedValue(0);
   db.getElfSettings.mockResolvedValue(ON);
   dbDoors.ensureElfDoors.mockResolvedValue(undefined);
   dbDoors.listElfDoors.mockResolvedValue([]);
@@ -216,6 +219,20 @@ describe("HQ in the admin", () => {
     dbPhotos.countPhotosWaiting.mockResolvedValue(3);
     const res = await run(getAdminElfHq, req("viewer", {}, HEAD_ELF));
     expect((res.body as { photosWaiting: number }).photosWaiting).toBe(3);
+  });
+
+  // Plan 2c-2: the count on the Grand prize tile, the pictures sent in for this year's grand prize.
+  it("says how many pictures have been sent in for this year's grand prize", async () => {
+    dbPrize.countEntries.mockResolvedValue(4);
+    const res = await run(getAdminElfHq, req("viewer", {}, HEAD_ELF));
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { grandPrizeEntries: number }).grandPrizeEntries).toBe(4);
+    expect(dbPrize.countEntries).toHaveBeenCalledWith(2026);
+  });
+
+  it("says none when no picture has been sent in", async () => {
+    const res = await run(getAdminElfHq, req("viewer", {}, HEAD_ELF));
+    expect((res.body as { grandPrizeEntries: number }).grandPrizeEntries).toBe(0);
   });
 
   it("counts the doors still to come that are not ready, from the clock", async () => {

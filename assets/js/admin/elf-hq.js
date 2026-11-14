@@ -1,10 +1,10 @@
 /* NBCC Elf Detective School: Head Elf HQ, its own admin section (Admin > Content > Elf Detective School,
  * #view-elf in admin.html). Design: docs/superpowers/specs/2026-11-05-elf-admin-design.md.
  *
- * The school runs itself; this is where head elves (Jodie, the Head Elf, and whoever is given the "elf"
+ * Elf Detective School runs itself; this is where head elves (the Head Elf, and whoever is given the "elf"
  * section in the Team matrix) see that it is going right and step in. A game's menu screen: big tiles
- * for HQ, Families, Money and Settings, each opening its part below. The open part is remembered for
- * the browser tab, as the admin remembers its open section.
+ * for HQ, Families, Doors, Finds, Grand prize, Money and Settings, each opening its part below. The open
+ * part is remembered for the browser tab, as the admin remembers its open section.
  *
  * Its own file beside app.js, as assets/js/admin/red-bag-list.js is: it fills #elfHq, reads the signed
  * in person's token the way app.js keeps it, and asks /api/admin/elf/* (src/routes/admin-elf.ts).
@@ -26,6 +26,7 @@
     { id: "families", name: "Families", icon: PAPER + "icons/icon-friend.webp" },
     { id: "doors", name: "Doors", icon: PAPER + "icons/icon-frame.webp" },
     { id: "finds", name: "Finds", icon: PAPER + "icons/icon-camera.webp" },
+    { id: "prize", name: "Grand prize", icon: PAPER + "icons/icon-surprise.webp" },
     { id: "money", name: "Money", coin: true },
     { id: "settings", name: "Settings", icon: PAPER + "icons/icon-paint.webp" },
   ];
@@ -156,14 +157,15 @@
     mount.textContent = "";
     mount.appendChild(root);
 
-    /** A count on a tile (the names waiting for a tick on Families), or none. */
-    function tileCount(id, n) {
+    /** A count on a tile (the names waiting for a tick on Families), or none. A screen reader hears the tile's
+     *  name, the count and its `words`: "Families, 6 waiting", or the Grand prize's "3 pictures". */
+    function tileCount(id, n, words) {
       var c = counts[id];
       if (!c) return;
       var name = TABS.filter(function (t) { return t.id === id; })[0].name;
       c.hidden = !(n > 0);
       c.textContent = n > 0 ? String(n) : "";
-      if (n > 0) tabs[id].setAttribute("aria-label", name + ", " + n + " waiting");
+      if (n > 0) tabs[id].setAttribute("aria-label", name + ", " + n + " " + (words || "waiting"));
       else tabs[id].removeAttribute("aria-label");
     }
 
@@ -180,7 +182,9 @@
       if (id === "doors" && !doors.list && !doors.asking) loadDoors();
       if (id === "doors") fitFields(); // boxes drawn while this tab was hidden had no height to measure
       if (id === "finds") loadFinds();
-      if (id === "settings" && data) { loadPractice(); loadAlerts(); }
+      if (id === "prize") loadPrizeEntries();
+      else stopCloseWait(); // the Grand prize part's wait for the close ends as its tile is left
+      if (id === "settings" && data) { loadPractice(); loadAlerts(); loadGrandPrize(); }
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -1086,8 +1090,9 @@
       return doorsSheet.querySelector('[data-part="' + key + '"] .hq-status');
     }
 
+    /** A field: its label, its box, and the words under it (one hint, or a list of them). */
     function doorField(key, label, input, hint, wide) {
-      return el("div", { class: "hq-field" + (wide ? " is-wide" : "") }, [el("label", { for: "hqDoor-" + key, text: label }), input, hint || null]);
+      return el("div", { class: "hq-field" + (wide ? " is-wide" : "") }, [el("label", { for: "hqDoor-" + key, text: label }), input].concat(hint || []));
     }
     /** A box for one line, a time, or (kind "area") words that can run long. */
     function doorInput(key, value, max, kind, readonly) {
@@ -1130,6 +1135,14 @@
       var d = doors.sheet;
       h.className = "hq-hint " + (d.closesTooSoon ? "is-error" : "is-ok");
       h.textContent = d.closesTooSoon ? "It closes less than an hour after the last clue." : "Open past " + hourAfter(d.evening.clue3) + ", an hour after the last clue.";
+      // Door 24 against the grand prize entries: the server's warning (DoorSheet.grandPrize), or nothing. It is
+      // drawn again from every sheet a save answers, as a new time of the evening can change it too.
+      var w = doorsSheet.querySelector("[data-prize]");
+      if (w) {
+        w.className = d.grandPrize ? "hq-hint is-error" : "hq-hint";
+        w.textContent = d.grandPrize || "";
+        w.hidden = !d.grandPrize;
+      }
     }
 
     /** The names that also count, as chips, each with its remove button (for someone who may edit). */
@@ -1594,7 +1607,7 @@
         });
         row.appendChild(b);
       });
-      var tickRow = function (path, id, words, at, by) {
+      var tickRow = function (path, id, words, at, by, name) {
         var box = el("input", { type: "checkbox", id: id, name: id, disabled: !doors.canEdit });
         box.checked = !!at;
         box.addEventListener("change", function () {
@@ -1610,17 +1623,19 @@
               say(said, e.message, false);
             });
         });
-        var who = at ? "Ticked by " + (by || "staff") + " on " + dayWords(at) : "";
-        return el("div", { class: "hq-dtick" }, [el("label", { class: "hq-tickbox", for: id }, [box, el("span", { text: words })]), who ? el("span", { class: "hq-hint", text: who }) : null]);
+        // The head elf by name, as the server gives it (their full name, the email when it is blank); an answer
+        // with no name yet still says who by the email.
+        var line = at ? "Ticked by " + (name || who(by) || "staff") + " on " + dayWords(at) : "";
+        return el("div", { class: "hq-dtick" }, [el("label", { class: "hq-tickbox", for: id }, [box, el("span", { text: words })]), line ? el("span", { class: "hq-hint", text: line }) : null]);
       };
       return el("section", { class: "hq-dpart", "data-part": "prints" }, [
         el("header", {}, [el("h3", { class: "hq-h3", text: "Print and drop off" })]),
         row,
         el("p", { class: "hq-words hq-soft", "data-prints-place": "", text: printsWords(d) }),
         el("div", { class: "hq-handover" }, [
-          tickRow("dropped-off", "hqDoor-droppedOff", "Elf, poster, prize and staff card dropped off", d.droppedOffAt, d.droppedOffBy),
+          tickRow("dropped-off", "hqDoor-droppedOff", "Elf, poster, prize and staff card dropped off", d.droppedOffAt, d.droppedOffBy, d.droppedOffName),
           el("p", { class: "hq-words hq-soft", text: "Ticking it keeps who did it and when." }),
-          tickRow("thanked", "hqDoor-thanked", "Thank you sent", d.thankedAt, d.thankedBy),
+          tickRow("thanked", "hqDoor-thanked", "Thank you sent", d.thankedAt, d.thankedBy, d.thankedName),
         ]),
         said,
       ]);
@@ -1987,6 +2002,13 @@
       }
       var closes = doorInput("closesAt", clock5(d.closesAt), null, "time");
       var closeHint = el("span", { "data-close": "" });
+      // Door 24's place closes at 4pm when no time is typed (src/elf/calendar.ts), an hour before the grand prize
+      // entries; under its time, the warning while its place closes too late for them (filled by updateCloseHint).
+      var closeHints = [
+        closeHint,
+        d.door === 24 ? el("span", { class: "hq-hint", text: "4pm unless you type an earlier time." }) : null,
+        el("span", { class: "hq-hint", "data-prize": "", hidden: true }),
+      ];
       return makePart(
         "place",
         "The place",
@@ -2005,7 +2027,7 @@
             doorField("contactName", "Who to talk to", placeIn.contactName),
             doorField("contactPhone", "Phone", placeIn.contactPhone),
             doorField("contactEmail", "Email", placeIn.contactEmail, el("span", { class: "hq-hint", text: "The reminder on its day goes here." })),
-            doorField("closesAt", "Open on its day until", closes, closeHint),
+            doorField("closesAt", "Open on its day until", closes, closeHints),
             doorField("elfSpot", "Where the elf sits", placeIn.elfSpot, null, true),
             doorField("agreedBy", "Agreed by", placeIn.agreedBy),
           ]),
@@ -2182,7 +2204,7 @@
       fitFields();
     }
 
-    // ---- Money: what the school has made, and the way to every payment in Donations ----
+    // ---- Money: what Elf Detective School has made, and the way to every payment in Donations ----
     function drawMoneyPart() {
       var part = parts.money;
       part.textContent = "";
@@ -2192,7 +2214,7 @@
       box.appendChild(el("p", { class: "hq-words", text: "Entries are a payment to take part, so they are never claimed for Gift Aid. A gift on top can be, when the grown up says yes." }));
       var go = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Every payment, in Donations" });
       go.addEventListener("click", function () {
-        // Donations, showing only the school's payments: its own filter (Admin > Donations) is ticked
+        // Donations, showing only Elf Detective School's payments: its own filter (Admin > Donations) is ticked
         // the way a person would tick it, so app.js reads the list for it as it always does.
         var filter = doc.getElementById("donationsElfFilter");
         if (filter && !filter.checked) {
@@ -2362,7 +2384,9 @@
       grid.appendChild(preview);
       part.appendChild(grid);
       if (!admin) part.appendChild(el("p", { class: "hq-words hq-soft", text: "Only an admin can change these." }));
-      // Its own panel after the admin only ones: anyone who may edit can start a practice evening.
+      // Their own panels after the admin only ones: anyone who may edit can change the grand prize's
+      // settings and start a practice evening.
+      part.appendChild(grandPrizePanel());
       part.appendChild(practicePanel());
       part.appendChild(alertsPanel());
     }
@@ -2983,6 +3007,304 @@
       box.appendChild(el("p", { class: "hq-end", text: deletionDay() + ": every photo is deleted. The log keeps these lines, without the pictures." }));
     }
 
+    // ---- Grand prize: every picture sent in for the grand prize, and the one winner (Plan 2c-2) ----
+    // Read afresh each time the tile opens (src/routes/admin-elf-prize.ts, /api/admin/elf/grand-prize). Head
+    // elves see each detective's full name, the grown up's mobile to ring and the picture, which is fetched
+    // with the signed in token into a Blob address (never in a link), as the photo check does. The pictures
+    // are judged with no age: the site never asks for one. The winner can be marked only once the entries
+    // have closed, so a picture never changes under the judge, and marking another moves the mark. The
+    // website announces nothing: NBCC rings the winner's grown up. The part's pieces are named .hq-gp, since
+    // .hq-prize is the Doors prize part's. The pictures are fetched three at a time, top first, so a hundred
+    // cards at 5pm are never a hundred requests at once (gp.queue, gp.loading).
+    var gp = { box: null, answer: null, error: null, seq: 0, pictures: {}, marking: false, queue: [], loading: 0, closeWait: null };
+    var GP_PATH = "/api/admin/elf/grand-prize";
+    /** How many pictures are on their way at once, at most. */
+    var GP_AT_ONCE = 3;
+    // While the part is open and the entries close within a day, it reads itself again just after they close, so
+    // the buttons to mark the winner appear by themselves (gp.closeWait). A browser fires a wait of more than about
+    // 24.8 days at once, so none is set for a close further off than a day. Should the server still say open just
+    // after the close by this browser's clock (the two clocks can differ a little), it reads again a moment later,
+    // for half a minute at most.
+    var GP_WAIT_MAX_MS = 24 * 60 * 60 * 1000;
+    var GP_AFTER_CLOSE_MS = 2000;
+    var GP_LATE_MS = 30 * 1000;
+    var GP_WORDS = {
+      heading: "Grand prize",
+      intro: "Every picture sent in for the grand prize, in the order they came in. Only head elves see them.",
+      none: "No pictures have come in yet.",
+      note: "The website announces nothing. NBCC rings the winner's grown up on Christmas Eve and takes the prize round on Christmas Day.",
+      winner: "The winner",
+      mark: "Mark as the winner",
+      marked: "Marked as the winner.",
+      noMobile: "No mobile number",
+      loading: "Loading the picture…",
+      noPicture: "The picture could not be loaded.",
+    };
+
+    /** The count on the Grand prize tile, said as pictures. */
+    function prizeCount(n) {
+      tileCount("prize", n, plural(n, "picture", "pictures"));
+    }
+
+    /** A usable answer from the entries routes, or null. */
+    function entriesAnswerOf(d) {
+      return d && Array.isArray(d.entries) && typeof d.closesAt === "string" ? d : null;
+    }
+
+    /** Where an entry's picture is kept in gp.pictures: by the entry and when its picture came in, since a
+     *  replaced picture comes in again. */
+    function pictureKey(e) {
+      return e.id + " " + e.sentAt;
+    }
+
+    /** Keeps the pictures `entries` still list, and lets go of the rest: an entry that has gone, or whose
+     *  picture was replaced. Their Blob addresses are revoked, and one still on its way is revoked as it comes. */
+    function keepEntryPictures(entries) {
+      var listed = {};
+      entries.forEach(function (e) {
+        listed[pictureKey(e)] = true;
+      });
+      Object.keys(gp.pictures).forEach(function (key) {
+        if (listed[key]) return;
+        var kept = gp.pictures[key];
+        kept.gone = true;
+        if (kept.url && win.URL && typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(kept.url);
+        delete gp.pictures[key];
+      });
+    }
+
+    /** An entry's picture as a Blob address: fetched with the token once, and kept across drawings and reads of
+     *  the part until its entry goes or its picture is replaced (keepEntryPictures). One that could not be
+     *  fetched is forgotten, so the next drawing tries it again. */
+    function entryPicture(e) {
+      var key = pictureKey(e);
+      if (gp.pictures[key]) return gp.pictures[key].promise;
+      var kept = { url: null, gone: false, promise: null };
+      gp.pictures[key] = kept;
+      kept.promise = win
+        .fetch(GP_PATH + "/" + e.id + "/picture", { headers: { Authorization: "Bearer " + token() } })
+        .then(function (res) {
+          if (!res.ok || typeof res.blob !== "function") throw new Error("not found");
+          return res.blob();
+        })
+        .then(function (blob) {
+          if (!win.URL || typeof win.URL.createObjectURL !== "function") throw new Error("no blob addresses");
+          var url = win.URL.createObjectURL(blob);
+          if (kept.gone) {
+            if (typeof win.URL.revokeObjectURL === "function") win.URL.revokeObjectURL(url);
+            throw new Error("no longer listed");
+          }
+          kept.url = url;
+          return url;
+        })
+        .catch(function (err) {
+          if (gp.pictures[key] === kept) delete gp.pictures[key];
+          throw err;
+        });
+      return kept.promise;
+    }
+
+    /** Shows an entry's picture on its card when it comes. One already fetched, or on its way, is shown from what is
+     *  kept, with no request of its own; the rest wait their turn in gp.queue, in the order the cards are listed, at
+     *  most GP_AT_ONCE on their way at once, the next starting as soon as one finishes, loaded or not. Drawing the part
+     *  again empties the queue (drawPrize), so what the drawing before was waiting for is never fetched for it. */
+    function showEntryPicture(e, img, wait) {
+      if (gp.pictures[pictureKey(e)]) return pictureOnCard(entryPicture(e), img, wait);
+      gp.queue.push({ e: e, img: img, wait: wait });
+      nextPictures();
+    }
+
+    function nextPictures() {
+      while (gp.loading < GP_AT_ONCE && gp.queue.length) {
+        var turn = gp.queue.shift();
+        if (gp.pictures[pictureKey(turn.e)]) {
+          pictureOnCard(entryPicture(turn.e), turn.img, turn.wait);
+          continue;
+        }
+        gp.loading++;
+        var coming = entryPicture(turn.e);
+        coming.then(pictureDone, pictureDone);
+        pictureOnCard(coming, turn.img, turn.wait);
+      }
+    }
+
+    /** One picture has come, or could not: the next one in the queue takes its place. */
+    function pictureDone() {
+      gp.loading--;
+      nextPictures();
+    }
+
+    function pictureOnCard(coming, img, wait) {
+      coming.then(
+        function (url) {
+          img.setAttribute("src", url);
+          img.hidden = false;
+          wait.hidden = true;
+        },
+        function () {
+          wait.textContent = GP_WORDS.noPicture;
+        },
+      );
+    }
+
+    function loadPrizeEntries() {
+      buildPrize();
+      // While a marking is on its way, its answer draws the part from a list read after the marking. A read
+      // asked for now could land after it and draw the old winner back, so none is.
+      if (gp.marking) return Promise.resolve();
+      var mine = ++gp.seq;
+      return ask("GET", GP_PATH)
+        .then(function (d) {
+          if (mine !== gp.seq) return;
+          gp.answer = entriesAnswerOf(d);
+          gp.error = gp.answer ? null : WORDS.didNotWork;
+          if (gp.answer) {
+            keepEntryPictures(gp.answer.entries);
+            prizeCount(gp.answer.entries.length);
+          }
+          drawPrize();
+        })
+        .catch(function (e) {
+          if (mine !== gp.seq) return;
+          gp.answer = null;
+          gp.error = e.message;
+          drawPrize();
+        });
+    }
+
+    /** Ends the wait for the close, if there is one: the part is drawn again, or its tile is left. */
+    function stopCloseWait() {
+      if (gp && gp.closeWait) win.clearTimeout(gp.closeWait);
+      if (gp) gp.closeWait = null;
+    }
+
+    /** While the entries are open and close within a day, waits for the close and reads the part again just after
+     *  it, so the buttons appear by themselves. Only one wait at a time: every drawing ends the one before. */
+    function waitForClose(p) {
+      stopCloseWait();
+      if (!p || p.closed || parts.prize.hidden) return;
+      var left = new Date(p.closesAt).getTime() - Date.now();
+      if (!(left < GP_WAIT_MAX_MS) || left < -GP_LATE_MS) return;
+      gp.closeWait = win.setTimeout(function () {
+        gp.closeWait = null;
+        if (!parts.prize.hidden) loadPrizeEntries();
+      }, Math.max(left, 0) + GP_AFTER_CLOSE_MS);
+    }
+
+    function buildPrize() {
+      if (gp.box) return;
+      parts.prize.textContent = "";
+      gp.box = el("section", { class: "hq-panel hq-gp", "aria-label": GP_WORDS.heading }, [
+        el("h2", { class: "hq-h2", text: GP_WORDS.heading }),
+        el("p", { class: "hq-loading", text: WORDS.loading }),
+      ]);
+      parts.prize.appendChild(gp.box);
+    }
+
+    function drawPrize() {
+      var box = gp.box;
+      var p = gp.answer;
+      // The cards are drawn afresh, so whatever the drawing before was still waiting to fetch is left; pictures on
+      // their way still count towards the three, and are kept for the new cards when they come.
+      gp.queue = [];
+      waitForClose(p);
+      box.textContent = "";
+      box.appendChild(el("h2", { class: "hq-h2", text: GP_WORDS.heading }));
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: GP_WORDS.intro }));
+      if (!p) {
+        var failed = el("p", { class: "hq-status", role: "status" });
+        say(failed, gp.error || WORDS.didNotWork, false);
+        box.appendChild(failed);
+        return;
+      }
+      var at = timeShort(p.closesAt);
+      box.appendChild(
+        el("p", {
+          class: "hq-words hq-gp__when",
+          text: p.closed ? "Entries closed at " + at + " on Christmas Eve." : "Entries close at " + at + " on Christmas Eve. You can mark the winner after that.",
+        }),
+      );
+      if (p.entries.length === 0) {
+        box.appendChild(el("p", { class: "hq-words", text: GP_WORDS.none }));
+      } else {
+        var list = el("ul", { class: "hq-gp__list" });
+        p.entries.forEach(function (e) {
+          list.appendChild(el("li", {}, [entryCard(e, p)]));
+        });
+        box.appendChild(list);
+      }
+      box.appendChild(el("p", { class: "hq-end", text: GP_WORDS.note }));
+    }
+
+    /** One picture's card: the picture, the detective, the grown up and the mobile to ring (as the family's
+     *  sheet shows it), when it came in, the chip on the winner, and, once the entries have closed and for a
+     *  head elf who may edit, the button on every other card. */
+    function entryCard(e, p) {
+      var img = el("img", { class: "hq-gp-entry__img", alt: "The picture sent in for " + e.detective, hidden: true });
+      var wait = el("span", { class: "hq-gp-entry__wait", text: GP_WORDS.loading });
+      var said = el("p", { class: "hq-status", role: "status" });
+      var facts = el("div", { class: "hq-gp-entry__facts" }, [
+        el("h3", { class: "hq-h3", text: e.detective }),
+        e.winner ? el("span", { class: "hq-chip hq-gp-entry__chip", text: GP_WORDS.winner }) : null,
+        el("p", { class: "hq-words", text: "Grown up: " + e.grownUpName }),
+        e.mobile
+          ? el("p", { class: "hq-words hq-gp-entry__mobile" }, ["Mobile ", el("a", { href: "tel:" + e.mobile, text: mobileWords(e.mobile) })])
+          : el("p", { class: "hq-words hq-soft", text: GP_WORDS.noMobile }),
+        el("p", { class: "hq-words hq-soft", text: "Came in " + longDay(e.sentAt) + " at " + timeShort(e.sentAt) }),
+      ]);
+      if (p.closed && p.canEdit && !e.winner) {
+        var mark = el("button", { class: "hq-btn hq-btn--go", type: "button", text: GP_WORDS.mark });
+        mark.addEventListener("click", function () {
+          markPrizeWinner(e, mark, said);
+        });
+        facts.appendChild(el("div", { class: "hq-actions" }, [mark]));
+      }
+      facts.appendChild(said);
+      showEntryPicture(e, img, wait);
+      return el("article", { class: "hq-gp-entry" + (e.winner ? " is-winner" : ""), "data-entry": e.id }, [el("figure", { class: "hq-gp-entry__pic" }, [img, wait]), facts]);
+    }
+
+    /** Marks one entry as the winner, holding every button meanwhile. The part is drawn again from the answer
+     *  and the new winner's card says so where its button was, with the focus there. A refusal, such as
+     *  another head elf's marking at the same moment, says the server's sentence on this card as an error and
+     *  gives the buttons back. */
+    function markPrizeWinner(e, button, said) {
+      if (gp.marking) return;
+      gp.marking = true;
+      gp.seq++; // a read already on its way is older than this marking, so it never draws over it
+      var held = Array.prototype.slice.call(gp.box.querySelectorAll(".hq-gp-entry button"));
+      held.forEach(function (b) {
+        b.disabled = true;
+      });
+      say(said, "", null);
+      ask("POST", GP_PATH + "/" + e.id + "/winner")
+        .then(function (d) {
+          var p = entriesAnswerOf(d);
+          if (!p) throw new Error(WORDS.didNotWork);
+          gp.marking = false;
+          gp.answer = p;
+          gp.error = null;
+          keepEntryPictures(p.entries);
+          prizeCount(p.entries.length);
+          drawPrize();
+          var now = gp.box.querySelector('.hq-gp-entry[data-entry="' + e.id + '"] .hq-status');
+          if (now) {
+            say(now, GP_WORDS.marked, true);
+            now.setAttribute("tabindex", "-1");
+            now.focus();
+          }
+        })
+        .catch(function (err) {
+          gp.marking = false;
+          held.forEach(function (b) {
+            b.disabled = false;
+          });
+          say(said, err.message, false);
+          var at = doc.activeElement;
+          if (!at || at === doc.body || at === button) button.focus();
+        });
+    }
+
     // ---- Settings: Alerts, who gets a text and an email when a photo is waiting ----
     // Read afresh each time Settings opens (src/routes/admin-elf.ts, /api/admin/elf/alerts). A head elf
     // changes only their own mobile and tick; the rest are shown as words.
@@ -3154,6 +3476,165 @@
       return box;
     }
 
+    // ---- Settings: The grand prize, when its entries close on Christmas Eve, and the graduates' video ----
+    // Read afresh each time Settings opens (src/routes/admin-elf-prize.ts). Anyone who may edit Head Elf HQ
+    // changes them, the time and the link each with its own Save, as the server changes only what is sent;
+    // the rest see them as words. The server refuses a time too soon after door 24's place closes, in its
+    // own words, and warns while door 24's place closes later than an hour before the entries do.
+    var grandPrize = { loaded: false, answer: null, error: null, asking: false, seq: 0 };
+    var PRIZE_PATH = "/api/admin/elf/grand-prize/settings";
+    var PRIZE_WORDS = {
+      time: "Grand prize entries close on Christmas Eve at",
+      timeHint: "5pm unless you change it. It must be at least an hour after door 24's hiding place closes.",
+      video: "The graduates' video",
+      videoHint: "A link to the video every graduate can watch, starting https://. Leave it empty for none.",
+      noVideo: "not set yet",
+    };
+
+    /** An answer from the grand prize routes, or null for anything that is not one. */
+    function prizeAnswerOf(d) {
+      return d && typeof d.time === "string" ? d : null;
+    }
+
+    function loadGrandPrize() {
+      if (grandPrize.asking) return;
+      grandPrize.asking = true;
+      var mine = ++grandPrize.seq;
+      ask("GET", PRIZE_PATH)
+        .then(function (d) {
+          grandPrize.asking = false;
+          if (mine !== grandPrize.seq) return;
+          grandPrize.answer = prizeAnswerOf(d);
+          grandPrize.error = null;
+          grandPrize.loaded = true;
+          redrawGrandPrize();
+        })
+        .catch(function (e) {
+          grandPrize.asking = false;
+          if (mine !== grandPrize.seq) return;
+          grandPrize.error = e.message;
+          grandPrize.loaded = true;
+          redrawGrandPrize();
+        });
+    }
+
+    function redrawGrandPrize() {
+      var old = parts.settings.querySelector(".hq-prize-settings");
+      if (old && old.parentNode) old.parentNode.replaceChild(grandPrizePanel(), old);
+    }
+
+    /** Words in the status line under the time ("time") or under the link ("video"), as drawn now. */
+    function grandPrizeSay(which, words, ok) {
+      var now = parts.settings.querySelector(".hq-prize-settings__" + which + " > .hq-status");
+      if (now) say(now, words, ok);
+    }
+
+    /** Takes a save's answer into the panel where it stands: the saved box ("time" or "video") shows what is
+     *  now kept, the other box keeps what was typed and not saved, and door 24's warning is the answer's.
+     *  False when the panel is not drawn for changing them. */
+    function takeGrandPrize(which) {
+      var p = grandPrize.answer;
+      var box = doc.getElementById(which === "time" ? "hqPrizeTime" : "hqPrizeVideo");
+      var warning = doc.getElementById("hqPrizeTimeWarning");
+      if (!p || !box || !warning) return false;
+      box.value = which === "time" ? p.time : p.videoUrl || "";
+      warning.className = p.warning ? "hq-hint is-error" : "hq-hint";
+      warning.textContent = p.warning || "";
+      warning.hidden = !p.warning;
+      return true;
+    }
+
+    /** Saves the time or the link alone, then takes the answer in place (takeGrandPrize), so nothing typed in
+     *  the other box is lost (ruling F6, one step earlier) and "Saved." goes in a status line already on the
+     *  page, where a screen reader hears it. A refusal keeps what was typed and says the server's sentence as
+     *  an error. Either way the button pressed (`buttonId`) is ready again and has the focus back, unless the
+     *  head elf has moved on to something else meanwhile. */
+    function saveGrandPrize(sent, which, buttonId) {
+      var pressed = doc.getElementById(buttonId);
+      if (pressed) pressed.disabled = true;
+      grandPrize.seq++;
+      ask("PUT", PRIZE_PATH, sent)
+        .then(function (d) {
+          var p = prizeAnswerOf(d);
+          if (p) {
+            grandPrize.answer = p;
+            grandPrize.error = null;
+            if (!takeGrandPrize(which)) redrawGrandPrize();
+          }
+          grandPrizeSay(which, "Saved.", true);
+        })
+        .catch(function (e) {
+          grandPrizeSay(which, e.message, false);
+        })
+        .then(function () {
+          var again = doc.getElementById(buttonId);
+          if (!again) return;
+          again.disabled = false;
+          var at = doc.activeElement;
+          if (!at || at === doc.body || at === again) again.focus();
+        });
+    }
+
+    function grandPrizePanel() {
+      var box = el("section", { class: "hq-panel hq-prize-settings", "aria-label": "The grand prize" });
+      box.appendChild(el("h2", { class: "hq-h2", text: "The grand prize" }));
+      if (!grandPrize.loaded) {
+        box.appendChild(el("p", { class: "hq-loading", text: WORDS.loading }));
+        return box;
+      }
+      var p = grandPrize.answer;
+      if (grandPrize.error || !p) {
+        var failed = el("p", { class: "hq-status", role: "status" });
+        say(failed, grandPrize.error || WORDS.didNotWork, false);
+        box.appendChild(failed);
+        return box;
+      }
+      if (!p.canEdit) {
+        box.appendChild(el("p", { class: "hq-words", text: PRIZE_WORDS.time + " " + clockWords(p.time) + "." }));
+        if (p.warning) box.appendChild(el("p", { class: "hq-status is-error", text: p.warning }));
+        box.appendChild(el("p", { class: "hq-words", text: PRIZE_WORDS.video + ": " + (p.videoUrl || PRIZE_WORDS.noVideo) }));
+        return box;
+      }
+      var time = el("input", { id: "hqPrizeTime", name: "time", type: "time", autocomplete: "off", "aria-describedby": "hqPrizeTimeHint hqPrizeTimeWarning" });
+      time.value = p.time;
+      var saveTime = el("button", { class: "hq-btn hq-btn--go", type: "button", id: "hqPrizeSaveTime", text: "Save the time" });
+      saveTime.addEventListener("click", function () {
+        saveGrandPrize({ time: time.value }, "time", "hqPrizeSaveTime");
+      });
+      box.appendChild(
+        el("div", { class: "hq-prize-settings__time" }, [
+          el("div", { class: "hq-field" }, [
+            el("label", { for: "hqPrizeTime", text: PRIZE_WORDS.time }),
+            time,
+            el("small", { class: "hq-hint", id: "hqPrizeTimeHint", text: PRIZE_WORDS.timeHint }),
+            // Door 24's warning: always here, empty and hidden when there is none, so a save can show or clear it.
+            el("small", { class: p.warning ? "hq-hint is-error" : "hq-hint", id: "hqPrizeTimeWarning", text: p.warning || "", hidden: !p.warning }),
+          ]),
+          el("div", { class: "hq-actions" }, [saveTime]),
+          el("p", { class: "hq-status", role: "status" }),
+        ]),
+      );
+      // No maxlength: a link cut short by the box would save a broken link. The server says when it is too long.
+      var video = el("input", { id: "hqPrizeVideo", name: "videoUrl", type: "url", autocomplete: "off", spellcheck: "false", "aria-describedby": "hqPrizeVideoHint" });
+      video.value = p.videoUrl || "";
+      var saveLink = el("button", { class: "hq-btn hq-btn--go", type: "button", id: "hqPrizeSaveLink", text: "Save the link" });
+      saveLink.addEventListener("click", function () {
+        saveGrandPrize({ videoUrl: video.value.trim() }, "video", "hqPrizeSaveLink");
+      });
+      box.appendChild(
+        el("div", { class: "hq-prize-settings__video" }, [
+          el("div", { class: "hq-field" }, [
+            el("label", { for: "hqPrizeVideo", text: PRIZE_WORDS.video }),
+            video,
+            el("small", { class: "hq-hint", id: "hqPrizeVideoHint", text: PRIZE_WORDS.videoHint }),
+          ]),
+          el("div", { class: "hq-actions" }, [saveLink]),
+          el("p", { class: "hq-status", role: "status" }),
+        ]),
+      );
+      return box;
+    }
+
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
     function draw() {
       if (!data) return;
@@ -3163,6 +3644,7 @@
       tileCount("families", data.numbers ? data.numbers.namesToCheck : 0);
       tileCount("doors", data.doorsNotReady || 0);
       tileCount("finds", data.photosWaiting || 0);
+      prizeCount(data.grandPrizeEntries || 0);
       drawHq();
       drawMoneyPart();
       drawSettingsPart();
@@ -3176,8 +3658,9 @@
           data = d;
           say(status, "", null);
           draw();
-          if (!parts.settings.hidden) { loadPractice(); loadAlerts(); }
+          if (!parts.settings.hidden) { loadPractice(); loadAlerts(); loadGrandPrize(); }
           if (!parts.finds.hidden) loadFinds();
+          if (!parts.prize.hidden) loadPrizeEntries();
           // A sheet already open was drawn before anyone knew whether this person may change it.
           if (fam.sheet) drawSheet();
           var asked = remembered(FAMILY_KEY);

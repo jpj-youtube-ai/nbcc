@@ -147,10 +147,10 @@ beforeEach(() => {
 });
 
 describe("the menu with the Doors tile", () => {
-  it("draws six tiles, Doors then Finds, between Families and Money", () => {
+  it("draws seven tiles, Doors, Finds then Grand prize, between Families and Money", () => {
     page();
     const names = [...document.querySelectorAll("#elfHq [role=tab]")].map((t) => t.textContent!.trim());
-    expect(names).toEqual(["HQ", "Families", "Doors", "Finds", "Money", "Settings"]);
+    expect(names).toEqual(["HQ", "Families", "Doors", "Finds", "Grand prize", "Money", "Settings"]);
   });
 });
 
@@ -836,5 +836,85 @@ describe("if the door cannot run", () => {
     withEight({ dayOver: true }, {}, false);
     await openEight();
     expect(sheetEl().querySelector<HTMLInputElement>("#hqDoor-goneHome")!.disabled).toBe(true);
+  });
+});
+
+// ---- Plan 2c-2, Task 4: door 24 against the grand prize, and the head elf named on the ticks ----
+
+describe("door 24 and the grand prize", () => {
+  // Door 24's place typed to close at 4:30pm, with the entries at 5pm (ruling F3).
+  const WARNING = "Grand prize entries close at 5pm, so door 24's place must close by 4pm.";
+  const FOUR_PM = "4pm unless you type an earlier time.";
+  const eve = (over: Record<string, unknown> = {}) =>
+    sheet({ door: 24, day: "Thursday 24 December", closesAt: "16:30", evening: { clue1: "10:00", clue2: "10:30", clue3: "11:00", reveal: "11:30", problems: [] }, grandPrize: WARNING, ...over });
+  async function openDoor(n: number, answers: Record<string, Answer | Answer[]> = {}) {
+    const ctx = page({ "GET /api/admin/elf/doors/24": { body: { door: eve(), canEdit: true } }, ...answers });
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    tile(n).click();
+    await flush();
+    return ctx;
+  }
+  /** The field for the closing time: its label, its box and the words under it. */
+  const closing = () => field("closesAt").closest<HTMLElement>(".hq-field")!;
+  const errors = (within: HTMLElement) => [...within.querySelectorAll<HTMLElement>(".is-error")].map((n) => n.textContent);
+
+  it("shows door 24's warning as an error in The place, under its closing time", async () => {
+    await openDoor(24);
+    expect(closing().parentElement!.closest('[data-part="place"]')).not.toBeNull();
+    expect(errors(closing())).toEqual([WARNING]);
+    const hints = [...closing().children];
+    expect(hints.indexOf(field("closesAt"))).toBeLessThan(hints.findIndex((n) => n.textContent === WARNING));
+  });
+
+  it("says door 24 closes at 4pm unless a time is typed, and no other door says so or warns", async () => {
+    await openDoor(24);
+    expect([...closing().querySelectorAll(".hq-hint")].map((h) => h.textContent)).toContain(FOUR_PM);
+    tile(7).click();
+    await flush();
+    expect(closing().textContent).not.toContain(FOUR_PM);
+    expect(partOf("place").textContent).not.toContain(WARNING);
+  });
+
+  it("follows the sheet a save answers, even from another part", async () => {
+    await openDoor(24, { "PATCH /api/admin/elf/doors/24": { body: { door: eve({ prize: "A sled", grandPrize: null }) } } });
+    expect(errors(closing())).toEqual([WARNING]);
+    type(field("prize"), "A sled");
+    button(partOf("prize"), "Save")!.click();
+    await flush();
+    expect(errors(closing())).toEqual([]);
+    expect(closing().textContent).not.toContain(WARNING);
+  });
+});
+
+describe("the head elf named on the ticks", () => {
+  const TICKED = {
+    droppedOffAt: "2026-12-01T10:00:00.000Z",
+    droppedOffBy: "admin:alex@example.org",
+    thankedAt: "2026-12-02T10:00:00.000Z",
+    thankedBy: "admin:sam@example.org",
+  };
+  async function openSeven(over: Record<string, unknown>) {
+    page({ "GET /api/admin/elf/doors/7": { body: { door: sheet(over), canEdit: true } } });
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    tile(7).click();
+    await flush();
+  }
+
+  it("reads Ticked by the head elf's name on the day, for dropped off and for thank you", async () => {
+    await openSeven({ ...TICKED, droppedOffName: "Alex Example", thankedName: "Sam Example" });
+    const words = partOf("prints").textContent!;
+    expect(words).toContain("Ticked by Alex Example on 1 December");
+    expect(words).toContain("Ticked by Sam Example on 2 December");
+    expect(words).not.toContain("example.org");
+  });
+
+  it("says the email when the answer has no name", async () => {
+    await openSeven(TICKED);
+    const words = partOf("prints").textContent!;
+    expect(words).toContain("Ticked by alex@example.org on 1 December");
+    expect(words).toContain("Ticked by sam@example.org on 2 December");
+    expect(words).not.toContain("admin:");
   });
 });

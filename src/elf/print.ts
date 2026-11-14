@@ -362,7 +362,8 @@ export function renderElfCertificate(c: CertificatePrint): string {
 </div>
 ${statement}
 </div>`;
-  return shell({ title: `Elf Detective School certificate for ${name}`, paper: "A4 landscape", fontCss: assets.fontCss, css, toolbar: `<span>Certificate for ${name}</span>`, body });
+  // A family's own print: none of the fundraisers' note on asking us for other sizes.
+  return shell({ title: `Elf Detective School certificate for ${name}`, paper: "A4 landscape", fontCss: assets.fontCss, css, toolbar: `<span>Certificate for ${name}</span>`, body, askUs: false });
 }
 
 /** A PNG picture as a data address, and nothing else: no link, no markup. */
@@ -379,8 +380,23 @@ export function shareCardSvg(s: ShareCardPrint, elfPicture: string): string {
   const publicName = detectiveName(s.detective);
   const elf = PNG_DATA.test(elfPicture) ? `<image href="${elfPicture}" x="0" y="0" width="340" height="510"/>` : "";
   // A picture cannot wrap its words, so a long name or rank is set smaller until it fits the
-  // 620 units beside the elf. A bold serif letter is a little over half as wide as it is tall.
-  const fit = (words: string, biggest: number): number => Math.max(24, Math.min(biggest, Math.floor(620 / (Math.max(1, words.length) * 0.56))));
+  // 620 units beside the elf. The card is drawn on the server in the fonts it has, DejaVu Serif Bold
+  // here, not Georgia, whose letters run wider, and m, w and the capitals wider still. So each
+  // character is weighed for the room it takes, as a share of the size: m, w, æ and œ 1.1; M, W, Æ
+  // and Œ 1.25; other capitals 0.8; everything else 0.64 (an accented letter as its plain one). A
+  // name may be set as small as 16, so that the widest names the rules let through (a ticked first
+  // name of 20 letters, all m and w or all œ, with a 12 letter surname) still fit.
+  // src/scripts/check-share-card.ts proves it in the image (pr.yml).
+  const weightOf = (ch: string): number => {
+    const plain = ch.normalize("NFD").charAt(0);
+    if (plain === "m" || plain === "w" || plain === "æ" || plain === "œ") return 1.1;
+    if (plain === "M" || plain === "W" || plain === "Æ" || plain === "Œ") return 1.25;
+    return plain !== plain.toLowerCase() ? 0.8 : 0.64;
+  };
+  const fit = (words: string, biggest: number): number => {
+    const weighed = [...words].reduce((sum, ch) => sum + weightOf(ch), 0);
+    return Math.max(16, Math.min(biggest, Math.floor(620 / Math.max(0.64, weighed))));
+  };
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeHtml(`${SCHOOL_NAME}: ${publicName}, ${s.rank}`)}">` +
     `<rect width="1200" height="630" fill="#F8F5EE"/>` +

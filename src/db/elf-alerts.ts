@@ -12,7 +12,8 @@ import { headElfName, headElvesOf, type HeadElf } from "../elf/alerts";
 /** Who each actor a change was made under ("admin:<email>", from actorOf) is, as a screen names them: the
  *  head elf's users.full_name, or the email when that is blank or there is no users row any more. One read
  *  for them all, and none when no actor is a person. Any other actor ("automatic") comes back as it is. Read
- *  by the photo log (src/db/elf-photos.ts) and Doors' snow day and gone home lines (src/routes/admin-elf-doors.ts). */
+ *  by the photo log (src/db/elf-photos.ts) and by a door's sheet in Doors (src/routes/admin-elf-doors.ts),
+ *  for its snow day and gone home lines and its dropped off and thank you ticks. */
 export async function headElfNamesOf(actors: readonly (string | null | undefined)[]): Promise<(actor: string | null) => string> {
   const emails = new Set<string>();
   for (const a of actors) {

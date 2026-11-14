@@ -13,11 +13,13 @@ import {
   deleteElfSession,
   deleteElfSignInCode,
   endOtherElfSessions,
+  familyByEmailsToken,
   findElfSession,
   familyWithDetectives,
   getElfSettings,
   orderForWelcome,
   saveLook,
+  setEmailsStopped,
   type ElfSettings,
 } from "../db/elf";
 import {
@@ -52,20 +54,27 @@ import {
   type DoorRun,
   type FamilyRuns,
 } from "../db/elf-game";
+import { entryPicture, familyEntries, familyHasMobile, saveEntry } from "../db/elf-grand-prize";
+import type { MadePicture } from "../db/fundraiser-pictures";
+import { normaliseUkMobile } from "../elf/alerts";
 import { DOOR_COUNT, isDoor, type Door } from "../elf/calendar";
 import { decideGo, doorsKnown, doorsToCrack, knowsPlace, mayHaveAGo, placesPublic, type FamilyKnowledge, type GoRefusal } from "../elf/catch-up";
 import { MAX_WRONG_WORDS, decideWord } from "../elf/claim";
 import { canGuess, cluesOut, doorState, isOpen, shownAt, type DoorState } from "../elf/doors";
 import { badgeWords } from "../elf/emails";
+import { entriesOpenAt, entryOpen, grandPrizeClosesAt, prizeSectionShows } from "../elf/grand-prize";
 import { decideGuess, type GuessRefusal } from "../elf/guess";
 import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
 import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
+import { renderEmailsPage } from "../elf/pages/emails";
+import { renderEntryPage } from "../elf/pages/entry";
 import { goOutcomeWords, renderGoPage } from "../elf/pages/go";
 import { renderHqPage } from "../elf/pages/hq";
 import { claimWinHtml, renderPosterPage, visitWinHtml, wordRefusalWords } from "../elf/pages/poster";
 import { renderRulesPage } from "../elf/pages/rules";
 import type { CalendarView, ClaimWin, DoorView, FamilyMarks, GoView, HqView, PosterOutcome, PosterView, VisitWin } from "../elf/pages/types";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
+import { renderElfCertificate, shareCardSvg } from "../elf/print";
 import { progressOf, promotionsBetween, type DoorsDone, type Rank } from "../elf/progress";
 import { makePublicCalendar } from "../elf/public-calendar";
 import type { ScrapPhoto, Scrapbook } from "../elf/scrapbook";
@@ -73,9 +82,13 @@ import { COSTUMES, costumeUnlocked, normaliseLook, wardrobeState, type WardrobeS
 import {
   calendarViewFor,
   doorPlaceOf,
+  EMAILS_SWITCH_PATH,
+  entryViewFor,
   familyDoorView,
+  GRADUATE_VIDEO_PATH,
   goOutcomeOf,
   goViewFor,
+  graduateVideoOf,
   hqViewFor,
   lookFromForm,
   marksOf,
@@ -86,10 +99,11 @@ import {
   type FamilyRow,
 } from "../elf/views";
 import { realElfDeps, sendProudMoments, type WordMoment } from "../elf/worker";
-import { elfPng, elfPngKey } from "../elf/elf-png";
+import { clockWords } from "../elf/words";
+import { elfPng, elfPngKey, inTurn } from "../elf/elf-png";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
-import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
-import { FESTIVE_SURNAMES, familyDetectiveName, type DetectiveNameParts } from "../elf/names";
+import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, MOBILE_WORDS, parseJoin } from "../elf/join";
+import { FESTIVE_SURNAMES, detectiveName, familyDetectiveName, type DetectiveNameParts } from "../elf/names";
 import { renderJoinPage } from "../elf/pages/join";
 import { ELF_BAR_START } from "../elf/pages/shell";
 import { renderSignInPage, renderWelcomePage } from "../elf/pages/sign-in";
@@ -604,9 +618,14 @@ async function knowledgeFor(res: Response, runs: FamilyRuns, familyId: number): 
   return { guesses, typed };
 }
 
+/** A family with no grand prize entries: what Detective HQ is given while its grand prize section does not show. */
+const NO_ENTRIES: ReadonlyMap<number, { sentAt: Date }> = new Map();
+
 /** Detective HQ's view for a family, all read through runsFor: what the family has done, each detective's
  *  doors done and, once today's door is found and its place shown, who found it (read for that one door
- *  only). `known` is the doors, and `knowledge` what the family has done, when the caller has just read them. */
+ *  only), and the family's grand prize entries, read only while the grand prize section shows (Plan 2c-2: one
+ *  rule, prizeSectionShows, for reading them and for drawing the section). `known` is the doors, and
+ *  `knowledge` what the family has done, when the caller has just read them. */
 async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: FamilyRuns, knowledge?: FamilyKnowledge): Promise<HqView> {
   const settings = settingsOf(res);
   const runs = known ?? (await familyRuns(res, now));
@@ -615,13 +634,15 @@ async function hqViewOf(res: Response, family: FamilyRow, now: Date, known?: Fam
     if (!todayRun || todayRun.door === 0 || doorState(todayRun.facts, now) !== "found") return new Map();
     return new Map([[todayRun.door, await finderParts(todayRun.year, todayRun.door)]]);
   };
-  const [done, doorsDone, finders] = await Promise.all([
+  const prizeShows = prizeSectionShows({ doorsOn: settings.doorsOn, year: settings.year, closesAt: grandPrizeClosesAt(settings), now });
+  const [done, doorsDone, finders, entries] = await Promise.all([
     knowledge ?? knowledgeFor(res, runs, family.id),
     familyDoorsDone(settings.year, family.id, runs.runs, now),
     findersOfToday(),
+    prizeShows ? familyEntries(settings.year, family.id) : NO_ENTRIES,
   ]);
   // HQ draws no photos: the calendar's script reads the family's own from /api/elf/me.
-  return hqViewFor({ family, settings, now, runs, guesses: done.guesses, typed: done.typed, doorsDone, finders, photos: [] });
+  return hqViewFor({ family, settings, now, runs, guesses: done.guesses, typed: done.typed, doorsDone, finders, photos: [], entries });
 }
 
 export async function getHq(req: Request, res: Response): Promise<Response | void> {
@@ -1111,7 +1132,7 @@ export const WORD_ADDRESS_LIMIT = { max: 300, windowMs: 15 * 60_000 } as const;
  *  are: the database's limit of five a day applies only once a picture has been made, so these keep
  *  anyone from keeping the one picture maker busy. An address gets more, for a shared connection. */
 export const PHOTO_TRIES = { max: 20, windowMs: 24 * 60 * 60_000 } as const;
-const PHOTO_ADDRESS_TRIES = { max: 60, windowMs: PHOTO_TRIES.windowMs } as const;
+export const PHOTO_ADDRESS_TRIES = { max: 60, windowMs: PHOTO_TRIES.windowMs } as const;
 /** Guesses each family may send in 15 minutes: every one is saved, so this is plenty for a family
  *  changing its mind, and far too few for a script to keep the database busy. */
 export const GUESS_LIMIT = { max: 60, windowMs: 15 * 60_000 } as const;
@@ -1143,6 +1164,20 @@ function allowedOnce(
   if (isLoopbackRequest(req)) return true;
   const t = Date.now();
   return family.allow(String(familyId), t) && (!address || address.allow(req.ip ?? "unknown", t));
+}
+
+/** Gives back the try allowedOnce took, to the family and to the address, for an answer that was no fault of the
+ *  family's: the picture maker busy. So pressing again while it is busy never uses up the day's tries. Nothing for a
+ *  request made on the box itself, which allowedOnce never counts. */
+function giveBackOnce(
+  req: Request,
+  familyId: number,
+  family: ReturnType<typeof createRateLimiter>,
+  address?: ReturnType<typeof createRateLimiter>,
+): void {
+  if (isLoopbackRequest(req)) return;
+  family.giveBack(String(familyId));
+  address?.giveBack(req.ip ?? "unknown");
 }
 
 const NO_DOORS: DoorsDone = { cracked: [], visited: [] };
@@ -1295,12 +1330,13 @@ export async function postWord(req: Request, res: Response): Promise<Response | 
     // then, no promotion and no new things: the "It counts from" line says when it counts.
     const later = result.countsFrom.getTime() > now.getTime();
     // What the word gave, for the proud moments: each detective it stamped, with this door counted only
-    // once the visit counts (the sweep sends a promotion that comes from later).
+    // once the visit counts (the sweep sends a promotion that comes from later). With the family's switch for the
+    // emails and its token (Plan 2c-2): one that has stopped the emails gets the won email alone.
     const moment = (): WordMoment => ({
       year,
       door,
       elfName: run.elfName,
-      family: { id: family.id, grownUpName: family.grownUpName, email: family.email },
+      family: { id: family.id, grownUpName: family.grownUpName, email: family.email, emailsStopped: family.emailsStopped === true, emailsToken: family.emailsToken ?? null },
       won: result.won,
       stamped: result.stamped.flatMap((id) => {
         const d = family.detectives.find((x) => x.id === id);
@@ -1563,11 +1599,13 @@ export async function postGo(req: Request, res: Response): Promise<Response | vo
 }
 
 export const ELF_PHOTO_POST_PATH = "/api/elf/p/:code/photo";
+/** Where a graduate's grand prize picture is sent (Plan 2c-2): postEntry, below. */
+export const ELF_ENTRY_POST_PATH = "/api/elf/entry/:detective";
 
-/** The photo post's bigger body parser (src/app.ts), behind its guard: only a POST is read with it, and
- *  only when it carries a session cookie the shape of one of ours. Anything else on the photo's address
- *  (the take down's DELETE) goes on to the usual small parser. Whether the session is real is checked by
- *  the route, after the body is read. */
+/** The bigger body parser of the photo post and of the grand prize entry's post (src/app.ts), behind its
+ *  guard: only a POST is read with it, and only when it carries a session cookie the shape of one of ours.
+ *  Anything else on either address (the photo take down's DELETE) goes on to the usual small parser. Whether
+ *  the session is real is checked by the route, after the body is read. */
 export function elfPhotoBodyGuard(parser: RequestHandler): RequestHandler {
   return (req, res, next) => {
     if (req.method !== "POST") return next();
@@ -1591,6 +1629,31 @@ const PHOTO_READ = PICTURE_READ_WORDS;
 const PHOTO_BUSY = { error: PICTURE_BUSY_WORDS };
 const PHOTO_TOO_MANY_TRIES = { error: "You have tried to send a lot of photos today. Please try again tomorrow." };
 
+/** A picture made again by madePicture, or the refusal it has already answered: `busy` when the picture maker had too
+ *  many waiting (503), which is no fault of the family's. */
+type Made = { ok: true; picture: MadePicture } | { ok: false; busy: boolean };
+
+/** A picture sent as JSON { mime, dataBase64 }, checked and made again as the fundraisers' pictures are: a JPEG,
+ *  PNG or WebP whose bytes really are that, made again here so nothing from the camera is kept (not where, not
+ *  when, not the phone) and what is stored is always a fresh JPEG. A door's photo and a graduate's grand prize
+ *  picture both take it. The made picture, or why not once the refusal has been answered, with the photo route's
+ *  statuses and words. */
+async function madePicture(res: Response, body: Record<string, unknown>): Promise<Made> {
+  const bytes = decodeBase64(typeof body.dataBase64 === "string" ? body.dataBase64 : "");
+  const check = checkPictureUpload(typeof body.mime === "string" ? body.mime : "", bytes);
+  if (!check.ok) {
+    const size = check.reason === "size";
+    res.status(size ? 413 : 400).json({ error: LOOK_AGAIN, fields: { photo: size ? PHOTO_SIZE : PHOTO_TYPE } });
+    return { ok: false, busy: false };
+  }
+  const made = await processPicture("main", bytes);
+  if (made.ok) return { ok: true, picture: { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height } };
+  if (made.reason === "busy") res.status(503).json(PHOTO_BUSY);
+  else if (made.reason === "size") res.status(413).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_SIZE } });
+  else res.status(400).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_READ } });
+  return { ok: false, busy: made.reason === "busy" };
+}
+
 export async function postPhoto(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
@@ -1607,26 +1670,11 @@ export async function postPhoto(req: Request, res: Response): Promise<Response |
     if (!visits.some((v) => v.door === run.door)) return res.status(403).json(NOT_VISITED);
     if (body.consent !== true) return res.status(400).json(NO_CONSENT);
     if (!allowedOnce(req, s.familyId, limits.photoFamily, limits.photoAddress)) return res.status(429).json(PHOTO_TOO_MANY_TRIES);
-    const bytes = decodeBase64(typeof body.dataBase64 === "string" ? body.dataBase64 : "");
-    const check = checkPictureUpload(typeof body.mime === "string" ? body.mime : "", bytes);
-    // A JPEG, PNG or WebP whose bytes really are that, as the fundraisers' pictures take: it is made
-    // again below, so what is stored is always a fresh JPEG.
-    if (!check.ok) {
-      const size = !check.ok && check.reason === "size";
-      return res.status(size ? 413 : 400).json({ error: LOOK_AGAIN, fields: { photo: size ? PHOTO_SIZE : PHOTO_TYPE } });
-    }
-    // Made again here, so nothing from the camera is kept: not where, not when, not the phone.
-    const made = await processPicture("main", bytes);
-    if (!made.ok && made.reason === "busy") return res.status(503).json(PHOTO_BUSY);
-    if (!made.ok && made.reason === "size") return res.status(413).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_SIZE } });
-    if (!made.ok) return res.status(400).json({ error: LOOK_AGAIN, fields: { photo: PHOTO_READ } });
-    const sent = await sendElfPhoto({
-      year: run.year,
-      door: run.door,
-      familyId: s.familyId,
-      picture: { mime: made.mime, bytes: made.bytes, width: made.width, height: made.height },
-      at: now,
-    });
+    // Made again here, so nothing from the camera is kept: not where, not when, not the phone. A busy answer still
+    // counts as a try here: the door is done by its visit, and its photo is extra.
+    const made = await madePicture(res, body);
+    if (!made.ok) return;
+    const sent = await sendElfPhoto({ year: run.year, door: run.door, familyId: s.familyId, picture: made.picture, at: now });
     if (sent === "limit") return res.status(429).json(PHOTO_LIMIT);
     return res.status(202).json({ status: "waiting", token: sent.token });
   } catch (err) {
@@ -1766,6 +1814,368 @@ export async function getCluePicture(req: Request, res: Response): Promise<Respo
   }
 }
 
+// --- the grand prize: a graduate's picture, sent from Detective HQ (Plan 2c-2) -----------------------------
+//
+//   GET  /elf/hq/entry/:detective              the entry page: one of the signed in family's own detectives,
+//                                              who has done all 24 doors, from midnight as Christmas Eve
+//                                              begins (404 otherwise), open until the entries close and
+//                                              saying they have closed after
+//   POST /api/elf/entry/:detective             the picture, JSON { mime, dataBase64, mobile? } from the page's
+//                                              script (the bigger body parser is in src/app.ts): 201 { ok,
+//                                              message } for a new entry, 200 for one that replaces the
+//                                              picture before; 403 for a detective with doors still to do,
+//                                              409 once the entries have closed, 400 for a family with no
+//                                              mobile that sends none, 429 after the photo's daily tries, and
+//                                              the photo post's answers for a picture it cannot use
+//   GET  /elf/hq/entry/:detective/picture.jpg  the family's own picture for its own detective, private
+//
+// All three sit behind schoolOn and doorsOn, and each answers 404 while December's doors are off even to a
+// browser holding the preview link: the grand prize is never the practice door's. Each is the family's own,
+// so no browser or shared cache keeps any of them, and an entry's picture goes to its own family only.
+
+/** The signed in family's own detective named in an address, the doors it has done and whether it has graduated:
+ *  all 24 doors done, worked out here from the doors every family route reads (familyRuns), never taken from the
+ *  page. Null when the detective is not one of the family's own. The entry page and its post use it, and so do a
+ *  graduate's certificate and share card (ruling F9). */
+async function ownDetective(
+  res: Response,
+  family: FamilyRow,
+  raw: unknown,
+  now: Date,
+): Promise<{ detective: DetectiveRow; doors: DoorsDone; graduate: boolean } | null> {
+  const id = detectiveIdOf(raw);
+  const detective = family.detectives.find((d) => d.id === id);
+  if (!detective) return null;
+  const doors = (await familyDoorsDone(settingsOf(res).year, family.id, (await familyRuns(res, now)).runs, now)).get(detective.id) ?? NO_DOORS;
+  return { detective, doors, graduate: progressOf(doors).graduate };
+}
+
+/** A detective's name as its own family sees it, in full: "Detective Ruby Tinselfoot". */
+const familyNameOf = (d: DetectiveRow): string => familyDetectiveName({ firstName: d.firstName, surname: d.surname, approved: true });
+
+const ENTRY_TOO_MANY_TRIES = { error: "You have tried to send a lot of pictures today. Please try again tomorrow." };
+
+/** The words once the entries have closed, with their closing time on the clock in London. */
+const entriesClosedWords = (closesAt: Date): string => `Grand prize entries closed at ${clockWords(closesAt)} on Christmas Eve.`;
+
+export async function getEntry(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    // Only while December's doors are on, whatever the preview link says, and from midnight as Christmas Eve begins.
+    if (!settings.doorsOn) return notFound(res);
+    const family = await familyOr(req, res);
+    if (!family) return;
+    if (now.getTime() < entriesOpenAt(settings.year).getTime()) return notFound(res);
+    const own = await ownDetective(res, family, req.params.detective, now);
+    if (!own || !own.graduate) return notFound(res);
+    const [hasMobile, entries] = await Promise.all([familyHasMobile(family.id), familyEntries(settings.year, family.id)]);
+    const sentAt = entries.get(own.detective.id)?.sentAt ?? null;
+    return await sendPage(req, res, renderEntryPage(entryViewFor({ detective: own.detective, hasMobile, closesAt: grandPrizeClosesAt(settings), now, sentAt })));
+  } catch (err) {
+    return gameFailed(res, "grand prize entry page", err, false);
+  }
+}
+
+/** A graduate's picture for the grand prize (planner's calls 4 and 5): one a detective, replaced in place until
+ *  the entries close (saveEntry), sent with the picture script as a door's photo is, sharing the photo's daily
+ *  tries, and made again exactly as a door's photo is (madePicture). A mobile typed with it goes on a family
+ *  that has none. */
+export async function postEntry(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    const s = await signedInFamily(req);
+    if (!s) return res.status(401).json({ error: "Please sign in again." });
+    // Only while December's doors are on, whatever the preview link says.
+    if (!settings.doorsOn) return notFound(res, true);
+    const family = await familyWithDetectives(s.familyId);
+    if (!family) return res.status(401).json({ error: "Please sign in again." });
+    const own = await ownDetective(res, family, req.params.detective, now);
+    if (!own) return notFound(res, true);
+    const name = familyNameOf(own.detective);
+    if (!own.graduate) return res.status(403).json({ error: `${name} has not done all 24 doors yet.` });
+    const closesAt = grandPrizeClosesAt(settings);
+    if (now.getTime() < entriesOpenAt(settings.year).getTime()) return notFound(res, true);
+    // The one rule for the window (entryOpen), which fails closed: a closing that is not a real time refuses.
+    if (!entryOpen({ graduate: own.graduate, year: settings.year, closesAt, now })) return res.status(409).json({ error: entriesClosedWords(closesAt) });
+    // A family with no mobile gives one, with the join form's words and check; one sent by a family that has a
+    // mobile already is ignored, so the store is given none.
+    const askMobile = !(await familyHasMobile(family.id));
+    const mobile = askMobile ? normaliseUkMobile(body.mobile) : null;
+    if (askMobile && mobile === null) return res.status(400).json({ error: MOBILE_WORDS, fields: { mobile: MOBILE_WORDS } });
+    if (!allowedOnce(req, family.id, limits.photoFamily, limits.photoAddress)) return res.status(429).json(ENTRY_TOO_MANY_TRIES);
+    // Made again here, so nothing from the camera is kept: not where, not when, not the phone.
+    const made = await madePicture(res, body);
+    if (!made.ok) {
+      // The page sends again while the picture maker is busy (assets/js/elf-entry.js), so a busy answer gives its try
+      // back: a rush before the close never uses up a family's tries.
+      if (made.busy) giveBackOnce(req, family.id, limits.photoFamily, limits.photoAddress);
+      return;
+    }
+    const saved = await saveEntry({ year: settings.year, detectiveId: own.detective.id, familyId: family.id, picture: made.picture, mobile, at: now });
+    const message = `Thank you! ${name}'s picture is in. You can change it until ${clockWords(closesAt)} on Christmas Eve.`;
+    return res.status(saved.replaced ? 200 : 201).json({ ok: true, message });
+  } catch (err) {
+    return gameFailed(res, "grand prize entry", err, true);
+  }
+}
+
+export async function getEntryPicture(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  try {
+    if (!settings.doorsOn) return notFound(res);
+    const s = await signedInFamily(req);
+    const family = s ? await familyWithDetectives(s.familyId) : null;
+    const id = detectiveIdOf(req.params.detective);
+    const detective = family ? family.detectives.find((d) => d.id === id) : undefined;
+    if (!family || !detective) return notFound(res);
+    // The store matches the detective and the family both, so a picture only ever goes to its own family.
+    const picture = await entryPicture(settings.year, detective.id, family.id);
+    if (!picture) return notFound(res);
+    return sendPicture(res, picture, "private, no-store");
+  } catch (err) {
+    return gameFailed(res, "grand prize picture", err, false);
+  }
+}
+
+// --- a graduate's certificate, share card and the graduates' video (Plan 2c-2) -----------------------------------
+//
+//   GET /elf/hq/certificate/:detective  the certificate, a sheet to print (src/fundraising/materials.ts' print shell,
+//                                       as Elf Detective School's other prints are), not a page of the site
+//   GET /elf/hq/share/:detective.png    the share card, a PNG drawn here from its SVG
+//   GET /elf/hq/video                   303 to the graduates' video that a head elf saved in Head Elf HQ > Settings
+//
+// The first two are for one of the signed in family's own detectives who has done all 24 doors (ownDetective), and
+// not found otherwise; the video is for a signed in family with a graduate, and not found otherwise. All three sit
+// behind schoolOn and doorsOn, and each answers 404 while December's doors are off even to a browser holding the
+// preview link. Each is the family's own, so no browser or shared cache keeps any of them. The certificate names the
+// detective in full, as their own family sees them; the share card is made to be shared, so it names them as the
+// public sees them (ruling F11): a first name staff have not ticked shows as its first letter.
+
+/** The elf on its stage for a print, as a PNG data address: a print or a picture made on the server cannot fetch
+ *  the elf's address. */
+const pngData = (png: Buffer): string => `data:image/png;base64,${png.toString("base64")}`;
+
+/** Too many pictures are being made just now: ask again in a moment, as the elves' pictures say. */
+function picturesBusy(res: Response): Response {
+  res.setHeader("Retry-After", "2");
+  return res.status(503).type("text/plain").send("Busy. Please try again in a moment.");
+}
+
+/** How many share cards are kept: the last ones made, so a graduate's family pressing again and again never fills the
+ *  picture queue for everyone else (Plan 2c-2's final review, issue 12). */
+export const SHARE_CARDS_KEPT = 32;
+/** The last share cards made, by everything a card is drawn from (shareCardKey), and nothing else of a family: when
+ *  full, the oldest goes. In this task's memory only. */
+const shareCards = new Map<string, Buffer>();
+
+/** For tests: no share card kept. */
+export function resetShareCards(): void {
+  shareCards.clear();
+}
+
+/** Everything a share card is drawn from: the elf as its look and wardrobe draw it (elfPngKey, at the card's 340
+ *  wide), the name as the public sees it (detectiveName of the parts with staff's tick, never the raw first name), the
+ *  rank, the doors done and the year. */
+function shareCardKey(o: { look: unknown; state: WardrobeState; name: string; rank: Rank; doorsDone: number; year: number }): string {
+  return JSON.stringify([elfPngKey(o.look, o.state, 340), o.name, o.rank, o.doorsDone, o.year]);
+}
+
+function keepShareCard(key: string, card: Buffer): void {
+  shareCards.set(key, card);
+  if (shareCards.size > SHARE_CARDS_KEPT) shareCards.delete(shareCards.keys().next().value as string);
+}
+
+/** The share card as a PNG, drawn by sharp from its SVG (the October plan's Stage B), or null when too many pictures
+ *  are already waiting. It takes its turn with the elves' pictures (inTurn, src/elf/elf-png.ts), so the one small
+ *  task never makes two at once. sharp is loaded the first time, never as the app starts, and by then elfPng has made
+ *  the card's elf, which set sharp up its way (no cache, one thread). The image needs fonts for the card's words: the
+ *  Dockerfile's fontconfig and fonts-dejavu-core, which pr.yml's image check proves are there. */
+function shareCardPng(svg: string): Promise<Buffer | null> {
+  return inTurn<Buffer | null>(async () => {
+    const m = await import("sharp");
+    const sharp = ((m as unknown as { default?: typeof m.default }).default ?? m) as typeof m.default;
+    return sharp(Buffer.from(svg)).png().toBuffer();
+  }, null);
+}
+
+export async function getCertificate(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    // Only while December's doors are on, whatever the preview link says.
+    if (!settings.doorsOn) return notFound(res);
+    const family = await familyOr(req, res);
+    if (!family) return;
+    const own = await ownDetective(res, family, req.params.detective, now);
+    if (!own || !own.graduate) return notFound(res);
+    const { detective, doors } = own;
+    const progress = progressOf(doors);
+    // Drawn in the wardrobe the detective has earned, worked out here, never taken from the browser.
+    const elf = await elfPng(detective.look, wardrobeState(doors), 340);
+    if (!elf) return picturesBusy(res);
+    const page = renderElfCertificate({
+      name: familyNameOf(detective),
+      badgeNumber: detective.badgeNumber === null ? "" : badgeWords(detective.badgeNumber),
+      year: settings.year,
+      doorsDone: progress.doorsDone,
+      goldSeal: progress.goldSeal,
+      elfPicture: pngData(elf),
+      // Dated the day it is printed (planner's call 10): a detective can only graduate from Christmas Eve.
+      awardedOn: now,
+    });
+    // A sheet to print, sent as it is: it is not a page of the site, so it wears no banner.
+    return res.type("html").send(page);
+  } catch (err) {
+    return gameFailed(res, "certificate", err, false);
+  }
+}
+
+export async function getShareCard(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const settings = settingsOf(res);
+  const file = /^(\d{1,10})\.png$/.exec(String(req.params.file));
+  const now = new Date();
+  try {
+    // Only while December's doors are on, whatever the preview link says.
+    if (!settings.doorsOn || !file) return notFound(res);
+    const s = await signedInFamily(req);
+    const family = s ? await familyWithDetectives(s.familyId) : null;
+    if (!family) return notFound(res);
+    const own = await ownDetective(res, family, file[1], now);
+    if (!own || !own.graduate) return notFound(res);
+    const { detective, doors } = own;
+    const progress = progressOf(doors);
+    const state = wardrobeState(doors);
+    // The name in its parts, with staff's tick, never familyDetectiveName's: the card works out the public form itself.
+    const name = { firstName: detective.firstName, surname: detective.surname, approved: detective.nameApproved };
+    const key = shareCardKey({ look: detective.look, state, name: detectiveName(name), rank: progress.rank, doorsDone: progress.doorsDone, year: settings.year });
+    // A card made already is sent as it was, with no elf or card made again; a busy answer keeps nothing.
+    let card = shareCards.get(key) ?? null;
+    if (!card) {
+      const elf = await elfPng(detective.look, state, 340);
+      if (!elf) return picturesBusy(res);
+      card = await shareCardPng(shareCardSvg({ detective: name, rank: progress.rank, doorsDone: progress.doorsDone, year: settings.year }, pngData(elf)));
+      if (!card) return picturesBusy(res);
+      keepShareCard(key, card);
+    }
+    res.setHeader("Content-Disposition", 'inline; filename="elf-detective-school-graduate.png"');
+    return sendPicture(res, { mime: "image/png", bytes: card }, "private, no-store");
+  } catch (err) {
+    return gameFailed(res, "share card", err, false);
+  }
+}
+
+/** The graduates' video (ruling F10): Detective HQ links only to this site, so its link is this address, which sends a
+ *  signed in family with a graduate on to the https link a head elf saved (graduateVideoOf), telling the video's site
+ *  nothing of where the family came from. */
+export async function getGraduateVideo(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  const settings = settingsOf(res);
+  const now = new Date();
+  try {
+    const link = graduateVideoOf(settings);
+    // Only while December's doors are on, whatever the preview link says, and only with a link set.
+    if (!settings.doorsOn || !link) return notFound(res);
+    const s = await signedInFamily(req);
+    const family = s ? await familyWithDetectives(s.familyId) : null;
+    if (!family) return notFound(res);
+    const doorsDone = await familyDoorsDone(settings.year, family.id, (await familyRuns(res, now)).runs, now);
+    if (!family.detectives.some((d) => progressOf(doorsDone.get(d.id) ?? NO_DOORS).graduate)) return notFound(res);
+    return res.redirect(303, link);
+  } catch (err) {
+    return gameFailed(res, "graduates' video", err, false);
+  }
+}
+
+// --- the emails a family can stop (Plan 2c-2, Task 7) ------------------------------------------------------------
+//
+//   GET  /elf/emails/:token  the page the small link at the foot of a clue email, a promotion or a graduation opens:
+//                            the family's switch for the emails that are not essential, as a button, since following a
+//                            link never changes anything; 404 for a token that is no family's
+//   POST /elf/emails/:token  the page's button, the plain form's stopped=yes or stopped=no, from our own page only
+//                            (403): the page again, saying what it did; 404 for a token that is no family's, and 400,
+//                            changing nothing, for any other choice
+//   POST /api/elf/emails     Detective HQ's switch, for the signed in family: JSON { stopped } or the plain form's
+//                            stopped=yes or stopped=no, from our own page only (403); JSON { ok, stopped }, or 303
+//                            back to Detective HQ
+//
+// The link's page and its button answer while Elf Detective School is on, whatever December's doors say, so a family
+// can always stop the emails it has had. Detective HQ's switch answers only while December's doors are on, whatever
+// the preview link says (ruling F16). Every answer is the family's own, so no browser or shared cache keeps any of
+// them, and the link's page is never listed. The token in the link is the family's own (elf_families.emails_token),
+// and its page shows nothing of the family, so a forwarded email gives nothing away. The won email, sign in codes and
+// the welcome, which is the family's receipt, always go.
+
+/** The plain form's choice: stopped=yes stops the emails, stopped=no starts them again; anything else is none. */
+const stoppedFromForm = (raw: unknown): boolean | null => (raw === "yes" ? true : raw === "no" ? false : null);
+
+/** The link's own address, where its page's button posts. */
+const emailsPagePath = (token: string): string => `/elf/emails/${token}`;
+
+/** Never kept by a browser or a shared cache, and never listed: set before anything else, so every answer has it. */
+function emailsPageHeaders(res: Response): void {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+}
+
+export async function getEmailsPage(req: Request, res: Response): Promise<Response | void> {
+  emailsPageHeaders(res);
+  try {
+    const token = String(req.params.token);
+    const family = await familyByEmailsToken(token);
+    if (!family) return notFound(res);
+    return await sendPage(req, res, renderEmailsPage({ stopped: family.stopped, said: null, postUrl: emailsPagePath(token) }));
+  } catch (err) {
+    return gameFailed(res, "emails page", err, false);
+  }
+}
+
+export async function postEmailsPage(req: Request, res: Response): Promise<Response | void> {
+  emailsPageHeaders(res);
+  if (!ourOwnPage(req)) return res.status(403).type("text/plain").send(ELF_NOT_OURS);
+  try {
+    const token = String(req.params.token);
+    const family = await familyByEmailsToken(token);
+    if (!family) return notFound(res);
+    const postUrl = emailsPagePath(token);
+    const stopped = stoppedFromForm((req.body ?? {}).stopped);
+    // Not a choice the page's button sends: nothing changes, and the page is drawn as it stands.
+    if (stopped === null) return await sendPage(req, res.status(400), renderEmailsPage({ stopped: family.stopped, said: null, postUrl }));
+    await setEmailsStopped(family.id, stopped);
+    return await sendPage(req, res, renderEmailsPage({ stopped, said: stopped ? "stopped" : "started", postUrl }));
+  } catch (err) {
+    return gameFailed(res, "emails", err, false);
+  }
+}
+
+export async function postEmails(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  const json = wantsJson(req);
+  if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
+  try {
+    // Only while December's doors are on, whatever the preview link says (ruling F16).
+    if (!settingsOf(res).doorsOn) return notFound(res, json);
+    const s = await signedInFamily(req);
+    if (!s) return json ? res.status(401).json({ error: "Please sign in again." }) : res.redirect(303, "/elf/sign-in");
+    const sent = (req.body ?? {}) as Record<string, unknown>;
+    const stopped = json ? (typeof sent.stopped === "boolean" ? sent.stopped : null) : stoppedFromForm(sent.stopped);
+    if (stopped === null) return json ? res.status(400).json({ error: ELF_NOT_OURS }) : res.status(400).type("text/plain").send(ELF_NOT_OURS);
+    await setEmailsStopped(s.familyId, stopped);
+    return json ? res.status(200).json({ ok: true, stopped }) : res.redirect(303, "/elf/hq");
+  } catch (err) {
+    return gameFailed(res, "emails switch", err, json);
+  }
+}
+
 elfRouter.get("/elf/p/:code", schoolOn, doorsOn, getPoster);
 elfRouter.post("/elf/p/:code/word", forms, schoolOn, doorsOn, postWord);
 elfRouter.post("/api/elf/word", forms, schoolOn, doorsOn, postWord);
@@ -1778,3 +2188,12 @@ elfRouter.delete("/api/elf/door/:n/photo", schoolOn, doorsOn, deletePhotoByDoor)
 elfRouter.get("/elf/door/:n/photo/:token.jpg", schoolOn, doorsOn, getDoorPhoto);
 elfRouter.get("/elf/door/:n/elf/:visitId.png", schoolOn, doorsOn, getDoorElf);
 elfRouter.get("/elf/hq/clue/:door/:n.jpg", schoolOn, doorsOn, getCluePicture);
+elfRouter.get("/elf/hq/entry/:detective", schoolOn, doorsOn, getEntry);
+elfRouter.post(ELF_ENTRY_POST_PATH, schoolOn, doorsOn, postEntry);
+elfRouter.get("/elf/hq/entry/:detective/picture.jpg", schoolOn, doorsOn, getEntryPicture);
+elfRouter.get("/elf/hq/certificate/:detective", schoolOn, doorsOn, getCertificate);
+elfRouter.get("/elf/hq/share/:file", schoolOn, doorsOn, getShareCard);
+elfRouter.get(GRADUATE_VIDEO_PATH, schoolOn, doorsOn, getGraduateVideo);
+elfRouter.get("/elf/emails/:token", schoolOn, getEmailsPage);
+elfRouter.post("/elf/emails/:token", forms, schoolOn, postEmailsPage);
+elfRouter.post(EMAILS_SWITCH_PATH, forms, schoolOn, doorsOn, postEmails);

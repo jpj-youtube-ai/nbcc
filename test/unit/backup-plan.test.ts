@@ -83,9 +83,10 @@ describe("knowing how many tables to expect", () => {
   // since Elf Detective School's game added guesses, word tries, visits, photos, photo files and the
   // practice door; 119 since the alerts plan added head elves' mobiles, the alerts sent and the claimed sends;
   // 122 since TASK-619 added the phones to notify, each person's notification settings, and how far
-  // each has been told.
-  it("counts 122 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(122);
+  // each has been told; 124 since Elf Detective School's grand prize added its entries and their
+  // pictures (whose rows stay out of the dump, as photos' do).
+  it("counts 124 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(124);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -218,7 +219,12 @@ describe("knowing how many tables to expect", () => {
     for (const t of ["admin_push_subscriptions", "admin_notify_prefs", "admin_notified"]) {
       expect(main).toContain(t);
     }
-    expect(main.length).toBe(119);
+    // Elf Detective School's grand prize: the entries, and their pictures (whose rows stay out of the
+    // dump). The table is still dumped, empty, so a restore has it.
+    for (const t of ["elf_grand_prize_entries", "elf_grand_prize_files"]) {
+      expect(main).toContain(t);
+    }
+    expect(main.length).toBe(121);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {
@@ -226,14 +232,17 @@ describe("knowing how many tables to expect", () => {
   });
 });
 
-describe("keeping photo bytes out of the nightly backup (C12)", () => {
-  it("names the photo files table as the one whose data is left out", () => {
-    expect(BACKUP_TABLE_DATA_LEFT_OUT).toEqual(["elf_photo_files"]);
+describe("keeping photo and grand prize picture bytes out of the nightly backup (C12)", () => {
+  // The grand prize pictures are handled as photos are (the grand prize plan's carried item 6).
+  it("names the photo files and the grand prize pictures as the tables whose data is left out", () => {
+    expect(BACKUP_TABLE_DATA_LEFT_OUT).toEqual(["elf_photo_files", "elf_grand_prize_files"]);
   });
 
-  it("tells pg_dump to leave that table's data out, and only that", () => {
-    const args = dumpArgs(["elf_photo_files"]);
+  it("tells pg_dump to leave those tables' data out, and only those", () => {
+    const args = dumpArgs(BACKUP_TABLE_DATA_LEFT_OUT);
     expect(args).toContain("--exclude-table-data=elf_photo_files");
+    expect(args).toContain("--exclude-table-data=elf_grand_prize_files");
+    expect(args.filter((a) => a.startsWith("--exclude-table-data"))).toHaveLength(2);
     expect(args).toContain("--format=custom");
     expect(dumpArgs([]).some((a) => a.startsWith("--exclude-table-data"))).toBe(false);
   });
@@ -241,6 +250,11 @@ describe("keeping photo bytes out of the nightly backup (C12)", () => {
   it("skips those tables when writing the CSVs", () => {
     expect(csvTables(["a", "elf_photo_files", "b"], ["elf_photo_files"])).toEqual(["a", "b"]);
     expect(csvTables(["a", "elf_photo_files"], ["elf_photo_files"])).toEqual(["a"]);
+    // The entries hold no picture, so they still get their CSV; only their pictures are left out.
+    expect(csvTables(["a", "elf_grand_prize_entries", "elf_grand_prize_files"], BACKUP_TABLE_DATA_LEFT_OUT)).toEqual([
+      "a",
+      "elf_grand_prize_entries",
+    ]);
   });
 
   it("gives tests a real JPEG", async () => {

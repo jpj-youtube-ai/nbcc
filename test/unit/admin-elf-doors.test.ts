@@ -27,7 +27,14 @@ const { getUserAuthRowMock, doors, settingsDb, processPictureMock, cluePictureMo
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf-doors", () => doors);
 vi.mock("../../src/db/elf", () => settingsDb);
-vi.mock("../../src/db/elf-game", () => ({ onDoorsSwitchedOn: vi.fn(), familyWordTries: vi.fn(), clearWordTries: vi.fn(), cluePicture: cluePictureMock }));
+// The real runOf (pure) stays: door 24's sheet builds its run to warn about the grand prize.
+vi.mock("../../src/db/elf-game", async (orig) => ({
+  ...(await orig<object>()),
+  onDoorsSwitchedOn: vi.fn(),
+  familyWordTries: vi.fn(),
+  clearWordTries: vi.fn(),
+  cluePicture: cluePictureMock,
+}));
 vi.mock("../../src/fundraising/picture-process", () => ({ processPicture: processPictureMock }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
@@ -754,5 +761,88 @@ describe("gone home", () => {
     expect((await call(routes.postAdminElfDoorGoneHome, "6", VIEW)).statusCode).toBe(403);
     expect((await call(routes.deleteAdminElfDoorGoneHome, "6", VIEW)).statusCode).toBe(403);
     expect(doors.tickElfDoor).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Plan 2c-2: door 24 against the grand prize entries, and the head elf named on the ticks ----
+
+const sheetFor = async (door: string) => body(await run(routes.getAdminElfDoor, ask("viewer", { permissions: VIEW, params: { door } }))).door;
+
+describe("door 24 and the grand prize entries", () => {
+  const WARNING = "Grand prize entries close at 5pm, so door 24's place must close by 4pm.";
+  const AT_5_30 = { ...ON, grandPrizeClosesAt: new Date("2026-12-24T17:30:00.000Z") };
+
+  it("warns on door 24's sheet when its place closes at 4:30pm and the entries at 5pm", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(24, { closesAt: "16:30:00" }));
+    expect((await sheetFor("24")).grandPrize).toBe(WARNING);
+  });
+
+  // Ruling F3: with no time typed door 24's place closes at 4pm, an hour before the entries.
+  it("gives no warning on door 24 at its 4pm default or an earlier time, and none on any other door", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(24));
+    expect((await sheetFor("24")).grandPrize).toBeNull();
+    doors.getElfDoor.mockResolvedValue(doorOf(24, { closesAt: "15:00:00" }));
+    expect((await sheetFor("24")).grandPrize).toBeNull();
+    doors.getElfDoor.mockResolvedValue(doorOf(7, { closesAt: "23:00:00" }));
+    expect((await sheetFor("7")).grandPrize).toBeNull();
+  });
+
+  it("measures door 24 against the closing a head elf saved", async () => {
+    settingsDb.getElfSettings.mockResolvedValue(AT_5_30);
+    doors.getElfDoor.mockResolvedValue(doorOf(24, { closesAt: "16:30:00" }));
+    expect((await sheetFor("24")).grandPrize).toBeNull();
+    doors.getElfDoor.mockResolvedValue(doorOf(24, { closesAt: "16:45:00" }));
+    expect((await sheetFor("24")).grandPrize).toBe("Grand prize entries close at 5:30pm, so door 24's place must close by 4:30pm.");
+  });
+
+  it("warns from the sheet a change or a tick answers too, against the saved closing", async () => {
+    settingsDb.getElfSettings.mockResolvedValue(AT_5_30);
+    doors.changeElfDoor.mockResolvedValue(doorOf(24, { closesAt: "16:45:00" }));
+    const changed = await run(routes.patchAdminElfDoor, ask("viewer", { permissions: EDIT, params: { door: "24" }, body: { closesAt: "16:45" } }));
+    expect(changed.statusCode).toBe(200);
+    expect(body(changed).door.grandPrize).toBe("Grand prize entries close at 5:30pm, so door 24's place must close by 4:30pm.");
+    doors.tickElfDoor.mockResolvedValue(doorOf(24, { closesAt: "16:45:00" }));
+    const ticked = await run(routes.postAdminElfDoorThanked, ask("viewer", { permissions: EDIT, params: { door: "24" } }));
+    expect(body(ticked).door.grandPrize).toBe("Grand prize entries close at 5:30pm, so door 24's place must close by 4:30pm.");
+  });
+});
+
+// As snow days and gone home are named: users.full_name, the email only when it is blank.
+describe("the head elf named on the ticks", () => {
+  const TICKED = {
+    droppedOffAt: new Date("2026-12-01T10:00:00Z"),
+    droppedOffBy: "admin:alex@example.org",
+    thankedAt: new Date("2026-12-02T10:00:00Z"),
+    thankedBy: "admin:sam@example.org",
+  };
+
+  it("names who ticked dropped off and thank you sent by their name, and by the email when it is blank", async () => {
+    users([
+      { full_name: "Alex Example", email: "alex@example.org" },
+      { full_name: "  ", email: "sam@example.org" },
+    ]);
+    doors.getElfDoor.mockResolvedValue(doorOf(8, TICKED));
+    const d = await sheetFor("8");
+    expect(d.droppedOffName).toBe("Alex Example");
+    expect(d.thankedName).toBe("sam@example.org");
+    // One read of users for every name on the sheet.
+    const lookups = vi.mocked(pool.query).mock.calls.filter((c) => /FROM users/.test(String(c[0])));
+    expect(lookups).toHaveLength(1);
+    expect(lookups[0][1]).toEqual([["alex@example.org", "sam@example.org"]]);
+  });
+
+  it("has no names, and reads no users, for ticks that are not ticked", async () => {
+    doors.getElfDoor.mockResolvedValue(doorOf(8));
+    const d = await sheetFor("8");
+    expect(d.droppedOffName).toBeNull();
+    expect(d.thankedName).toBeNull();
+    expect(vi.mocked(pool.query).mock.calls.filter((c) => /FROM users/.test(String(c[0])))).toEqual([]);
+  });
+
+  it("answers the name from the tick itself", async () => {
+    users([{ full_name: "Alex Example", email: "alex@example.org" }]);
+    doors.tickElfDoor.mockResolvedValue(doorOf(8, { droppedOffAt: TICKED.droppedOffAt, droppedOffBy: TICKED.droppedOffBy }));
+    const res = await run(routes.postAdminElfDoorDroppedOff, ask("viewer", { permissions: EDIT, params: { door: "8" } }));
+    expect(body(res).door).toMatchObject({ droppedOffName: "Alex Example", thankedName: null });
   });
 });

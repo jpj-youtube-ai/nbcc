@@ -41,15 +41,19 @@ export interface ClueFamily {
   familyId: number;
   email: string;
   grownUpName: string;
+  /** The family's own token for the link that ends its email, to stop the emails (Plan 2c-2). */
+  emailsToken: string;
 }
 
-/** The families still to get a door's clue email, oldest first, at most `limit`: active, not removed, and
- *  with no claim for this door that went, was given up or is in flight. A failed claim old enough to try
- *  again is listed; claimSend then takes it. */
+/** The families still to get a door's clue email, oldest first, at most `limit`: active, not removed, with the
+ *  emails not stopped (Plan 2c-2), and with no claim for this door that went, was given up or is in flight. A
+ *  failed claim old enough to try again is listed; claimSend then takes it. A family that has stopped the emails
+ *  is never listed, so nothing is claimed for it: one that starts them again while a clue's email is still going
+ *  out (six hours from clue 1) gets that clue's email. */
 export async function familiesStillToEmail(year: number, door: number, limit: number): Promise<ClueFamily[]> {
-  const r = await pool.query<{ id: number; email: string; grown_up_name: string }>(
-    `SELECT f.id, f.email, f.grown_up_name FROM elf_families f
-      WHERE f.active AND f.removed_at IS NULL
+  const r = await pool.query<{ id: number; email: string; grown_up_name: string; emails_token: string }>(
+    `SELECT f.id, f.email, f.grown_up_name, f.emails_token FROM elf_families f
+      WHERE f.active AND f.removed_at IS NULL AND f.emails_stopped_at IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM elf_sends s
            WHERE s.kind = 'clue' AND s.key = $1::text || ':' || f.id
@@ -58,10 +62,12 @@ export async function familiesStillToEmail(year: number, door: number, limit: nu
       LIMIT $2`,
     [`${year}-${door}`, limit],
   );
-  return r.rows.map((row) => ({ familyId: Number(row.id), email: row.email, grownUpName: row.grown_up_name }));
+  return r.rows.map((row) => ({ familyId: Number(row.id), email: row.email, grownUpName: row.grown_up_name, emailsToken: row.emails_token }));
 }
 
-/** The families the sweep looks at for proud moments: active and not removed, by id. */
+/** The families the sweep looks at for proud moments: active and not removed, by id. A family that has stopped the
+ *  emails is still swept: its proud moments are claimed and marked without an email (src/elf/worker.ts), so
+ *  starting the emails again never sends old news. */
 export async function familiesToSweep(): Promise<number[]> {
   const r = await pool.query<{ id: number }>("SELECT id FROM elf_families WHERE active AND removed_at IS NULL ORDER BY id");
   return r.rows.map((row) => Number(row.id));

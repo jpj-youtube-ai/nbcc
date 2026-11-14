@@ -21,8 +21,11 @@ import {
   buildElfSignInCodeEmail,
   buildElfTestAlertEmail,
   buildElfWelcomeEmail,
+  type ClueCatchUp,
 } from "../elf/emails";
+import type { Door } from "../elf/calendar";
 import { factFor } from "../elf/facts";
+import { grandPrizeClosesAt } from "../elf/grand-prize";
 import { doorPost, yesterdayPost } from "../elf/posts";
 import { buildMemoryReceiptEmail, buildTshirtAskEmail, greetGuardian } from "../fundraising/signup-tidy-emails";
 import { buildInMemoryApprovedEmail } from "../fundraising/memory-emails";
@@ -1211,21 +1214,40 @@ const ELF_CLUE_3 = new Date("2026-12-07T19:30:00.000Z");
 const ELF_REVEAL = new Date("2026-12-07T20:30:00.000Z");
 /** The pretend place's closing time, as typed in Doors. */
 const ELF_CLOSES = new Date("2026-12-07T21:00:00.000Z");
-const elfClue = (clue: { words: string | null; pictureAlt: string | null }) => (b: string) =>
-  buildElfClueEmail({
-    grownUpName: "Sam Example",
-    door: 7,
-    elfName: "Pip",
-    clue,
-    clue1At: ELF_EVENING_CLUE,
-    clue2At: ELF_CLUE_2,
-    clue3At: ELF_CLUE_3,
-    revealAt: ELF_REVEAL,
-    closesAt: ELF_CLOSES,
-    hqUrl: `${b}/elf/hq`,
-    fact: factFor(7),
-    giveUrl: `${b}/donate`,
-  });
+/** A pretend family's own page for stopping the emails that are not essential (Plan 2c-2): its token is made up. */
+const ELF_STOP = (b: string) => `${b}/elf/emails/0123456789abcdef0123456789abcdef`;
+const ELF_CLUE_WORDS = "I am waiting by the pine cones, where the tea is hot.";
+/** Door 24's first clue on Christmas Eve, as door 23's email says it: 10am unless a head elf sets a time. */
+const ELF_CHRISTMAS_EVE_CLUE = new Date("2026-12-24T10:00:00.000Z");
+/** When the grand prize entries close unless a head elf sets a time: 5pm on Christmas Eve. */
+const ELF_ENTRIES_CLOSE = grandPrizeClosesAt({ year: 2026, grandPrizeClosesAt: null });
+/** A clue email as the worker builds it, always ending with the link to stop the emails. `lines` may give it another
+ *  door, with that door's fact, and the lines of the week before Christmas Eve (Plan 2c-2). */
+const elfClue =
+  (clue: { words: string | null; pictureAlt: string | null }, lines: Partial<Pick<Parameters<typeof buildElfClueEmail>[0], "door" | "fact" | "christmasEve" | "catchUp">> = {}) =>
+  (b: string) =>
+    buildElfClueEmail({
+      grownUpName: "Sam Example",
+      door: 7,
+      elfName: "Pip",
+      clue,
+      clue1At: ELF_EVENING_CLUE,
+      clue2At: ELF_CLUE_2,
+      clue3At: ELF_CLUE_3,
+      revealAt: ELF_REVEAL,
+      closesAt: ELF_CLOSES,
+      hqUrl: `${b}/elf/hq`,
+      fact: factFor(7),
+      giveUrl: `${b}/donate`,
+      christmasEve: null,
+      catchUp: null,
+      ...lines,
+      stopUrl: ELF_STOP(b),
+    });
+/** A clue email of the week before Christmas Eve (doors 17 to 23), as one family gets it, with the door's own fact.
+ *  Doors 18 and 23 are school days, as door 7 is, so they keep door 7's evening: only the clock shows. */
+const elfWeekBefore = (door: Door, lines: { christmasEve?: { clue1At: Date }; catchUp: ClueCatchUp }) =>
+  elfClue({ words: ELF_CLUE_WORDS, pictureAlt: null }, { door, fact: factFor(door), ...lines });
 const elfReminder = (clue1At: Date) => () =>
   buildElfPlaceReminderEmail({ contactName: "Alex Example", placeName: ELF_PLACE, elfName: "Pip", door: 7, clue1At, closesAt: "5pm", phone: "01632 960 123" });
 /** Today's door as the 8am email sees it: ready; not ready but able to open (things still to do); or unable to
@@ -1265,8 +1287,17 @@ const elfMorning = (door: { ready: boolean; toDo: string[]; canRun: boolean }, s
     pictures: { today: null, yesterday: null },
     adminUrl: `${b}/admin`,
   });
+/** A proud email as the worker builds it: a promotion and a graduation end with the link to stop the emails; a win,
+ *  which always goes, has none. */
 const elfProud = (o: { kind: "won" | "promoted" | "graduated"; elfName?: string; door?: 7; rank?: "Junior Detective" }) => (b: string) =>
-  buildElfProudEmail({ ...o, grownUpName: "Sam Example", detectiveName: "Detective Ruby Tinselfoot", hqUrl: `${b}/elf/hq`, giveUrl: `${b}/donate` });
+  buildElfProudEmail({
+    ...o,
+    grownUpName: "Sam Example",
+    detectiveName: "Detective Ruby Tinselfoot",
+    hqUrl: `${b}/elf/hq`,
+    giveUrl: `${b}/donate`,
+    stopUrl: o.kind === "won" ? null : ELF_STOP(b),
+  });
 const ELF: CatalogueEmail[] = [
   {
     id: "elf-welcome",
@@ -1301,9 +1332,17 @@ const ELF: CatalogueEmail[] = [
     logKinds: ["elfClue"],
     note: "The clue words and the picture words are typed in Doors. A clue picture is never in the email.",
     versions: [
-      v("words", "Words", elfClue({ words: "I am waiting by the pine cones, where the tea is hot.", pictureAlt: null })),
+      v("words", "Words", elfClue({ words: ELF_CLUE_WORDS, pictureAlt: null })),
       v("picture", "A picture only", elfClue({ words: null, pictureAlt: "a pine cone on a snowy wall" })),
-      v("both", "Words and a picture", elfClue({ words: "I am waiting by the pine cones, where the tea is hot.", pictureAlt: "a pine cone on a snowy wall" })),
+      v("both", "Words and a picture", elfClue({ words: ELF_CLUE_WORDS, pictureAlt: "a pine cone on a snowy wall" })),
+      v("week-before-ready", "The week before, up to date", elfWeekBefore(18, { catchUp: { ready: true, closesAt: ELF_ENTRIES_CLOSE } })),
+      v("week-before-behind", "The week before, behind", elfWeekBefore(18, { catchUp: { ready: false, fromHome: 3 } })),
+      v("week-before-behind-visit", "The week before, behind, nothing left to crack from home", elfWeekBefore(18, { catchUp: { ready: false, fromHome: 0 } })),
+      v(
+        "day-before-christmas-eve",
+        "The day before Christmas Eve",
+        elfWeekBefore(23, { christmasEve: { clue1At: ELF_CHRISTMAS_EVE_CLUE }, catchUp: { ready: true, closesAt: ELF_ENTRIES_CLOSE } }),
+      ),
     ],
   },
   {

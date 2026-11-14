@@ -168,8 +168,9 @@ describe("the clue email", () => {
 
 // Plan 2c-1, Task 9: a family sees a door's place only once it has had its guess or been there, so the clue
 // email no longer says when the place "is shown". It says when the family finds out whether it cracked the
-// case, when the place closes on its day (a closing time typed in Doors), and that a missed hunt can still be
-// cracked later in Detective HQ. Door 7 is a Monday evening; door 5 a Saturday morning.
+// case, when the place closes on its day (a closing time typed in Doors, or door 24's 4pm when none is typed: Plan
+// 2c-2, ruling F4), and that a missed hunt can still be cracked later in Detective HQ. Door 7 is a Monday evening;
+// door 5 a Saturday morning.
 describe("the clue email, on finding out and catching up", () => {
   const SIX = new Date("2026-12-07T18:00:00.000Z");
   const SIX_30 = new Date("2026-12-07T18:30:00.000Z");
@@ -204,8 +205,9 @@ describe("the clue email, on finding out and catching up", () => {
     expect(e.html.toLowerCase()).not.toContain("tonight");
   });
 
-  // Ruling F13: with no closing time typed the place still closes, at the 8pm a door falls back to, so the
-  // family may find out later than the reveal; and a closing time not given at all reads as none.
+  // Ruling F13: with no closing time typed the place still closes, at the time a door falls back to (8pm, or 4pm on
+  // Christmas Eve, whose clues say it), so the family may find out later than the reveal; and a closing time not
+  // given at all reads as none.
   it("says nothing of closing with no closing time, and that the family may find out later", () => {
     const notGiven: Record<string, unknown> = {
       grownUpName: "Sam Example",
@@ -237,6 +239,140 @@ describe("the clue email, on finding out and catching up", () => {
       expect(e.html).not.toContain("or later if the elf is still hiding then");
     }
     expect(morning({ closesAt: at("16:00") }).text).toContain("You find out whether you cracked it at 11:30am, or later if the elf is still hiding then.");
+  });
+});
+
+// Plan 2c-2, Task 8: in the week before Christmas Eve (doors 17 to 23) the clue email ends, before the button, with the
+// grand prize lines for the family: up to date, it is asked whether its picture is ready; behind, it is told what it can
+// still crack from home, or to visit the places it has not done. Door 23's email also says, before the clue 2 line, when
+// door 24's first clue comes out. Every other door's email has neither, and reads as it did.
+describe("the clue email in the week before Christmas Eve", () => {
+  const CHRISTMAS_EVE_10AM = new Date("2026-12-24T10:00:00.000Z");
+  const ENTRIES_CLOSE = new Date("2026-12-24T17:00:00.000Z");
+  const TOMORROW = "Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early.";
+  const READY = "Have you got your picture ready?";
+  const WHAT = "Every detective who does all 24 doors can send in a drawing, or a photo of their naughtiest elf at home, for the grand prize.";
+  const WHEN = "You can send it in Detective HQ from the morning of Christmas Eve until 5pm that day.";
+  const BEHIND = "Catching up for the grand prize";
+  const CRACK_3 = "You can still crack 3 doors from home, with one guess each. They are in Detective HQ, under Doors you can still crack.";
+  const VISIT = "To catch up, visit the hiding places of the doors you have not done yet, and type the word on each elf's tag.";
+  const PICTURE = "Every detective who does all 24 doors can send in a picture for the grand prize on Christmas Eve.";
+  const MISSED = "If you miss tonight's hunt, you can still crack this case later in Detective HQ, with one guess.";
+  const BUTTON = "Open Detective HQ: https://nbcc.scot/elf/hq";
+  const EVERY_LINE = [TOMORROW, READY, WHAT, WHEN, BEHIND, CRACK_3, VISIT, PICTURE];
+  const ready = (closesAt: Date = ENTRIES_CLOSE) => ({ ready: true as const, closesAt });
+  const behind = (fromHome: number) => ({ ready: false as const, fromHome });
+  /** Both halves of an email as words, the apostrophes read back. */
+  const both = (e: BuiltEmail) => [e.text, htmlWords(e.html)];
+
+  it("says on door 23 when door 24's first clue comes out, in its own paragraph after the clue and before the clue 2 line", () => {
+    const e = clue({ door: 23, christmasEve: { clue1At: CHRISTMAS_EVE_10AM } });
+    const lines = e.text.split("\n");
+    const at = lines.indexOf(TOMORROW);
+    expect(at).toBeGreaterThan(-1);
+    expect(lines.slice(at - 2, at + 3)).toEqual([
+      '"I live where the pine cones are."',
+      "",
+      TOMORROW,
+      "",
+      "Clue 2 comes out at 6:30pm and clue 3 at 7:30pm, in Detective HQ. You find out whether you cracked it at 8:30pm, or later if the elf is still hiding then.",
+    ]);
+    const html = htmlWords(e.html);
+    expect(html).toContain(`>${TOMORROW}</p>`);
+    expect(html.indexOf("I live where the pine cones are.")).toBeLessThan(html.indexOf(TOMORROW));
+    expect(html.indexOf(TOMORROW)).toBeLessThan(html.indexOf("Clue 2 comes out at"));
+  });
+
+  it("says the time a head elf set for door 24's first clue", () => {
+    const e = clue({ door: 23, christmasEve: { clue1At: new Date("2026-12-24T09:30:00.000Z") } });
+    for (const words of both(e)) expect(words).toContain("Tomorrow is Christmas Eve, so door 24's first clue comes out at 9:30am, and hiding places close early.");
+  });
+
+  it("asks a family that is up to date whether its picture is ready, and until when it can send it, at the end before the button", () => {
+    const e = clue({ door: 18, catchUp: ready() });
+    const lines = e.text.split("\n");
+    const from = lines.indexOf(MISSED);
+    expect(lines.slice(from, from + 8)).toEqual([MISSED, "", READY, WHAT, "", WHEN, "", BUTTON]);
+    const html = htmlWords(e.html);
+    expect(html).toContain(`>${READY}</h2>`);
+    const order = [MISSED, READY, WHAT, WHEN, ">Open Detective HQ</a>"].map((w) => html.indexOf(w));
+    expect(order.every((n) => n > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    for (const words of both(e)) {
+      expect(words).not.toContain(BEHIND);
+      expect(words).not.toContain(PICTURE);
+      expect(words).not.toContain("Tomorrow is Christmas Eve");
+    }
+  });
+
+  it("says the closing time a head elf set for the entries", () => {
+    const e = clue({ door: 18, catchUp: ready(new Date("2026-12-24T17:30:00.000Z")) });
+    for (const words of both(e)) expect(words).toContain("You can send it in Detective HQ from the morning of Christmas Eve until 5:30pm that day.");
+  });
+
+  it("tells a family that is behind how many doors it can still crack from home, and that the grand prize is on Christmas Eve", () => {
+    const e = clue({ door: 18, catchUp: behind(3) });
+    const lines = e.text.split("\n");
+    const from = lines.indexOf(MISSED);
+    expect(lines.slice(from, from + 8)).toEqual([MISSED, "", BEHIND, CRACK_3, "", PICTURE, "", BUTTON]);
+    const html = htmlWords(e.html);
+    expect(html).toContain(`>${BEHIND}</h2>`);
+    for (const words of both(e)) {
+      expect(words).toContain(CRACK_3);
+      expect(words).toContain(PICTURE);
+      expect(words).not.toContain(VISIT);
+      expect(words).not.toContain(READY);
+      expect(words).not.toContain(WHAT);
+    }
+    expect(clue({ door: 18, catchUp: behind(1) }).text).toContain("You can still crack 1 door from home, with one guess each.");
+  });
+
+  it("tells a family that is behind with nothing left to crack from home to visit the places it has not done", () => {
+    const e = clue({ door: 18, catchUp: behind(0) });
+    const lines = e.text.split("\n");
+    const from = lines.indexOf(MISSED);
+    expect(lines.slice(from, from + 8)).toEqual([MISSED, "", BEHIND, VISIT, "", PICTURE, "", BUTTON]);
+    for (const words of both(e)) {
+      expect(words).toContain(VISIT);
+      expect(words).not.toContain("You can still crack");
+    }
+  });
+
+  it("gives door 23's email both, the day before's line first", () => {
+    const e = clue({ door: 23, christmasEve: { clue1At: CHRISTMAS_EVE_10AM }, catchUp: ready() });
+    for (const words of both(e)) {
+      expect(words.indexOf(TOMORROW)).toBeGreaterThan(-1);
+      expect(words.indexOf(TOMORROW)).toBeLessThan(words.indexOf(READY));
+    }
+  });
+
+  it("says none of these on any other door, with both null or not given", () => {
+    for (const e of [clue({ door: 16, christmasEve: null, catchUp: null }), clue({ door: 24, christmasEve: null, catchUp: null }), clue()]) {
+      for (const words of both(e)) for (const line of EVERY_LINE) expect(words, line).not.toContain(line);
+      // The email reads as it did: straight from the missed hunt line to the button.
+      const lines = e.text.split("\n");
+      expect(lines.slice(lines.indexOf(MISSED), lines.indexOf(MISSED) + 3)).toEqual([MISSED, "", BUTTON]);
+    }
+  });
+
+  // A time that is not a real time is never said: the line that needs it is left out.
+  it("leaves out a line whose time is not a real time", () => {
+    const eve = clue({ door: 23, christmasEve: { clue1At: new Date("nonsense") } });
+    for (const words of both(eve)) expect(words).not.toContain("Tomorrow is Christmas Eve");
+    const e = clue({ door: 18, catchUp: ready(new Date("nonsense")) });
+    for (const words of both(e)) {
+      expect(words).toContain(READY);
+      expect(words).toContain(WHAT);
+      expect(words).not.toContain("You can send it in Detective HQ");
+    }
+    const lines = e.text.split("\n");
+    expect(lines.slice(lines.indexOf(MISSED), lines.indexOf(MISSED) + 6)).toEqual([MISSED, "", READY, WHAT, "", BUTTON]);
+  });
+
+  it("uses no dashes", () => {
+    for (const e of [clue({ door: 23, christmasEve: { clue1At: CHRISTMAS_EVE_10AM }, catchUp: ready() }), clue({ door: 18, catchUp: behind(3) }), clue({ door: 18, catchUp: behind(0) })]) {
+      expect(`${e.subject}\n${e.text}`).not.toMatch(/[‒–—―]| - /);
+    }
   });
 });
 
@@ -364,6 +500,87 @@ describe("the proud emails", () => {
   });
 });
 
+// Plan 2c-2, Task 7 (rulings F16 and F17): the emails a family can stop end with a small link to its own page for
+// them, as the body's last line: after the give link and before the sign off, in the html and in the text. The won
+// email never has it, and nor does an email built with none.
+describe("the link to stop the emails", () => {
+  const STOP = "https://nbcc.scot/elf/emails/0123456789abcdef0123456789abcdef";
+  /** The words of a piece of an email's html, its tags left out. */
+  const wordsOf = (html: string) => htmlWords(html.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+  /** The html from the give link to the sign off: the give link's words, then the stop link's, then nothing else. */
+  function htmlEnd(e: BuiltEmail, signOffLine: string) {
+    const give = e.html.indexOf('href="https://nbcc.scot/donate"');
+    const stop = e.html.indexOf(`href="${STOP}"`);
+    const sign = e.html.indexOf(signOffLine);
+    expect(give, "the give link").toBeGreaterThan(-1);
+    expect(stop, "the stop link comes after the give link").toBeGreaterThan(give);
+    expect(sign, "the sign off comes after the stop link").toBeGreaterThan(stop);
+    return { give: wordsOf(e.html.slice(e.html.indexOf(">", give) + 1, e.html.lastIndexOf("<a", stop))), stop: wordsOf(e.html.slice(e.html.indexOf(">", stop) + 1, sign)) };
+  }
+  /** The text's lines with words, from the give line on: the give line, then the stop line, then the sign off. */
+  function textEnd(e: BuiltEmail, giveLine: string) {
+    const lines = e.text.split("\n").filter((l) => l.trim() !== "");
+    const from = lines.indexOf(giveLine);
+    expect(from, giveLine).toBeGreaterThan(-1);
+    return lines.slice(from, from + 3);
+  }
+  const noLink = (e: BuiltEmail) => {
+    for (const part of [e.html, e.text]) {
+      expect(part).not.toContain("Stop these emails");
+      expect(part).not.toContain("/elf/emails/");
+    }
+  };
+
+  it("ends the clue email's body with the small link to stop them, after the give link and before the sign off", () => {
+    const e = clue({ stopUrl: STOP });
+    expect(htmlEnd(e, "Happy hunting!")).toEqual({ give: "Every pound could help a child wake up to a Red Bag Full of Joy.", stop: "Stop these emails" });
+    expect(textEnd(e, "Every pound could help a child wake up to a Red Bag Full of Joy. https://nbcc.scot/donate")).toEqual([
+      "Every pound could help a child wake up to a Red Bag Full of Joy. https://nbcc.scot/donate",
+      `Stop these emails: ${STOP}`,
+      "Happy hunting!",
+    ]);
+    // Small, as the give link is: never a button.
+    expect(e.html).toContain(`<p style="font-size:12px;line-height:1.5;margin:14px 0 0"><a href="${STOP}" style="color:#6F6A66">Stop these emails</a></p>`);
+  });
+
+  it("leaves the clue email without one when it is given none", () => {
+    noLink(clue({ stopUrl: null }));
+    // An email built before the link existed reads as given none.
+    noLink(clue());
+  });
+
+  it("ends a promotion's and a graduation's body with it, after Give a little more and before the sign off", () => {
+    for (const e of [proud({ kind: "promoted", rank: "Junior Detective", stopUrl: STOP }), proud({ kind: "graduated", stopUrl: STOP })]) {
+      expect(htmlEnd(e, "Well done from all of us!")).toEqual({ give: "Give a little more", stop: "Stop these emails" });
+      expect(textEnd(e, "Give a little more: https://nbcc.scot/donate")).toEqual(["Give a little more: https://nbcc.scot/donate", `Stop these emails: ${STOP}`, "Well done from all of us!"]);
+    }
+  });
+
+  // The won email always goes, so it has nothing to stop.
+  it("never puts it in the won email, which is built with none", () => {
+    noLink(proud({ kind: "won", elfName: "Pip", door: 7, stopUrl: null }));
+    noLink(proud({ kind: "promoted", rank: "Junior Detective", stopUrl: null }));
+  });
+
+  it("writes the link's address as words, never as markup", () => {
+    const e = clue({ stopUrl: `${STOP}"><b>x` });
+    expect(e.html).not.toContain("<b>x");
+    expect(e.html).toContain("&quot;&gt;&lt;b&gt;x");
+  });
+
+  it("is shown to staff in All emails: in every clue email and in the promotion and graduation, never in the won email", () => {
+    const link = 'href="https://nbcc.scot/elf/emails/0123456789abcdef0123456789abcdef"';
+    for (const version of findEmail("elf-clue")!.versions) {
+      const built = version.render("https://nbcc.scot");
+      expect(built.html, version.id).toContain(link);
+      expect(built.text, version.id).toContain("Stop these emails: https://nbcc.scot/elf/emails/0123456789abcdef0123456789abcdef");
+    }
+    const proudOf = (id: string) => findEmail("elf-proud")!.versions.find((v) => v.id === id)!.render("https://nbcc.scot");
+    for (const id of ["promoted", "graduated"]) expect(proudOf(id).html, id).toContain(link);
+    noLink(proudOf("won"));
+  });
+});
+
 describe("typed names are escaped in every wave 2 email", () => {
   it("never lets an elf name with & and < through raw", () => {
     const elf = "Pip & <b>Co";
@@ -399,6 +616,47 @@ describe("their lines in All emails, for staff", () => {
       expect(html, version.id).toContain("you can still crack this case later in Detective HQ, with one guess.");
       expect(html, version.id).not.toContain("is shown at");
     }
+  });
+
+  // Plan 2c-2, Task 8 (ruling F17): staff read every line the week before Christmas Eve adds, each in a version of its
+  // own, as a family gets it. Every version also ends with the link to stop the emails (the test above).
+  it("show the week before Christmas Eve's lines and the day before's, each in a version of its own", () => {
+    const versions = findEmail("elf-clue")!.versions;
+    const render = (label: string) => {
+      const found = versions.find((v) => v.label === label);
+      expect(found, label).toBeDefined();
+      const e = found!.render("https://nbcc.scot");
+      return { subject: e.subject, parts: [e.text, htmlWords(e.html)] };
+    };
+    const says = (e: { parts: string[] }, lines: string[], not: string[]) => {
+      for (const part of e.parts) {
+        for (const line of lines) expect(part, line).toContain(line);
+        for (const line of not) expect(part, line).not.toContain(line);
+      }
+    };
+    const READY = [
+      "Have you got your picture ready?",
+      "Every detective who does all 24 doors can send in a drawing, or a photo of their naughtiest elf at home, for the grand prize.",
+      "You can send it in Detective HQ from the morning of Christmas Eve until 5pm that day.",
+    ];
+    const BEHIND = ["Catching up for the grand prize", "Every detective who does all 24 doors can send in a picture for the grand prize on Christmas Eve."];
+    const CRACK = "You can still crack 3 doors from home, with one guess each. They are in Detective HQ, under Doors you can still crack.";
+    const VISIT = "To catch up, visit the hiding places of the doors you have not done yet, and type the word on each elf's tag.";
+    const TOMORROW = "Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early.";
+
+    const ready = render("The week before, up to date");
+    expect(ready.subject).toBe("Door 18: the first clue is out");
+    says(ready, READY, [BEHIND[0], TOMORROW]);
+    const behind = render("The week before, behind");
+    expect(behind.subject).toBe("Door 18: the first clue is out");
+    says(behind, [...BEHIND, CRACK], [VISIT, READY[0], TOMORROW]);
+    const visit = render("The week before, behind, nothing left to crack from home");
+    says(visit, [...BEHIND, VISIT], ["from home, with one guess each", READY[0], TOMORROW]);
+    const eve = render("The day before Christmas Eve");
+    expect(eve.subject).toBe("Door 23: the first clue is out");
+    says(eve, [TOMORROW, ...READY], [BEHIND[0]]);
+    // The first three are the clue email of any other door, as it was.
+    for (const v of versions.slice(0, 3)) says({ parts: [v.render("https://nbcc.scot").text] }, [], [TOMORROW, READY[0], BEHIND[0]]);
   });
 
   // From the present PR's review: staff see both of the 8am email's not ready lines.

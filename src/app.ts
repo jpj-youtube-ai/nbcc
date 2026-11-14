@@ -61,9 +61,10 @@ import { adminOverviewRouter } from "./routes/admin-overview";
 import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
 import { createSiteRouter } from "./routes/site";
-import { elfPhotoBodyGuard, elfRouter, ELF_PHOTO_POST_PATH } from "./routes/elf";
+import { elfPhotoBodyGuard, elfRouter, ELF_ENTRY_POST_PATH, ELF_PHOTO_POST_PATH } from "./routes/elf";
 import { adminElfRouter } from "./routes/admin-elf";
 import { adminElfFindsRouter } from "./routes/admin-elf-finds";
+import { adminElfPrizeRouter } from "./routes/admin-elf-prize";
 import { adminElfDoorsRouter, ELF_CLUE_PICTURE_PATH, elfCluePictureBodyWanted } from "./routes/admin-elf-doors";
 
 export function createApp() {
@@ -109,6 +110,9 @@ export function createApp() {
   // only for a POST with a cookie the shape of a signed in family's (elfPhotoBodyGuard); the take down's
   // DELETE on the same address gets the usual small parser.
   app.use(ELF_PHOTO_POST_PATH, elfPhotoBodyGuard(express.json({ limit: PICTURE_JSON_BODY_LIMIT })));
+  // Elf Detective School: a graduate's picture for the grand prize (Plan 2c-2), shrunk in the browser first, read
+  // the same way, behind the same guard.
+  app.use(ELF_ENTRY_POST_PATH, elfPhotoBodyGuard(express.json({ limit: PICTURE_JSON_BODY_LIMIT })));
   // Elf Detective School: a clue's picture from Head Elf HQ (shrunk in the browser first). Only on the admin's own
   // address; the route itself checks the bearer token and the elf permission.
   const cluePictureJson = express.json({ limit: PICTURE_JSON_BODY_LIMIT });
@@ -198,6 +202,8 @@ export function createApp() {
   app.use(adminElfRouter);
   app.use(adminElfDoorsRouter);
   app.use(adminElfFindsRouter);
+  // Plan 2c-2: Head Elf HQ > Settings > The grand prize, when the entries close and the graduates' video.
+  app.use(adminElfPrizeRouter);
   app.use(adminEventTicketsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);

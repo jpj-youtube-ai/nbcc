@@ -868,7 +868,8 @@ describe("the proud moments after a word", () => {
         year: 2026,
         door: 7,
         elfName: TYPED_ELF,
-        family: { id: 3, grownUpName: "Sam Example", email: "sam.example@example.com" },
+        // A family row built by hand, as here, has neither the emails switch nor its token (Plan 2c-2): the emails go.
+        family: { id: 3, grownUpName: "Sam Example", email: "sam.example@example.com", emailsStopped: false, emailsToken: null },
         won: true,
         stamped: [{ id: 100, name: "Detective Ruby Tinselfoot", doorsDone: { cracked: [], visited: [7], snow: [] } }],
       },
@@ -877,6 +878,20 @@ describe("the proud moments after a word", () => {
     expect(game.recordWord.mock.invocationCallOrder[0]).toBeLessThan(spies.sendProudMoments.mock.invocationCallOrder[0]);
     expect(proudClaims()).toEqual(["2026:won:3:7"]);
     expect(mail.sendElfProud).toHaveBeenCalledWith("Sam Example", expect.objectContaining({ email: "sam.example@example.com", subject: `You found ${TYPED_ELF}!` }));
+  });
+
+  // Plan 2c-2, Task 7: the moment carries the family's switch for the emails and its token, from its row, so a
+  // family that has stopped the emails still gets the won email, with no link to stop them.
+  it("carry the family's emails switch and its token from its row, and a family that stopped the emails still gets the won email", async () => {
+    const token = "0123456789abcdef0123456789abcdef";
+    db.familyWithDetectives.mockImplementation(async (id: number) => (id === 3 ? { ...FAMILY, emailsStopped: true, emailsToken: token } : null));
+    const r = await word("snowball 472");
+    expect(r.data.outcome).toBe("won");
+    await vi.waitFor(() => expect(mail.sendElfProud).toHaveBeenCalled());
+    expect(spies.sendProudMoments.mock.calls[0][0].family).toEqual({ id: 3, grownUpName: "Sam Example", email: "sam.example@example.com", emailsStopped: true, emailsToken: token });
+    const won = mail.sendElfProud.mock.calls[0][1] as { subject: string; text: string };
+    expect(won.subject).toBe(`You found ${TYPED_ELF}!`);
+    expect(won.text).not.toContain("Stop these emails");
   });
 
   it("claim a promotion only once the visit counts: nothing new while the place is hidden, the rank once it is shown", async () => {

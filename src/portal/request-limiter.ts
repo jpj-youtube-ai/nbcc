@@ -39,6 +39,15 @@ export function createRateLimiter(opts: { max: number; windowMs: number }) {
       hits.set(key, recent);
       return true;
     },
+    // Gives back the key's most recent hit, for a try that came to nothing through no fault of the caller's (Elf
+    // Detective School's grand prize entry when the picture maker is busy), so trying again never uses up the
+    // window. Nothing for a key with no hits, and a key left with none is let go.
+    giveBack(key: string): void {
+      const timestamps = hits.get(key);
+      if (!timestamps) return;
+      timestamps.pop();
+      if (timestamps.length === 0) hits.delete(key);
+    },
     // Test-only seam: exposes the number of tracked keys, to assert eviction behaviour.
     size(): number {
       return hits.size;

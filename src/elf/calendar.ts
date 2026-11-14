@@ -67,8 +67,9 @@ export function doorOn(season: Pick<ElfSeason, "year">, londonDate: string): Doo
   return isDoor(day) ? day : null;
 }
 
-/** Christmas Eve's door. Places close early that day, so it is a morning door (TASK-613). */
-const CHRISTMAS_EVE: Door = 24;
+/** Christmas Eve's door. Places close early that day, so it is a morning door (TASK-613), and its place
+ *  closes at CHRISTMAS_EVE_CLOSING_TIME unless a head elf types its own time (Plan 2c-2). */
+export const CHRISTMAS_EVE: Door = 24;
 
 /** A school day, a weekend, or a weekday staff have marked as a holiday. A weekend is always a weekend.
  *  Christmas Eve on a weekday is a holiday whether or not staff marked it (Jaimie, 11 November 2026: its
@@ -105,16 +106,27 @@ export function doorInstant(season: Pick<ElfSeason, "year">, door: number, time:
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** When a place is taken to close if staff have set no time for it. */
+/** When a place is taken to close if staff have set no time for it, on every door but Christmas Eve's. */
 export const DEFAULT_CLOSING_TIME = "20:00";
+
+/** When door 24's place is taken to close if staff have set no time for it: places close early on
+ *  Christmas Eve (Jaimie, 12 November 2026), and the grand prize entries close an hour later, at 5pm by
+ *  default (src/elf/grand-prize.ts). A head elf may type an earlier time, or a later one, which Head Elf
+ *  HQ warns about but never refuses in Doors. */
+export const CHRISTMAS_EVE_CLOSING_TIME = "16:00";
 
 /** No door's place is shown later than this on Christmas Eve, so that everyone can finish. */
 export const LAST_REVEAL_TIME = "20:00";
 
+/** The closing time a door falls back to when staff have set none: 4pm on Christmas Eve, 8pm otherwise. */
+function closingTimeOr(door: number, closingTime: string | null | undefined): string {
+  return clockOr(closingTime, door === CHRISTMAS_EVE ? CHRISTMAS_EVE_CLOSING_TIME : DEFAULT_CLOSING_TIME);
+}
+
 /**
  * The moment a door's place closes, which is when an unfound elf's place is shown. `clueTime` is the
- * door's clue time and `closingTime` is the time staff gave for the place (8pm if they gave none, or
- * one that is not a real time).
+ * door's clue time and `closingTime` is the time staff gave for the place (if they gave none, or one
+ * that is not a real time: 4pm on Christmas Eve, door 24, and 8pm on every other door).
  *
  * A closing time that is not after the clue cannot mean that day: the place is open past midnight,
  * or it shut before the clue came out and the hunt carries on when it opens again. Either way it is
@@ -133,7 +145,7 @@ export function closingInstant(
   closingTime: string | null | undefined,
 ): Date | null {
   const clue = doorInstant(season, door, clueTime);
-  const sameDay = doorInstant(season, door, clockOr(closingTime, DEFAULT_CLOSING_TIME));
+  const sameDay = doorInstant(season, door, closingTimeOr(door, closingTime));
   const last = doorInstant(season, DOOR_COUNT, LAST_REVEAL_TIME);
   if (!clue || !sameDay || !last) return null;
   // December has no clock change, so a day later is the same time on the clock.
@@ -208,8 +220,32 @@ export function eveningFor(season: ElfSeason, door: Door, staff: StaffEvening): 
   return { clue1, clue2, clue3, reveal, problems };
 }
 
-/** Does the place close less than an hour after clue 3? Both are clock times on the same day. */
-export function closesTooSoon(closesAt: string | null, clue3: string): boolean {
+/** Does the door's place close less than an hour after clue 3? Both are clock times on the same day. A
+ *  door with no closing time typed closes at its fallback: 4pm on Christmas Eve, 8pm otherwise. */
+export function closesTooSoon(door: number, closesAt: string | null, clue3: string): boolean {
   if (!isClockTime(clue3)) return false;
-  return minutesOf(clockOr(closesAt, DEFAULT_CLOSING_TIME)) - minutesOf(clue3) < 60;
+  return minutesOf(closingTimeOr(door, closesAt)) - minutesOf(clue3) < 60;
+}
+
+// ---- the end of the season: the clear out at the end of January ------------------------------------
+
+const londonYearAndMonth = (d: Date): { year: number; month: number } => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "numeric" }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { year: Number(p.year), month: Number(p.month) };
+};
+
+/** The December something sent at `sentAt` belongs to, for the clear out at the end of January: one sent in
+ *  January before the 31st belongs to the December before, and anything else to the December of its own year in
+ *  London, so nothing is past its clear out the moment it is sent. The one rule for a practice photo
+ *  (src/db/elf-photos.ts) and a grand prize entry (src/db/elf-grand-prize.ts). January in London is on GMT, so its
+ *  midnight is midnight UTC. */
+export function decemberOf(sentAt: Date): number {
+  const { year, month } = londonYearAndMonth(sentAt);
+  return month === 1 && sentAt.getTime() < Date.UTC(year, 0, 31) ? year - 1 : year;
+}
+
+/** When the clear out takes what belongs to `december`: from 31 January after it, at midnight, which in London in
+ *  January is midnight UTC. */
+export function clearOutFrom(december: number): Date {
+  return new Date(Date.UTC(december + 1, 0, 31));
 }

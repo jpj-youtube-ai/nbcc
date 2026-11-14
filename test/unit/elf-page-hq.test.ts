@@ -3,8 +3,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderHqPage } from "../../src/elf/pages/hq";
-import type { HqView, TodayView } from "../../src/elf/pages/types";
-import { at, hqView } from "./elf-fixtures";
+import type { DetectiveView, HqView, TodayView } from "../../src/elf/pages/types";
+import { at, graduateDetective, graduateHqView, grandPrize, hqEmails, hqView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: Detective HQ, a family's own page. Every family, detective, clue and
 // business here is invented (see elf-fixtures.ts).
@@ -365,7 +365,8 @@ describe("the doors a family can still crack", () => {
     { door: 3, elfName: "Pudding", clueAt: at("2026-12-03T17:30:00.000Z"), url: "/elf/hq/door/3" },
   ];
 
-  it("come straight after today's case, under a gold strip, with what having a go is", () => {
+  // With the grand prize showing (Plan 2c-2), it comes between the two: see "the grand prize" below.
+  it("come straight after today's case when there is no grand prize, under a gold strip, with what having a go is", () => {
     const doc = page(hqView({ toCrack: TO_CRACK }));
     const sections = [...doc.querySelectorAll("main > section")];
     const crack = doc.querySelector("main > section.elf-hq-crack")!;
@@ -413,6 +414,179 @@ describe("the doors a family can still crack", () => {
     const off = [{ ...TO_CRACK[0], url: "https://elsewhere.example/5" }, TO_CRACK[1]];
     expect([...page(hqView({ toCrack: off })).querySelectorAll(".elf-crack__door h3")].map((h) => words(h))).toEqual(["Door 3"]);
     expect(page(hqView({ toCrack: [off[0]] })).querySelector(".elf-hq-crack")).toBeNull();
+  });
+});
+
+// Plan 2c-2, Task 3: the grand prize, from midnight as Christmas Eve begins. Ruby's entry page is
+// /elf/hq/entry/11 in the fixture; Leo's is /elf/hq/entry/12.
+describe("the grand prize", () => {
+  const LEO = { name: "Detective Leo Frostwhistle", url: "/elf/hq/entry/12", sent: false };
+  const TO_CRACK: HqView["toCrack"] = [{ door: 23, elfName: "Sprout", clueAt: at("2026-12-23T17:30:00.000Z"), url: "/elf/hq/door/23" }];
+  const prizeOf = (doc: Document) => doc.querySelector("main > section.elf-hq-prize");
+
+  it("comes after today's case and before the doors still to crack, your detectives and your marks, under its strip", () => {
+    const doc = page(hqView({ grandPrize: grandPrize(), toCrack: TO_CRACK }));
+    const order = [...doc.querySelectorAll("main > section")].map((s) => [...s.classList].find((c) => c.startsWith("elf-hq-")));
+    expect(order).toEqual(["elf-hq-top", "elf-hq-case", "elf-hq-prize", "elf-hq-crack", "elf-hq-team", "elf-hq-marks"]);
+    const strip = prizeOf(doc)!.querySelector("h2")!;
+    expect(words(strip)).toBe("The grand prize");
+    expect(strip.classList.contains("elf-strip")).toBe(true);
+    expect(prizeOf(doc)!.getAttribute("aria-labelledby")).toBe(strip.id);
+  });
+
+  it("says what to send and when the entries close, then gives each graduate the button to send their picture", () => {
+    const doc = page(hqView({ grandPrize: grandPrize({ detectives: [grandPrize().detectives[0], LEO] }) }));
+    const section = prizeOf(doc)!;
+    expect(words(section)).toContain(
+      "Every detective who has done all 24 doors can send in a drawing, or a photo of their naughtiest elf at home. Entries close at 5pm on Christmas Eve.",
+    );
+    const items = [...section.querySelectorAll(".elf-prize > li")];
+    expect(items.length).toBe(2);
+    expect(seen(items[0])).toContain("Detective Ruby Tinselfoot");
+    const send = items[0].querySelector('a[href="/elf/hq/entry/11"]')!;
+    expect(seen(send)).toBe("Send in your picture");
+    expect(send.classList.contains("elf-btn")).toBe(true);
+    expect(items[1].querySelector('a[href="/elf/hq/entry/12"]')).not.toBeNull();
+    expect(words(section)).not.toContain("picture is in");
+  });
+
+  it("names its detective to a screen reader on every Send in your picture button", () => {
+    const doc = page(hqView({ grandPrize: grandPrize({ detectives: [grandPrize().detectives[0], LEO] }) }));
+    const links = [...prizeOf(doc)!.querySelectorAll("a")];
+    expect(links.map(words)).toEqual(["Send in your picture for Detective Ruby Tinselfoot", "Send in your picture for Detective Leo Frostwhistle"]);
+  });
+
+  it("says a graduate's picture is in, with a link to change it", () => {
+    const doc = page(hqView({ grandPrize: grandPrize({ detectives: [{ ...grandPrize().detectives[0], sent: true }, LEO] }) }));
+    const [ruby, leo] = [...prizeOf(doc)!.querySelectorAll(".elf-prize > li")];
+    expect(seen(ruby)).toContain("Detective Ruby Tinselfoot's picture is in.");
+    const change = ruby.querySelector('a[href="/elf/hq/entry/11"]')!;
+    expect(seen(change)).toBe("Change it");
+    expect(words(change)).toBe("Change it: Detective Ruby Tinselfoot's picture");
+    expect(words(ruby)).not.toContain("Send in your picture");
+    expect(seen(leo.querySelector("a")!)).toBe("Send in your picture");
+  });
+
+  it("says when no detective has done all 24 doors yet that their picture can be sent here once one has", () => {
+    const section = prizeOf(page(hqView({ grandPrize: grandPrize({ detectives: [] }) })))!;
+    expect(words(section)).toContain("Once a detective has done all 24 doors, you can send in their picture here.");
+    expect(section.querySelector(".elf-prize")).toBeNull();
+  });
+
+  it("says once the entries have closed that they have, and lists only the pictures that are in, with no way to change them", () => {
+    const closed = grandPrize({ open: false, detectives: [{ ...grandPrize().detectives[0], sent: true }, LEO] });
+    const section = prizeOf(page(hqView({ now: at("2026-12-24T17:30:00.000Z"), grandPrize: closed })))!;
+    expect(words(section)).toContain("Grand prize entries closed at 5pm on Christmas Eve. Thank you for every picture.");
+    expect([...section.querySelectorAll(".elf-prize > li")].map(words)).toEqual(["Detective Ruby Tinselfoot's picture is in."]);
+    expect(section.querySelector("a")).toBeNull();
+    expect(words(section)).not.toContain("Entries close at");
+    expect(words(section)).not.toContain("Leo");
+  });
+
+  it("says only that the entries closed when no picture went in", () => {
+    const section = prizeOf(page(hqView({ grandPrize: grandPrize({ open: false, detectives: [LEO] }) })))!;
+    expect(words(section)).toBe("The grand prize Grand prize entries closed at 5pm on Christmas Eve. Thank you for every picture.");
+    expect(section.querySelector(".elf-prize")).toBeNull();
+  });
+
+  it("says the time a head elf set", () => {
+    const section = prizeOf(page(hqView({ grandPrize: grandPrize({ closesAt: at("2026-12-24T18:30:00.000Z") }) })))!;
+    expect(words(section)).toContain("Entries close at 6:30pm on Christmas Eve.");
+  });
+
+  it("is not on the page without a grand prize in the view, so Detective HQ is exactly what it was", () => {
+    const before = renderHqPage(hqView());
+    // A view from before Plan 2c-2, with no grand prize at all.
+    const older: Partial<HqView> = hqView();
+    delete older.grandPrize;
+    expect(renderHqPage(older as HqView)).toBe(before);
+    expect(before).not.toContain("elf-hq-prize");
+    expect(words(page(hqView()).querySelector("main"))).not.toMatch(/grand prize/i);
+  });
+
+  it("leaves out a graduate whose entry page is not on this site", () => {
+    const doc = page(hqView({ grandPrize: grandPrize({ detectives: [{ ...LEO, url: "https://elsewhere.example/12" }, grandPrize().detectives[0]] }) }));
+    const items = [...prizeOf(doc)!.querySelectorAll(".elf-prize > li")];
+    expect(items.length).toBe(1);
+    expect(items[0].querySelector('a[href="/elf/hq/entry/11"]')).not.toBeNull();
+    expect(prizeOf(doc)!.innerHTML).not.toContain("elsewhere");
+    expect(words(prizeOf(doc))).not.toContain("Leo");
+  });
+
+  it("draws nothing when its closing time is not a real time, rather than a sentence with a gap in it", () => {
+    expect(prizeOf(page(hqView({ grandPrize: grandPrize({ closesAt: new Date(Number.NaN) }) })))).toBeNull();
+  });
+});
+
+// Plan 2c-2, Task 7: the family's switch for the emails that are not essential, last on the page (ruling F15), while
+// December's doors are on. A plain form, so it works with no script.
+describe("your emails", () => {
+  const emailsOf = (doc: Document) => doc.querySelector("main > section.elf-hq-emails");
+  const ALWAYS = "Sign in codes, payment receipts and the email when your family finds an elf first always come.";
+  /** The section's form: where it posts, what its hidden field sends, and its button's words. */
+  const formOf = (doc: Document) => {
+    const form = emailsOf(doc)!.querySelector<HTMLFormElement>("form")!;
+    return {
+      method: form.getAttribute("method"),
+      action: form.getAttribute("action"),
+      stopped: form.querySelector<HTMLInputElement>('input[type="hidden"][name="stopped"]')!.value,
+      button: words(form.querySelector('button[type="submit"]')),
+    };
+  };
+
+  it("comes last, after today's case, the grand prize, the doors still to crack, your detectives and your marks, under its strip", () => {
+    const TO_CRACK: HqView["toCrack"] = [{ door: 23, elfName: "Sprout", clueAt: at("2026-12-23T17:30:00.000Z"), url: "/elf/hq/door/23" }];
+    const doc = page(hqView({ grandPrize: grandPrize(), toCrack: TO_CRACK, emails: hqEmails() }));
+    const order = [...doc.querySelectorAll("main > section")].map((s) => [...s.classList].find((c) => c.startsWith("elf-hq-")));
+    expect(order).toEqual(["elf-hq-top", "elf-hq-case", "elf-hq-prize", "elf-hq-crack", "elf-hq-team", "elf-hq-marks", "elf-hq-emails"]);
+    const strip = emailsOf(doc)!.querySelector("h2")!;
+    expect(words(strip)).toBe("Your emails");
+    expect(strip.classList.contains("elf-strip")).toBe(true);
+    expect(emailsOf(doc)!.getAttribute("aria-labelledby")).toBe(strip.id);
+  });
+
+  it("says what is emailed, with the button to stop it, and what always comes", () => {
+    const doc = page(hqView({ emails: hqEmails() }));
+    expect(words(emailsOf(doc)!.querySelector(".lede"))).toBe("We email you when each door's first clue comes out, and when a detective is promoted or graduates.");
+    expect(formOf(doc)).toEqual({ method: "post", action: "/api/elf/emails", stopped: "yes", button: "Stop these emails" });
+    expect(words(emailsOf(doc)!.querySelector(".elf-emails__always"))).toBe(ALWAYS);
+  });
+
+  it("says the emails are stopped and that everything is still here, with the button to start them again", () => {
+    const doc = page(hqView({ emails: hqEmails({ stopped: true }) }));
+    expect(words(emailsOf(doc)!.querySelector(".lede"))).toBe("You have stopped these emails. Everything is still here in Detective HQ.");
+    expect(formOf(doc)).toEqual({ method: "post", action: "/api/elf/emails", stopped: "no", button: "Start them again" });
+    expect(words(emailsOf(doc)!.querySelector(".elf-emails__always"))).toBe(ALWAYS);
+    expect(words(emailsOf(doc))).not.toContain("We email you");
+  });
+
+  it("is not on the page without a switch in the view, so Detective HQ is exactly what it was", () => {
+    const before = renderHqPage(hqView());
+    // A view from before Plan 2c-2's switch, with no emails at all.
+    const older: Partial<HqView> = hqView();
+    delete older.emails;
+    expect(renderHqPage(older as HqView)).toBe(before);
+    expect(before).not.toContain("elf-hq-emails");
+    expect(words(page(hqView()).querySelector("main"))).not.toContain("Your emails");
+  });
+
+  it("is not on the page when the switch's address is not on this site", () => {
+    for (const url of ["https://elsewhere.example/api/elf/emails", "//elsewhere.example/x", "javascript:alert(1)"]) {
+      const html = renderHqPage(hqView({ emails: hqEmails({ url }) }));
+      expect(html, url).not.toContain("elf-hq-emails");
+      expect(html, url).not.toContain("elsewhere");
+    }
+  });
+
+  it("reads a stopped that is not true as on", () => {
+    expect(formOf(page(hqView({ emails: { stopped: "yes" as unknown as boolean, url: "/api/elf/emails" } }))).button).toBe("Stop these emails");
+  });
+
+  it("is styled as the page's other sections are, with its form drawn as no card of its own", () => {
+    const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+    expect(css).toMatch(/\.elf-page \.section\.elf-hq-emails \{[^}]*padding/);
+    expect(css).toMatch(/\.elf-hq-emails \.elf-strip \{[^}]*font-size/);
+    expect(css).toMatch(/form\.elf-emails \{[^}]*background:\s*none/);
   });
 });
 
@@ -509,6 +683,83 @@ describe("the family's detectives", () => {
     expect(words(ruby)).toContain("Graduate");
     expect(words(ruby)).toContain("Gold seal");
     expect(words(ruby)).toContain("All 24 doors done");
+  });
+});
+
+// Plan 2c-2, Task 6: a graduate's certificate to print, share card to save and, once a head elf has set it, the
+// graduates' video, across the foot of their card. Ruby is the graduate (detective 11 in the fixture); Leo has done 23.
+describe("a graduate's card", () => {
+  const cards = (v: HqView) => [...page(v).querySelectorAll(".elf-detective")];
+  const linksOf = (card: Element) => [...card.querySelectorAll(".elf-detective__graduate a")];
+  const withRuby = (over: Partial<DetectiveView>, view: Partial<HqView> = {}): HqView => {
+    const v = graduateHqView(view);
+    v.detectives[0] = graduateDetective(over);
+    return v;
+  };
+
+  it("offers the certificate to print, the share card to save and the graduates' video, in those words", () => {
+    const [ruby] = cards(graduateHqView());
+    const links = linksOf(ruby);
+    expect(links.map(seen)).toEqual(["Print the certificate", "Save the share card", "Watch the graduates' video"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/elf/hq/certificate/11", "/elf/hq/share/11.png", "/elf/hq/video"]);
+    for (const a of links) expect(a.classList.contains("elf-btn"), a.outerHTML).toBe(true);
+  });
+
+  it("saves the share card rather than opening it, and nothing else", () => {
+    const links = linksOf(cards(graduateHqView())[0]);
+    expect(links.map((a) => a.hasAttribute("download"))).toEqual([false, true, false]);
+  });
+
+  it("names the graduate to a screen reader on their certificate and share card, as several graduates can each have them", () => {
+    const links = linksOf(cards(graduateHqView())[0]);
+    expect(links.map(words)).toEqual([
+      "Print the certificate for Detective Ruby Tinselfoot",
+      "Save the share card for Detective Ruby Tinselfoot",
+      "Watch the graduates' video",
+    ]);
+  });
+
+  it("has no video link while no graduates' video is set", () => {
+    const links = linksOf(cards(graduateHqView({ videoUrl: null }))[0]);
+    expect(links.map(seen)).toEqual(["Print the certificate", "Save the share card"]);
+  });
+
+  it("gives a detective who has not done all 24 doors none of them, whatever the view holds", () => {
+    const [, leo] = cards(graduateHqView());
+    expect(leo.querySelector(".elf-detective__graduate")).toBeNull();
+    const stale = withRuby({ graduate: false, rank: "Senior Detective", doorsDone: 23, next: { rank: "Graduate", toGo: 1 } });
+    expect(cards(stale)[0].querySelector(".elf-detective__graduate")).toBeNull();
+    expect(renderHqPage(stale)).not.toContain("/elf/hq/certificate/");
+  });
+
+  it("draws only an address on this site: never one somewhere else", () => {
+    const elsewhere = withRuby({ certificateUrl: "https://elsewhere.example/c", shareUrl: "//elsewhere.example/s.png" }, { videoUrl: "https://example.org/graduates" });
+    expect(cards(elsewhere)[0].querySelector(".elf-detective__graduate")).toBeNull();
+    expect(renderHqPage(elsewhere)).not.toContain("elsewhere");
+    expect(renderHqPage(elsewhere)).not.toContain("example.org/graduates");
+  });
+
+  it("sits across the foot of the card, under the elf and the progress", () => {
+    const ruby = cards(graduateHqView())[0];
+    const row = ruby.querySelector(".elf-detective__graduate")!;
+    expect(row.parentElement).toBe(ruby);
+    expect(ruby.lastElementChild).toBe(row);
+    const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+    expect(css).toMatch(/\.elf-detective \.elf-detective__graduate \{[^}]*grid-column:\s*1 \/ -1/);
+    expect(css).toMatch(/\.elf-detective \.elf-detective__graduate \{[^}]*flex-wrap:\s*wrap/);
+  });
+
+  // With December's doors off the view holds no addresses, so a graduate's card is exactly what it was.
+  it("draws a graduate's card exactly as before when the view holds none of them, so Detective HQ is what it was", () => {
+    const none = withRuby({ certificateUrl: null, shareUrl: null }, { videoUrl: null });
+    // A view from before Plan 2c-2's Task 6, with none of the three fields at all.
+    const older = withRuby({}, {});
+    delete (older.detectives[0] as Partial<DetectiveView>).certificateUrl;
+    delete (older.detectives[0] as Partial<DetectiveView>).shareUrl;
+    delete (older as Partial<HqView>).videoUrl;
+    expect(renderHqPage(none)).toBe(renderHqPage(older));
+    expect(renderHqPage(none)).not.toContain("elf-detective__graduate");
+    expect(words(page(none).querySelector("main"))).not.toMatch(/certificate|share card|video/i);
   });
 });
 

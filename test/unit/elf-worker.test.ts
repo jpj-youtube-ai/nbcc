@@ -41,8 +41,12 @@ import { ELF_PHOTO_TEXT } from "../../src/elf/emails";
 import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
 import { config } from "../../src/config";
 import type { ClueFamily } from "../../src/db/elf-sends";
-import type { DoorRun } from "../../src/db/elf-game";
+import { runOf, type DoorRun } from "../../src/db/elf-game";
+import type { Door } from "../../src/elf/calendar";
+import type { FamilyKnowledge } from "../../src/elf/catch-up";
 import type { DoorFacts } from "../../src/elf/doors";
+import type { SavedGuess } from "../../src/elf/guess";
+import type { DoorsDone } from "../../src/elf/progress";
 import type { HeadElf } from "../../src/elf/alerts";
 import type { ElfSettings } from "../../src/elf/settings";
 
@@ -151,6 +155,12 @@ const QUIET: HeadElf = { userId: 3, name: "Kim Example", email: "kim@example.org
 const RUBY = { id: 100, firstName: "Ruby", surname: "Tinselfoot", nameApproved: false, badgeNumber: 427, look: null, fresh: [], favourites: [] };
 const SAM_FAMILY = { id: 3, grownUpName: "Sam Example", email: "sam@example.org", detectives: [RUBY] };
 
+/** Each family's own token for the link that stops its emails (Plan 2c-2), as the database makes them: invented. */
+const TOKEN_3 = "0123456789abcdef0123456789abcd03";
+const TOKEN_4 = "0123456789abcdef0123456789abcd04";
+/** A family's own page for stopping the emails, as the worker links it. */
+const stopPage = (token: string) => `https://nbcc.example.org/elf/emails/${token}`;
+
 interface Sent {
   kind: string;
   name: string | null;
@@ -234,6 +244,7 @@ function fakeDeps(over: Partial<ElfWorkerDeps> = {}, o: { clueFamilies?: ClueFam
     familiesToSweep: vi.fn(async () => []),
     familyWithDetectives: vi.fn(async () => null),
     familyDoorsDone: vi.fn(async () => new Map()),
+    familyKnowledge: vi.fn(async () => ({ guesses: new Map(), typed: new Set<number>() })),
     finderOf: vi.fn(async () => null),
     finderParts: vi.fn(async () => []),
     countPhotosWaiting: vi.fn(async () => 0),
@@ -247,6 +258,7 @@ function fakeDeps(over: Partial<ElfWorkerDeps> = {}, o: { clueFamilies?: ClueFam
     markSendFailed: sends.markSendFailed,
     sendText: vi.fn(async () => "stubbed" as const),
     deleteExpiredPhotoFiles: vi.fn(async () => 0),
+    deleteExpiredGrandPrizeEntries: vi.fn(async () => 0),
     send: { clue: sender("clue"), reminder: sender("reminder"), morning: sender("morning"), findAlert: sender("find"), photoAlert: sender("photo"), proud: sender("proud") },
     ...over,
   };
@@ -355,6 +367,30 @@ describe("the clue email, at 5:31pm on 7 December", () => {
     expect((deps.markSent as Mock).mock.calls.filter((c) => c[0] === "clue" && c[1] === "2026-7:11")).toHaveLength(3);
   });
 
+  // Plan 2c-2, Task 7: each clue email ends with the link to that family's own page for stopping the emails. A family
+  // that has stopped them is never listed (familiesStillToEmail's SQL, test/unit/elf-db-sends.test.ts).
+  it("ends each family's email with the link to its own page for stopping the emails", async () => {
+    const tokens = ["0123456789abcdef0123456789abcd11", "0123456789abcdef0123456789abcd12", "0123456789abcdef0123456789abcd13"];
+    const { sent, tick } = fakeDeps({ loadDoorRuns: vi.fn(async () => [door7()]) }, { clueFamilies: families.map((f, i) => ({ ...f, emailsToken: tokens[i] })) });
+    await tick(FIVE_31);
+    const clues = sentOf(sent, "clue");
+    expect(clues).toHaveLength(3);
+    clues.forEach((c, i) => {
+      expect(c.text).toContain(`Stop these emails: ${stopPage(tokens[i])}`);
+      expect(c.html).toContain(`href="${stopPage(tokens[i])}"`);
+      for (const other of tokens.filter((t) => t !== tokens[i])) expect(c.text + c.html).not.toContain(other);
+    });
+  });
+
+  it("makes no link from a token that is not one", async () => {
+    const { sent, tick } = fakeDeps({ loadDoorRuns: vi.fn(async () => [door7()]) }, { clueFamilies: [{ ...families[0], emailsToken: "../admin?x=1" }] });
+    await tick(FIVE_31);
+    const [mail] = sentOf(sent, "clue");
+    expect(mail.text).toContain("Pretend clue one");
+    expect(mail.text + mail.html).not.toContain("Stop these emails");
+    expect(mail.text + mail.html).not.toContain("/elf/emails/");
+  });
+
   it("never sends a first clue that has neither words nor a picture", async () => {
     const { deps, sent, tick } = withClue({ loadDoorRuns: vi.fn(async () => [door7({ words: null })]) });
     await tick(FIVE_31);
@@ -371,7 +407,8 @@ describe("the clue email, at 5:31pm on 7 December", () => {
   });
 
   // Plan 2c-1, Task 9: the email says when the place closes on its day (closingShown), only when a closing time
-  // is typed in Doors; it never says when the place is shown, and says a missed hunt can be cracked later.
+  // is typed in Doors, or on Christmas Eve, whose door 24 closes at 4pm unless a head elf types a time (Plan 2c-2,
+  // ruling F4, pinned below); it never says when the place is shown, and says a missed hunt can be cracked later.
   it("tells each family when the place closes when a closing time is typed, and nothing of closing when none is", async () => {
     const typed = withClue({ loadDoorRuns: vi.fn(async () => [door7({ closesAt: "20:00", facts: { closesAt: at("2026-12-07T20:00:00Z") } })]) });
     await typed.tick(FIVE_31);
@@ -385,6 +422,230 @@ describe("the clue email, at 5:31pm on 7 December", () => {
     const plain = sentOf(none.sent, "clue")[0].text;
     expect(plain).not.toContain("closes at");
     expect(plain).toContain("You find out whether you cracked it at 7pm, or later if the elf is still hiding then.");
+  });
+});
+
+// ---- the week before Christmas Eve ------------------------------------------------------------------
+
+// Plan 2c-2, Task 8: the clue emails of doors 17 to 23 end with the grand prize lines for each family, worked out from
+// its doors done and the doors it can still crack from home, read once its send is claimed (ruling F17); door 23's also
+// says when door 24's first clue comes out. December 2026 as the doors read with nothing changed in Doors: doors 16 to
+// 18 and 21 to 23 are school days, their first clue at 5:30pm and their place closing at 8pm; 19 and 20 a weekend, at
+// 10am; door 24, Christmas Eve, at 10am, its place closing at 4pm. So by 5:31pm on Friday 18 December, when door 18's
+// email goes, doors 1 to 17 are done for everyone.
+describe("the clue email in the week before Christmas Eve", () => {
+  const FRI_18 = at("2026-12-18T17:31:00Z");
+  const WED_16 = at("2026-12-16T17:31:00Z");
+  const WED_23 = at("2026-12-23T17:31:00Z");
+  const THU_24 = at("2026-12-24T10:01:00Z");
+  const READY = "Have you got your picture ready?";
+  const BEHIND = "Catching up for the grand prize";
+  const TOMORROW = "Tomorrow is Christmas Eve";
+  const doorsUpTo = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+  /** A door set up in Doors with its place, the word on its tag and its three clues, at the default times. */
+  const setupOf = (door: number, over: Partial<DoorSetup> = {}): DoorSetup => ({
+    ...emptyDoor(door as Door, `code${door}`),
+    placeName: "Corner Bakehouse",
+    placeTown: "Snowford",
+    tagWord: "SNOWBALL 472",
+    elfName: "Twinkle",
+    clues: [
+      { n: 1, words: "Pretend clue one", hasPicture: false, pictureAlt: null },
+      { n: 2, words: "Pretend clue two", hasPicture: false, pictureAlt: null },
+      { n: 3, words: "Pretend clue three", hasPicture: false, pictureAlt: null },
+    ],
+    ...over,
+  });
+  /** The 24 doors as a tick reads them, with whatever a head elf changed. */
+  const december = (now: Date, over: Record<number, Partial<DoorSetup>> = {}): DoorRun[] => doorsUpTo(24).map((door) => runOf(2026, setupOf(door, over[door]), now));
+  /** Detective 100's doors done. Every detective in a family has the same doors done. */
+  const doneOf = (doors: number[]): Map<number, DoorsDone> => new Map([[100, { cracked: doors, visited: [], family: [], snow: [] }]]);
+  const GUESS: SavedGuess = { text: "Corner Bakehouse", norm: "corner bakehouse", at: at("2026-12-01T18:00:00Z"), late: false };
+  /** A family that has a guess at these doors, right or wrong, and has typed no tag's word. */
+  const guessed = (doors: number[]): FamilyKnowledge => ({ guesses: new Map(doors.map((d) => [d, GUESS])), typed: new Set<number>() });
+  const FAMILY_3: ClueFamily = { familyId: 3, email: "sam@example.org", grownUpName: "Sam Example", emailsToken: TOKEN_3 };
+  const FAMILY_4: ClueFamily = { familyId: 4, email: "alex@example.org", grownUpName: "Alex Example", emailsToken: TOKEN_4 };
+
+  /** A tick's fakes: the doors at the tick's own moment, the families to email (3 and 4 unless said), and each family's
+   *  doors done (none: no detective) and what it has done door by door (nothing). */
+  function week(
+    o: { doors?: Record<number, Partial<DoorSetup>>; done?: Record<number, Map<number, DoorsDone>>; knowledge?: Record<number, FamilyKnowledge>; families?: ClueFamily[]; over?: Partial<ElfWorkerDeps> } = {},
+  ) {
+    return fakeDeps(
+      {
+        loadDoorRuns: vi.fn(async (_year: number, now: Date) => december(now, o.doors)),
+        familyDoorsDone: vi.fn(async (_year: number, familyId: number) => o.done?.[familyId] ?? new Map<number, DoorsDone>()),
+        familyKnowledge: vi.fn(async (_year: number, familyId: number) => o.knowledge?.[familyId] ?? guessed([])),
+        ...o.over,
+      },
+      { clueFamilies: o.families ?? [FAMILY_3, FAMILY_4] },
+    );
+  }
+  /** The one clue email sent to an address. */
+  function mailTo(sent: Sent[], to: string): Sent {
+    const found = sentOf(sent, "clue").filter((s) => s.to === to);
+    expect(found, to).toHaveLength(1);
+    return found[0];
+  }
+
+  it("asks a family that has done every door so far whether its picture is ready, and tells one that is behind how many doors it can still crack from home", async () => {
+    const { deps, sent, tick } = week({
+      done: { 3: doneOf(doorsUpTo(17)), 4: doneOf(doorsUpTo(15)) },
+      knowledge: { 3: guessed(doorsUpTo(17)), 4: guessed(doorsUpTo(15)) },
+    });
+    await tick(FRI_18);
+    const ready = mailTo(sent, "sam@example.org");
+    expect(ready.subject).toBe("Door 18: the first clue is out");
+    expect(ready.text).toContain(READY);
+    expect(ready.text).toContain("Every detective who does all 24 doors can send in a drawing, or a photo of their naughtiest elf at home, for the grand prize.");
+    expect(ready.text).toContain("You can send it in Detective HQ from the morning of Christmas Eve until 5pm that day.");
+    expect(ready.text).not.toContain(BEHIND);
+    const behind = mailTo(sent, "alex@example.org");
+    expect(behind.text).toContain(BEHIND);
+    expect(behind.text).toContain("You can still crack 2 doors from home, with one guess each. They are in Detective HQ, under Doors you can still crack.");
+    expect(behind.text).toContain("Every detective who does all 24 doors can send in a picture for the grand prize on Christmas Eve.");
+    expect(behind.text).not.toContain(READY);
+    for (const mail of [ready, behind]) expect(mail.text).not.toContain(TOMORROW);
+    // Each family's own, read at the tick, with the doors the tick read; and each still ends with its own link.
+    expect(deps.familyDoorsDone).toHaveBeenCalledWith(2026, 3, expect.any(Array), FRI_18);
+    expect(deps.familyDoorsDone).toHaveBeenCalledWith(2026, 4, expect.any(Array), FRI_18);
+    expect(deps.familyKnowledge).toHaveBeenCalledWith(2026, 3);
+    expect(deps.familyKnowledge).toHaveBeenCalledWith(2026, 4);
+    expect(ready.text).toContain(`Stop these emails: ${stopPage(TOKEN_3)}`);
+    expect(behind.text).toContain(`Stop these emails: ${stopPage(TOKEN_4)}`);
+  });
+
+  it("says when the entries close as a head elf set them", async () => {
+    const { sent, tick } = week({
+      over: { getSettings: vi.fn(async () => ({ ...ON, grandPrizeClosesAt: at("2026-12-24T17:30:00Z") })) },
+      done: { 3: doneOf(doorsUpTo(17)) },
+      families: [FAMILY_3],
+    });
+    await tick(FRI_18);
+    expect(mailTo(sent, "sam@example.org").text).toContain("You can send it in Detective HQ from the morning of Christmas Eve until 5:30pm that day.");
+  });
+
+  it("tells a family that is behind with nothing left to crack from home to visit the places it has not done", async () => {
+    // Doors 16 and 17 guessed wrong: neither is done, and neither has a go left.
+    const { sent, tick } = week({ done: { 3: doneOf(doorsUpTo(15)) }, knowledge: { 3: guessed(doorsUpTo(17)) }, families: [FAMILY_3] });
+    await tick(FRI_18);
+    const { text } = mailTo(sent, "sam@example.org");
+    expect(text).toContain(BEHIND);
+    expect(text).toContain("To catch up, visit the hiding places of the doors you have not done yet, and type the word on each elf's tag.");
+    expect(text).not.toContain("You can still crack");
+  });
+
+  it("says in door 23's email when door 24's first clue comes out, at the time a head elf set, before the clue 2 line", async () => {
+    const { sent, tick } = week({ doors: { 24: { clue1Time: "09:30" } }, done: { 3: doneOf(doorsUpTo(22)) }, families: [FAMILY_3] });
+    await tick(WED_23);
+    const { subject, text } = mailTo(sent, "sam@example.org");
+    expect(subject).toBe("Door 23: the first clue is out");
+    const line = "Tomorrow is Christmas Eve, so door 24's first clue comes out at 9:30am, and hiding places close early.";
+    expect(text).toContain(line);
+    expect(text.indexOf(line)).toBeLessThan(text.indexOf("Clue 2 comes out at"));
+    expect(text).toContain(READY);
+  });
+
+  // Ruling F17: a head elf can call door 24 off before its first clue, and then no clue comes out.
+  it("says nothing of door 24 in door 23's email when door 24 is snowed in", async () => {
+    const { sent, tick } = week({ doors: { 24: { snowDayAt: at("2026-12-23T12:00:00Z") } }, done: { 3: doneOf(doorsUpTo(22)) }, families: [FAMILY_3] });
+    await tick(WED_23);
+    const { text } = mailTo(sent, "sam@example.org");
+    expect(text).not.toContain(TOMORROW);
+    expect(text).toContain(READY);
+  });
+
+  // The spec puts no condition on door 23's line: every family is told when Christmas Eve starts, and only a family
+  // with a detective is told how it stands for the grand prize.
+  it("gives a family with no detective door 23's Christmas Eve line, and no line for the grand prize", async () => {
+    const { sent, tick } = week({ families: [FAMILY_3] });
+    await tick(WED_23);
+    const { text } = mailTo(sent, "sam@example.org");
+    expect(text).toContain("Pretend clue one");
+    expect(text).toContain("Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early.");
+    for (const words of [READY, BEHIND]) expect(text).not.toContain(words);
+  });
+
+  it("gives door 16's and door 24's emails neither line, and reads nothing of the family's for them", async () => {
+    for (const [moment, subject] of [
+      [WED_16, "Door 16: the first clue is out"],
+      [THU_24, "Door 24: the first clue is out"],
+    ] as const) {
+      const { deps, sent, tick } = week({ done: { 3: doneOf(doorsUpTo(23)) }, knowledge: { 3: guessed(doorsUpTo(23)) }, families: [FAMILY_3] });
+      await tick(moment);
+      const mail = mailTo(sent, "sam@example.org");
+      expect(mail.subject).toBe(subject);
+      for (const words of [TOMORROW, READY, BEHIND]) expect(mail.text, subject).not.toContain(words);
+      expect(deps.familyDoorsDone, subject).not.toHaveBeenCalled();
+      expect(deps.familyKnowledge, subject).not.toHaveBeenCalled();
+    }
+  });
+
+  // Ruling F4: door 24's place closes at 4pm unless a head elf types a time, and its clues say so.
+  it("tells each family on Christmas Eve that door 24's place closes at 4pm when no time is typed", async () => {
+    const { sent, tick } = week({ families: [FAMILY_3] });
+    await tick(THU_24);
+    expect(mailTo(sent, "sam@example.org").text).toContain("The hiding place closes at 4pm today.");
+  });
+
+  // Ruling F17: each family's doors are read inside its own claimed send.
+  it("reads nothing for a family whose send another task has claimed", async () => {
+    const { deps, sent, tick } = week({
+      over: { claimSend: vi.fn(async (kind: string, key: string) => !(kind === "clue" && key === "2026-18:4")) },
+      done: { 3: doneOf(doorsUpTo(17)), 4: doneOf(doorsUpTo(17)) },
+    });
+    await tick(FRI_18);
+    expect(sentOf(sent, "clue").map((s) => s.to)).toEqual(["sam@example.org"]);
+    expect((deps.familyDoorsDone as Mock).mock.calls.map((c) => c[1])).toEqual([3]);
+    expect((deps.familyKnowledge as Mock).mock.calls.map((c) => c[1])).toEqual([3]);
+  });
+
+  // The final review, issue 3: the clue is the essential part of the email. A family whose doors cannot be read still
+  // gets its clue email straight away, without the grand prize lines, and the failure is logged by its id alone.
+  it("still sends a family whose doors cannot be read its clue email, with none of the week before's lines, logging only its id", async () => {
+    const SUN_20 = at("2026-12-20T10:01:00Z");
+    for (const broken of ["familyDoorsDone", "familyKnowledge"] as const) {
+      vi.mocked(console.error).mockClear();
+      const { deps, sent, tick } = week({
+        done: { 3: doneOf(doorsUpTo(19)), 4: doneOf(doorsUpTo(15)) },
+        knowledge: { 3: guessed(doorsUpTo(19)), 4: guessed(doorsUpTo(15)) },
+      });
+      const read = (deps[broken] as Mock).getMockImplementation()!;
+      (deps[broken] as Mock).mockImplementation(async (...args: unknown[]) => {
+        if (args[1] === 4) throw new Error("the doors could not be read");
+        return read(...args);
+      });
+      await tick(SUN_20);
+      expect(sentOf(sent, "clue").map((s) => s.to), broken).toEqual(["sam@example.org", "alex@example.org"]);
+      const mail = mailTo(sent, "alex@example.org");
+      expect(mail.subject).toBe("Door 20: the first clue is out");
+      expect(mail.text).toContain("Pretend clue one");
+      for (const words of [READY, BEHIND, TOMORROW, "You can still crack"]) expect(mail.text, broken).not.toContain(words);
+      expect(mail.text).toContain(`Stop these emails: ${stopPage(TOKEN_4)}`);
+      // The other family's lines are its own.
+      expect(mailTo(sent, "sam@example.org").text).toContain(READY);
+      // It went, so it is never tried again; and the log names the family by its id alone.
+      expect(deps.markSendFailed).not.toHaveBeenCalled();
+      expect(console.error).toHaveBeenCalledWith("elf worker grand prize lines for family 4 failed:", "the doors could not be read");
+      const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+      for (const name of ["Alex Example", "alex@example.org", "Sam Example"]) expect(logged, broken).not.toContain(name);
+    }
+  });
+
+  // Door 23's Christmas Eve line needs nothing of the family's, so it still goes when the family's doors cannot be read.
+  it("keeps door 23's Christmas Eve line for a family whose doors cannot be read", async () => {
+    const { sent, tick } = week({
+      families: [FAMILY_3],
+      over: {
+        familyKnowledge: vi.fn(async () => {
+          throw new Error("the guesses could not be read");
+        }),
+      },
+    });
+    await tick(WED_23);
+    const { text } = mailTo(sent, "sam@example.org");
+    expect(text).toContain("Tomorrow is Christmas Eve, so door 24's first clue comes out at 10am, and hiding places close early.");
+    for (const words of [READY, BEHIND]) expect(text).not.toContain(words);
   });
 });
 
@@ -417,6 +678,27 @@ describe("each tick", () => {
     }
   });
 
+  // The final review, issue 2: the grand prize entries and their pictures go from 31 January after their December, as
+  // the entry page promises, by a part of their own beside the photos', on every tick.
+  it("clears expired grand prize entries away on every tick, with the tick's own time, doors on or off", async () => {
+    for (const settings of [ON, OFF]) {
+      const { deps, tick } = fakeDeps({ getSettings: vi.fn(async () => settings) });
+      await tick(SIX_05);
+      expect(deps.deleteExpiredGrandPrizeEntries).toHaveBeenCalledWith(SIX_05);
+    }
+  });
+
+  it("clears the grand prize entries away even when the photos' clear out fails", async () => {
+    const { deps, tick } = fakeDeps({
+      deleteExpiredPhotoFiles: vi.fn(async () => {
+        throw new Error("the photos could not be read");
+      }),
+    });
+    await tick(FIVE_31);
+    expect(deps.deleteExpiredGrandPrizeEntries).toHaveBeenCalledWith(FIVE_31);
+    expect(console.error).toHaveBeenCalledWith("elf worker clear out failed:", "the photos could not be read");
+  });
+
   it("never lets one part's failure stop the rest", async () => {
     const { deps, sent, tick } = fakeDeps({
       markAutomaticSnowDays: vi.fn(async () => {
@@ -445,6 +727,7 @@ describe("each tick", () => {
     await tick(FIVE_31);
     expect(deps.markAutomaticSnowDays).not.toHaveBeenCalled();
     expect(deps.deleteExpiredPhotoFiles).toHaveBeenCalledWith(FIVE_31);
+    expect(deps.deleteExpiredGrandPrizeEntries).toHaveBeenCalledWith(FIVE_31);
   });
 });
 
@@ -894,6 +1177,56 @@ describe("the sweep", () => {
     expect(sentOf(sent, "proud")).toEqual([]);
   });
 
+  // Plan 2c-2, Task 7 (Review Focus 3, ruling F17): a family that has stopped the emails gets no promotion and no
+  // graduation. Each moment is claimed and marked sent with no email, so starting the emails again never sends one it
+  // missed. The control: the same moment, on the same sweeps, for a family that never stopped them is emailed, ending
+  // with the link to its own page for stopping them.
+  describe("for a family that has stopped the emails", () => {
+    const SIX_DOORS = { cracked: [1, 2, 3, 4, 5, 6], visited: [], snow: [] };
+    const LEO = { id: 200, firstName: "Leo", surname: "Frostwhistle", nameApproved: true, badgeNumber: 428, look: null, fresh: [], favourites: [] };
+    const ALEX_FAMILY = { id: 4, grownUpName: "Alex Example", email: "alex@example.org", detectives: [LEO], emailsStopped: false, emailsToken: TOKEN_4 };
+    /** Family 3 with the emails stopped while `stopped.now` says so, and family 4, which never stopped them. */
+    const twoFamilies = (done: { cracked: number[]; visited: number[]; snow: number[] }) => {
+      const stopped = { now: true };
+      const made = sweeping(new Map(), {
+        familiesToSweep: vi.fn(async () => [3, 4]),
+        familyWithDetectives: vi.fn(async (id: number) => (id === 3 ? { ...SAM_FAMILY, emailsStopped: stopped.now, emailsToken: TOKEN_3 } : id === 4 ? ALEX_FAMILY : null)),
+        familyDoorsDone: vi.fn(async (_year: number, id: number) => new Map([[id === 3 ? 100 : 200, done]])),
+      });
+      return { ...made, stopped };
+    };
+
+    it("claims its promotion and marks it sent with no email, never sends it once the emails start again, and emails it to a family that never stopped them", async () => {
+      const { deps, sent, sends, stopped, tick } = twoFamilies(SIX_DOORS);
+      await tick(FIVE_31);
+      expect(claimsOf(deps, "proud")).toEqual(["2026:rank:100:Junior Detective", "2026:rank:200:Junior Detective"]);
+      expect(sends.row("proud", "2026:rank:100:Junior Detective")!.sentAt).not.toBeNull();
+      const proud = sentOf(sent, "proud");
+      expect(proud.map((m) => [m.to, m.subject])).toEqual([["alex@example.org", "Detective Leo Frostwhistle is now a Junior Detective"]]);
+      expect(proud[0].text).toContain(`Stop these emails: ${stopPage(TOKEN_4)}`);
+      expect(proud[0].html).toContain(`href="${stopPage(TOKEN_4)}"`);
+      // The family starts the emails again. The next sweep, eleven minutes on, when a claim that was never marked
+      // could be taken again, sends nothing for the moment it missed.
+      stopped.now = false;
+      await tick(at("2026-12-07T17:42:00Z"));
+      expect(claimsOf(deps, "sweep")).toEqual(["2026:2994441", "2026:2994442"]);
+      expect(claimsOf(deps, "proud").filter((k) => k === "2026:rank:100:Junior Detective")).toHaveLength(2);
+      expect(sentOf(sent, "proud")).toHaveLength(1);
+      expect(sent.map((m) => m.to)).not.toContain("sam@example.org");
+    });
+
+    it("claims every new rank and the graduation, each marked sent with no email, while a family that never stopped them hears of the graduation", async () => {
+      const ALL = Array.from({ length: 24 }, (_, i) => i + 1);
+      const { deps, sent, sends, tick } = twoFamilies({ cracked: [], visited: [], snow: ALL });
+      await tick(FIVE_31);
+      const sams = ["2026:rank:100:Junior Detective", "2026:rank:100:Detective", "2026:rank:100:Senior Detective", "2026:grad:100"];
+      expect(claimsOf(deps, "proud").filter((k) => k.includes(":100"))).toEqual(sams);
+      for (const key of sams) expect(sends.row("proud", key)!.sentAt, key).not.toBeNull();
+      expect(sentOf(sent, "proud").map((m) => [m.to, m.subject])).toEqual([["alex@example.org", "Detective Leo Frostwhistle has graduated!"]]);
+      expect(sentOf(sent, "proud")[0].text).toContain(`Stop these emails: ${stopPage(TOKEN_4)}`);
+    });
+  });
+
   it("goes on to the next family when one cannot be read", async () => {
     const { sent, tick } = sweeping(new Map([[100, { cracked: [1, 2, 3, 4, 5, 6], visited: [], snow: [] }]]), {
       familiesToSweep: vi.fn(async () => [2, 3]),
@@ -914,10 +1247,40 @@ describe("the proud moments after a word", () => {
     year: 2026,
     door: 7,
     elfName: "Pip",
-    family: { id: 3, grownUpName: "Sam Example", email: "sam@example.org" },
+    family: { id: 3, grownUpName: "Sam Example", email: "sam@example.org", emailsStopped: false, emailsToken: TOKEN_3 },
     won: true,
     stamped: [{ id: 100, name: "Detective Ruby Tinselfoot", doorsDone: { cracked: [], visited: [7], snow: [] } }],
     ...over,
+  });
+  /** Ruby's sixth door, the word at door 7: a promotion to Junior Detective. */
+  const SIXTH: WordMoment["stamped"] = [{ id: 100, name: "Detective Ruby Tinselfoot", doorsDone: { cracked: [1, 2, 3], visited: [4, 5, 7], snow: [] } }];
+
+  // Plan 2c-2, Task 7: the won email always goes, and has no link to stop the emails; a promotion ends with one.
+  it("ends a promotion with the link to the family's own page for stopping the emails, and the won email with none", async () => {
+    const { deps, sent } = fakeDeps();
+    await sendProudMoments(moment({ stamped: SIXTH }), deps);
+    const [won, promoted] = sentOf(sent, "proud");
+    expect([won.subject, promoted.subject]).toEqual(["You found Pip!", "Detective Ruby Tinselfoot is now a Junior Detective"]);
+    expect(won.text + won.html).not.toContain("Stop these emails");
+    expect(promoted.text).toContain(`Stop these emails: ${stopPage(TOKEN_3)}`);
+    expect(promoted.html).toContain(`href="${stopPage(TOKEN_3)}"`);
+  });
+
+  it("still sends the won email to a family that has stopped the emails, and claims its promotion with no email", async () => {
+    const { deps, sent, sends } = fakeDeps();
+    await sendProudMoments(moment({ family: { ...moment().family, emailsStopped: true }, stamped: SIXTH }), deps);
+    expect(claimsOf(deps, "proud")).toEqual(["2026:won:3:7", "2026:rank:100:Junior Detective"]);
+    expect(sentOf(sent, "proud").map((m) => [m.to, m.subject])).toEqual([["sam@example.org", "You found Pip!"]]);
+    expect(sends.row("proud", "2026:won:3:7")!.sentAt).not.toBeNull();
+    expect(sends.row("proud", "2026:rank:100:Junior Detective")!.sentAt).not.toBeNull();
+  });
+
+  it("sends a promotion from a word with no link when the family has no token to link", async () => {
+    const { deps, sent } = fakeDeps();
+    await sendProudMoments(moment({ won: false, family: { ...moment().family, emailsToken: null }, stamped: SIXTH }), deps);
+    const [promoted] = sentOf(sent, "proud");
+    expect(promoted.subject).toBe("Detective Ruby Tinselfoot is now a Junior Detective");
+    expect(promoted.text + promoted.html).not.toContain("Stop these emails");
   });
 
   it("claims the won key for a win and sends the won email, naming every detective stamped", async () => {

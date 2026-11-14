@@ -4,6 +4,7 @@ import { closingShown, doorsToCrack, goesOpen, knowsPlace, mayHaveAGo, placesPub
 import { canGuess, cluesOut, doorState, isClaimable, isOpen, nextClueAt, openedAt, shownAt, type DoorFacts, type DoorState } from "./doors";
 import { badgeWords } from "./emails";
 import { factFor } from "./facts";
+import { grandPrizeClosesAt, prizeSectionShows } from "./grand-prize";
 import { cracked, type SavedGuess } from "./guess";
 import { detectiveNames, familyDetectiveName, type DetectiveNameParts } from "./names";
 import { doorPicture } from "./door-setup";
@@ -12,7 +13,7 @@ import { collageOf, orderScrapbook, type ScrapPhoto, type Scrapbook } from "./sc
 import type { ElfSettings } from "./settings";
 import { sameDay } from "./words";
 import { normaliseFavourites, normaliseLook, wardrobeState } from "./wardrobe";
-import type { CalendarView, DetectiveView, DoorView, FamilyMarks, GoView, HqView, PosterView, TodayView, WardrobeView } from "./pages/types";
+import type { CalendarView, DetectiveView, DoorView, EntryView, FamilyMarks, GoView, HqView, PosterView, TodayView, WardrobeView } from "./pages/types";
 
 // NBCC Elf Detective School: what the database holds, turned into what the screens show. Pure: the
 // rows and the doors' runs come in, the views go out. Nothing is shown before its time: a place, a
@@ -40,6 +41,12 @@ export interface FamilyRow {
   grownUpName: string;
   email: string;
   detectives: DetectiveRow[];
+  /** Has the family stopped the emails that are not essential (Plan 2c-2)? Read by familyWithDetectives, and left
+   *  out only where a family is built by hand, as in tests: missing reads as not stopped. */
+  emailsStopped?: boolean;
+  /** The family's own token for the link in its emails that stops them (elf_families.emails_token), read by
+   *  familyWithDetectives as emailsStopped is. Never on a page: a page posts to the signed in switch instead. */
+  emailsToken?: string;
 }
 
 /** When school starts: door 1's first clue, at 5:30pm London time. */
@@ -54,8 +61,12 @@ function earned(doors: DoorsDone) {
 
 const NO_DOORS: DoorsDone = { cracked: [], visited: [] };
 
-export function detectiveViewFor(d: DetectiveRow, doorsDone: DoorsDone): DetectiveView {
+/** A detective as their own family's screens show them. `doorsOn` is December's doors' switch: only while it is on
+ *  does a graduate get their certificate to print and share card to save (Plan 2c-2), so with it off a detective
+ *  reads exactly as before. */
+export function detectiveViewFor(d: DetectiveRow, doorsDone: DoorsDone, doorsOn = false): DetectiveView {
   const { progress, state } = earned(doorsDone);
+  const prints = doorsOn && progress.graduate;
   return {
     id: String(d.id),
     // A family always sees its own detectives' names in full.
@@ -71,7 +82,24 @@ export function detectiveViewFor(d: DetectiveRow, doorsDone: DoorsDone): Detecti
     frame: normaliseLook(d.look, state).frame,
     newThings: d.fresh.length,
     wardrobeUrl: `/elf/hq/wardrobe/${d.id}`,
+    certificateUrl: prints ? `/elf/hq/certificate/${d.id}` : null,
+    shareUrl: prints ? `/elf/hq/share/${d.id}.png` : null,
   };
+}
+
+/** Detective HQ's own address for the graduates' video (ruling F10): a family's page links only to this site, and
+ *  this address sends a graduate's family on to the video's link (getGraduateVideo in src/routes/elf.ts). */
+export const GRADUATE_VIDEO_PATH = "/elf/hq/video";
+
+/** Where Detective HQ's switch for the emails that are not essential posts (Plan 2c-2): postEmails in
+ *  src/routes/elf.ts, for the signed in family. */
+export const EMAILS_SWITCH_PATH = "/api/elf/emails";
+
+/** The graduates' video's link that a head elf saved (Plan 2c-2), when it is an https link; null otherwise, and then
+ *  Detective HQ shows no video link and its address is not found. One rule for both. */
+export function graduateVideoOf(settings: Pick<ElfSettings, "graduateVideoUrl">): string | null {
+  const link = settings.graduateVideoUrl;
+  return typeof link === "string" && link.startsWith("https://") ? link : null;
 }
 
 function firstWord(name: string): string {
@@ -151,7 +179,8 @@ function todayOf(
     closesAt: closingShown(run, o.now),
     goneHome: run.facts.goneHome,
     // An unfound elf's place is shown at the reveal or the closing, whichever is later (shownAt), so only a
-    // closing after the reveal can make it later; the 8pm a door falls back to counts.
+    // closing after the reveal can make it later; the time a door falls back to with none typed counts (4pm on
+    // Christmas Eve, 8pm otherwise).
     mayShowLater: state === "hunting" && run.facts.closesAt.getTime() > run.facts.revealAt.getTime(),
     shownBy: state === "hunting" ? latestShownToday(run) : null,
   };
@@ -192,8 +221,27 @@ export function marksOf(runs: readonly DoorRun[], family: FamilyRow, doorsDone: 
   return { doors, photos };
 }
 
+/** Detective HQ's grand prize section (Plan 2c-2), or null while it does not show: prizeSectionShows is the one
+ *  rule both for reading the family's entries (hqViewOf in src/routes/elf.ts) and for drawing the section (ruling
+ *  F9). The family's graduates, in the family's order, each with its entry page and whether its picture is in. */
+function grandPrizeOf(
+  o: { settings: ElfSettings; now: Date; entries: ReadonlyMap<number, { sentAt: Date }> },
+  detectives: readonly { id: number; view: DetectiveView }[],
+): HqView["grandPrize"] {
+  const closesAt = grandPrizeClosesAt(o.settings);
+  if (!prizeSectionShows({ doorsOn: o.settings.doorsOn, year: o.settings.year, closesAt, now: o.now })) return null;
+  return {
+    closesAt,
+    open: o.now.getTime() < closesAt.getTime(),
+    // A caller from before Plan 2c-2 passes no entries: that reads as none.
+    detectives: detectives.flatMap((d) => (d.view.graduate ? [{ name: d.view.name, url: `/elf/hq/entry/${d.id}`, sent: o.entries?.has(d.id) === true }] : [])),
+  };
+}
+
 /** Detective HQ's view. `guesses` and `typed` are what the family has done (FamilyKnowledge in catch-up.ts):
- *  this year's while December's doors are on, and the practice door's while a practice runs for this browser. */
+ *  this year's while December's doors are on, and the practice door's while a practice runs for this browser.
+ *  `entries` are the family's grand prize entries this year, by detective (familyEntries in
+ *  src/db/elf-grand-prize.ts): read only while the grand prize section shows, and empty otherwise. */
 export function hqViewFor(o: {
   family: FamilyRow;
   settings: ElfSettings;
@@ -204,6 +252,7 @@ export function hqViewFor(o: {
   doorsDone: Map<number, DoorsDone>;
   finders: Map<Door, DetectiveNameParts[]>;
   photos: FamilyMarks["photos"];
+  entries: ReadonlyMap<number, { sentAt: Date }>;
 }): HqView {
   const real = o.runs.runs.filter((r) => r.door !== 0);
   // With December's doors off, HQ is wave 1: no case today unless a practice run is going, and, as wave
@@ -225,10 +274,11 @@ export function hqViewFor(o: {
     : o.now.getTime() < start.getTime()
       ? start
       : undefined;
+  const detectives = o.family.detectives.map((d) => ({ id: d.id, view: detectiveViewFor(d, o.doorsDone.get(d.id) ?? NO_DOORS, o.settings.doorsOn) }));
   return {
     now: o.now,
     familyName: firstWord(o.family.grownUpName),
-    detectives: o.family.detectives.map((d) => detectiveViewFor(d, o.doorsDone.get(d.id) ?? NO_DOORS)),
+    detectives: detectives.map((d) => d.view),
     today: todayRun ? todayOf(todayRun, o) : null,
     nextClueAt: next ?? null,
     toCrack,
@@ -236,6 +286,31 @@ export function hqViewFor(o: {
     calendarUrl: "/elf",
     guessUrl: "/api/elf/guess",
     addDetectiveUrl: "/elf/join",
+    grandPrize: grandPrizeOf(o, detectives),
+    // With December's doors off, no family sees anything new: no video link.
+    videoUrl: o.settings.doorsOn && graduateVideoOf(o.settings) ? GRADUATE_VIDEO_PATH : null,
+    // Nor the switch for the emails, which only go while December's doors are on. A family row built by hand, with
+    // no switch read, has the emails on.
+    emails: o.settings.doorsOn ? { stopped: o.family.emailsStopped === true, url: EMAILS_SWITCH_PATH } : null,
+  };
+}
+
+/** The grand prize entry page's view for one of the family's graduates (Plan 2c-2). The caller has checked that
+ *  the detective is the signed in family's own and has done all 24 doors, and that the entries have opened.
+ *  `sentAt` is when its picture came in, or null before one has; `hasMobile` whether the family has a mobile. */
+export function entryViewFor(o: { detective: DetectiveRow; hasMobile: boolean; closesAt: Date; now: Date; sentAt: Date | null }): EntryView {
+  const id = String(o.detective.id);
+  const pictureUrl = `/elf/hq/entry/${id}/picture.jpg`;
+  return {
+    // A family always sees its own detectives' names in full.
+    detective: { id, name: familyDetectiveName({ firstName: o.detective.firstName, surname: o.detective.surname, approved: true }) },
+    closesAt: o.closesAt,
+    open: o.now.getTime() < o.closesAt.getTime(),
+    sent: o.sentAt ? { at: o.sentAt, pictureUrl } : null,
+    askMobile: !o.hasMobile,
+    postUrl: `/api/elf/entry/${id}`,
+    pictureUrl,
+    hqUrl: "/elf/hq",
   };
 }
 
@@ -329,7 +404,7 @@ export function wardrobeViewFor(o: {
   const doorDays = [];
   for (let n = 1; n <= DOOR_COUNT; n += 1) doorDays.push({ door: n, clueAt: clueAtOf(o.settings, n as Door), date: doorDate(o.settings, n as Door) });
   return {
-    detective: detectiveViewFor(o.detective, o.doorsDone),
+    detective: detectiveViewFor(o.detective, o.doorsDone, o.settings.doorsOn),
     look: normaliseLook(o.detective.look, state),
     state,
     fresh: o.detective.fresh,

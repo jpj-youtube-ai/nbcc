@@ -59,11 +59,12 @@ export function expectedTableCount(root: string): number {
 
 /**
  * Tables whose rows are never dumped or exported (C12). Elf Detective School's photo bytes live only
- * in elf_photo_files: a family's photo of a child's evening must not sit in a nightly archive. The
- * table itself is still dumped (empty) and still listed in the manifest, as 0 rows, so a restore
- * has the table and compares equal.
+ * in elf_photo_files: a family's photo of a child's evening must not sit in a nightly archive. Its
+ * grand prize pictures live only in elf_grand_prize_files, and are kept out the same way. Each table
+ * itself is still dumped (empty) and still listed in the manifest, as 0 rows, so a restore has the
+ * table and compares equal.
  */
-export const BACKUP_TABLE_DATA_LEFT_OUT: readonly string[] = ["elf_photo_files"];
+export const BACKUP_TABLE_DATA_LEFT_OUT: readonly string[] = ["elf_photo_files", "elf_grand_prize_files"];
 
 /** The pg_dump arguments, with each left-out table's data excluded. */
 export function dumpArgs(leftOut: readonly string[]): string[] {

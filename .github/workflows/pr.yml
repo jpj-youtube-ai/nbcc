@@ -101,7 +101,7 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=8192
       - name: Start app + BDD against it
         run: |
           node dist/index.js & APP_PID=$!

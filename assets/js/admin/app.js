@@ -3895,30 +3895,731 @@
   }
 
   // ---- audit ----
-  function loadAudit() {
+  // Governance > Audit, in the kit's look (the admin refresh, 2026-11-14;
+  // docs/superpowers/specs/2026-11-14-admin-refresh-records.md): who did what, and when, in plain
+  // English. Reads GET /api/admin/audit 50 lines at a time, with the screen's filters; "Show older"
+  // adds the next 50 under what is showing. Each line is a sentence from AUDIT_WORDS: who did it,
+  // then the words for what they did. A form of the words may take a detail from what the line
+  // recorded ({role:role}, {refundedPence:money}, {reference}, {about} for the team member it is
+  // about) or apply only when a detail has a value ([collecting=true]); the first form whose details
+  // are all there is used, and the last form never needs one. A code with no words yet reads as a
+  // tidy version of the code, never a blank, and test/unit/admin-audit-words.test.ts fails until it
+  // is given words.
+  var AUDIT_WORDS = {
+    "admin.subscription_cancelled": "cancelled a donor's monthly gift",
+    "admin_user.activated": "set a password and joined the team",
+    "admin_user.invited": "invited {email} to the team as {role:role} | invited someone to the team",
+    "admin_user.name_changed": "changed their name to {fullName} | changed their name",
+    "admin_user.password_changed": "changed their password",
+    "admin_user.password_reset": "chose a new password from a reset link",
+    "admin_user.permissions_changed": "changed what {about} can open | changed what a team member can open",
+    "admin_user.removed": "removed {email} from the team | removed someone from the team",
+    "admin_user.role_changed": "changed {about}'s role to {role:role} | changed a team member's role",
+    "admin_user.status_changed": "[status=disabled]stopped {about} signing in | [status=active]let {about} sign in again | changed whether a team member can sign in",
+    "analytics.collecting_switched": "[collecting=true]started counting visits to the website | [collecting=false]stopped counting visits to the website | switched counting visits on or off",
+    "ball.already_paid": "was told again about a Festive Ball booking already paid",
+    "ball.booking_cancelled": "cancelled Festive Ball booking {reference} | cancelled a Festive Ball booking",
+    "ball.booking_phone": "changed the phone number on Festive Ball booking {reference} | changed a Festive Ball booking's phone number",
+    "ball.expired": "gave back the seats from an unpaid Festive Ball booking",
+    "ball.expired_noop": "found an unpaid Festive Ball booking already given back",
+    "ball.hold_created": "held back Festive Ball seats",
+    "ball.hold_released": "released held Festive Ball seats",
+    "ball.menu_email_sent": "sent the Festive Ball menu email to {sent} bookings | sent the Festive Ball menu email",
+    "ball.paid": "recorded a paid Festive Ball booking",
+    "ball.paid_after_seats_released": "recorded Festive Ball booking {reference} paid after its seats were released | recorded a Festive Ball booking paid after its seats were released",
+    "ball.paid_recovered": "recovered a paid Festive Ball booking",
+    "ball.reminders_sent": "sent Festive Ball reminders to {sent} bookings | sent Festive Ball reminders",
+    "ball.settings_updated": "changed the Festive Ball settings",
+    "ball.transfer_booking_added": "added Festive Ball booking {reference} to pay by bank transfer | added a Festive Ball booking to pay by bank transfer",
+    "ball.transfer_marked_paid": "marked Festive Ball booking {reference} paid by bank transfer | marked a Festive Ball bank transfer paid",
+    "ball.transfer_pay_by_changed": "changed when Festive Ball booking {reference} must pay by | changed a Festive Ball pay by date",
+    "ball.transfer_reinstated": "put back Festive Ball booking {reference} | put back a Festive Ball bank transfer booking",
+    "ball.transfer_settings_changed": "changed the Festive Ball bank transfer settings",
+    "ball_chase.recipients_saved": "changed who gets the Festive Ball chase list",
+    "ball_report.resend": "asked for the Festive Ball ticket report to go again",
+    "ball_report.resend_failed": "could not send the Festive Ball ticket report again",
+    "ball_report.resent": "sent the Festive Ball ticket report again",
+    "ball_report.send_failed": "could not send the Festive Ball ticket report",
+    "ball_report.settings_saved": "changed the Festive Ball ticket report settings",
+    "ball_report.test_sent": "sent a test Festive Ball ticket report to {to} | sent a test Festive Ball ticket report",
+    "claim.adjustment_recorded": "recorded a Gift Aid adjustment owed to HMRC",
+    "claim_batch.created": "started a Gift Aid claim",
+    "claim_batch.submitted": "marked a Gift Aid claim sent to HMRC",
+    "declaration.amended": "changed a Gift Aid declaration",
+    "declaration.completed": "filled in a Gift Aid declaration",
+    "declaration.created": "made a Gift Aid declaration",
+    "declaration.invited": "asked a supporter for a Gift Aid declaration",
+    "declaration.revoked": "cancelled a Gift Aid declaration",
+    "donation.batched": "put a donation into a Gift Aid claim",
+    "donation.benefits_recorded": "recorded what a donor received in return for a gift",
+    "donation.created": "recorded a donation of {amountPence:money} | recorded a donation",
+    "donation.flagged_for_trustees": "flagged a donation for the trustees to look at",
+    "donation.payment_failed": "recorded a failed payment on a donation",
+    "donation.payment_succeeded": "recorded a payment on a donation",
+    "donation.recurring": "recorded a monthly gift",
+    "donation.refunded": "recorded a refund of {refundedPence:money} on a donation | recorded a refund on a donation",
+    "donor.historical_import": "brought in a donor from before the site kept records",
+    "donor.personal_data_anonymized": "removed a donor's personal details",
+    "donor.updated": "changed a donor's details",
+    "elf.alerts.changed": "changed who gets Elf Detective School alerts",
+    "elf.clue.picture": "changed a clue picture for Elf Detective School door {door} | changed an Elf Detective School clue picture",
+    "elf.clue.save": "saved an Elf Detective School clue",
+    "elf.clues.paste": "pasted in Elf Detective School clues",
+    "elf.detective.changed": "changed a detective's details in Elf Detective School",
+    "elf.door.change": "changed an Elf Detective School door",
+    "elf.door.found": "found the elf behind an Elf Detective School door",
+    "elf.door.gone_home": "marked an Elf Detective School door's elf gone home",
+    "elf.door.name.add": "added a name to an Elf Detective School door",
+    "elf.door.name.remove": "took a name off an Elf Detective School door",
+    "elf.door.snow_day": "marked a snow day on an Elf Detective School door",
+    "elf.door.tag.printed": "printed the tag for an Elf Detective School door",
+    "elf.door.tag.set": "set the tag for an Elf Detective School door",
+    "elf.door.tick": "ticked off an Elf Detective School door",
+    "elf.door.visited": "visited an Elf Detective School door",
+    "elf.emails.started": "started their Elf Detective School emails again",
+    "elf.emails.stopped": "stopped their Elf Detective School emails",
+    "elf.family.changed": "changed a family's details in Elf Detective School",
+    "elf.family.removed": "removed a family from Elf Detective School",
+    "elf.family.restored": "put a family back in Elf Detective School",
+    "elf.grand_prize.entry": "entered the Elf Detective School grand prize",
+    "elf.grand_prize.winner": "picked the Elf Detective School grand prize winner",
+    "elf.paid": "recorded a payment for Elf Detective School",
+    "elf.photo.decided": "decided on a photo sent to Elf Detective School",
+    "elf.photo.sent": "sent a photo to Elf Detective School",
+    "elf.photo.taken_down": "took down a photo from Elf Detective School",
+    "elf.practice.cleared": "cleared the Elf Detective School practice run",
+    "elf.practice.started": "started an Elf Detective School practice run",
+    "elf.preview.ended": "ended the Elf Detective School preview",
+    "elf.preview.made": "made an Elf Detective School preview link",
+    "elf.settings": "changed the Elf Detective School settings",
+    "elf.sign_in_code.sent": "sent a family an Elf Detective School sign in code",
+    "elf.word_tries.cleared": "cleared a family's guesses at an Elf Detective School door",
+    "events.created": "added the event {name} | added an event",
+    "events.deleted": "deleted the event {name} | deleted an event",
+    "events.page_switched": "[pageOn=true]switched the events page on | [pageOn=false]switched the events page off | switched the events page on or off",
+    "events.updated": "changed the event {name} | changed an event",
+    "fulfilment.added_to_supporters": "added a business supporter to the supporters list",
+    "fulfilment.backfill_invites": "sent business supporters their thank you invites",
+    "fulfilment.badge_sent": "sent a business supporter their badge",
+    "fulfilment.called": "called a business supporter",
+    "fulfilment.captured": "a business supporter told us how they would like to be thanked",
+    "fulfilment.certificate_posted": "posted a business supporter their certificate",
+    "fulfilment.certificate_sent": "sent a business supporter their certificate",
+    "fulfilment.created": "recorded a new business supporter",
+    "fulfilment.phone": "changed a business supporter's phone number",
+    "fulfilment.send_invite": "sent a business supporter their thank you invite",
+    "fulfilment.social_done": "thanked a business supporter on social media",
+    "fundraiser.again_used": "signed up to do their fundraiser again",
+    "fundraiser.approved": "approved a sign up",
+    "fundraiser.called": "called a fundraiser",
+    "fundraiser.cash_added": "added {amountPence:money} cash to a fundraiser | added cash to a fundraiser",
+    "fundraiser.cash_removed": "removed {amountPence:money} cash from a fundraiser | removed cash from a fundraiser",
+    "fundraiser.declined": "declined a sign up",
+    "fundraiser.edit_approved": "approved a change to a fundraiser's page",
+    "fundraiser.edit_rejected": "turned down a change to a fundraiser's page",
+    "fundraiser.edit_requested": "asked for a change to their page",
+    "fundraiser.finish_requested": "said they have finished their fundraiser",
+    "fundraiser.finished": "marked a fundraiser finished",
+    "fundraiser.gift_not_linked": "could not put a gift on its fundraiser's page",
+    "fundraiser.gift_received": "put a gift on a fundraiser's page",
+    "fundraiser.handover_cancelled": "cancelled a team organiser handover",
+    "fundraiser.handover_started": "started handing a team over to {toName} | started handing a team to a new organiser",
+    "fundraiser.joined_team": "asked to join a fundraising team",
+    "fundraiser.member_removed": "took someone off a fundraising team",
+    "fundraiser.memory_changed": "corrected the in memory details on a fundraiser",
+    "fundraiser.memory_year_on_done": "dealt with a fundraiser's year on",
+    "fundraiser.message_approved": "approved a message for a fundraiser's page",
+    "fundraiser.message_hidden": "hid a message on a fundraiser's page",
+    "fundraiser.message_shown": "showed a message on a fundraiser's page again",
+    "fundraiser.news_approved": "approved a fundraiser's news update",
+    "fundraiser.news_hidden": "hid a fundraiser's news update",
+    "fundraiser.news_posted": "posted a news update on their page",
+    "fundraiser.news_rejected": "did not use a fundraiser's news update",
+    "fundraiser.news_shown": "showed a fundraiser's news update again",
+    "fundraiser.organiser_handed_over": "confirmed they are the new team organiser",
+    "fundraiser.pack_updated": "updated a fundraiser's welcome pack",
+    "fundraiser.paid_in": "recorded money a fundraiser paid in",
+    "fundraiser.picture_approved": "approved a fundraiser's picture",
+    "fundraiser.picture_declined": "declined a fundraiser's picture",
+    "fundraiser.picture_deleted": "deleted a fundraiser's picture",
+    "fundraiser.picture_removed": "took down a fundraiser's picture",
+    "fundraiser.picture_sent": "sent a picture for their page",
+    "fundraiser.print_requested": "asked us to print things for a fundraiser",
+    "fundraiser.prompt_called": "called a fundraiser about a prompt",
+    "fundraiser.put_back_on_list": "put a fundraiser back on Get involved",
+    "fundraiser.removed_from_team": "was taken off a fundraising team",
+    "fundraiser.request_updated": "updated a fundraiser's request",
+    "fundraiser.signed_up": "signed up to fundraise",
+    "fundraiser.split_changed": "changed how a fundraiser is split with another cause",
+    "fundraiser.taken_off_list": "took a fundraiser off Get involved",
+    "fundraiser.thanks_approved": "approved a fundraiser's thank you to their givers",
+    "fundraiser.thanks_delivered": "sent a fundraiser's thank you to their givers",
+    "fundraiser.thanks_posted": "wrote a thank you to their givers",
+    "fundraiser.thanks_rejected": "did not pass on a fundraiser's thank you",
+    "fundraiser.touch_sent": "sent a fundraiser an automatic email",
+    "fundraiser.tshirt_asked": "asked a fundraiser for their T-shirt size",
+    "fundraiser.tshirt_chosen": "chose a T-shirt size",
+    "fundraiser.updated": "changed a fundraiser's details",
+    "fundraiser.wall_message_added": "left a message on a fundraiser's page",
+    "fundraiser.welcome_pack_changed": "changed a fundraiser's welcome pack",
+    "fundraiser_invite.removed": "removed a fundraising invite to {email} | removed a fundraising invite",
+    "fundraiser_invite.resent": "sent a fundraising invite to {email} again | sent a fundraising invite again",
+    "fundraiser_invite.sent": "sent a fundraising invite to {email} | sent a fundraising invite",
+    "fundraiser_invite.used": "used a fundraising invite to sign up",
+    "fundraising.category_added": "added the fundraising kind {label} | added a fundraising kind",
+    "fundraising.category_changed": "changed a fundraising kind",
+    "fundraising.invite_wording_approved": "approved the wording of a fundraising invite",
+    "fundraising.invite_wording_withdrawn": "withdrew the wording of a fundraising invite",
+    "fundraising.summary_recipients_saved": "changed who gets the Monday fundraising summary",
+    "fundraising.summary_sent": "sent the Monday fundraising summary",
+    "fundraising.switched": "[pageOn=true]switched fundraising on | [pageOn=false]switched fundraising off | switched fundraising on or off",
+    "fundraising.touch_emails_switched": "[on=true]switched the automatic fundraiser emails on | [on=false]switched the automatic fundraiser emails off | switched the automatic fundraiser emails on or off",
+    "fundraising.touch_wording_approved": "approved the wording of an automatic fundraiser email",
+    "fundraising.touch_wording_withdrawn": "withdrew the wording of an automatic fundraiser email",
+    "gasds.claimed": "marked a small donation claimed under GASDS (the small donations scheme)",
+    "ignored.dunning_noop": "found nothing to change on a monthly gift",
+    "ignored.duplicate_charge": "skipped a payment it had already recorded",
+    "ignored.duplicate_invoice": "skipped a monthly payment it had already recorded",
+    "ignored.invoice": "skipped a payment that was not for a monthly gift",
+    "ignored.no_donation": "could not find the donation a payment was for",
+    "ignored.no_parent": "could not find the first gift of a monthly gift",
+    "ignored.no_subscription": "could not find a monthly gift",
+    "ignored.not_card_present": "skipped a payment that was not made in person",
+    "ignored.not_dunning": "skipped a monthly gift change that needed nothing",
+    "impact.example_added": "added a what your gift does example",
+    "impact.example_changed": "changed a what your gift does example",
+    "impact.example_moved": "moved a what your gift does example",
+    "invoice.already_recorded": "found an invoice payment already recorded",
+    "invoice.cancelled": "cancelled invoice {number} | cancelled an invoice",
+    "invoice.created": "made invoice {number} for {amountPence:money} | made an invoice",
+    "invoice.gift_aid_cleared": "took Gift Aid off an invoice",
+    "invoice.gift_aid_saved": "added Gift Aid to an invoice",
+    "invoice.not_paid": "was told an invoice payment had not gone through",
+    "invoice.paid": "recorded invoice {number} paid | recorded an invoice paid",
+    "invoice.paid_twice": "recorded invoice {number} paid twice | recorded an invoice paid twice",
+    "invoice.sent": "sent an invoice",
+    "invoice.unknown": "took a payment for an invoice it could not find",
+    "invoice_settings.updated": "changed the invoice bank details",
+    "newsletter.deleted": "deleted the newsletter {subject} | deleted a newsletter",
+    "outreach.note_added": "added a note on {businessName} | added a note on a business",
+    "outreach.nudge_sent": "sent {businessName} a reminder | sent a business a reminder",
+    "outreach.outcome_recorded": "recorded how it went with {businessName} | recorded how it went with a business",
+    "outreach.tps_checked": "checked {businessName} against the do not call list | checked a business against the do not call list",
+    "partnership.shares_created": "shared a gift between partner charities",
+    "pledge.anonymised": "removed a sponsor's details",
+    "pledge.cancelled": "cancelled a sponsor pledge",
+    "pledge.cash_marked": "marked a sponsor pledge paid in cash",
+    "pledge.cash_unmarked": "took the cash mark off a sponsor pledge",
+    "pledge.confirmed": "confirmed a sponsor pledge",
+    "pledge.created": "made a sponsor pledge",
+    "pledge.double_paid_checked": "checked a sponsor pledge paid twice",
+    "pledge.email_sent": "sent a sponsor an email about their pledge",
+    "pledge.hidden_by_organiser": "hid a sponsor pledge from their page",
+    "pledge.message_hidden": "hid a sponsor's message",
+    "pledge.message_shown": "showed a sponsor's message again",
+    "pledge.paid": "recorded a sponsor pledge paid",
+    "pledge.paid_again": "recorded a sponsor pledge paid again",
+    "pledge.paid_missing": "took a payment for a sponsor pledge it could not find",
+    "pledge.shown_by_organiser": "showed a sponsor pledge on their page again",
+    "pledge.unconfirmed_deleted": "deleted a sponsor pledge that was never confirmed",
+    "portal.token_issued": "sent a donor a link to their details",
+    "portal.token_used": "opened the link to their details",
+    "qr_code.created": "made the QR code {name} | made a QR code",
+    "qr_code.updated": "changed a QR code",
+    "red_bag.draft_thrown_away": "threw away a draft of the Fill a Red Bag list",
+    "red_bag.list_published": "published the Fill a Red Bag list",
+    "red_bag.list_put_back": "put back an earlier Fill a Red Bag list",
+    "red_bag_workshop.archived": "archived a Fill a Red Bag workshop",
+    "red_bag_workshop.created": "added the Fill a Red Bag workshop {name} | added a Fill a Red Bag workshop",
+    "red_bag_workshop.restored": "brought back a Fill a Red Bag workshop",
+    "sleigh_night.saved": "saved a Santa Sleigh night",
+    "sleigh_settings.saved": "changed the Santa Sleigh settings",
+    "subscribers.added": "added {email} to a newsletter list | added someone to a newsletter list",
+    "subscribers.imported": "brought in a list of newsletter subscribers",
+    "subscribers.list_visibility": "changed who can see a newsletter list",
+    "subscription.cancelled": "recorded a monthly gift cancelled",
+    "subscription.lapsed": "recorded a monthly gift lapsed",
+    "subscription.payment_failed": "recorded a failed monthly payment",
+    "subscription.payment_recovered": "recorded a monthly payment that went through after failing",
+    "supporter.created": "added {name} to the partners | added a partner",
+    "supporter.deleted": "removed a partner",
+    "supporter.updated": "changed a partner",
+    "thank_you.deleted": "deleted a thank you letter",
+    "thank_you.sent": "sent a thank you letter",
+    "thank_you.sent_automatically": "sent a thank you letter automatically",
+    "tickets.already_paid": "was told again about tickets already paid",
+    "tickets.booked_free": "booked free tickets {reference} | booked free tickets",
+    "tickets.close_declined": "turned down a ticket sales closing time",
+    "tickets.close_set": "set when ticket sales close",
+    "tickets.dispute_funds_withdrawn": "recorded money taken back for a disputed ticket payment",
+    "tickets.dispute_won": "recorded a disputed ticket payment won",
+    "tickets.disputed": "recorded a disputed ticket payment",
+    "tickets.email_resent": "sent the tickets email again",
+    "tickets.expired": "gave back tickets from an unpaid booking",
+    "tickets.expired_noop": "found an unpaid ticket booking already given back",
+    "tickets.free_booking_cancelled": "cancelled free tickets {reference} | cancelled a free ticket booking",
+    "tickets.ignored": "skipped a ticket payment that needed nothing",
+    "tickets.limit_declined": "turned down a ticket limit",
+    "tickets.limit_set": "set how many tickets can be sold",
+    "tickets.no_reference": "took a ticket payment with no booking reference",
+    "tickets.not_paid": "was told a ticket payment had not gone through",
+    "tickets.paid": "recorded tickets {reference} paid | recorded tickets paid",
+    "tickets.paid_flagged": "recorded tickets {reference} paid, with something to check | recorded tickets paid, with something to check",
+    "tickets.paid_unknown_order": "took a ticket payment for a booking it could not find",
+    "tickets.proposed": "proposed tickets for their event",
+    "tickets.refund_completed": "finished a ticket refund",
+    "tickets.refund_declined": "turned down a ticket refund",
+    "tickets.refund_failed": "recorded a ticket refund that failed",
+    "tickets.refund_failed_sorted": "sorted out a failed ticket refund",
+    "tickets.refund_let_go": "let go of a ticket refund that could not be made",
+    "tickets.refund_requested": "asked for a ticket refund",
+    "tickets.refund_started": "started a ticket refund of {amountPence:money} | started a ticket refund",
+    "tickets.refunded": "refunded {amountPence:money} on tickets | refunded tickets",
+    "tickets.refunded_in_stripe": "recorded a ticket refund made in Stripe",
+    "tickets.refunds_reconciled": "checked the ticket refunds against Stripe",
+    "tickets.refunds_unchanged": "found the ticket refunds unchanged",
+    "tickets.released_no_money": "released tickets with no money to give back",
+    "tickets.sales_closed": "closed ticket sales",
+    "tickets.sales_opened": "opened ticket sales",
+    "tickets.type_added": "added a kind of ticket",
+    "tickets.type_approved": "approved a kind of ticket",
+    "tickets.type_changed": "changed a kind of ticket",
+    "tickets.type_withdrawn": "withdrew a kind of ticket",
+    "tickets.unknown_order": "took a ticket payment for a booking it could not find",
+    "uniform.already_paid": "found a uniform payment already recorded",
+    "uniform.ignored": "skipped a uniform payment that needed nothing",
+    "uniform.moved_from_donation": "moved a uniform payment out of the donations",
+    "uniform.not_paid": "was told a uniform payment had not gone through",
+    "uniform.paid": "recorded a uniform payment of {amountPence:money} | recorded a uniform payment",
+    "uniform.recorded_late": "recorded a uniform payment late",
+    "uniform.refunded": "recorded a uniform payment refunded",
+    "welcome.sent": "sent a newsletter welcome email to {email} | sent a newsletter welcome email",
+  };
+  // Every kind of record a line can be about, and the part of the admin it belongs to: the tiles.
+  // test/unit/admin-audit-words.test.ts checks every entity the server writes about has a part.
+  var AUDIT_PARTS = [
+    ["donations", "Donations"], ["get-involved", "Get involved"], ["ball", "Festive Ball"],
+    ["elf", "Elf Detective School"], ["business", "Businesses"], ["red-bag", "Fill a Red Bag"],
+    ["newsletter", "Newsletter"], ["team", "Team"], ["website", "Website"],
+  ];
+  var AUDIT_AREAS = [
+    ["donation", "donations"], ["donor", "donations"], ["declaration", "donations"], ["claim_batch", "donations"],
+    ["subscription", "donations"], ["donation_invoice", "donations"], ["donation_invoice_settings", "donations"],
+    ["uniform_payment", "donations"], ["sleigh_night", "donations"], ["sleigh_settings", "donations"],
+    ["impact_example", "donations"], ["thank_you", "donations"],
+    ["fundraiser", "get-involved"], ["fundraiser_invite", "get-involved"], ["fundraising_category", "get-involved"],
+    ["fundraising_settings", "get-involved"], ["event", "get-involved"], ["events_settings", "get-involved"],
+    ["event_ticket_order", "get-involved"], ["event_ticket_type", "get-involved"], ["sponsor_pledge", "get-involved"],
+    ["ball_booking", "ball"], ["ball_bookings", "ball"], ["ball_chase", "ball"], ["ball_hold", "ball"],
+    ["ball_report", "ball"], ["ball_settings", "ball"],
+    ["elf_detective", "elf"], ["elf_door", "elf"], ["elf_family", "elf"], ["elf_grand_prize_entry", "elf"],
+    ["elf_head_elves", "elf"], ["elf_order", "elf"], ["elf_photo", "elf"], ["elf_practice", "elf"], ["elf_settings", "elf"],
+    ["business_outreach", "business"], ["business_supporter_fulfilment", "business"], ["supporter_ticker", "business"],
+    ["red_bag_list", "red-bag"], ["red_bag_workshop", "red-bag"],
+    ["newsletter", "newsletter"], ["subscriber_list", "newsletter"], ["list_subscriber", "newsletter"],
+    ["user", "team"],
+    ["analytics_settings", "website"], ["qr_code", "website"],
+  ];
+  var AUDIT_PAGE = 50;
+  var auditRows = [];
+  var auditTotal = 0;
+  var auditOpen = {};
+  var auditArea = "";
+  var auditSeq = 0;
+  var auditWired = false;
+  var auditSearchTimer = null;
+  var auditPeople = [];
+  var auditCounts = {};
+
+  // A code as words: "zebra.stripes_counted" -> "Zebra stripes counted".
+  function auditTidy(code) {
+    var s = String(code || "").replace(/[._:-]+/g, " ").replace(/\s+/g, " ").trim();
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : "Something";
+  }
+  function auditPartOf(entity) {
+    for (var i = 0; i < AUDIT_AREAS.length; i++) if (AUDIT_AREAS[i][0] === entity) return AUDIT_AREAS[i][1];
+    return "";
+  }
+  function auditPartName(entity) {
+    var part = auditPartOf(entity);
+    for (var i = 0; i < AUDIT_PARTS.length; i++) if (AUDIT_PARTS[i][0] === part) return AUDIT_PARTS[i][1];
+    return auditTidy(entity);
+  }
+  function auditEntitiesOf(part) {
+    return AUDIT_AREAS.filter(function (a) { return a[1] === part; }).map(function (a) { return a[0]; });
+  }
+  // Who did it, as a person would say it. Staff by their own name where they are still on the team.
+  function auditWho(r) {
+    var a = String(r.actor || "");
+    var low = a.toLowerCase();
+    if (r.actor_name) return r.actor_name;
+    if (low.indexOf("admin:") === 0) return a.slice(6);
+    if (low.indexOf("self:") === 0) return a.slice(5);
+    if (low === "stripe" || low === "system:stripe") return "Stripe";
+    if (low === "system" || low === "automatic" || low.indexOf("system:") === 0 || low.indexOf("script:") === 0) return "An automatic job";
+    if (low === "organiser" || low.indexOf("organiser:") === 0) return "The organiser";
+    if (low === "family") return "A family";
+    if (low === "public") return "Someone on the website";
+    if (low === "donor") return "The donor";
+    if (low === "giver") return "A giver";
+    if (low === "signup") return "Someone signing up";
+    if (low === "team handover") return "The new team organiser";
+    return a || "Someone";
+  }
+  // Who did it, in full for the facts and the spreadsheet: "Fern Example (fern@example.com)".
+  function auditWhoFull(r) {
+    var a = String(r.actor || "");
+    var email = /^(admin|self):/i.test(a) ? a.replace(/^(admin|self):/i, "") : a.indexOf("@") > 0 && a.indexOf(":") < 0 ? a : "";
+    if (r.actor_name && email) return r.actor_name + " (" + email + ")";
+    return auditWho(r);
+  }
+  function auditDataOf(r) {
+    var d = r.data;
+    if (typeof d === "string") {
+      try {
+        d = JSON.parse(d);
+      } catch (e) {
+        d = {};
+      }
+    }
+    return d && typeof d === "object" && !Array.isArray(d) ? d : {};
+  }
+  function auditAbout(r) {
+    return r.about_name || r.about_email || "";
+  }
+  // The words for what was done, without who: the first form whose details are all there.
+  function auditWhat(r) {
+    var words = Object.prototype.hasOwnProperty.call(AUDIT_WORDS, r.action) ? AUDIT_WORDS[r.action] : null;
+    if (!words) return null;
+    var data = auditDataOf(r);
+    var forms = words.split(" | ");
+    for (var i = 0; i < forms.length; i++) {
+      var form = forms[i];
+      var cond = form.match(/^\[([A-Za-z]+)=([a-z_]+)\]/);
+      if (cond) {
+        if (String(data[cond[1]]) !== cond[2]) continue;
+        form = form.slice(cond[0].length);
+      }
+      var missing = false;
+      var out = form.replace(/\{([A-Za-z]+)(?::([a-z]+))?\}/g, function (_m, key, kind) {
+        var v = key === "about" ? auditAbout(r) : data[key];
+        if (v === null || v === undefined || v === "") {
+          missing = true;
+          return "";
+        }
+        if (kind === "money") return typeof v === "number" ? H.formatPence(v) : (missing = true, "");
+        if (kind === "role") return auditTidy(v);
+        return String(v);
+      });
+      if (!missing) return out;
+    }
+    return null;
+  }
+  // The whole sentence: "Fern Example changed Sam Example's role to Editor".
+  function auditSentence(r) {
+    var what = auditWhat(r);
+    var who = auditWho(r);
+    return what === null ? who + ": " + auditTidy(r.action) : who + " " + what;
+  }
+  function auditWhatAlone(r) {
+    var what = auditWhat(r);
+    if (what === null) return auditTidy(r.action);
+    return what.charAt(0).toUpperCase() + what.slice(1);
+  }
+  // What the line is about: one of the team by name, else the kind of record and its number.
+  function auditAboutWords(r) {
+    if (r.entity === "user" && (r.about_name || r.about_email)) {
+      return "Team member: " + (r.about_name && r.about_email ? r.about_name + " (" + r.about_email + ")" : r.about_name || r.about_email);
+    }
+    return auditTidy(r.entity) + (r.entity_id != null ? " " + r.entity_id : "");
+  }
+
+  // UK days and times.
+  var AUDIT_UK = "Europe/London";
+  function auditParts(value, opts) {
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    var o = { timeZone: AUDIT_UK };
+    Object.keys(opts).forEach(function (k) { o[k] = opts[k]; });
+    var out = {};
+    new Intl.DateTimeFormat("en-GB", o).formatToParts(d).forEach(function (p) { out[p.type] = p.value; });
+    return out;
+  }
+  function auditDayKey(value) {
+    var p = auditParts(value, { year: "numeric", month: "2-digit", day: "2-digit" });
+    return p ? p.year + "-" + p.month + "-" + p.day : "";
+  }
+  function auditTime(value) {
+    var p = auditParts(value, { hour: "numeric", minute: "2-digit", hour12: true });
+    if (!p) return "";
+    var hour = p.hour === "0" ? "12" : String(Number(p.hour));
+    return hour + ":" + p.minute + String(p.dayPeriod || "").toLowerCase().replace(/[^a-z]/g, "");
+  }
+  function auditDayHeading(value) {
+    var key = auditDayKey(value);
+    var today = auditDayKey(new Date());
+    if (key === today) return "Today";
+    var t = today.split("-").map(Number);
+    if (key === auditDayKey(new Date(Date.UTC(t[0], t[1] - 1, t[2] - 1, 12)))) return "Yesterday";
+    var p = auditParts(value, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    if (!p) return "";
+    return p.weekday + " " + p.day + " " + p.month + (p.year === today.slice(0, 4) ? "" : " " + p.year);
+  }
+  function auditDate(value) {
+    var p = auditParts(value, { day: "numeric", month: "long", year: "numeric" });
+    return p ? p.day + " " + p.month + " " + p.year : "";
+  }
+  function auditMoment(value) {
+    var p = auditParts(value, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    return p ? p.weekday + " " + p.day + " " + p.month + " " + p.year + " at " + auditTime(value) : "";
+  }
+
+  // What the line recorded, as plain facts: [name, value] pairs.
+  var AUDIT_TIDY_VALUES = { role: 1, status: 1, claimStatus: 1, decision: 1, outcome: 1, direction: 1, kind: 1, which: 1 };
+  function auditFactName(key) {
+    var k = String(key);
+    var money = /Pence$/.test(k);
+    var base = k.replace(/Pence$/, "").replace(/Id$/, money ? "" : " number");
+    var words = base.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").toLowerCase().trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : k;
+  }
+  function auditFactValue(key, v) {
+    if (v === null || v === undefined || v === "") return "None";
+    if (typeof v === "boolean") return v ? "Yes" : "No";
+    if (typeof v === "number" && /Pence$/.test(key)) return H.formatPence(v);
+    if (Array.isArray(v)) return v.length ? v.map(function (x) { return typeof x === "object" && x !== null ? JSON.stringify(x) : String(x); }).join(", ") : "None";
+    if (typeof v === "object") {
+      return Object.keys(v).map(function (k) { return auditFactName(k) + ": " + auditFactValue(k, v[k]); }).join("; ") || "None";
+    }
+    if (AUDIT_TIDY_VALUES[key] && typeof v === "string") return auditTidy(v);
+    return String(v);
+  }
+  function auditFacts(r) {
+    var data = auditDataOf(r);
+    return Object.keys(data).map(function (k) { return [auditFactName(k), auditFactValue(k, data[k])]; });
+  }
+  function auditDonorId(r) {
+    if (r.entity === "donor" && r.entity_id != null) return Number(r.entity_id);
+    var d = auditDataOf(r);
+    return Number.isInteger(Number(d.donorId)) && d.donorId !== null && d.donorId !== undefined ? Number(d.donorId) : null;
+  }
+  function auditSignupId(r) {
+    return r.entity === "fundraiser" && r.entity_id != null ? Number(r.entity_id) : null;
+  }
+
+  function auditLineHtml(r) {
+    var esc = H.escapeHtml;
+    var id = Number(r.id);
+    var open = !!auditOpen[id];
+    var facts = auditFacts(r);
+    var donor = auditDonorId(r);
+    var signup = auditSignupId(r);
+    var links = "";
+    if (donor !== null && canView("donations")) links += '<button class="admin-btn ak-btn--plain" type="button" data-audit-donor="' + donor + '">Open this donor</button>';
+    if (signup !== null && canView("fundraising")) links += '<button class="admin-btn ak-btn--plain" type="button" data-audit-signup="' + signup + '">Open this sign up</button>';
+    return (
+      '<li class="ak-item' + (open ? " is-open" : "") + '" data-audit-line="' + id + '">' +
+      '<button class="ak-item__face" type="button" aria-expanded="' + (open ? "true" : "false") + '" aria-controls="auditMore-' + id + '">' +
+      '<span class="ak-item__main"><span class="ak-item__name rc-sentence">' + esc(auditSentence(r)) + "</span>" +
+      '<span class="ak-item__meta"><span data-audit-time>' + esc(auditTime(r.created_at)) + '</span><span class="ak-mark">' +
+      esc(auditPartName(r.entity)) + "</span></span></span>" +
+      '<span class="ak-item__chev" aria-hidden="true"></span></button>' +
+      '<div class="ak-item__more" id="auditMore-' + id + '"' + (open ? "" : " hidden") + ">" +
+      '<dl class="ak-facts"><dt>When</dt><dd>' + esc(auditMoment(r.created_at)) + "</dd><dt>Who</dt><dd>" + esc(auditWhoFull(r)) +
+      "</dd><dt>Part of the admin</dt><dd>" + esc(auditPartName(r.entity)) + "</dd><dt>About</dt><dd>" + esc(auditAboutWords(r)) + "</dd>" +
+      facts.map(function (f) { return "<dt>" + esc(f[0]) + "</dt><dd>" + esc(f[1]) + "</dd>"; }).join("") + "</dl>" +
+      (links ? '<div class="ak-actions">' + links + "</div>" : "") +
+      '<p class="rc-kept" data-audit-kept>Stored as line ' + id + ": " + esc(r.action) + ", " + esc(r.entity) + (r.entity_id != null ? " " + esc(r.entity_id) : "") +
+      ", by " + esc(r.actor) + "</p></div></li>"
+    );
+  }
+  function auditFiltered() {
+    return !!(auditArea || el("auditPerson").value || el("auditFrom").value || el("auditTo").value ||
+      (el("auditSearch").value || "").trim() || el("auditStaffOnly").checked);
+  }
+  function auditRenderList() {
     var wrap = el("auditTable");
-    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/audit?limit=50")
+    if (!auditRows.length) {
+      wrap.innerHTML = '<p class="admin-empty">' + (auditFiltered() ? "Nothing matches what you have chosen. Press Clear to see everything." : "No audit entries.") + "</p>";
+      el("auditFoot").hidden = true;
+      return;
+    }
+    var html = "";
+    var day = null;
+    auditRows.forEach(function (r) {
+      var heading = auditDayHeading(r.created_at);
+      if (heading !== day) {
+        if (day !== null) html += "</ul>";
+        day = heading;
+        html += '<h3 class="ak-group">' + H.escapeHtml(heading) + '</h3><ul class="ak-list rc-lines">';
+      }
+      html += auditLineHtml(r);
+    });
+    wrap.innerHTML = html + "</ul>";
+    var shown = auditRows.length;
+    el("auditFoot").hidden = false;
+    el("auditCount").textContent =
+      shown >= auditTotal
+        ? shown === 1 ? "Showing the only line." : shown === 2 ? "Showing both lines." : "Showing all " + shown + " lines."
+        : "Showing the newest " + shown + " of " + auditTotal + " lines.";
+    el("auditOlder").hidden = shown >= auditTotal;
+  }
+  function auditRenderTiles() {
+    var box = el("auditAreas");
+    var all = 0;
+    var byPart = {};
+    Object.keys(auditCounts).forEach(function (entity) {
+      var n = Number(auditCounts[entity]) || 0;
+      all += n;
+      var part = auditPartOf(entity);
+      if (part) byPart[part] = (byPart[part] || 0) + n;
+    });
+    var tiles = [["", "All", all]].concat(AUDIT_PARTS.map(function (p) { return [p[0], p[1], byPart[p[0]] || 0]; }));
+    box.innerHTML = tiles.map(function (t) {
+      var on = t[0] === auditArea;
+      return '<button class="ak-tile' + (on ? " is-active" : "") + (!t[2] && t[0] ? " is-none" : "") + '" type="button" data-audit-area="' + t[0] +
+        '" aria-pressed="' + (on ? "true" : "false") + '"><span class="ak-tile__n">' + H.escapeHtml(t[2].toLocaleString("en-GB")) +
+        '</span><span class="ak-tile__name">' + H.escapeHtml(t[1]) + "</span></button>";
+    }).join("");
+  }
+  function auditRenderPeople() {
+    var sel = el("auditPerson");
+    var keep = sel.value;
+    sel.innerHTML = '<option value="">Anyone</option>' + auditPeople.map(function (p) {
+      return '<option value="' + H.escapeHtml(p.email) + '">' + H.escapeHtml(p.name || p.email) + "</option>";
+    }).join("");
+    sel.value = keep;
+    if (sel.value !== keep) sel.value = "";
+  }
+  function auditQuery(offset) {
+    var q = "?limit=" + AUDIT_PAGE + "&offset=" + offset;
+    if (auditArea) q += "&entities=" + encodeURIComponent(auditEntitiesOf(auditArea).join(","));
+    var who = el("auditPerson").value;
+    if (who) q += "&actor=" + encodeURIComponent(who);
+    if (el("auditStaffOnly").checked) q += "&staff=1";
+    if (el("auditFrom").value) q += "&from=" + encodeURIComponent(el("auditFrom").value);
+    if (el("auditTo").value) q += "&to=" + encodeURIComponent(el("auditTo").value);
+    var word = (el("auditSearch").value || "").trim();
+    if (word) q += "&q=" + encodeURIComponent(word);
+    if (!offset) q += "&summary=1";
+    return q;
+  }
+  function auditSay(text, cls) {
+    var s = el("auditFootSaid");
+    s.className = "ak-status" + (cls ? " " + cls : "");
+    s.textContent = text || "";
+  }
+  // older: add the next page under what is showing, rather than read the list afresh.
+  function auditLoad(older) {
+    var seq = ++auditSeq;
+    var offset = older ? auditRows.length : 0;
+    auditSay("");
+    if (!older) {
+      auditOpen = {};
+      el("auditTable").innerHTML = '<p class="admin-loading">Loading…</p>';
+    } else {
+      el("auditOlder").disabled = true;
+    }
+    return authFetch("/api/admin/audit" + auditQuery(offset))
       .then(okJson)
       .then(function (d) {
+        if (seq !== auditSeq) return;
+        el("auditOlder").disabled = false;
         var rows = d.results || [];
-        if (!rows.length) {
-          wrap.innerHTML = '<p class="admin-empty">No audit entries.</p>';
+        auditRows = older ? auditRows.concat(rows) : rows;
+        auditTotal = Math.max(Number(d.total) || 0, auditRows.length);
+        if (d.counts) auditCounts = d.counts;
+        if (d.people) auditPeople = d.people;
+        if (!older) {
+          auditRenderTiles();
+          auditRenderPeople();
+        }
+        auditRenderList();
+      })
+      .catch(function (err) {
+        if (seq !== auditSeq || (err && err.message === "unauthorized")) return;
+        el("auditOlder").disabled = false;
+        if (older) {
+          auditSay("The older lines could not load. Press Show older to try again.", "is-error");
           return;
         }
-        var body = rows
-          .map(function (r) {
-            return (
-              "<tr><td>" + r.id + "</td><td>" + H.fmtDate(r.created_at) + "</td><td>" + H.escapeHtml(r.actor) +
-              "</td><td>" + H.escapeHtml(r.action) + "</td><td>" + H.escapeHtml(r.entity) + " " + (r.entity_id || "") + "</td></tr>"
-            );
-          })
-          .join("");
-        wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>When</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>' + body + "</tbody></table>";
-      })
-      .catch(function () {
-        wrap.innerHTML = unavailableHtml("The audit log is unavailable.");
+        auditRows = [];
+        el("auditTable").innerHTML = unavailableHtml("The audit log is unavailable.");
+        el("auditFoot").hidden = true;
       });
+  }
+  function auditDownload() {
+    var head = ["Date", "Time", "Who", "What happened", "Part of the admin", "About", "What was recorded", "Stored as", "Line"];
+    var rows = [head].concat(auditRows.map(function (r) {
+      return [
+        auditDate(r.created_at), auditTime(r.created_at), auditWhoFull(r), auditWhatAlone(r), auditPartName(r.entity), auditAboutWords(r),
+        auditFacts(r).map(function (f) { return f[0] + ": " + f[1]; }).join("; "), String(r.action || ""), Number(r.id),
+      ];
+    }));
+    var Kit = window.AdminKit;
+    var ok = !!(Kit && Kit.downloadCsv && Kit.downloadCsv("nbcc-audit-" + auditDayKey(new Date()) + ".csv", rows));
+    if (ok) auditSay("Downloaded " + (auditRows.length === 1 ? "1 line." : auditRows.length + " lines."), "is-ok");
+    else auditSay("This browser could not make the spreadsheet.", "is-error");
+  }
+  function auditOpenSignup(id) {
+    selectView("fundraising");
+    if (frOpenId !== id) frToggle(id);
+  }
+  function wireAudit() {
+    if (auditWired) return;
+    auditWired = true;
+    var form = el("auditFilters");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      auditLoad(false);
+    });
+    ["auditPerson", "auditFrom", "auditTo", "auditStaffOnly"].forEach(function (id) {
+      el(id).addEventListener("change", function () { auditLoad(false); });
+    });
+    el("auditSearch").addEventListener("input", function () {
+      if (auditSearchTimer) clearTimeout(auditSearchTimer);
+      auditSearchTimer = setTimeout(function () {
+        auditSearchTimer = null;
+        auditLoad(false);
+      }, 400);
+    });
+    bindClick("auditClear", function () {
+      el("auditSearch").value = "";
+      el("auditPerson").value = "";
+      el("auditFrom").value = "";
+      el("auditTo").value = "";
+      el("auditStaffOnly").checked = false;
+      auditArea = "";
+      auditLoad(false);
+    });
+    bindClick("auditOlder", function () { auditLoad(true); });
+    bindClick("auditDownload", auditDownload);
+    el("view-audit").addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target : null;
+      if (!t) return;
+      var tile = t.closest("[data-audit-area]");
+      if (tile) {
+        auditArea = tile.getAttribute("data-audit-area") || "";
+        auditLoad(false);
+        return;
+      }
+      var donor = t.closest("[data-audit-donor]");
+      if (donor) return openDonor(Number(donor.getAttribute("data-audit-donor")));
+      var signup = t.closest("[data-audit-signup]");
+      if (signup) return auditOpenSignup(Number(signup.getAttribute("data-audit-signup")));
+      var faceBtn = t.closest(".ak-item__face");
+      var item = faceBtn && faceBtn.closest("[data-audit-line]");
+      if (!item) return;
+      var id = Number(item.getAttribute("data-audit-line"));
+      auditOpen[id] = !auditOpen[id];
+      faceBtn.setAttribute("aria-expanded", auditOpen[id] ? "true" : "false");
+      item.classList.toggle("is-open", auditOpen[id]);
+      item.querySelector(".ak-item__more").hidden = !auditOpen[id];
+    });
+  }
+  function loadAudit() {
+    wireAudit();
+    auditLoad(false);
   }
 
   // ---- email audit (email-audit feature) ----

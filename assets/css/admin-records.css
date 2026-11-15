@@ -4,3 +4,14 @@
  * Only what the kit does not already give these screens. The kit's house rules hold here too: no
  * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
  * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+
+/* ---- Audit: tiles, the filters card, the lines and the foot ---- */
+#view-audit .rc-filters { margin: 0 0 22px; }
+#view-audit .rc-filter-foot { margin: 14px 0 0; justify-content: space-between; }
+#view-audit .rc-list { min-width: 0; }
+#view-audit .rc-lines { margin: 8px 0 16px; }
+#view-audit .rc-sentence { font-family: inherit; font-weight: 600; font-size: 1rem; line-height: 1.35; }
+#view-audit .rc-kept { margin: 0; font-size: 0.82rem; line-height: 1.45; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-audit .rc-foot { display: grid; gap: 8px; margin: 18px 0 0; }
+#view-audit .rc-count { margin: 0; color: var(--ov-soft); font-size: 0.92rem; }
+#view-audit .rc-foot[hidden] { display: none; }

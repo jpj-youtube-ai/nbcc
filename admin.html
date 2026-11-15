@@ -2555,9 +2555,50 @@
             </section>
 
 
-            <section class="admin-view" id="view-audit" aria-labelledby="audit-heading" hidden>
+            <!-- Audit, in the kit's look (the admin refresh, 2026-11-14;
+                 docs/superpowers/specs/2026-11-14-admin-refresh-records.md): who did what, and when,
+                 in plain English. app.js draws the tiles (one a part of the admin, with its count),
+                 the lines as cards under day headings, and what a line recorded when it is opened.
+                 Needs audit:view. Nothing here changes anything: the trail is append-only. -->
+            <section class="admin-view ak" id="view-audit" aria-labelledby="audit-heading" hidden>
               <h2 id="audit-heading">Audit trail</h2>
-              <div class="admin-table-wrap" id="auditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="admin-view-intro">Who did what, and when. Every change made in the admin, by a card payment or by an automatic job is kept here, newest first, and none of it can be changed or removed.</p>
+
+              <div class="ak-tiles rc-areas" id="auditAreas" role="group" aria-label="Show one part of the admin"></div>
+
+              <form class="ak-panel rc-filters" id="auditFilters" autocomplete="off">
+                <div class="ak-fields">
+                  <label class="ak-field"><span>Find a word</span>
+                    <input id="auditSearch" type="search" placeholder="A name, an email or a booking reference" />
+                  </label>
+                  <label class="ak-field"><span>Done by</span>
+                    <select id="auditPerson"><option value="">Anyone</option></select>
+                  </label>
+                  <label class="ak-field"><span>From</span>
+                    <input id="auditFrom" type="date" />
+                  </label>
+                  <label class="ak-field"><span>To</span>
+                    <input id="auditTo" type="date" />
+                  </label>
+                </div>
+                <div class="ak-actions rc-filter-foot">
+                  <label class="admin-check"><input id="auditStaffOnly" type="checkbox" /> <span>Staff only</span></label>
+                  <button class="admin-btn ak-btn--plain" type="button" id="auditClear">Clear</button>
+                </div>
+                <p class="ak-says">Staff only hides what Stripe (card payments), people using the website and automatic jobs wrote, so you see only what the team did. The list updates as you choose.</p>
+              </form>
+
+              <div id="auditTable" class="rc-list" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+
+              <div class="rc-foot" id="auditFoot" hidden>
+                <p class="rc-count" id="auditCount"></p>
+                <div class="ak-actions">
+                  <button class="admin-btn" type="button" id="auditOlder">Show older</button>
+                  <button class="admin-btn ak-btn--plain" type="button" id="auditDownload">Download what is shown</button>
+                </div>
+                <p class="ak-says">The download is a spreadsheet of the lines on this screen, in the same words.</p>
+                <p class="ak-status" id="auditFootSaid" role="status" aria-live="polite"></p>
+              </div>
             </section>
 
             <!-- Email audit (email-audit feature): every email the system attempted to send, with

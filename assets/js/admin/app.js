@@ -6628,7 +6628,7 @@
   // Mark paid, Cancel and the bank details are for Donations edit only (the server checks too). No
   // modals: Mark paid and Cancel each open a short confirm inside their card.
 
-  var invState = { invoices: [], bank: null, today: "", filter: "all" };
+  var invState = { invoices: [], bank: null, today: "", filter: "all", query: "", shown: [] };
   var invWired = false;
   // An invoice with a change on its way: a second press waits for the first, so a double click on Mark paid
   // or Email it again sends one request (the server refuses a second Mark paid too).
@@ -6649,7 +6649,7 @@
     overdue: "Overdue",
     paid: "Paid",
     cancelled: "Cancelled",
-    "paid-after-cancel": "Paid",
+    "paid-after-cancel": "Paid, was cancelled",
   };
 
   function invNumber(id) {
@@ -6777,6 +6777,20 @@
       .then(function () { btn.disabled = false; });
   }
 
+  // The card, in the kit's look since 2026-11-14: its number and state, who and how much, the dates,
+  // then what was already returned and never shown (where it went, how often, how overdue, the note,
+  // who made it), then the buttons, each a real button a finger can press.
+  function invDaysOver(inv) {
+    if ((inv.state || "") !== "overdue" || !inv.dueOn || !invState.today) return 0;
+    return Math.round((Date.parse(invState.today + "T12:00:00Z") - Date.parse(inv.dueOn + "T12:00:00Z")) / 86400000);
+  }
+  // ", last on 3 November", or ", last today".
+  function invLast(word) {
+    return (word === "today" || word === "yesterday" ? ", last " : ", last on ") + H.escapeHtml(word);
+  }
+  function invTimes(n) {
+    return n === 1 ? "once" : n === 2 ? "twice" : n + " times";
+  }
   function invCard(inv) {
     var esc = H.escapeHtml;
     var today = invState.today;
@@ -6794,21 +6808,34 @@
     } else {
       lines.push("Sent " + esc(qrDay(inv.issuedOn, today)) + " &middot; " + (state === "cancelled" ? "was due " : "due ") + esc(qrDay(inv.dueOn, today)));
     }
+    var over = invDaysOver(inv);
     var warn = "";
+    if (over > 0) warn += '<p class="inv-warn">' + (over === 1 ? "1 day" : over + " days") + " overdue</p>";
     if (inv.paidTwiceAt) warn += '<p class="inv-warn">Paid twice: refund one? Both payments are in Donations.</p>';
     if (state === "paid-after-cancel") warn += '<p class="inv-warn">Paid after it was cancelled. Refund it if it should not have been paid.</p>';
+    var facts = [];
+    if (inv.email) facts.push(["Sent to", '<a class="inv-mail" href="mailto:' + esc(inv.email) + '">' + esc(inv.email) + "</a>"]);
+    if (inv.sendCount) {
+      facts.push(["Emailed", "Emailed " + invTimes(inv.sendCount) + (inv.lastSentAt ? invLast(qrDay(qrUkDay(new Date(inv.lastSentAt)), today)) : "")]);
+    }
+    if (inv.note) facts.push(["Note", '<span class="inv-note">' + esc(inv.note) + "</span>"]);
+    if (inv.createdBy) facts.push(["Made by", esc(String(inv.createdBy).replace(/^admin:/, ""))]);
     var quiet = [];
     if (edit && (state === "waiting" || state === "overdue")) {
-      quiet.push('<button type="button" class="inv-quiet" data-inv-resend="' + inv.id + '">Email it again</button>');
+      quiet.push('<button type="button" class="admin-btn ak-btn--plain admin-btn--small inv-quiet" data-inv-resend="' + inv.id + '">Email it again</button>');
     }
     if (edit && state !== "paid" && state !== "paid-after-cancel") {
-      quiet.push('<button type="button" class="inv-quiet" data-inv-markpaid="' + inv.id + '">Mark paid</button>');
+      quiet.push('<button type="button" class="admin-btn admin-btn--small inv-quiet" data-inv-markpaid="' + inv.id + '">Mark paid</button>');
     }
     if (edit && (state === "waiting" || state === "overdue")) {
-      quiet.push('<button type="button" class="inv-quiet" data-inv-cancel="' + inv.id + '">Cancel</button>');
+      quiet.push('<button type="button" class="admin-btn ak-btn--danger admin-btn--small inv-quiet" data-inv-cancel="' + inv.id + '">Cancel</button>');
+    }
+    if (edit) quiet.push('<button type="button" class="admin-btn ak-btn--plain admin-btn--small inv-quiet" data-inv-again="' + inv.id + '">Send another like this</button>');
+    if (paid && inv.donationId && canView("donations")) {
+      quiet.push('<button type="button" class="admin-btn ak-btn--plain admin-btn--small inv-quiet" data-inv-gift="' + inv.id + '">See it in Donations</button>');
     }
     return (
-      '<article class="inv-card is-' + esc(state) + '" data-inv-id="' + inv.id + '">' +
+      '<article class="inv-card ak-card is-' + esc(state) + '" data-inv-id="' + inv.id + '">' +
       '<div class="inv-card-top"><span class="inv-num">' + esc(number) + "</span>" +
       '<span class="inv-pill inv-pill--' + esc(state) + '">' + esc(INV_STATES[state] || state) + "</span></div>" +
       '<h4 class="inv-who">' + esc(who) + "</h4>" +
@@ -6816,9 +6843,12 @@
       '<p class="inv-amount"><b>' + esc(invMoney(inv.amountPence)) + "</b> " + esc(inv.description) + "</p>" +
       '<p class="inv-dates">' + lines.join("") + "</p>" +
       warn +
+      (facts.length
+        ? '<dl class="ak-facts inv-facts">' + facts.map(function (f) { return "<dt>" + f[0] + "</dt><dd>" + f[1] + "</dd>"; }).join("") + "</dl>"
+        : "") +
       '<p class="inv-actions">' +
       '<a class="admin-btn admin-btn--small" data-inv-open href="' + esc(inv.link) + '" target="_blank" rel="noopener">Open the invoice</a>' +
-      '<button type="button" class="admin-btn admin-btn--small" data-inv-copy="' + inv.id + '">Copy link</button>' +
+      '<button type="button" class="admin-btn ak-btn--plain admin-btn--small" data-inv-copy="' + inv.id + '">Copy link</button>' +
       "</p>" +
       (quiet.length ? '<p class="inv-quiet-row">' + quiet.join("") + "</p>" : "") +
       '<div data-inv-confirm="' + inv.id + '"></div>' +
@@ -6827,24 +6857,131 @@
     );
   }
 
-  function invShown(inv) {
-    var f = invState.filter;
+  function invInFilter(inv, f) {
     var s = inv.state || "waiting";
     if (f === "waiting") return s === "waiting" || s === "overdue";
+    if (f === "overdue") return s === "overdue";
     if (f === "paid") return s === "paid" || s === "paid-after-cancel";
     if (f === "cancelled") return s === "cancelled";
     return true;
+  }
+  function invShown(inv) {
+    if (!invInFilter(inv, invState.filter)) return false;
+    var q = String(invState.query || "").trim().toLowerCase();
+    if (!q) return true;
+    var hay = [inv.number || invNumber(inv.id), inv.orgName, inv.contactName, inv.email].join(" ").toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
+
+  // Tiles that count, total and filter. Waiting includes the overdue ones, as the filter always has.
+  var INV_TILES = [
+    { key: "waiting", name: "Waiting" },
+    { key: "overdue", name: "Overdue", urgent: true },
+    { key: "paid", name: "Paid" },
+    { key: "cancelled", name: "Cancelled", says: "Their links say so" },
+    { key: "all", name: "All", says: "Every invoice" },
+  ];
+  function invDrawTiles() {
+    var box = el("invTiles");
+    if (!box) return;
+    if (!box.children.length) {
+      box.innerHTML = INV_TILES.map(function (t) {
+        return '<li><button type="button" class="ak-tile" data-inv-filter="' + t.key + '" aria-pressed="false"><span class="ak-tile__n"></span>' +
+          '<span class="ak-tile__name">' + t.name + '</span><span class="ak-tile__says"></span></button></li>';
+      }).join("");
+    }
+    INV_TILES.forEach(function (t) {
+      var these = invState.invoices.filter(function (i) { return invInFilter(i, t.key); });
+      var btn = box.querySelector('[data-inv-filter="' + t.key + '"]');
+      var pence = these.reduce(function (sum, i) { return sum + (i.amountPence || 0); }, 0);
+      btn.querySelector(".ak-tile__n").textContent = String(these.length);
+      btn.querySelector(".ak-tile__says").textContent = t.says || (these.length ? invMoney(pence) + " in all" : "");
+      btn.classList.toggle("is-active", invState.filter === t.key);
+      btn.classList.toggle("is-none", these.length === 0);
+      btn.classList.toggle("ak-tile--urgent", !!t.urgent && these.length > 0);
+      btn.setAttribute("aria-pressed", invState.filter === t.key ? "true" : "false");
+    });
   }
 
   function drawInvoices() {
     var all = invState.invoices;
     var shown = all.filter(invShown);
+    invState.shown = shown;
+    var q = String(invState.query || "").trim();
     var empty = all.length === 0
       ? canEdit("donations")
         ? "No invoices yet. Send your first one above: choose who it is for, the amount and the due date."
         : "No invoices yet."
+      : q ? "No invoice matches “" + q + "”."
       : "None here. Choose All to see every invoice.";
+    invDrawTiles();
     el("invList").innerHTML = shown.length ? shown.map(invCard).join("") : '<p class="admin-empty">' + H.escapeHtml(empty) + "</p>";
+  }
+
+  // Send another like this: the form filled from an old invoice, for the school or club that gives
+  // every year. Nothing is sent until Send invoice is pressed; the date is 30 days from today again.
+  function invFillFrom(inv) {
+    var kind = inv.payerKind || "person";
+    var radio = document.querySelector('#view-invoices input[name="invKind"][value="' + kind + '"]');
+    if (radio) radio.checked = true;
+    invShowKind();
+    invClearErrors();
+    el("invOrgName").value = inv.orgName || "";
+    el("invContactName").value = inv.contactName || "";
+    el("invEmail").value = inv.email || "";
+    el("invAddress").value = inv.address || "";
+    el("invPostcode").value = inv.postcode || "";
+    el("invAmount").value = (inv.amountPence / 100).toFixed(inv.amountPence % 100 ? 2 : 0);
+    el("invDescription").value = inv.description || "Donation to NBCC";
+    el("invNote").value = inv.note || "";
+    el("invDueOn").value = invAddDays(qrUkDay(new Date()), 30);
+    document.querySelectorAll('#view-invoices input[name="invConsideration"]').forEach(function (r) {
+      r.checked = inv.considerationGiven === null || inv.considerationGiven === undefined ? false : (r.value === "yes") === !!inv.considerationGiven;
+    });
+    invOpenForm(true);
+    qrSay(el("invNewStatus"), "Filled in from " + (inv.number || invNumber(inv.id)) + ". Check it, then press Send invoice.", false, true);
+    var form = el("invNewForm");
+    if (form && form.scrollIntoView) form.scrollIntoView({ block: "start" });
+    var first = el("invContactName");
+    if (first && first.focus) first.focus();
+  }
+  // On a phone the form waits behind one big button; this opens or closes it (a laptop always shows it).
+  function invOpenForm(open) {
+    var wrap = el("invNewWrap");
+    var btn = el("invNewOpen");
+    if (wrap) wrap.classList.toggle("is-open", open);
+    if (btn) {
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.textContent = open ? "Close the form" : "Send an invoice";
+    }
+  }
+
+  // See it in Donations: the gift log showing only paid invoices, searched for whoever paid it.
+  function invSeeGift(inv) {
+    var box = el("donationsSearch");
+    if (box) box.value = inv.email || inv.contactName || "";
+    var filter = el("donationsInvoiceFilter");
+    if (filter && !filter.checked) {
+      filter.checked = true;
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    selectView("donations");
+  }
+
+  function invDownload() {
+    var shown = invState.shown || [];
+    var say = el("invToolsStatus");
+    if (!shown.length) return qrSay(say, "No invoices are showing, so there is nothing to download.", true);
+    var rows = [["Number", "For", "Attention of", "Email", "Amount (£)", "What it is for", "State", "Sent", "Due", "Paid on", "Paid by", "Gift in Donations", "Note"]]
+      .concat(shown.map(function (i) {
+        return [i.number || invNumber(i.id), i.orgName || i.contactName, i.orgName ? i.contactName : "", i.email, i.amountPence / 100,
+          i.description, INV_STATES[i.state] || i.state, i.issuedOn, i.dueOn, i.paidOn || "", i.paidBy === "card" ? "Card" : i.paidBy ? "Bank transfer" : "",
+          i.donationId ? "NBCC-" + String(i.donationId).padStart(6, "0") : "", i.note || ""];
+      }));
+    var kit = window.AdminKit;
+    var ok = kit && kit.downloadCsv ? kit.downloadCsv("invoices-" + qrUkDay(new Date()) + ".csv", rows) : false;
+    if (ok) qrSay(say, "Downloaded " + (shown.length === 1 ? "1 invoice." : shown.length + " invoices."), false, true);
+    else qrSay(say, "Your browser could not make the file. Nothing was downloaded.", true);
   }
 
   function invCardSay(id, msg, isError, isOk) {
@@ -6925,6 +7062,16 @@
           })
           .then(function () { delete invBusy[rid]; });
       }
+      var again = t.closest("[data-inv-again]");
+      if (again) {
+        var ainv = invById(Number(again.getAttribute("data-inv-again")));
+        return ainv ? invFillFrom(ainv) : undefined;
+      }
+      var gift = t.closest("[data-inv-gift]");
+      if (gift) {
+        var ginv = invById(Number(gift.getAttribute("data-inv-gift")));
+        return ginv ? invSeeGift(ginv) : undefined;
+      }
       var mark = t.closest("[data-inv-markpaid]");
       if (mark) {
         var mid = Number(mark.getAttribute("data-inv-markpaid"));
@@ -6934,7 +7081,8 @@
           '<form class="inv-confirm" data-inv-paid-form="' + mid + '">' +
             '<label class="inv-field">When did the money arrive?<input type="date" max="' + day + '" value="' + day + '" /></label>' +
             '<p class="inv-actions"><button type="submit" class="btn btn-primary">Mark paid</button>' +
-            '<button type="button" class="inv-quiet" data-inv-confirm-close="' + mid + '">Not yet</button></p></form>',
+            '<button type="button" class="btn" data-inv-confirm-close="' + mid + '">Not yet</button></p>' +
+            '<small class="ak-says">This puts it in Donations and emails their receipt. It cannot be undone here.</small></form>',
         );
       }
       var cancel = t.closest("[data-inv-cancel]");
@@ -6944,7 +7092,7 @@
           xid,
           '<div class="inv-confirm"><p>Cancel ' + H.escapeHtml(invNumber(xid)) + "? The link will say it is cancelled and can no longer be paid.</p>" +
             '<p class="inv-actions"><button type="button" class="btn btn-primary" data-inv-cancel-yes="' + xid + '">Cancel the invoice</button>' +
-            '<button type="button" class="inv-quiet" data-inv-confirm-close="' + xid + '">Keep it</button></p></div>',
+            '<button type="button" class="btn" data-inv-confirm-close="' + xid + '">Keep it</button></p></div>',
         );
       }
       var yes = t.closest("[data-inv-cancel-yes]");
@@ -6978,7 +7126,18 @@
         });
       }
     });
-    el("invBankClear").addEventListener("click", function () { invSaveBank({ clear: true }); });
+    // Remove them asks first, under the button; only its Yes takes the bank details off.
+    var bankAsk = function (asking) {
+      el("invBankClearAsk").hidden = !asking;
+      var next = asking ? el("invBankClearYes") : el("invBankClear");
+      if (next && next.focus) next.focus();
+    };
+    el("invBankClear").addEventListener("click", function () { bankAsk(true); });
+    el("invBankClearNo").addEventListener("click", function () { bankAsk(false); });
+    el("invBankClearYes").addEventListener("click", function () { el("invBankClearAsk").hidden = true; invSaveBank({ clear: true }); });
+    el("invSearch").addEventListener("input", function () { invState.query = el("invSearch").value; drawInvoices(); });
+    el("invDownload").addEventListener("click", invDownload);
+    el("invNewOpen").addEventListener("click", function () { invOpenForm(!el("invNewWrap").classList.contains("is-open")); });
   }
 
   function invDrawBank() {
@@ -7027,6 +7186,7 @@
     var edit = canEdit("donations");
     el("invNewForm").hidden = !edit;
     el("invBank").hidden = !edit;
+    el("invNewOpen").hidden = !edit;
     if (!el("invDueOn").value) el("invDueOn").value = invAddDays(qrUkDay(new Date()), 30);
     invShowKind();
     return loadInvoiceList();

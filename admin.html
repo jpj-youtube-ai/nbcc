@@ -3126,11 +3126,18 @@
             <!-- Invoices for donations (docs/superpowers/specs/2026-11-05-donation-invoices-design.md). Anyone
                  who can view Donations sees the list; the form, the bank details and every button that
                  changes something are for Donations edit only. -->
-            <section class="admin-view" id="view-invoices" aria-labelledby="invoices-heading" hidden>
+            <section class="admin-view ak" id="view-invoices" aria-labelledby="invoices-heading" hidden>
               <h2 id="invoices-heading">Invoices</h2>
               <p class="admin-view-intro">Send an invoice to a person, a business or a group. They pay it by card from the link in their email, or by bank transfer, and once it is paid it comes through into Donations by itself, labelled with its invoice number. When a bank transfer arrives, press <b>Mark paid</b>.</p>
 
-              <form id="invNewForm" class="inv-new" autocomplete="off" novalidate hidden>
+              <!-- Tiles that count, total and filter (app.js, invDrawTiles). Each carries data-inv-filter, as the
+                   All / Waiting / Paid / Cancelled buttons did; Overdue has one of its own now. -->
+              <ul class="ak-tiles" id="invTiles" aria-label="Which invoices to show"></ul>
+              <!-- On a phone the list comes first: the form waits behind this one big button (editors only). On a
+                   laptop the button is hidden and the form always shows. -->
+              <button class="admin-btn inv-new-open" type="button" id="invNewOpen" aria-expanded="false" aria-controls="invNewWrap" hidden>Send an invoice</button>
+              <div class="inv-new-wrap" id="invNewWrap">
+              <form id="invNewForm" class="inv-new ak-panel" autocomplete="off" novalidate hidden>
                 <h3 class="inv-new-title">Send an invoice</h3>
                 <fieldset class="inv-kind">
                   <legend class="inv-field">Who is it for?</legend>
@@ -3208,10 +3215,11 @@
                 <p class="inv-actions"><button class="btn btn-primary" type="submit" id="invNewBtn">Send invoice</button></p>
                 <p class="ty-status" id="invNewStatus" role="status" aria-live="polite"></p>
               </form>
+              </div>
 
-              <details id="invBank" class="inv-bank" hidden>
+              <details id="invBank" class="inv-bank ak-fold" hidden>
                 <summary>Bank details on invoices <span id="invBankState" class="inv-bank-state"></span></summary>
-                <form id="invBankForm" class="inv-bank-form" autocomplete="off" novalidate>
+                <form id="invBankForm" class="inv-bank-form ak-fold__body" autocomplete="off" novalidate>
                   <p class="admin-help">Printed on every invoice that is still waiting, so people can pay by bank transfer. Until these are filled in, invoices offer card only.</p>
                   <label class="inv-field" for="invBankName">Account name</label>
                   <input id="invBankName" type="text" maxlength="70" />
@@ -3220,21 +3228,26 @@
                   <label class="inv-field" for="invBankNumber">Account number</label>
                   <input id="invBankNumber" type="text" inputmode="numeric" maxlength="10" />
                   <p class="inv-actions"><button class="btn btn-primary" type="submit">Save bank details</button>
-                    <button class="inv-quiet" type="button" id="invBankClear">Remove them</button></p>
+                    <button class="btn ak-btn--danger" type="button" id="invBankClear">Remove them</button></p>
+                  <small class="ak-says">Remove them takes the bank details off every invoice still waiting, so people can only pay by card. It asks first.</small>
+                  <div class="ak-notice inv-ask" id="invBankClearAsk" hidden>
+                    <p>Remove the bank details? Invoices still waiting will offer card only until you add them again.</p>
+                    <p class="inv-actions"><button class="btn ak-btn--danger" type="button" id="invBankClearYes">Yes, remove them</button>
+                      <button class="btn" type="button" id="invBankClearNo">Keep them</button></p>
+                  </div>
                   <p class="ty-status" id="invBankStatus" role="status" aria-live="polite"></p>
                 </form>
               </details>
 
               <div class="inv-head">
                 <h3 class="admin-subhead">Your invoices</h3>
-                <div class="admin-segmented inv-filter" role="group" aria-label="Show">
-                  <button type="button" class="admin-seg is-active" data-inv-filter="all" aria-pressed="true">All</button>
-                  <button type="button" class="admin-seg" data-inv-filter="waiting" aria-pressed="false">Waiting</button>
-                  <button type="button" class="admin-seg" data-inv-filter="paid" aria-pressed="false">Paid</button>
-                  <button type="button" class="admin-seg" data-inv-filter="cancelled" aria-pressed="false">Cancelled</button>
-                </div>
+                <label class="ak-field inv-search" for="invSearch"><span>Find an invoice</span>
+                  <input type="search" id="invSearch" autocomplete="off" placeholder="Name, email or number" /></label>
               </div>
               <div id="invList" class="inv-list" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              <div class="ak-actions inv-export"><button class="admin-btn ak-btn--plain" type="button" id="invDownload">Download the spreadsheet</button></div>
+              <small class="ak-says">The invoices showing above, for the treasurer: choose a tile or search first to narrow them down.</small>
+              <p class="admin-action-status" id="invToolsStatus" role="status" aria-live="polite"></p>
             </section>
 
             <section class="admin-view ak" id="view-qr" aria-labelledby="qr-heading" hidden>

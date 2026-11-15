@@ -116,3 +116,72 @@
 #view-monthly .mg-table th:last-child { width: 5.5rem; }
 #view-monthly .ak-cards__lead .mg-email { font-family: var(--font-body, inherit); font-weight: 500; }
 #view-monthly .ak-cards__lead .mg-none { font-family: var(--font-body, inherit); font-weight: 400; }
+
+/* ---- Invoices ----
+ * admin.css draws this screen through #view-invoices; each rule here is as specific, and loaded later,
+ * so the kit's look wins without !important. */
+#view-invoices .inv-new { display: grid; gap: 4px; max-width: 680px; margin: 0 0 22px; padding: clamp(16px, 2.4vw, 26px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+#view-invoices .inv-new[hidden] { display: none; }
+#view-invoices .inv-new-title { margin: 0 0 6px; font-family: var(--ov-head); font-size: 1.3rem; font-weight: 800; color: var(--ov-maroon); }
+#view-invoices .inv-field { font-family: var(--ov-head); font-size: 0.98rem; font-weight: 700; color: var(--ov-ink); }
+#view-invoices .inv-hint, #view-invoices .inv-optional { font-family: var(--font-body, sans-serif); font-size: 0.86rem; font-weight: 400; color: var(--ov-soft); }
+#view-invoices .inv-kind label { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 1rem; }
+#view-invoices .inv-kind input { width: 22px; height: 22px; accent-color: var(--ov-maroon); }
+#view-invoices .inv-new input[type="text"], #view-invoices .inv-new input[type="email"], #view-invoices .inv-new input[type="date"], #view-invoices .inv-new textarea,
+#view-invoices .inv-bank-form input, #view-invoices .inv-confirm input { min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); box-shadow: inset 2px 3px 0 rgba(58, 11, 11, 0.08); color: var(--ov-text); font-size: 1rem; }
+#view-invoices .inv-new input:focus, #view-invoices .inv-new textarea:focus, #view-invoices .inv-bank-form input:focus, #view-invoices .inv-confirm input:focus { border-color: var(--ov-ink); outline: 3px solid var(--ov-gold-ink); outline-offset: 2px; }
+#view-invoices .inv-money { color: var(--ov-maroon); }
+/* The button that opens the form, on a phone only; on a laptop the form always shows. */
+#view-invoices .inv-new-open { width: 100%; margin: 0 0 16px; min-height: 52px; font-size: 1.05rem; }
+#view-invoices .inv-new-open[hidden] { display: none; }
+#view-invoices .inv-bank { max-width: 680px; margin: 0 0 22px; padding: 0; border: var(--ov-thin); border-radius: 16px; background: var(--ov-card); }
+#view-invoices .inv-bank summary { min-height: 48px; padding: 10px 16px; color: var(--ov-ink); }
+#view-invoices .inv-bank-state { font-family: var(--font-body, sans-serif); font-size: 0.88rem; font-weight: 400; color: var(--ov-soft); }
+#view-invoices .inv-bank-form { max-width: 420px; padding: 14px 16px 16px; }
+#view-invoices .inv-ask { margin: 10px 0 0; }
+#view-invoices .inv-ask p { margin: 0; }
+#view-invoices .inv-head { align-items: end; margin: 26px 0 0; }
+#view-invoices .inv-search { width: min(100%, 22rem); }
+#view-invoices .inv-list { gap: 16px; margin: 14px 0 22px; }
+#view-invoices .inv-card { gap: 8px; padding: 16px 18px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+#view-invoices .inv-card.is-cancelled { background: var(--ov-warm); box-shadow: none; }
+#view-invoices .inv-num { color: var(--ov-soft); }
+#view-invoices .inv-pill { padding: 1px 9px; border: 2px solid currentColor; border-radius: 999px; background: var(--ov-gold-soft); color: var(--ov-gold-ink); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+#view-invoices .inv-pill--overdue { background: var(--ov-blush); color: var(--ov-crimson); }
+#view-invoices .inv-pill--paid { background: var(--ov-holly-soft); color: var(--ov-holly); }
+#view-invoices .inv-pill--paid-after-cancel { background: var(--ov-blush); color: var(--ov-crimson); }
+#view-invoices .inv-pill--cancelled { background: var(--ov-card); color: var(--ov-soft); }
+#view-invoices .inv-who { font-family: var(--ov-head); font-size: 1.15rem; color: var(--ov-ink); }
+#view-invoices .inv-sub, #view-invoices .inv-dates { color: var(--ov-soft); }
+#view-invoices .inv-amount { color: var(--ov-text); }
+#view-invoices .inv-amount b { font-family: var(--ov-head); color: var(--ov-ink); }
+#view-invoices .inv-warn { padding: 6px 10px; border: var(--ov-thin); border-radius: 10px; background: var(--ov-blush); color: var(--ov-ink); }
+#view-invoices .inv-facts { gap: 2px 12px; margin: 2px 0 0; padding: 10px 0 0; border-top: 2px dashed var(--ov-rule); }
+#view-invoices .inv-facts dt, #view-invoices .inv-facts dd { font-size: 0.88rem; }
+#view-invoices .inv-facts dt { align-self: center; }
+#view-invoices .inv-mail { display: inline-flex; align-items: center; min-height: 44px; color: var(--ov-maroon); text-underline-offset: 4px; overflow-wrap: anywhere; }
+#view-invoices .inv-note { white-space: pre-line; }
+/* The card's buttons are the kit's: admin.css drew them as thin outlines and underlined words. */
+#view-invoices .inv-card .admin-btn { min-height: 44px; border: var(--ov-thin); box-shadow: 2px 3px 0 var(--ov-ink); background: var(--ov-holly); color: var(--ov-on-dark); }
+#view-invoices .inv-card .admin-btn:hover { background: var(--ov-holly-dark); border-color: var(--ov-ink); }
+#view-invoices .inv-card .ak-btn--plain { background: var(--ov-card); color: var(--ov-ink); }
+#view-invoices .inv-card .ak-btn--plain:hover { background: var(--ov-hover); }
+#view-invoices .inv-card .ak-btn--danger { background: var(--ov-card); color: var(--ov-crimson); }
+#view-invoices .inv-card .ak-btn--danger:hover { background: var(--ov-blush); }
+#view-invoices .inv-quiet-row { gap: 10px; margin: 2px 0 0; }
+#view-invoices .inv-quiet { padding: 6px 14px; font-size: 0.88rem; text-decoration: none; }
+#view-invoices .inv-confirm { gap: 8px; padding: 12px 14px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-gold-soft); }
+#view-invoices .inv-confirm p { font-size: 0.95rem; }
+#view-invoices .inv-confirm .ak-says { margin: 0; }
+#view-invoices .inv-export { margin: 4px 0 0; }
+
+@media (min-width: 861px) {
+  #view-invoices .inv-new-open { display: none; }
+}
+@media (max-width: 860px) {
+  /* The form waits behind its button, so the list comes first. */
+  #view-invoices .inv-new-wrap:not(.is-open) .inv-new { display: none; }
+  #view-invoices .inv-list { grid-template-columns: minmax(0, 1fr); }
+  #view-invoices .inv-facts { grid-template-columns: minmax(0, 1fr); }
+  #view-invoices .inv-facts dd { margin: 0 0 6px; }
+}

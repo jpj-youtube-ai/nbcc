@@ -15,3 +15,20 @@
 #view-audit .rc-foot { display: grid; gap: 8px; margin: 18px 0 0; }
 #view-audit .rc-count { margin: 0; color: var(--ov-soft); font-size: 0.92rem; }
 #view-audit .rc-foot[hidden] { display: none; }
+
+/* ---- Email audit ---- */
+/* A failure stands out in the list, as it does in the band. */
+#view-email-audit .ty-pill-blocked { color: var(--ov-crimson); background: var(--ov-blush); }
+#view-email-audit .rc-time { color: var(--ov-soft); }
+#view-email-audit .rc-to { min-height: 44px; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; text-align: left; text-decoration: underline; overflow-wrap: anywhere; cursor: pointer; }
+#view-email-audit .rc-foot { display: grid; gap: 6px; justify-items: start; margin: 18px 0 0; }
+#view-email-audit .ty-controls { flex-wrap: wrap; align-items: end; }
+#view-email-audit .ty-inline { display: grid; gap: 4px; min-width: 0; }
+#view-email-audit .ty-inline :where(input, select) { width: 100%; min-width: 0; }
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  /* admin.css pins three columns to 400px for a laptop; on a phone each email is a card. */
+  #view-email-audit .email-audit-table th, #view-email-audit .email-audit-table td { width: auto; }
+  #view-email-audit .ty-inline { flex: 1 1 100%; }
+}

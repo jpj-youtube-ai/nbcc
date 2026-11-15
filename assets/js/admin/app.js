@@ -4694,10 +4694,21 @@
     if (r.deliveryStatus === "delivered") return '<span class="ty-pill ty-pill-ready">Delivered</span>';
     return '<span class="ty-pill">Sent</span>';
   }
+  // The admin refresh (2026-11-14): the day and time in UK time, the address as a button that shows
+  // everything sent to it, and when the mailbox answered.
+  var EMAIL_ANSWER_WORDS = { delivered: "Delivered", bounced: "Bounced", complained: "Marked as spam" };
+  function emailWhen(iso) {
+    return iso ? auditDate(iso) + " " + auditTime(iso) : "";
+  }
   function emailAuditRow(r) {
-    var who = H.escapeHtml(r.recipient) + (r.recipientName ? "<br><small>" + H.escapeHtml(r.recipientName) + "</small>" : "");
+    var addr = H.escapeHtml(r.recipient);
+    var who = '<button class="admin-link rc-to" type="button" data-email-to="' + addr + '" aria-label="Everything sent to ' + addr + '">' + addr + "</button>" +
+      (r.recipientName ? "<br><small>" + H.escapeHtml(r.recipientName) + "</small>" : "");
     var detail = r.error || r.deliveryDetail;
-    var status = emailStatusPill(r) + (detail ? "<br><small>" + H.escapeHtml(String(detail)) + "</small>" : "");
+    var answered = r.deliveryAt && EMAIL_ANSWER_WORDS[r.deliveryStatus]
+      ? "<br><small>" + H.escapeHtml(EMAIL_ANSWER_WORDS[r.deliveryStatus] + " " + auditDate(r.deliveryAt) + " at " + auditTime(r.deliveryAt)) + "</small>"
+      : "";
+    var status = emailStatusPill(r) + answered + (detail ? "<br><small>" + H.escapeHtml(String(detail)) + "</small>" : "");
     // TASK-562: nothing leaves this list. A problem staff removed from the red band says so here,
     // with who and when, and the way to undo it for someone who may edit.
     if (r.removedAt) {
@@ -4711,8 +4722,9 @@
           : "");
     }
     return (
-      "<tr><td>" + H.fmtDate(r.createdAt) + "</td><td>" + H.escapeHtml(emailKindLabel(r.kind)) +
-      "</td><td>" + who + "</td><td>" + H.escapeHtml(r.subject) + "</td><td>" + status + "</td></tr>"
+      '<tr><td data-label="When"><span>' + H.escapeHtml(r.createdAt ? auditDate(r.createdAt) : "") + '</span> <span class="rc-time">' +
+      H.escapeHtml(r.createdAt ? auditTime(r.createdAt) : "") + '</span></td><td data-label="Type">' + H.escapeHtml(emailKindLabel(r.kind)) +
+      '</td><td data-label="To">' + who + '</td><td data-label="Subject">' + H.escapeHtml(r.subject) + '</td><td data-label="Status">' + status + "</td></tr>"
     );
   }
   // TASK-562: the red band, one block an address. What staff decide here is about an address (is
@@ -4902,20 +4914,57 @@
   }
   function emailAuditTableHtml(rows) {
     return (
-      '<table class="admin-table email-audit-table"><thead><tr><th>When</th><th>Type</th><th>To</th><th>Subject</th><th>Status</th></tr></thead><tbody>' +
+      '<table class="admin-table email-audit-table ak-cards"><thead><tr><th>When</th><th>Type</th><th>To</th><th>Subject</th><th>Status</th></tr></thead><tbody>' +
       rows.map(emailAuditRow).join("") + "</tbody></table>"
     );
+  }
+  // The type list in groups, A to Z inside each (the admin refresh, 2026-11-14).
+  var EMAIL_KIND_GROUPS = ["Donations", "Festive Ball", "Get involved", "Elf Detective School", "Newsletter", "Signing in", "Businesses", "Behind the scenes"];
+  function emailKindGroup(kind) {
+    if (/^ball/.test(kind)) return "Festive Ball";
+    if (/^elf/.test(kind)) return "Elf Detective School";
+    if (/^(fundraise|eventTickets)/.test(kind)) return "Get involved";
+    if (/^newsletter$/.test(kind)) return "Newsletter";
+    if (/^(adminInvite|adminReset|loginCode|portal)$/.test(kind)) return "Signing in";
+    if (/^(business|outreach)/.test(kind)) return "Businesses";
+    if (/^backup/.test(kind)) return "Behind the scenes";
+    return "Donations";
+  }
+  var emailAuditTimer = null;
+  var emailAuditShown = [];
+  function emailAuditDownload() {
+    var said = el("emailAuditDownloadSaid");
+    var rows = [["Sent", "Type", "To", "Name", "Subject", "What happened", "When the mailbox answered", "Why"]].concat(
+      emailAuditShown.map(function (r) {
+        var what = r.status === "failed" ? "Failed to send" : EMAIL_ANSWER_WORDS[r.deliveryStatus] || "Sent";
+        return [emailWhen(r.createdAt), emailKindLabel(r.kind), r.recipient || "", r.recipientName || "", r.subject || "", what,
+          emailWhen(r.deliveryAt), String(r.error || r.deliveryDetail || "")];
+      }),
+    );
+    var Kit = window.AdminKit;
+    var ok = !!(Kit && Kit.downloadCsv && Kit.downloadCsv("nbcc-email-audit-" + auditDayKey(new Date()) + ".csv", rows));
+    said.className = "ak-status " + (ok ? "is-ok" : "is-error");
+    said.textContent = ok
+      ? "Downloaded " + (emailAuditShown.length === 1 ? "1 email." : emailAuditShown.length + " emails.")
+      : "This browser could not make the spreadsheet.";
   }
   function wireEmailAudit() {
     if (emailAuditWired) return;
     emailAuditWired = true;
     var type = el("emailAuditType");
     if (type) {
-      EMAIL_KINDS.forEach(function (k) {
-        var o = doc.createElement("option");
-        o.value = k[0];
-        o.textContent = k[1];
-        type.appendChild(o);
+      EMAIL_KIND_GROUPS.forEach(function (g) {
+        var group = doc.createElement("optgroup");
+        group.label = g;
+        EMAIL_KINDS.filter(function (k) { return emailKindGroup(k[0]) === g; })
+          .sort(function (a, b) { return a[1].localeCompare(b[1], "en-GB"); })
+          .forEach(function (k) {
+            var o = doc.createElement("option");
+            o.value = k[0];
+            o.textContent = k[1];
+            group.appendChild(o);
+          });
+        if (group.children.length) type.appendChild(group);
       });
     }
     var form = el("emailAuditFilters");
@@ -4924,6 +4973,23 @@
       emailAuditOffset = 0;
       loadEmailAudit();
     });
+    ["emailAuditType", "emailAuditStatus"].forEach(function (id) {
+      var field = el(id);
+      if (field) field.addEventListener("change", function () {
+        emailAuditOffset = 0;
+        loadEmailAudit();
+      });
+    });
+    var search = el("emailAuditSearch");
+    if (search) search.addEventListener("input", function () {
+      if (emailAuditTimer) clearTimeout(emailAuditTimer);
+      emailAuditTimer = setTimeout(function () {
+        emailAuditTimer = null;
+        emailAuditOffset = 0;
+        loadEmailAudit();
+      }, 400);
+    });
+    bindClick("emailAuditDownload", emailAuditDownload);
     bindClick("emailAuditClear", function () {
       el("emailAuditSearch").value = "";
       el("emailAuditType").value = "";
@@ -4942,6 +5008,21 @@
     // TASK-562: one listener for the band's two controls and every Put back, on the screen's own
     // box, which stays while the band and the list inside it are drawn again.
     el("view-email-audit").addEventListener("click", function (e) {
+      var tile = e.target && e.target.closest && e.target.closest("[data-email-tile]");
+      if (tile) {
+        el("emailAuditStatus").value = tile.getAttribute("data-email-tile") || "";
+        emailAuditOffset = 0;
+        loadEmailAudit();
+        return;
+      }
+      var to = e.target && e.target.closest && e.target.closest("[data-email-to]");
+      if (to) {
+        el("emailAuditSearch").value = to.getAttribute("data-email-to") || "";
+        emailAuditOffset = 0;
+        loadEmailAudit();
+        el("emailAuditSearch").focus({ preventScroll: true });
+        return;
+      }
       var t = e.target && e.target.closest && e.target.closest("[data-audit-stop],[data-audit-tidy],[data-audit-putback]");
       if (!t) return;
       if (t.hasAttribute("data-audit-putback")) {
@@ -4971,11 +5052,18 @@
     if (q) params += "&q=" + encodeURIComponent(q);
     if (type) params += "&type=" + encodeURIComponent(type);
     if (status) params += "&status=" + encodeURIComponent(status);
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-email-tile]"), function (b) {
+      var on = b.getAttribute("data-email-tile") === status;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    emailAuditShown = [];
     return authFetch("/api/admin/email-log" + params)
       .then(okJson)
       .then(function (d) {
         band.innerHTML = emailFailBandHtml(d.failures || []);
         var rows = d.results || [];
+        emailAuditShown = rows;
         wrap.innerHTML = rows.length
           ? emailAuditTableHtml(rows)
           : '<p class="admin-empty">' + (emailAuditOffset ? "No more entries." : "No emails recorded yet. The log starts from when this page was added.") + "</p>";

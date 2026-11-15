@@ -2606,12 +2606,18 @@
                  email-audit section, which only admins carry by default (donor-identifying send
                  data); app.js hides the nav entry and the server enforces on the route. History
                  starts at the feature's deploy — nothing was recorded per-send before it. -->
-            <section class="admin-view" id="view-email-audit" aria-labelledby="email-audit-heading" hidden>
+            <section class="admin-view ak" id="view-email-audit" aria-labelledby="email-audit-heading" hidden>
               <h2 id="email-audit-heading">Email audit</h2>
               <p class="admin-view-intro">Every email the system has tried to send, newest first, with what happened to it: sent, failed, and what the mailbox side reported back (delivered, bounced, marked as spam). Anything that went wrong in the last 14 days sits in the red band at the top, until someone removes its address there. Removing an address deletes nothing: every email stays in the list below. Records are kept for six years after the tax year they were sent in, then removed automatically.</p>
+              <div class="ak-tiles rc-status-tiles" id="emailAuditTiles" role="group" aria-label="Show emails by what happened to them">
+                <button class="ak-tile is-active" type="button" data-email-tile="" aria-pressed="true"><span class="ak-tile__name">All</span><span class="ak-tile__says">Every email</span></button>
+                <button class="ak-tile" type="button" data-email-tile="problems" aria-pressed="false"><span class="ak-tile__name">Problems</span><span class="ak-tile__says">Failed, bounced or marked as spam</span></button>
+                <button class="ak-tile" type="button" data-email-tile="delivered" aria-pressed="false"><span class="ak-tile__name">Delivered</span><span class="ak-tile__says">The mailbox said it arrived</span></button>
+                <button class="ak-tile" type="button" data-email-tile="sent" aria-pressed="false"><span class="ak-tile__name">Sent</span><span class="ak-tile__says">Sent, with no answer from the mailbox yet</span></button>
+              </div>
               <form id="emailAuditFilters" class="ty-controls" autocomplete="off">
                 <label class="ty-inline">Search
-                  <input id="emailAuditSearch" type="search" placeholder="Name, email or subject" style="width:220px" />
+                  <input id="emailAuditSearch" type="search" placeholder="Name, email or subject" />
                 </label>
                 <label class="ty-inline">Type
                   <select id="emailAuditType"><option value="">All types</option></select>
@@ -2619,6 +2625,7 @@
                 <label class="ty-inline">Status
                   <select id="emailAuditStatus">
                     <option value="">All statuses</option>
+                    <option value="problems">Any problem</option>
                     <option value="failed">Failed to send</option>
                     <option value="bounced">Bounced</option>
                     <option value="complained">Marked as spam</option>
@@ -2638,6 +2645,11 @@
                 <button class="btn btn-ghost" type="button" id="emailAuditPrev">&larr; Newer</button>
                 <span id="emailAuditPageInfo"></span>
                 <button class="btn btn-ghost" type="button" id="emailAuditNext">Older &rarr;</button>
+              </div>
+              <div class="rc-foot" id="emailAuditFoot">
+                <button class="admin-btn ak-btn--plain" type="button" id="emailAuditDownload">Download what is shown</button>
+                <p class="ak-says">A spreadsheet of the emails on this screen. The list updates as you type or choose.</p>
+                <p class="ak-status" id="emailAuditDownloadSaid" role="status" aria-live="polite"></p>
               </div>
             </section>
 

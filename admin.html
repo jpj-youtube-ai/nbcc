@@ -315,19 +315,39 @@
             </section>
 
             <!-- The individuals giving every month (TASK-447). -->
-            <section class="admin-view" id="view-monthly" aria-labelledby="monthly-heading" hidden>
+            <section class="admin-view ak" id="view-monthly" aria-labelledby="monthly-heading" hidden>
               <h2 id="monthly-heading">Monthly givers</h2>
-              <p class="fx-hint" style="padding-left:0">The people giving every month. Businesses have
-                their own tab; this is everybody else.</p>
-              <label class="admin-inline-filter" for="monthlyStateFilter">Show
-                <select id="monthlyStateFilter">
-                  <option value="giving">Still giving</option>
-                  <option value="attention">Needs attention</option>
-                  <option value="">Everyone</option>
-                </select>
-              </label>
+              <p class="admin-view-intro">The people giving every month: who is still giving, whose card is failing, who has not been thanked yet and who has no Gift Aid. Businesses have their own tab; this is everybody else.</p>
+              <!-- Tiles that count and filter (app.js, drawMonthlyTiles). Hidden until a list has come. -->
+              <ul class="ak-tiles" id="monthlyTiles" aria-label="Which givers to show" hidden></ul>
+              <div class="mg-tools">
+                <label class="ak-field" for="monthlyStateFilter"><span>Show</span>
+                  <select id="monthlyStateFilter">
+                    <option value="giving">Still giving</option>
+                    <option value="attention">Needs attention</option>
+                    <option value="thanks">Not thanked yet</option>
+                    <option value="giftaid">No Gift Aid</option>
+                    <option value="">Everyone</option>
+                  </select></label>
+                <label class="ak-field" for="monthlySearch"><span>Find a giver</span>
+                  <input type="search" id="monthlySearch" autocomplete="off" placeholder="Name or email" /></label>
+                <label class="ak-field" for="monthlySort"><span>Order</span>
+                  <select id="monthlySort">
+                    <option value="">Latest payment first</option>
+                    <option value="amount">Biggest monthly gift first</option>
+                    <option value="longest">Giving longest first</option>
+                    <option value="total">Given most first</option>
+                  </select></label>
+              </div>
               <p class="admin-action-status" id="monthlySummary" role="status" aria-live="polite"></p>
+              <p class="ak-hint mg-worth" id="monthlyWorth"></p>
               <div class="admin-table-wrap" id="monthlyTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div class="ak-actions mg-export">
+                <button class="admin-btn ak-btn--plain" type="button" id="monthlyCopyEmails">Copy everyone's email</button>
+                <button class="admin-btn ak-btn--plain" type="button" id="monthlyDownload">Download the spreadsheet</button>
+              </div>
+              <small class="ak-says">Both take the givers showing above, so choose a tile or search first to narrow them down.</small>
+              <p class="admin-action-status" id="monthlyToolsStatus" role="status" aria-live="polite"></p>
             </section>
 
             <!-- Fill a Red Bag: the list on the public page /fill (red-bag:view to look,

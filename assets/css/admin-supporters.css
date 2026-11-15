@@ -84,3 +84,35 @@
   /* The job's words above its button here (admin.css stacks them): only as tall as the words. */
   #view-fulfilments .fx-task-text { flex: 0 1 auto; }
 }
+
+/* ---- Monthly givers ---- */
+#view-monthly .mg-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 15rem)); gap: 12px 16px; margin: 0 0 14px; }
+#view-monthly .mg-tools select, #view-monthly .mg-tools input { width: 100%; }
+#view-monthly .mg-worth { margin: 0 0 16px; }
+#view-monthly .mg-worth:empty { display: none; }
+#view-monthly .mg-name { display: block; font-weight: 700; color: var(--ov-ink); overflow-wrap: anywhere; }
+/* The email is its own line under the name, a link to write to them (it ran on from the name). */
+#view-monthly .mg-email { display: inline-flex; align-items: center; min-height: 44px; font-size: 0.88rem; font-weight: 500; color: var(--ov-maroon); text-underline-offset: 4px; overflow-wrap: anywhere; word-break: break-word; }
+#view-monthly .mg-sub, #view-monthly .mg-when { display: block; font-size: 0.84rem; color: var(--ov-soft); }
+#view-monthly .mg-none { display: block; font-size: 0.86rem; color: var(--ov-soft); }
+#view-monthly .mg-cell { display: grid; justify-items: start; gap: 6px; }
+#view-monthly .mg-next { display: block; max-width: 34ch; font-size: 0.86rem; line-height: 1.45; color: var(--ov-text); }
+#view-monthly .mg-todo { font-weight: 600; color: var(--ov-gold-ink); }
+#view-monthly .fx-yes { font-weight: 600; color: var(--ov-holly); }
+#view-monthly .fx-no { color: var(--ov-soft); }
+#view-monthly .fx-state { font-weight: 700; }
+#view-monthly .fx-state--todo { color: var(--ov-crimson); }
+#view-monthly .fx-state--waiting { color: var(--ov-soft); }
+#view-monthly .fx-state--done { color: var(--ov-holly); }
+#view-monthly .mg-table td { vertical-align: top; }
+#view-monthly .mg-export { margin: 20px 0 0; }
+
+@media (max-width: 860px) {
+  #view-monthly .mg-tools { grid-template-columns: minmax(0, 1fr); }
+  #view-monthly .mg-next { max-width: none; }
+}
+#view-monthly .mg-table th:first-child { width: 19%; }
+#view-monthly .mg-table th:nth-child(8) { width: 20%; }
+#view-monthly .mg-table th:last-child { width: 5.5rem; }
+#view-monthly .ak-cards__lead .mg-email { font-family: var(--font-body, inherit); font-weight: 500; }
+#view-monthly .ak-cards__lead .mg-none { font-family: var(--font-body, inherit); font-weight: 400; }

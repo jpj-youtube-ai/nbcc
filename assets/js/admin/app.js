@@ -3171,62 +3171,142 @@
   // nothing, and were findable only by paging the whole donations list - which is how three of them
   // went four months without a thank-you and nobody noticed.
   var monthlyRows = null; // null until a list has loaded: no list is not the same as nobody giving
+  var monthlyShown = []; // the givers on the screen now, for Copy everyone's email and the spreadsheet
 
   // What is actually wrong, in the order it matters. A cancellation is settled and needs nothing; a
-  // failing card is money leaving this month and is the reason to open this screen at all.
+  // failing card is money leaving this month and is the reason to open this screen at all. The
+  // words are plain (2026-11-14): never the database's own past_due or lapsed.
   function monthlyState(r) {
     if (r.state === "cancelled") return { label: "Cancelled", cls: "fx-state--waiting", attention: false };
-    if (r.state === "lapsed") return { label: "Lapsed", cls: "fx-state--todo", attention: true };
+    if (r.state === "lapsed") return { label: "Stopped", cls: "fx-state--todo", attention: true };
     if (r.state === "past_due") {
       return {
-        label: r.failedAttempts ? "Payment failing (" + r.failedAttempts + ")" : "Payment failing",
+        label: r.failedAttempts ? "Payment failing, " + mgPlural(r.failedAttempts, "try", "tries") : "Payment failing",
         cls: "fx-state--todo",
         attention: true,
       };
     }
     // No dunning row: an older or hand-imported supporter. Not a problem, and saying "unknown"
     // would send somebody looking for a fault that is not there.
-    if (r.state === "unknown") return { label: "Giving", cls: "fx-state--done", attention: false };
     return { label: "Giving", cls: "fx-state--done", attention: false };
+  }
+  function mgPlural(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
   }
 
   var monthlyGiving = function (r) {
     return r.state === "active" || r.state === "unknown";
   };
+  function monthlyInFilter(r, want) {
+    if (want === "giving") return monthlyGiving(r);
+    if (want === "attention") return monthlyState(r).attention;
+    if (want === "thanks") return !r.thankedAt;
+    if (want === "giftaid") return monthlyGiving(r) && !r.giftAid;
+    return true;
+  }
+
+  // The email that a next step starts: to them, with a subject, and a first line to write on from.
+  function monthlyMailto(r) {
+    var first = String(r.fullName || "").split(" ")[0];
+    return "mailto:" + encodeURIComponent(r.email).replace(/%40/g, "@") +
+      "?subject=" + encodeURIComponent("Your monthly gift to NBCC") +
+      "&body=" + encodeURIComponent("Hello " + first + ",\n\n");
+  }
+  // What to do about someone needing attention, from what is already known, and the email to start.
+  function monthlyNextStep(r) {
+    var esc = H.escapeHtml;
+    var say = "";
+    if (r.state === "past_due") {
+      say = (r.failedAttempts ? "Card failed " + mgPlural(r.failedAttempts, "time", "times") + ". " : "Their card has failed. ") +
+        "Stripe is still trying it, so nothing is needed yet; a friendly email can help if it keeps failing.";
+    } else if (r.state === "lapsed") {
+      say = (r.lapsedAt ? "Stopped on " + fxDate(r.lapsedAt) : "Stopped") +
+        (r.failedAttempts ? " after " + mgPlural(r.failedAttempts, "try", "tries") : "") +
+        ". Stripe has given up, so it is worth a friendly email to ask if they would like to start again.";
+    } else return "";
+    return '<span class="mg-next">' + esc(say) + "</span>" +
+      (r.email
+        ? '<a class="admin-btn admin-btn--small mg-mail" data-mg-mail href="' + esc(monthlyMailto(r)) + '">Email them</a>'
+        : '<span class="mg-none">No email address on file</span>');
+  }
 
   function monthlyTable(rows) {
     if (!rows.length) return '<p class="admin-empty">Nobody matches that.</p>';
+    var esc = H.escapeHtml;
     var body = rows
       .map(function (r) {
         var st = monthlyState(r);
         // Gift Aid on a regular gift is worth 25% a month, for ever. It earns a column of its own
-        // rather than a tick lost among the rest.
-        var ga = r.giftAid
-          ? '<span class="fx-yes">Yes</span>'
-          : '<span class="fx-state fx-state--todo">No</span>';
+        // rather than a tick lost among the rest. No Gift Aid is nobody's job, so it is quiet.
+        var ga = r.giftAid ? '<span class="fx-yes">Yes</span>' : '<span class="fx-no">No</span>';
         var thanked = r.thankedAt
-          ? H.fmtDate(r.thankedAt)
-          : '<span class="fx-state fx-state--todo">Not yet</span>';
+          ? esc(fxDate(r.thankedAt))
+          : '<span class="mg-todo">Not thanked yet</span>' +
+            '<button class="admin-btn ak-btn--plain admin-btn--small" type="button" data-goto-section="thank-you">Thank them</button>';
+        var ended = r.state === "cancelled" && r.cancelledAt ? '<span class="mg-when">Cancelled on ' + esc(fxDate(r.cancelledAt)) + "</span>"
+          : "";
         return (
-          '<tr><td data-label="Name">' + H.escapeHtml(r.fullName) +
-          '<span class="admin-sub">' + H.escapeHtml(r.email || "No email") + "</span>" +
+          '<tr><td class="ak-cards__lead" data-label="Name"><span class="mg-name">' + esc(r.fullName) + "</span>" +
+          (r.email ? '<a class="mg-email" href="mailto:' + esc(r.email) + '">' + esc(r.email) + "</a>" : '<span class="mg-none">No email</span>') +
           '</td><td data-label="Monthly">' + H.formatPence(r.monthlyPence) +
-          '</td><td data-label="Since">' + H.fmtDate(r.firstPaidAt) + rowNewPill("monthly", r.firstPaidAt) +
+          '</td><td data-label="Since">' + esc(fxDate(r.firstPaidAt)) + rowNewPill("monthly", r.firstPaidAt) +
+          '</td><td data-label="Last paid">' + esc(fxDate(r.mostRecentPaidAt)) +
           '</td><td data-label="Given so far">' + H.formatPence(r.totalPence) +
-          '<span class="admin-sub">' + r.paymentCount + (r.paymentCount === 1 ? " payment" : " payments") + "</span>" +
+          '<span class="mg-sub">' + mgPlural(r.paymentCount, "payment", "payments") + "</span>" +
           '</td><td data-label="Gift Aid">' + ga +
-          '</td><td data-label="Thanked">' + thanked +
-          '</td><td data-label="State"><span class="fx-state ' + st.cls + '">' + H.escapeHtml(st.label) + "</span>" +
-          '</td><td data-label=""><button class="admin-link" type="button" data-donor="' + r.donorId + '">View</button></td></tr>'
+          '</td><td data-label="Thanked"><span class="mg-cell">' + thanked + "</span>" +
+          '</td><td data-label="Where it stands"><span class="mg-cell"><span class="fx-state ' + st.cls + '">' + esc(st.label) + "</span>" +
+          ended + monthlyNextStep(r) + "</span>" +
+          '</td><td data-label=""><button class="admin-btn ak-btn--plain admin-btn--small" type="button" data-donor="' + r.donorId + '">View</button></td></tr>'
         );
       })
       .join("");
     return (
-      '<table class="admin-table monthly-table"><thead><tr><th>Name</th><th>Monthly</th><th>Since</th>' +
-      "<th>Given so far</th><th>Gift Aid</th><th>Thanked</th><th>State</th><th></th>" +
+      '<table class="admin-table mg-table ak-cards"><thead><tr><th>Name</th><th>Monthly</th><th>Since</th><th>Last paid</th>' +
+      "<th>Given so far</th><th>Gift Aid</th><th>Thanked</th><th>Where it stands</th><th></th>" +
       "</tr></thead><tbody>" + body + "</tbody></table>"
     );
   }
+
+  var MONTHLY_TILES = [
+    { key: "giving", name: "Still giving" },
+    { key: "attention", name: "Needs attention", says: "A card failing, or a gift that stopped", urgent: true },
+    { key: "thanks", name: "Not thanked yet", says: "No thank you letter on record" },
+    { key: "giftaid", name: "No Gift Aid", says: "Still giving, without Gift Aid" },
+    { key: "", name: "Everyone", says: "Everyone who has given monthly" },
+  ];
+  function drawMonthlyTiles(want, perMonth) {
+    var box = el("monthlyTiles");
+    if (!box) return;
+    if (!monthlyRows) {
+      box.hidden = true;
+      box.innerHTML = "";
+      return;
+    }
+    if (!box.children.length) {
+      box.innerHTML = MONTHLY_TILES.map(function (t) {
+        return '<li><button type="button" class="ak-tile" data-mg-filter="' + t.key + '"><span class="ak-tile__n"></span>' +
+          '<span class="ak-tile__name">' + t.name + '</span><span class="ak-tile__says">' + (t.says || "") + "</span></button></li>";
+      }).join("");
+    }
+    MONTHLY_TILES.forEach(function (t) {
+      var btn = box.querySelector('[data-mg-filter="' + t.key + '"]');
+      var n = monthlyRows.filter(function (r) { return monthlyInFilter(r, t.key); }).length;
+      btn.querySelector(".ak-tile__n").textContent = String(n);
+      if (t.key === "giving") btn.querySelector(".ak-tile__says").textContent = H.formatPence(perMonth) + " a month";
+      btn.classList.toggle("is-active", want === t.key);
+      btn.classList.toggle("is-none", n === 0);
+      btn.classList.toggle("ak-tile--urgent", !!t.urgent && n > 0);
+      btn.setAttribute("aria-pressed", want === t.key ? "true" : "false");
+    });
+    box.hidden = false;
+  }
+
+  var MONTHLY_SORTS = {
+    amount: function (a, b) { return b.monthlyPence - a.monthlyPence; },
+    longest: function (a, b) { return Date.parse(a.firstPaidAt) - Date.parse(b.firstPaidAt); },
+    total: function (a, b) { return b.totalPence - a.totalPence; },
+  };
 
   function renderMonthly() {
     // "Show" can be changed when no list ever came (TASK-458). Counting nothing would put "0 giving,
@@ -3234,11 +3314,18 @@
     if (!monthlyRows) return;
     var filter = el("monthlyStateFilter");
     var want = filter ? filter.value : "giving";
-    var rows = monthlyRows.filter(function (r) {
-      if (want === "giving") return monthlyGiving(r);
-      if (want === "attention") return monthlyState(r).attention;
-      return true;
-    });
+    var q = String((el("monthlySearch") || {}).value || "").trim().toLowerCase();
+    var sort = MONTHLY_SORTS[String((el("monthlySort") || {}).value || "")];
+    var rows = monthlyRows
+      .map(function (r, i) { return { r: r, i: i }; })
+      .filter(function (x) {
+        if (!monthlyInFilter(x.r, want)) return false;
+        return !q || (String(x.r.fullName || "") + " " + String(x.r.email || "")).toLowerCase().indexOf(q) !== -1;
+      })
+      // The server's order (latest payer first) is kept wherever the chosen order ties.
+      .sort(function (a, b) { return (sort ? sort(a.r, b.r) : 0) || a.i - b.i; })
+      .map(function (x) { return x.r; });
+    monthlyShown = rows;
     el("monthlyTable").innerHTML = monthlyTable(rows);
 
     // The figure worth knowing: what is coming in every month from the people still giving. Taken
@@ -3252,6 +3339,14 @@
       giving.length + " giving, " + H.formatPence(perMonth) + " a month" +
       (needing ? " · " + needing + " needing attention" : "") +
       (noGiftAid ? " · " + noGiftAid + " without Gift Aid" : "");
+    // What that is worth in a year, if everyone carries on at today's amounts. Gift Aid is only
+    // "about": it is 25p on the pound, and only on the gifts that carry a declaration.
+    var withGa = giving.filter(function (r) { return r.giftAid; }).reduce(function (sum, r) { return sum + r.monthlyPence; }, 0);
+    el("monthlyWorth").textContent = perMonth
+      ? "If everyone still giving carries on, that is " + invMoney(perMonth * 12) + " a year" +
+        (withGa ? ", and about " + invMoney(Math.round(withGa * 12 * 0.25)) + " more in Gift Aid on the gifts that carry it." : ".")
+      : "";
+    drawMonthlyTiles(want, perMonth);
   }
 
   function loadMonthly() {
@@ -3273,12 +3368,53 @@
         // Whatever loaded before is not what is there now: nothing of it stays up to be taken as
         // current, or comes back when "Show" is changed.
         monthlyRows = null;
+        monthlyShown = [];
         el("monthlySummary").textContent = "";
+        el("monthlyWorth").textContent = "";
+        drawMonthlyTiles("", 0);
         wrap.innerHTML = '<p class="admin-empty">Monthly givers are unavailable.</p>';
       });
   }
   var monthlyFilter = el("monthlyStateFilter");
   if (monthlyFilter) monthlyFilter.addEventListener("change", renderMonthly);
+  var monthlySortBox = el("monthlySort");
+  if (monthlySortBox) monthlySortBox.addEventListener("change", renderMonthly);
+  var monthlySearchBox = el("monthlySearch");
+  if (monthlySearchBox) monthlySearchBox.addEventListener("input", renderMonthly);
+  var monthlyTilesBox = el("monthlyTiles");
+  if (monthlyTilesBox) {
+    monthlyTilesBox.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("[data-mg-filter]") : null;
+      if (!t || !monthlyFilter) return;
+      monthlyFilter.value = t.getAttribute("data-mg-filter");
+      renderMonthly();
+    });
+  }
+  function monthlyToolsSay(msg, isError, isOk) {
+    qrSay(el("monthlyToolsStatus"), msg, isError, isOk);
+  }
+  bindClick("monthlyCopyEmails", function () {
+    var emails = monthlyShown.map(function (r) { return r.email; }).filter(Boolean);
+    if (!emails.length) return monthlyToolsSay("Nobody showing has an email address.", true, false);
+    var kit = window.AdminKit;
+    (kit ? kit.copyText(emails.join(", ")) : Promise.resolve(false)).then(function (ok) {
+      if (ok) monthlyToolsSay("Copied " + mgPlural(emails.length, "email address", "email addresses") + ".", false, true);
+      else monthlyToolsSay("Could not copy. Your browser would not allow it.", true, false);
+    });
+  });
+  bindClick("monthlyDownload", function () {
+    if (!monthlyShown.length) return monthlyToolsSay("Nobody is showing, so there is nothing to download.", true, false);
+    var day = function (v) { return v ? qrUkDay(new Date(v)) : ""; };
+    var rows = [["Name", "Email", "Monthly (£)", "Since", "Last paid", "Payments", "Given so far (£)", "Gift Aid", "Thanked", "Where it stands", "Cancelled or stopped on"]]
+      .concat(monthlyShown.map(function (r) {
+        return [r.fullName, r.email || "", r.monthlyPence / 100, day(r.firstPaidAt), day(r.mostRecentPaidAt), r.paymentCount,
+          r.totalPence / 100, r.giftAid ? "Yes" : "No", day(r.thankedAt), monthlyState(r).label, day(r.cancelledAt || r.lapsedAt)];
+      }));
+    var kit = window.AdminKit;
+    var ok = kit ? kit.downloadCsv("monthly-givers-" + qrUkDay(new Date()) + ".csv", rows) : false;
+    if (ok) monthlyToolsSay("Downloaded " + mgPlural(monthlyShown.length, "giver", "givers") + ".", false, true);
+    else monthlyToolsSay("Your browser could not make the file. Nothing was downloaded.", true, false);
+  });
 
   // ---- catch up invites (TASK-214): email the thank-you invite to supporters who never got it ----
   // The button says under it what it does and how many businesses it will email (counted from the

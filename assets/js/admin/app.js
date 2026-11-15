@@ -6809,6 +6809,7 @@
   // newsletter is only read; saving the copy makes a newsletter of its own.
   function nlUseAgain(id) {
     if (!canEdit("newsletter")) return;
+    if (!nlMayLeave()) return;
     var said = nlHereMsg();
     var seq = ++nlLoadSeq;
     nlSay(said, "Opening a copy…");
@@ -7597,6 +7598,27 @@
   // top of the new one a moment later. Whatever starts or opens a newsletter moves this on (nlStartNew
   // too), and an answer to an earlier ask is dropped.
   var nlLoadSeq = 0;
+
+  // What the editor held when it was last opened or saved, so a button that replaces it can tell
+  // whether there is work not saved (review of #763). Null until anything has been opened: the
+  // editor then starts empty.
+  var nlBaseline = null;
+  function nlEditorNow() {
+    return JSON.stringify({ subject: (el("newsletterSubject") && el("newsletterSubject").value) || "", doc: nlDoc });
+  }
+  function nlMarkBaseline() { nlBaseline = nlEditorNow(); }
+  function nlHasUnsaved() {
+    if (nlSent || !canEdit("newsletter")) return false;
+    var base = nlBaseline || JSON.stringify({ subject: "", doc: { blocks: [] } });
+    return nlEditorNow() !== base;
+  }
+  /** True when it is fine to replace what is in the editor: nothing unsaved, or the person said so. */
+  function nlMayLeave() {
+    if (!nlHasUnsaved()) return true;
+    var subject = ((el("newsletterSubject") && el("newsletterSubject").value) || "").trim() || "this newsletter";
+    return window.confirm("Your changes to “" + subject + "” are not saved. Leave them?");
+  }
+
   function loadNewsletterInto(id, opts) {
     var seq = ++nlLoadSeq;
     if (!opts || !opts.stay) nlShowPanel("nlPanelWrite"); // open the one you clicked, where you write it
@@ -7649,6 +7671,7 @@
         nlRefreshPreview();
         nlRefreshAttachments();
         nlRefreshTemplates(); // TASK-249: fill the shared library picker when the tab opens
+        nlMarkBaseline();
       })
       .catch(function () {
         if (seq !== nlLoadSeq) return;
@@ -7976,10 +7999,13 @@
   function nlStartWriting() {
     if (!canEdit("newsletter")) { nlShowPanel("nlPanelWrite"); return; }
     if (nlStartDraftId != null) nlOpenDraft(nlStartDraftId);
-    else nlStartNew();
+    else if (nlMayLeave()) nlStartNew();
   }
 
   function nlOpenDraft(id) {
+    // Already the one open: show it, changes and all, rather than reading it again over them.
+    if (String(el("newsletterId").value) === String(id)) { nlShowPanel("nlPanelWrite"); return; }
+    if (!nlMayLeave()) return;
     loadNewsletterInto(id);
     nlMarkSaved("Carrying on with your draft");
   }
@@ -8017,6 +8043,7 @@
     nlRefreshAttachments();
     nlShowPanel("nlPanelWrite");
     nlMarkSaved(said || "A new newsletter, not saved yet");
+    nlMarkBaseline();
   }
 
   // One listener for everything in the section that goes somewhere: the tiles, the cards, and the
@@ -8037,7 +8064,7 @@
     });
     if (el("nlStartWriting")) el("nlStartWriting").addEventListener("click", nlStartWriting);
     if (el("nlWriteBtn")) el("nlWriteBtn").addEventListener("click", nlStartWriting);
-    if (el("nlStartNew")) el("nlStartNew").addEventListener("click", function () { nlStartNew(); });
+    if (el("nlStartNew")) el("nlStartNew").addEventListener("click", function () { if (nlMayLeave()) nlStartNew(); });
   }
 
   // keepPanel: the list is being read again from inside the section (a draft was deleted), so stay on
@@ -9683,6 +9710,9 @@
         nlShowPanel("nlPanelSend"); // TASK-279: watch it go, rather than leaving you on the editor
         nlWatchSendJob(id);
         loadNewsletters(true); // the list again, with the newsletter being sent left in the editor
+        // ...and read that newsletter again, so the editor shows it as sent and read only, as it did
+        // before the list stopped doing that (review of #763).
+        loadNewsletterInto(id, { stay: true });
       })
       .catch(function (err) {
         sendBtn.disabled = false;

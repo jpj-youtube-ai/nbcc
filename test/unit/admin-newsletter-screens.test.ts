@@ -924,3 +924,91 @@ describe("Audiences & people", () => {
     expect(cells[2]).toContain("Asked us to stop, so will not be added");
   });
 });
+
+describe("work not saved is never thrown away without asking (review of #763)", () => {
+  const list = () => [draft(12, "Invented Christmas thank you"), draft(8, "An older invented idea"), sent(11, "Invented November news", 2, 100, 97, 10)];
+  let asked: string[] = [];
+  const answer = (yes: boolean) => { asked = []; window.confirm = (m?: string) => { asked.push(String(m)); return yes; }; };
+  async function editing(id: number) {
+    served["/api/admin/newsletters"] = list();
+    await open();
+    await go("nlPanelHistory");
+    (q(`#newsletterList [data-edit-newsletter="${id}"]`) as HTMLElement).click();
+    await settle();
+  }
+
+  it("just shows the Write step when the draft asked for is the one already open, keeping the changes", async () => {
+    await editing(12);
+    type("newsletterSubject", "Invented Christmas thank you, changed");
+    answer(true);
+    (q("#nlComposeClose") as HTMLElement).click();
+    await settle();
+    el("nlStartWriting").click();
+    await settle();
+    expect(asked).toEqual([]);
+    expect(panel()).toEqual(["nlPanelWrite"]);
+    expect((el("newsletterSubject") as HTMLInputElement).value).toBe("Invented Christmas thank you, changed");
+  });
+
+  it("asks before Worth a look's draft replaces changes that are not saved, and keeps them if you say no", async () => {
+    await editing(8);
+    type("newsletterSubject", "An older invented idea, changed");
+    (q("#nlComposeClose") as HTMLElement).click();
+    await settle();
+    answer(false);
+    (q('#nlAttention [data-nl-go="draft:12"]') as HTMLElement).click();
+    await settle();
+    expect(asked.length).toBe(1);
+    expect(asked[0]).toContain("Your changes to");
+    expect(asked[0]).toContain("An older invented idea, changed");
+    expect(asked[0]).toContain("are not saved. Leave them?");
+    expect((el("newsletterId") as HTMLInputElement).value).toBe("8");
+    expect((el("newsletterSubject") as HTMLInputElement).value).toBe("An older invented idea, changed");
+    answer(true);
+    (q('#nlAttention [data-nl-go="draft:12"]') as HTMLElement).click();
+    await settle();
+    expect((el("newsletterId") as HTMLInputElement).value).toBe("12");
+  });
+
+  it("asks before Use this again replaces changes that are not saved", async () => {
+    await editing(8);
+    type("newsletterSubject", "An older invented idea, changed");
+    (q("#nlComposeClose") as HTMLElement).click();
+    await settle();
+    await go("nlPanelHistory");
+    answer(false);
+    (q('#newsletterList [data-use-again="11"]') as HTMLElement).click();
+    await settle();
+    expect(asked.length).toBe(1);
+    expect((el("newsletterSubject") as HTMLInputElement).value).toBe("An older invented idea, changed");
+    expect(got("GET", "/api/admin/newsletters/11").length).toBe(0);
+  });
+
+  it("asks nothing when nothing has changed since it was opened", async () => {
+    await editing(8);
+    (q("#nlComposeClose") as HTMLElement).click();
+    await settle();
+    answer(false);
+    (q('#nlAttention [data-nl-go="draft:12"]') as HTMLElement).click();
+    await settle();
+    expect(asked).toEqual([]);
+    expect((el("newsletterId") as HTMLInputElement).value).toBe("12");
+  });
+
+  it("makes a newsletter read only once it has been sent, as it was before", async () => {
+    await editing(12);
+    served["POST /api/admin/newsletters/12/send"] = () => {
+      served["/api/admin/newsletters"] = (served["/api/admin/newsletters"] as { id: number }[]).map((n) =>
+        n.id === 12 ? { ...n, status: "sent", sentAt: new Date().toISOString(), recipientCount: 3, sentCount: 0 } : n);
+      return { status: "queued", jobId: 1, recipientCount: 3, rollout: "immediate", scheduledAt: null };
+    };
+    expect((el("newsletterSave") as HTMLButtonElement).disabled).toBe(false);
+    el("newsletterSend").click();
+    await settle();
+    (q(".nl-modal-confirm") as HTMLButtonElement).click();
+    await settle();
+    expect(got("POST", "/api/admin/newsletters/12/send").length).toBe(1);
+    expect((el("newsletterSave") as HTMLButtonElement).disabled).toBe(true);
+    expect(text(el("newsletterMsg"))).toBe("This newsletter has been sent and is read-only.");
+  });
+});

@@ -29,7 +29,7 @@ vi.mock("../../src/config", () => ({
 }));
 vi.mock("../../src/clients/stripe", () => ({ cancelSubscription: vi.fn() }));
 
-import { getAdminOutreach, getAdminOutreachOne, patchAdminOutreach } from "../../src/routes/admin";
+import { getAdminOutreach, getAdminOutreachExport, getAdminOutreachOne, patchAdminOutreach } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 import type { PermissionMap } from "../../src/admin/permissions";
 
@@ -240,16 +240,17 @@ describe("changing the details of a business", () => {
 
   it("saves what was typed and hands the business back", async () => {
     const res = await run(patchAdminOutreach, {
-      body: { ...DETAILS, contactName: " Jo Sample ", contactEmail: "Hello@InventedJoinery.example", warmIntro: "Rowan knows the owner" },
+      // The same address in other capitals is the same address, so it is not a change.
+      body: { ...DETAILS, contactName: " Jo Sample ", contactEmail: " Jo@InventedJoinery.example", warmIntro: "Rowan knows the owner" },
     });
     expect(res.statusCode).toBe(200);
     expect(calls(UPDATE)[0][1]).toEqual([
-      4, "Invented Joinery Ltd", "Jo Sample", "hello@inventedjoinery.example", "01632 960111", "Rowan knows the owner",
+      4, "Invented Joinery Ltd", "Jo Sample", "jo@inventedjoinery.example", "01632 960111", "Rowan knows the owner",
       "Fern Example", ME, ["chamber"], false,
     ]);
     const b = (res.body as PatchBody).business as Record<string, unknown>;
     expect(b.contactName).toBe("Jo Sample");
-    expect(b.contactEmail).toBe("hello@inventedjoinery.example");
+    expect(b.contactEmail).toBe("jo@inventedjoinery.example");
   });
 
   it("leaves alone whatever it was not sent", async () => {
@@ -267,9 +268,9 @@ describe("changing the details of a business", () => {
   });
 
   it("empties a box that was cleared", async () => {
-    await run(patchAdminOutreach, { body: { contactName: "", contactEmail: "", owner: "", ownerEmail: "" } });
+    await run(patchAdminOutreach, { body: { contactName: "", owner: "", ownerEmail: "" } });
     const p = calls(UPDATE)[0][1] as unknown[];
-    expect([p[2], p[3], p[6], p[7]]).toEqual([null, null, null, null]);
+    expect([p[2], p[6], p[7]]).toEqual([null, null, null]);
   });
 
   it("refuses a business with no name, or an address that is not one, in a sentence", async () => {
@@ -349,10 +350,11 @@ describe("the do not contact rule still holds when details are changed", () => {
     expect(calls(UPDATE)).toHaveLength(1);
   });
 
-  it("refuses a new email address at a business that said no", async () => {
+  it("never puts an address belonging to a business that said no on another business", async () => {
     known = [declined];
     const res = await run(patchAdminOutreach, { body: { contactEmail: "orders@pretendbakery.example" } });
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(400);
+    expect(calls(UPDATE)).toHaveLength(0);
   });
 
   it("is not stopped by itself, or by a match that was already there before the change", async () => {
@@ -360,8 +362,8 @@ describe("the do not contact rule still holds when details are changed", () => {
     known = [{ id: 4, business_name: "Pretend Bakery Two", contact_email: null, outcome: null, sent_at: null, sent_by: null }, declined];
     // Only the name of the contact changes: nothing new to warn about.
     expect((await run(patchAdminOutreach, { body: { contactName: "Jo Sample" } })).statusCode).toBe(200);
-    // The email changes, the name does not: the similar name was there before, so it does not block.
-    expect((await run(patchAdminOutreach, { body: { contactEmail: "jo@somewhere-else.example" } })).statusCode).toBe(200);
+    // The phone changes, the name does not: the similar name was there before, so it does not block.
+    expect((await run(patchAdminOutreach, { body: { contactPhone: "01632 960333" } })).statusCode).toBe(200);
   });
 
   // "Pretend Bakery Two" only looked like the business that said no. Renamed to its exact name, it
@@ -381,7 +383,7 @@ describe("the do not contact rule still holds when details are changed", () => {
     expect((res.body as PatchBody).error).toBe(
       "This business asked us not to contact them again, so its name and email address are kept as they are",
     );
-    expect((await run(patchAdminOutreach, { body: { contactEmail: "new@inventedjoinery.example" } })).statusCode).toBe(409);
+    expect((await run(patchAdminOutreach, { body: { contactEmail: "new@inventedjoinery.example" } })).statusCode).toBe(400);
     expect(calls(UPDATE)).toHaveLength(0);
     // Everything else can still be put right.
     expect((await run(patchAdminOutreach, { body: { contactName: "Jo Sample", contactPhone: "01632 960222" } })).statusCode).toBe(200);
@@ -390,16 +392,16 @@ describe("the do not contact rule still holds when details are changed", () => {
 
 describe("a change of details is written to the audit log", () => {
   it("says who changed what, without copying the details themselves into the log", async () => {
-    await run(patchAdminOutreach, { body: { ...DETAILS, contactEmail: "new@inventedjoinery.example", contactPhone: "01632 960222" } });
+    await run(patchAdminOutreach, { body: { ...DETAILS, contactName: "Jo Sample", contactPhone: "01632 960222" } });
     expect(audits()).toHaveLength(1);
     const [actor, action, entity, entityId, data] = audits()[0][1] as [string, string, string, number, Record<string, unknown>];
     expect(actor).toBe(ME);
     expect(action).toBe("outreach.details_changed");
     expect(entity).toBe("business_outreach");
     expect(entityId).toBe(4);
-    expect(data).toEqual({ businessName: "Invented Joinery Ltd", changed: ["contactEmail", "contactPhone"], tpsCheckCleared: true });
+    expect(data).toEqual({ businessName: "Invented Joinery Ltd", changed: ["contactName", "contactPhone"], tpsCheckCleared: true });
     expect(JSON.stringify(data)).not.toContain("01632");
-    expect(JSON.stringify(data)).not.toContain("new@");
+    expect(JSON.stringify(data)).not.toContain("Jo Sample");
   });
 
   it("writes nothing when the change was refused", async () => {
@@ -413,5 +415,93 @@ describe("a change of details is written to the audit log", () => {
     expect(calls(UPDATE)).toHaveLength(0);
     expect(audits()).toHaveLength(0);
     expect(((res.body as PatchBody).business as Record<string, unknown>).businessName).toBe("Invented Joinery Ltd");
+  });
+});
+
+// Review of #757: how a sole trader agreed to hear from us is recorded against the address we have, so a
+// new address would carry an agreement it was never given. Until the business page has a form that asks
+// again, the address cannot be changed here at all: not replaced, not added, not taken away.
+describe("the email address cannot be changed here", () => {
+  const NO_EMAIL = "The email address cannot be changed here yet, because what they agreed to is recorded against the address we have";
+
+  it("refuses a different address, in a sentence, and changes and records nothing", async () => {
+    const res = await run(patchAdminOutreach, { body: { contactEmail: "new@inventedjoinery.example", contactName: "Jo Sample" } });
+    expect(res.statusCode).toBe(400);
+    expect((res.body as PatchBody).error).toBe(NO_EMAIL);
+    expect(calls(UPDATE)).toHaveLength(0);
+    expect(audits()).toHaveLength(0);
+  });
+
+  it("refuses an address for a business that had none, and taking one away", async () => {
+    one = dbRow({ contact_email: null });
+    expect((await run(patchAdminOutreach, { body: { contactEmail: "hello@inventedjoinery.example" } })).statusCode).toBe(400);
+    one = dbRow();
+    expect((await run(patchAdminOutreach, { body: { contactEmail: "" } })).statusCode).toBe(400);
+    expect(calls(UPDATE)).toHaveLength(0);
+  });
+
+  it("lets the same address through, whatever its capitals or spaces, with the other changes", async () => {
+    const res = await run(patchAdminOutreach, { body: { contactEmail: " JO@inventedjoinery.EXAMPLE ", contactName: "Jo Sample" } });
+    expect(res.statusCode).toBe(200);
+    expect((calls(UPDATE)[0][1] as unknown[])[3]).toBe("jo@inventedjoinery.example");
+  });
+});
+
+// Review of #757: the spreadsheet follows the page. A phone number goes in only once somebody has
+// recorded checking it against the Telephone Preference Service register, and a cell that Excel
+// would run as a formula (one starting = + - @, a tab or a return) is kept as words.
+describe("the spreadsheet of businesses", () => {
+  type CsvRes = MockRes & { sent: string; headers: Record<string, string> };
+  async function download(): Promise<CsvRes> {
+    const res = mockRes() as CsvRes;
+    res.headers = {};
+    res.sent = "";
+    (res as unknown as { setHeader: (k: string, v: string) => void }).setHeader = (k, v) => {
+      res.headers[k] = v;
+    };
+    (res as unknown as { send: (b: string) => CsvRes }).send = (b) => {
+      res.sent = b;
+      return res;
+    };
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    await getAdminOutreachExport(req({}) as any, res as any);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return res;
+  }
+  const lines = (res: CsvRes) => res.sent.replace(/^\ufeff/, "").split("\r\n");
+
+  it("writes a phone number that has been checked against the register", async () => {
+    listRows = [dbRow()];
+    const res = await download();
+    expect(res.statusCode).toBe(200);
+    expect(lines(res)[1]).toContain('"01632 960111"');
+  });
+
+  it("leaves the phone cell empty when nobody has checked the number", async () => {
+    listRows = [dbRow({ id: 5, business_name: "Unchecked Motors", contact_phone: "01632 960555", ctps_checked_at: null, ctps_checked_by: null })];
+    const res = await download();
+    expect(res.sent).not.toContain("960555");
+    const cells = lines(res)[1].split('","');
+    expect(cells[0]).toBe('"Unchecked Motors');
+    expect(cells[3]).toBe("");
+  });
+
+  it("keeps a cell that would run as a formula as words", async () => {
+    listRows = [dbRow({ business_name: "=HYPERLINK(1)", contact_name: "+44 Joinery", note: null, owner: "@owner", warm_intro: null })];
+    listRows.push(dbRow({ id: 6, business_name: "-Minus Ltd", contact_name: "\tTabbed", owner: "\rReturned" }));
+    const res = await download();
+    const [first, second] = [lines(res)[1], lines(res)[2]];
+    expect(first.startsWith("\"'=HYPERLINK(1)\"")).toBe(true);
+    expect(first).toContain("\"'+44 Joinery\"");
+    expect(first).toContain("\"'@owner\"");
+    expect(second.startsWith("\"'-Minus Ltd\"")).toBe(true);
+    expect(second).toContain("\"'\tTabbed\"");
+    expect(second).toContain("\"'\rReturned\"");
+  });
+
+  it("leaves ordinary words and quotes as they were", async () => {
+    listRows = [dbRow({ business_name: 'Jo "the joiner" Example, Ltd' })];
+    const res = await download();
+    expect(lines(res)[1].startsWith('"Jo ""the joiner"" Example, Ltd"')).toBe(true);
   });
 });

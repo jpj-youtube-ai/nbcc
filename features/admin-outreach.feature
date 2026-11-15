@@ -261,13 +261,21 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     Then the outreach response status should be 403
     And the outreach business should have no email address
 
-  Scenario: an Editor adds the missing address, and it is written to the audit log
+  Scenario: an Editor puts a phone number right, and it is written to the audit log
     Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
     And the business "Zzbdd Stonework" was added without an email address
-    When I change the business email to "Hello@ZzbddStonework.example" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    When I change the business phone to "01632 960300" as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the outreach response status should be 200
-    And the outreach business email should be "hello@zzbddstonework.example"
     And an audit_log row for action "outreach.details_changed" by actor "editor.admin.bdd@example.com" exists
+
+  # Review of #757: how a sole trader agreed to hear from us is recorded against the address we
+  # have, so the address is not changed here until the business page has a form that asks again.
+  Scenario: an Editor cannot change the email address here yet
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Stonework" was added without an email address
+    When I change the business email to "hello@zzbddstonework.example" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 400
+    And the outreach business should have no email address
 
   Scenario: an address that is not one is refused
     Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"

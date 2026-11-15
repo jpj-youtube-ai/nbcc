@@ -8581,10 +8581,15 @@ Design: `docs/superpowers/specs/2026-11-14-admin-refresh-outreach.md`.
   scrolls inside a box.
 - **Changing a business's details** (server only so far): `PATCH /api/admin/outreach/:id`, edit
   guarded, audited as `outreach.details_changed` (which details, not their values). Name, contact,
-  email, phone, who knows them, who looks after them, tags. A new name or email that matches a
-  business that said no is refused unless the volunteer says it is a different business; a business
-  that said no keeps its name and email; a changed phone number clears its register check. The form on
-  the business page is still to come.
+  phone, who knows them, who looks after them, tags. **The email address cannot be changed here** (a
+  400 that says why): how a sole trader agreed to hear from us is recorded against the address we
+  have, so it waits for a form that asks again. A new name that matches a business that said no is
+  refused unless the volunteer says it is a different business; a business that said no keeps its
+  name; a changed phone number clears its register check. The form on the business page is still to
+  come.
+- **The spreadsheet** (`GET /api/admin/outreach/export`) follows the same rule for phone numbers: the
+  cell is empty until the number's register check is recorded. A cell that would run as a formula in
+  Excel (one starting = + - @, a tab or a return) is kept as words with a leading apostrophe.
 
 ## Saving an editor's access took Contact businesses away (TASK-459)
 

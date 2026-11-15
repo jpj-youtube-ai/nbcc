@@ -81,11 +81,17 @@ Who can be emailed or phoned, the consent rule for a sole trader, the Telephone 
 ### Change their details (new way to change data)
 
 `PATCH /api/admin/outreach/:id`, beside its neighbours, guarded by `authorizeSection(…, "outreach",
-"edit")`. Name, contact, email, phone, who knows them, who looks after them, tags. No migration: the
+"edit")`. Name, contact, phone, who knows them, who looks after them, tags. No migration: the
 columns exist.
 
+- **Not the email address** (review of #757). How a sole trader agreed to hear from us is recorded
+  against the address we have, so a new address would carry an agreement it was never given. A
+  change of address, adding one where there was none, or taking one away, is refused with a sentence
+  saying why, until the business page has a form that asks again. The same address in other capitals
+  is not a change.
+
 - Validated by `outreachUpdateSchema`, made of the same pieces as the add form's.
-- The do not contact rule holds: a new name or email is put through the same matcher as a new
+- The do not contact rule holds: a new name is put through the same matcher as a new
   business, and a match against a business that said no is refused unless the volunteer says it is a
   different business. A business that itself said no cannot have its name or email changed, since
   those are what the matcher knows it by.
@@ -96,8 +102,8 @@ columns exist.
 
 ## Left out, and why
 
-- **The spreadsheet still lists every phone number**, checked or not. It is a file for trustees and a
-  backup; whether it should follow the screen's rule is a question for Jaimie.
+- **The spreadsheet** now follows the screen's rule too (review of #757): a phone number is left out
+  until its register check is recorded, and a cell that would run as a formula is kept as words.
 - **Sending from the business page.** The first email is written in Write and send, where the preview
   is; the page takes you there with the business chosen.
 - **Editing or deleting a note.** They are permanent on purpose.

@@ -3022,7 +3022,10 @@ export async function getAdminOutreachExport(req: Request, res: Response): Promi
   try {
     const rows = await listOutreach(500, 0);
     const cell = (v: unknown): string => {
-      const s = v === null || v === undefined ? "" : String(v);
+      let s = v === null || v === undefined ? "" : String(v);
+      // A cell that begins = + - @ (or a tab or a return) is run as a formula when Excel opens the
+      // file, so it gets a leading apostrophe and stays words, as AdminKit.csvCell does.
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
       // Quote everything: a business name with a comma in it is ordinary, and a lone quote in a
       // CSV breaks the rest of the file rather than one field.
       return `"${s.replace(/"/g, '""')}"`;
@@ -3035,7 +3038,9 @@ export async function getAdminOutreachExport(req: Request, res: Response): Promi
     for (const r of rows) {
       lines.push(
         [
-          r.businessName, r.contactName, r.contactEmail, r.contactPhone,
+          // The number only once somebody has recorded checking it against the Telephone
+          // Preference Service register: the rule the business page and the list follow.
+          r.businessName, r.contactName, r.contactEmail, r.ctpsCheckedAt ? r.contactPhone : null,
           r.businessType === "sole_trader" ? "Sole trader or partnership" : "Limited company or LLP",
           (r.tags ?? []).join(" "), r.owner,
           r.outcome ?? (r.sentAt ? "Emailed, no answer yet" : "Not emailed yet"),
@@ -3252,6 +3257,15 @@ export async function patchAdminOutreach(req: Request, res: Response): Promise<R
 
     const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
     const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => !same(next[k], business[k]));
+    // How a sole trader agreed to hear from us is recorded against the address we have, so a new
+    // address would carry an agreement it was never given (review of #757). Until the business page
+    // has a form that asks again, the address is not changed here at all: not replaced, not added,
+    // not taken away. The same address in other capitals or spaces is not a change.
+    if (changed.includes("contactEmail")) {
+      return res.status(400).json({
+        error: "The email address cannot be changed here yet, because what they agreed to is recorded against the address we have",
+      });
+    }
     // Nothing different: nothing to write, and nothing worth a line in the audit log.
     if (changed.length === 0) return res.status(200).json({ business });
 

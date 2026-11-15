@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="/assets/css/admin-kit.css" />
     <link rel="stylesheet" href="/assets/css/admin-giving.css" />
     <link rel="stylesheet" href="/assets/css/admin-supporters.css" />
+    <link rel="stylesheet" href="/assets/css/admin-people.css" />
     <link rel="stylesheet" href="/assets/css/admin-records.css" />
     <link rel="stylesheet" href="/assets/css/admin-content.css" />
     <link rel="stylesheet" href="/assets/css/admin-outreach.css" />
@@ -277,22 +278,37 @@
               </div>
             </section>
 
-            <!-- Search: donors / declarations / donations by a free query. -->
-            <section class="admin-view" id="view-search" aria-labelledby="search-heading" hidden>
+            <!-- Search, in the kit's look (2026-11-14): one box that looks at people, gifts and Gift Aid
+                 declarations together. The three tiles say what each search looks in, carry how many
+                 it found, and jump to that heading in the results. Your last few searches are kept
+                 for this browser tab only (app.js, sessionStorage), never anywhere longer. -->
+            <section class="admin-view ak" id="view-search" aria-labelledby="search-heading" hidden>
               <h2 id="search-heading">Search</h2>
-              <div class="admin-search-bar">
-                <div class="admin-segmented" role="group" aria-label="What to search">
-                  <button class="admin-seg is-active" type="button" data-kind="donors">Donors</button>
-                  <button class="admin-seg" type="button" data-kind="declarations">Declarations</button>
-                  <button class="admin-seg" type="button" data-kind="donations">Donations</button>
-                </div>
-                <form class="admin-search-form" id="searchForm">
-                  <label class="sr-only" for="searchQuery">Search query</label>
-                  <input id="searchQuery" type="search" placeholder="Name, email, id or postcode" />
-                  <button class="btn btn-primary" type="submit">Search</button>
-                </form>
+              <p class="admin-view-intro">Find a person, a gift or a Gift Aid declaration when somebody rings or writes in. One search looks in all three at once.</p>
+              <form class="admin-search-form pp-search" id="searchForm" role="search">
+                <label class="sr-only" for="searchQuery">Search for a name, an email address, a postcode, a phone number or a number</label>
+                <input id="searchQuery" type="search" placeholder="A name, email, postcode, phone or number" autocomplete="off" enterkeyhint="search" />
+                <button class="admin-btn" type="submit">Search</button>
+              </form>
+              <div class="pp-recent" id="searchRecent" hidden></div>
+              <div class="ak-tiles pp-kinds" role="group" aria-label="What the search looks in, and how many it found">
+                <button class="ak-tile admin-seg pp-kind" type="button" data-kind="donors">
+                  <span class="ak-tile__n" data-kind-count></span>
+                  <span class="ak-tile__name">People</span>
+                  <span class="ak-tile__says">Looks in names, business names, email addresses, postcodes, a business supporter's phone number and donor numbers.</span>
+                </button>
+                <button class="ak-tile admin-seg pp-kind" type="button" data-kind="donations">
+                  <span class="ak-tile__n" data-kind-count></span>
+                  <span class="ak-tile__name">Gifts</span>
+                  <span class="ak-tile__says">Looks in the donor's name and email address, gift and donor numbers, and the card payment references.</span>
+                </button>
+                <button class="ak-tile admin-seg pp-kind" type="button" data-kind="declarations">
+                  <span class="ak-tile__n" data-kind-count></span>
+                  <span class="ak-tile__name">Gift Aid declarations</span>
+                  <span class="ak-tile__says">Looks in the name and postcode on the declaration, and declaration and donor numbers.</span>
+                </button>
               </div>
-              <div class="admin-table-wrap" id="searchResults" aria-live="polite"></div>
+              <div class="pp-results" id="searchResults" aria-live="polite"></div>
             </section>
 
             <!-- The individuals giving every month (TASK-447). -->
@@ -2960,12 +2976,20 @@
               <p class="ty-status" id="accountPasswordStatus" role="status" aria-live="polite"></p>
             </section>
 
-            <!-- Donor detail (reached from a donor/donation row); role-gated actions. -->
-            <section class="admin-view" id="view-donor" aria-labelledby="donor-heading" hidden>
+            <!-- One donor's page, in the kit's look (2026-11-14), reached from anything carrying
+                 data-donor. app.js draws #donorDetail: their giving in figures, who they are, their
+                 monthly gift and Gift Aid, the two forms (folded), every gift, and what has changed.
+                 What a button did is said beside it and left there; #donorActionStatus repeats the
+                 latest for a screen reader, so the page itself is not read out again on every redraw. -->
+            <section class="admin-view ak" id="view-donor" aria-labelledby="donor-heading" hidden>
               <button class="admin-back" id="donorBack" type="button">&larr; Back</button>
-              <h2 id="donor-heading">Donor</h2>
-              <div id="donorDetail" aria-live="polite"></div>
-              <p class="admin-action-status" id="donorActionStatus" role="status" aria-live="polite"></p>
+              <div class="pp-title">
+                <h2 id="donor-heading">Donor</h2>
+                <p class="pp-marks" id="donorMarks"></p>
+              </div>
+              <p class="admin-view-intro">Everything we hold about one donor: who they are, what they have given, their monthly gift and their Gift Aid. Change their details here when they ask.</p>
+              <div id="donorDetail"></div>
+              <p class="sr-only" id="donorActionStatus" role="status" aria-live="polite"></p>
             </section>
           </div>
         </div>

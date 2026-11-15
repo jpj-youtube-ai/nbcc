@@ -47,6 +47,9 @@ const donation = {
 const snapshot = {
   fullName: "Ada Test", email: "ada@x.co", emailConsent: true, anonymous: false,
   subscriptionPlan: "silver", subscriptionId: "sub_1", giftAid: true,
+  // Gift Aid can be cancelled only while a declaration is in force (2026-11-14): giftAid alone means
+  // some gift once carried it, and the server answers 404 to a cancel without a declaration.
+  declaration: { id: 3, title: null, firstName: "Ada", lastName: "Test", houseNameNumber: "1", address: "Test Row", postcode: "KA1 1AA", nonUk: false, scope: "all_donations", confirmedTaxpayer: true },
 };
 const storyRow = {
   id: 9, created_at: "2026-06-01T00:00:00Z", consent_captured_at: "2026-06-01T00:00:00Z",

@@ -200,6 +200,8 @@
     brReset();
     bcReset();
     frKindReset();
+    // Nothing of the last person's searches is left for the next one to sign in.
+    if (typeof searchReset === "function") searchReset();
     el("appView").hidden = true;
     el("loginView").hidden = false;
     var email = el("adminEmail");
@@ -1378,7 +1380,10 @@
         var pay = H.paymentLabel(d);
         // A gift opens its donor; an elf payment has a family instead, which opens in Head Elf HQ for
         // someone who may open it.
-        var open = elfRow
+        // opts.noOpen: Search, for someone who may search but not open a donor (no button that only says no).
+        var open = opts.noOpen && !elfRow
+          ? ""
+          : elfRow
           ? canView("elf") ? '<button class="admin-link" type="button" data-elf-family="' + Number(d.elf_family_id) + '">Open in Head Elf HQ</button>' : ""
           : '<button class="admin-link" type="button" data-donor="' + d.donor_id + '">View</button>';
         return (
@@ -1633,27 +1638,190 @@
   }
 
   // ---- search ----
-  var searchKind = "donors";
-  // Only Search's own kind buttons (data-kind). Bound to every .admin-seg, as it was, a press on
-  // any other screen's segmented buttons took the pressed look off whichever was chosen there.
-  Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (b) {
-    b.addEventListener("click", function () {
-      searchKind = b.getAttribute("data-kind");
-      Array.prototype.forEach.call(doc.querySelectorAll(".admin-seg[data-kind]"), function (x) {
-        x.classList.toggle("is-active", x === b);
-      });
+  // Search, in the kit's look (2026-11-14, docs/superpowers/specs/2026-11-14-admin-refresh-people.md).
+  // One box looks at people, gifts and Gift Aid declarations together: the three routes are asked at
+  // once and drawn under three headings. The three tiles (still the old kind buttons, data-kind) say
+  // what each search looks in, carry how many it found, and jump to that heading.
+  //
+  // Gifts stay in the donations table (donationsTable, above): it already becomes a card per gift
+  // where it is narrow (admin.css, .dn-list), and its columns are pinned by tests. People and
+  // declarations are cards that open the donor.
+  var SEARCH_KINDS = [
+    { kind: "donors", name: "People", none: "No people match." },
+    { kind: "donations", name: "Gifts", none: "No gifts match." },
+    { kind: "declarations", name: "Gift Aid declarations", none: "No Gift Aid declarations match." },
+  ];
+  var SEARCH_CAP = 50; // each route answers with its newest 50 at most (SEARCH_LIMIT, src/db/admin.ts)
+  var SEARCH_RECENT_KEY = "nbcc_admin_recent_searches";
+  var SEARCH_RECENT_MAX = 5;
+  var searchSeq = 0; // the newest search asked for: an older one answering late is dropped
+  var searchLast = null; // { q, found: [rows or null (that part failed), ...] } as last drawn
+
+  // Your last few searches, for this browser tab only. They are people's names, so they live in
+  // sessionStorage and nowhere longer, and are forgotten at sign out.
+  function searchRecent() {
+    try {
+      var list = JSON.parse(sessionStorage.getItem(SEARCH_RECENT_KEY) || "[]");
+      if (!Array.isArray(list)) return [];
+      return list.filter(function (q) { return typeof q === "string" && q; }).slice(0, SEARCH_RECENT_MAX);
+    } catch (e) {
+      return [];
+    }
+  }
+  function searchRemember(q) {
+    var list = [q].concat(searchRecent().filter(function (old) { return old.toLowerCase() !== q.toLowerCase(); })).slice(0, SEARCH_RECENT_MAX);
+    try {
+      sessionStorage.setItem(SEARCH_RECENT_KEY, JSON.stringify(list));
+    } catch (e) {
+      // Storage refused: the search still runs, it is only not offered again.
+    }
+    drawSearchRecent();
+  }
+  function searchForget() {
+    try {
+      sessionStorage.removeItem(SEARCH_RECENT_KEY);
+    } catch (e) {
+      // Nothing was kept, then.
+    }
+    drawSearchRecent();
+  }
+  function drawSearchRecent() {
+    var host = el("searchRecent");
+    if (!host) return;
+    var list = searchRecent();
+    host.hidden = !list.length;
+    host.innerHTML = !list.length
+      ? ""
+      : '<p class="pp-recent__label" id="searchRecentLabel">Your last searches</p>' +
+        '<div class="pp-recent__list" role="group" aria-labelledby="searchRecentLabel">' +
+        list.map(function (q) {
+          return '<button class="admin-seg pp-recent__q" type="button" data-search-again="' + H.escapeHtml(q) + '">' + H.escapeHtml(q) + "</button>";
+        }).join("") +
+        '<button class="admin-link" type="button" id="searchForget">Forget these</button></div>' +
+        '<p class="ak-hint pp-recent__says">Kept only until you close this tab or sign out.</p>';
+  }
+  // The count on each tile: nothing before a search, "50+" when the list was cut off, a dash when
+  // that part could not be searched.
+  function searchCounts(found) {
+    SEARCH_KINDS.forEach(function (k, i) {
+      var tile = doc.querySelector('#view-search .pp-kind[data-kind="' + k.kind + '"]');
+      var n = tile ? tile.querySelector("[data-kind-count]") : null;
+      if (!n) return;
+      var rows = found ? found[i] : undefined;
+      n.textContent = rows === undefined ? "" : rows === null ? "–" : rows.length >= SEARCH_CAP ? SEARCH_CAP + "+" : String(rows.length);
+      tile.classList.toggle("is-none", !!rows && rows.length === 0);
     });
-  });
-  function genericTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No results.</p>';
-    var cols = Object.keys(rows[0]);
-    var head = cols.map(function (c) { return "<th>" + H.escapeHtml(c) + "</th>"; }).join("");
-    var body = rows
-      .map(function (r) {
-        return "<tr>" + cols.map(function (c) { return "<td>" + H.escapeHtml(r[c]) + "</td>"; }).join("") + "</tr>";
-      })
-      .join("");
-    return '<table class="admin-table"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table>";
+  }
+  // Signing out: nothing of the last person's search is left for the next.
+  function searchReset() {
+    if (!SEARCH_KINDS) return; // the sign in box shown before this part of the file has run
+    searchSeq++;
+    searchLast = null;
+    var out = el("searchResults");
+    if (out) out.innerHTML = "";
+    var box = el("searchQuery");
+    if (box) box.value = "";
+    searchCounts(null);
+    searchForget();
+  }
+  function searchCardMarks(marks, rest) {
+    return '<span class="ak-row__meta pp-row__marks">' + marks + H.escapeHtml(rest) + "</span>";
+  }
+  // A card that opens the donor, or the same card with nothing to press for someone who may search
+  // but may not open a donor: a button to a screen that would only say no is not a button.
+  function searchCard(donorId, inner, canOpen) {
+    return canOpen
+      ? '<li><button class="ak-row pp-found__card" type="button" data-donor="' + Number(donorId) + '">' + inner + "</button></li>"
+      : '<li><div class="ak-card pp-found__card">' + inner + "</div></li>";
+  }
+  function searchPerson(r, canOpen) {
+    var business = r.business_name && String(r.business_name).trim() ? String(r.business_name).trim() : "";
+    var name = business || r.full_name;
+    var marks = (r.donor_type === "company" ? ppMark("Business") : "") + (r.anonymous ? ppMark("Anonymous", "quiet") : "");
+    return searchCard(
+      r.id,
+      '<span class="ak-row__name">' + H.escapeHtml(name) + "</span>" +
+        (business && r.full_name && r.full_name !== business ? '<span class="ak-row__meta">Contact: ' + H.escapeHtml(r.full_name) + "</span>" : "") +
+        '<span class="ak-row__meta">' + H.escapeHtml(r.email || "No email address") + "</span>" +
+        searchCardMarks(marks, "Donor " + r.id),
+      canOpen
+    );
+  }
+  function searchDeclaration(r, canOpen) {
+    var covers = r.scope === "all_donations" ? "Covers all their gifts" : r.scope === "this_donation" ? "Covers one gift only" : cap(ppWords(r.scope));
+    var mark = r.revoked_at ? ppMark("Ended on " + ppDay(r.revoked_at), "quiet") : ppMark("In force", "ok");
+    return searchCard(
+      r.donor_id,
+      '<span class="ak-row__name">' + H.escapeHtml([r.first_name, r.last_name].filter(Boolean).join(" ")) + "</span>" +
+        '<span class="ak-row__meta">' + H.escapeHtml((r.postcode || "No UK postcode") + " · " + covers) + "</span>" +
+        searchCardMarks(mark, "Made on " + ppDay(r.created_at) + " · Declaration " + r.id + " · Donor " + r.donor_id),
+      canOpen
+    );
+  }
+  function searchPart(k, rows, canOpen) {
+    var body;
+    if (rows === null) body = unavailableHtml("Search is unavailable. Please try again.");
+    else if (!rows.length) body = '<p class="admin-empty">' + k.none + "</p>";
+    else if (k.kind === "donations") {
+      body = '<div class="admin-table-wrap pp-gifts-wrap">' + donationsTable(rows, { noOpen: !canOpen, plain: true }) + "</div>";
+    } else {
+      body = '<ul class="ak-list">' + rows.map(function (r) { return k.kind === "donors" ? searchPerson(r, canOpen) : searchDeclaration(r, canOpen); }).join("") + "</ul>";
+    }
+    var count = rows === null ? "" : ' <span class="pp-found__n">' + (rows.length >= SEARCH_CAP ? SEARCH_CAP + "+" : rows.length) + "</span>";
+    var cut = rows && rows.length >= SEARCH_CAP ? '<p class="ak-hint pp-found__cut">Showing the first ' + SEARCH_CAP + ", type more to narrow it.</p>" : "";
+    return (
+      '<section class="pp-found" data-found="' + k.kind + '" aria-labelledby="ppFound-' + k.kind + '">' +
+      '<h3 class="ak-h3" id="ppFound-' + k.kind + '" tabindex="-1">' + k.name + count + "</h3>" + cut + body + "</section>"
+    );
+  }
+  function drawSearch() {
+    var s = searchLast;
+    var out = el("searchResults");
+    var failed = s.found.filter(function (rows) { return rows === null; }).length;
+    var total = s.found.reduce(function (sum, rows) { return sum + (rows ? rows.length : 0); }, 0);
+    searchCounts(s.found);
+    if (failed === SEARCH_KINDS.length) {
+      out.innerHTML = unavailableHtml("Search is unavailable. Please try again.");
+      return;
+    }
+    if (!failed && !total) {
+      out.innerHTML =
+        '<p class="admin-empty">No results for “' + H.escapeHtml(s.q) + "”. Check the spelling, or try part of a name, an email address or a postcode.</p>";
+      return;
+    }
+    var canOpen = canView("donations");
+    out.innerHTML =
+      (canOpen ? "" : '<p class="ak-notice">You can search, but opening a donor needs Donations. An admin can give you that in Team.</p>') +
+      SEARCH_KINDS.map(function (k, i) { return searchPart(k, s.found[i], canOpen); }).join("");
+  }
+  // Asks all three routes together. quiet is for coming back from a donor that was changed: what is
+  // on the screen stays until the new answers are in, and stays for good if any of them fails.
+  function runSearch(q, quiet) {
+    var seq = ++searchSeq;
+    if (!quiet) {
+      el("searchResults").innerHTML = '<p class="admin-loading">Searching…</p>';
+      searchCounts(null);
+    }
+    var asks = SEARCH_KINDS.map(function (k) {
+      return authFetch("/api/admin/search/" + k.kind + "?q=" + encodeURIComponent(q)).then(okJson).then(
+        function (data) { return (data && data.results) || []; },
+        function () { return null; }
+      );
+    });
+    return Promise.all(asks).then(function (found) {
+      if (seq !== searchSeq) return;
+      if (quiet && found.some(function (rows) { return rows === null; })) return;
+      searchLast = { q: q, found: found };
+      drawSearch();
+    });
+  }
+  // Back from a donor: the results are where they were left, at the same place on the page, with
+  // the keyboard on the card that was opened.
+  function searchReturn(y, donorId, changed) {
+    if ((y || 0) !== (window.pageYOffset || 0) && typeof window.scrollTo === "function") window.scrollTo(0, y || 0);
+    var card = donorId == null ? null : doc.querySelector('#searchResults [data-donor="' + Number(donorId) + '"]');
+    if (card && card.focus) card.focus({ preventScroll: true });
+    if (changed && searchLast) runSearch(searchLast.q, true);
   }
   var searchForm = el("searchForm");
   if (searchForm) {
@@ -1661,20 +1829,37 @@
       e.preventDefault();
       var q = el("searchQuery").value.trim();
       if (!q) return;
-      var out = el("searchResults");
-      out.innerHTML = '<p class="admin-loading">Searching…</p>';
-      authFetch("/api/admin/search/" + searchKind + "?q=" + encodeURIComponent(q))
-        .then(okJson)
-        .then(function (data) {
-          var rows = data.results || [];
-          if (searchKind === "donors") out.innerHTML = donorsSearchTable(rows);
-          else if (searchKind === "donations") out.innerHTML = donationsTable(rows);
-          else out.innerHTML = genericTable(rows);
-        })
-        .catch(function () {
-          out.innerHTML = '<p class="admin-empty">Search is unavailable.</p>';
-        });
+      searchRemember(q);
+      runSearch(q);
     });
+    var searchView = el("view-search");
+    searchView.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target : null;
+      if (!t) return;
+      var again = t.closest("[data-search-again]");
+      if (again) {
+        var q = again.getAttribute("data-search-again");
+        el("searchQuery").value = q;
+        searchRemember(q);
+        runSearch(q);
+        return;
+      }
+      if (t.closest("#searchForget")) {
+        searchForget();
+        el("searchQuery").focus();
+        return;
+      }
+      // A tile jumps to its heading in the results; before a search there is nothing to jump to,
+      // so it puts you in the box.
+      var tile = t.closest(".pp-kind[data-kind]");
+      if (!tile) return;
+      var head = doc.querySelector('#searchResults [data-found="' + tile.getAttribute("data-kind") + '"] h3');
+      if (head) {
+        head.scrollIntoView({ block: "start" });
+        head.focus({ preventScroll: true });
+      } else el("searchQuery").focus();
+    });
+    drawSearchRecent();
   }
 
   function bindClick(id, fn) {
@@ -9232,24 +9417,356 @@
       });
   }
 
-  // ---- donor search results (with a View action) ----
-  function donorsSearchTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No results.</p>';
-    var body = rows
-      .map(function (r) {
-        return (
-          "<tr><td>" + r.id + "</td><td>" + H.escapeHtml(r.full_name) + "</td><td>" + H.escapeHtml(r.email || "") +
-          "</td><td>" + H.escapeHtml(r.donor_type) + "</td><td>" + (r.anonymous ? '<span class="admin-pill">Anon</span>' : "") +
-          '</td><td><button class="admin-link" type="button" data-donor="' + r.id + '">View</button></td></tr>'
-        );
-      })
-      .join("");
-    return '<table class="admin-table"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Type</th><th></th><th></th></tr></thead><tbody>' + body + "</tbody></table>";
-  }
-
   // ---- donor detail + role-gated actions ----
+  // One donor's page, in the kit's look (2026-11-14,
+  // docs/superpowers/specs/2026-11-14-admin-refresh-people.md). Opened by anything carrying
+  // data-donor. Three reads, asked together: the donor (GET /api/admin/donors/:id), their giving and
+  // the truth about their monthly gift (…/giving), and their lines from the audit trail (…/history).
+  // The page opens on the first alone; the other two say so in their own part when they fail.
+  //
+  // Four faults in the old page shaped this one (test/unit/admin-donor-page.test.ts):
+  //  - Saving drew the page from the PATCH's answer, which is the snapshot alone, so the address and
+  //    the Gift Aid form vanished. Now the page is read again after every change, and when that read
+  //    fails the answer is laid over what is already held, never drawn in its place.
+  //  - "Monthly donation cancelled." was written and wiped in the same breath, because reloading the
+  //    page cleared the one status line. Now each button has a line of its own beside it, held in
+  //    donorPage.said, drawn with the page, and cleared only when another donor is opened.
+  //  - "Gift Aid: Active" came from giftAid, which means some gift of theirs once carried Gift Aid.
+  //    Gift Aid is on only while there is a declaration in force.
+  //  - "Monthly plan" came from the newest gift with a subscription, cancelled or not. Whether it is
+  //    still running comes from the monthly gift's own read.
+  // A name and its value for a .admin-dl list (the story and contact detail screens use it too).
   function dl(k, v) {
     return "<dt>" + H.escapeHtml(k) + "</dt><dd>" + H.escapeHtml(v) + "</dd>";
+  }
+  var donorPage = null; // everything held about the donor that is open
+  var PP_GIFTS_SHOWN = 12; // the gifts shown before "Show all"
+  var PP_FROM_WORDS = { overview: "Overview", search: "Search", donations: "Donations", monthly: "Monthly givers", fulfilments: "Business supporters" };
+  var PP_SOURCE_WORDS = { red_bag: "Red Bag", ball: "Festive Ball", ball_bags: "Red bags at the Ball", santa_sleigh: "Santa Sleigh" };
+  // What each kind of line in the audit trail means, as you would say it.
+  var PP_CHANGE_WORDS = {
+    "donor.updated": "Details changed",
+    "admin.subscription_cancelled": "Monthly gift cancelled by the team",
+    "subscription.cancelled": "Monthly gift ended",
+    "subscription.payment_failed": "A monthly payment did not go through",
+    "subscription.payment_recovered": "A monthly payment went through after failing",
+    "subscription.lapsed": "Monthly gift stopped, after the payments kept failing",
+    "declaration.created": "Gift Aid declaration made",
+    "declaration.completed": "Gift Aid declaration completed",
+    "declaration.amended": "Gift Aid declaration details corrected",
+    "declaration.revoked": "A Gift Aid declaration was ended",
+    "thank_you.sent": "Thank you letter sent",
+    "thank_you.sent_automatically": "Thank you letter sent automatically",
+    "portal.token_issued": "Sent a link to their own giving page",
+    "portal.token_used": "They opened their own giving page",
+    "donor.personal_data_anonymized": "Personal details removed",
+    "donor.historical_import": "Added from older records",
+  };
+  var PP_FIELD_WORDS = {
+    fullName: "name", email: "email", emailConsent: "agreed to emails",
+    anonymous: "anonymous on the public page", hiddenFromSupporters: "hidden from the supporters wall",
+  };
+
+  // A moment as people say it, in UK time: "3 November 2026", and "4.05pm".
+  function ppParts(value, opts) {
+    if (!value) return null;
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    try {
+      var out = {};
+      new Intl.DateTimeFormat("en-GB", Object.assign({ timeZone: "Europe/London" }, opts)).formatToParts(d).forEach(function (p) {
+        out[p.type] = p.value;
+      });
+      return out;
+    } catch (e) {
+      return null;
+    }
+  }
+  function ppDay(value) {
+    var p = ppParts(value, { day: "numeric", month: "long", year: "numeric" });
+    return p ? p.day + " " + p.month + " " + p.year : "";
+  }
+  function ppClock(value) {
+    var p = ppParts(value, { hour: "numeric", minute: "2-digit", hour12: true });
+    if (!p) return "";
+    return p.hour + (p.minute === "00" ? "" : "." + p.minute) + String(p.dayPeriod || "").toLowerCase().replace(/[^apm]/g, "");
+  }
+  // Words for something stored with dots, underscores or capitals in it, when there is no better
+  // phrase: "something.brand_new" reads "Something brand new".
+  function ppWords(stored) {
+    var words = String(stored || "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[._]+/g, " ").trim().toLowerCase();
+    return words;
+  }
+  function ppMark(words, kind) {
+    return '<span class="ak-mark' + (kind ? " ak-mark--" + kind : "") + '">' + H.escapeHtml(words) + "</span>";
+  }
+  // Copies words through the kit, which says whether it worked; false where there is no kit or the
+  // browser will not.
+  function ppCopy(words) {
+    var Kit = window.AdminKit;
+    return Kit && Kit.copyText ? Kit.copyText(words) : Promise.resolve(false);
+  }
+
+  // What a button did, said beside it and left there. ok is true (it worked), false (it did not)
+  // or null (still going). Held with the page, so a redraw keeps it; repeated in the one status
+  // line a screen reader listens to.
+  function donorSay(key, msg, ok) {
+    if (!donorPage) return;
+    donorPage.said[key] = { msg: msg, ok: ok };
+    var line = doc.querySelector('#donorDetail [data-pp-said="' + key + '"]');
+    if (line) {
+      line.textContent = msg;
+      line.classList.toggle("is-ok", ok === true);
+      line.classList.toggle("is-error", ok === false);
+    }
+    el("donorActionStatus").textContent = msg;
+  }
+  function donorSaid(key) {
+    var s = donorPage && donorPage.said[key];
+    return (
+      '<p class="ak-status' + (s && s.ok === true ? " is-ok" : "") + (s && s.ok === false ? " is-error" : "") +
+      '" data-pp-said="' + key + '" tabindex="-1">' + H.escapeHtml(s ? s.msg : "") + "</p>"
+    );
+  }
+
+  // Where Back goes: the screen the donor was opened from, when it is one this page knows.
+  function donorFrom() {
+    var view = currentView && PP_FROM_WORDS[currentView] ? currentView : "donations";
+    return { view: view, y: window.pageYOffset || 0 };
+  }
+  function openDonor(id) {
+    // Opened again from the donor page itself (nothing does today), Back still goes where it did.
+    var from = donorPage && !el("view-donor").hidden ? donorPage.from : donorFrom();
+    donorPage = {
+      id: id, from: from, data: null, giving: null, history: null,
+      said: {}, open: {}, allGifts: false, busy: {}, subCancelled: null, subCancelledAt: null, changed: false,
+    };
+    showOnly("view-donor");
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+      b.classList.remove("is-active");
+    });
+    syncTabBar();
+    el("donorBack").innerHTML = "&larr; Back to " + H.escapeHtml(PP_FROM_WORDS[from.view]);
+    // Never the last donor's name over the next one's page.
+    el("donor-heading").textContent = "Donor";
+    el("donorMarks").innerHTML = "";
+    el("donorActionStatus").textContent = "";
+    el("donorDetail").innerHTML = '<p class="admin-loading">Loading…</p>';
+    // A donor opens at its top, not wherever the list it was opened from had been scrolled to.
+    if (window.pageYOffset > 0 && typeof window.scrollTo === "function") window.scrollTo(0, 0);
+    var page = donorPage;
+    donorLoad().catch(function (err) {
+      if (donorPage !== page) return;
+      var wrap = el("donorDetail");
+      // TASK-476: a failure is not a record with nothing in it, and neither is being refused.
+      if (err && err.notFound) wrap.innerHTML = '<p class="admin-empty">Donor not found.</p>';
+      else if (err && err.status === 403) wrap.innerHTML = unavailableHtml("Opening a donor is not part of your access. An admin can give you Donations in Team.");
+      else wrap.innerHTML = unavailableHtml("Could not load this donor. Please try again.");
+    });
+  }
+  // Reads the donor, their giving and what has changed, together, and draws the page. Rejects when
+  // the donor's own read fails; the other two failing is said in their own part of the page.
+  function donorLoad() {
+    var page = donorPage;
+    var base = "/api/admin/donors/" + page.id;
+    var main = authFetch(base).then(function (res) {
+      if (res.status === 404) {
+        var gone = new Error("not found");
+        gone.notFound = true;
+        throw gone;
+      }
+      return okJson(res);
+    });
+    var giving = authFetch(base + "/giving").then(okJson).then(
+      function (g) { return g && Array.isArray(g.gifts) ? g : null; },
+      function () { return null; }
+    );
+    var history = authFetch(base + "/history").then(okJson).then(
+      function (h) { return h && Array.isArray(h.results) ? h.results : null; },
+      function () { return null; }
+    );
+    return Promise.all([main, giving, history]).then(function (all) {
+      if (donorPage !== page) return; // another donor was opened while this one was on its way
+      page.data = all[0];
+      page.giving = all[1];
+      page.history = all[2];
+      renderDonor();
+    });
+  }
+  // After a change that worked: the page is read again, so everything on it is true. When that read
+  // fails, what is already held is redrawn (the caller has laid what it knows over it).
+  function donorReload(focusSaid) {
+    var page = donorPage;
+    page.changed = true;
+    return donorLoad()
+      .catch(function () {
+        if (donorPage === page) renderDonor();
+      })
+      .then(function () {
+        if (donorPage !== page || !focusSaid) return;
+        var line = doc.querySelector('#donorDetail [data-pp-said="' + focusSaid + '"]');
+        if (line && line.focus) line.focus();
+      });
+  }
+
+  // Join the donor's house name/number + address line into one string for display; "None on file"
+  // when neither is set. Postcode is shown as its own row (d.postcode).
+  function donorAddress(d) {
+    var parts = [d.houseNameNumber, d.address].filter(function (p) { return p && String(p).trim(); });
+    return parts.length ? parts.join(", ") : "None on file";
+  }
+  // What is true of their monthly gift. live is true (running), false (stopped) or null (the gift's
+  // own read failed, so nobody can say).
+  function donorMonthlyTruth(d) {
+    if (!(d.subscriptionPlan && d.subscriptionId)) return { has: false, live: false };
+    var m = donorPage.giving && donorPage.giving.monthly ? donorPage.giving.monthly : null;
+    // Cancelled from this page a moment ago: true whatever a read says, or fails to say.
+    if (donorPage.subCancelled === d.subscriptionId && !(m && m.state === "cancelled")) {
+      return { has: true, live: false, state: "cancelled", m: m, cancelledAt: donorPage.subCancelledAt };
+    }
+    if (!m) return { has: true, live: null, state: null, m: null };
+    return { has: true, live: m.state !== "cancelled" && m.state !== "lapsed", state: m.state, m: m, cancelledAt: m.cancelledAt };
+  }
+  function donorMarks(d) {
+    var marks = "";
+    if (donorMonthlyTruth(d).live === true) marks += ppMark("Monthly", "ok");
+    if (d.declaration) marks += ppMark("Gift Aid", "ok");
+    if (d.anonymous) marks += ppMark("Anonymous", "quiet");
+    return marks;
+  }
+  function donorFact(name, valueHtml) {
+    return "<dt>" + H.escapeHtml(name) + "</dt><dd>" + valueHtml + "</dd>";
+  }
+  function donorPart(name, title, inner, card) {
+    return (
+      '<section class="' + (card ? "ak-card pp-card" : "pp-part") + '" data-pp="' + name + '" aria-labelledby="ppHead-' + name + '">' +
+      '<h3 class="ak-h3" id="ppHead-' + name + '">' + H.escapeHtml(title) + "</h3>" + inner + "</section>"
+    );
+  }
+  // Their giving in four figures. Nothing at all when the read failed: a made up £0 is a lie.
+  function donorSums() {
+    var g = donorPage.giving;
+    if (!g) return "";
+    var tile = function (n, name, says, day) {
+      return (
+        '<li class="ak-tile' + (day ? " pp-tile--day" : "") + '"><span class="ak-tile__n">' + H.escapeHtml(n) + '</span><span class="ak-tile__name">' +
+        H.escapeHtml(name) + '</span><span class="ak-tile__says">' + H.escapeHtml(says) + "</span></li>"
+      );
+    };
+    return (
+      '<ul class="ak-tiles pp-sums" aria-label="Their giving in figures">' +
+      tile(H.formatPence(g.totalPence || 0), "Given in all", "Paid gifts, less anything refunded") +
+      tile(String(g.count || 0), "Gifts paid", "") +
+      tile(ppDay(g.firstAt) || "None yet", "First gift", "", true) +
+      tile(ppDay(g.latestAt) || "None yet", "Latest gift", "", true) +
+      "</ul>"
+    );
+  }
+  function donorWho(d) {
+    var email = d.email
+      ? '<a class="pp-link" id="donorEmailLink" href="mailto:' + H.escapeHtml(d.email) + '">' + H.escapeHtml(d.email) + "</a>"
+      : "None on file";
+    var hasAddress = donorAddress(d) !== "None on file";
+    var copy = "";
+    if (d.email) copy += '<button class="admin-btn ak-btn--plain admin-btn--small" type="button" id="donorCopyEmail">Copy email</button>';
+    if (hasAddress) copy += '<button class="admin-btn ak-btn--plain admin-btn--small" type="button" id="donorCopyAddress">Copy address</button>';
+    return donorPart(
+      "who",
+      "Who they are",
+      '<dl class="ak-facts">' +
+        donorFact("Name", H.escapeHtml(d.fullName)) +
+        donorFact("Email", email) +
+        donorFact("Agreed to emails", d.emailConsent ? "Yes" : "No") +
+        donorFact("Anonymous on the public page", d.anonymous ? "Yes" : "No") +
+        donorFact("Hidden from the supporters wall", d.hiddenFromSupporters ? "Yes" : "No") +
+        donorFact("Address", H.escapeHtml(donorAddress(d))) +
+        donorFact("Postcode", H.escapeHtml(d.postcode || "None on file")) +
+        "</dl>" +
+        (copy ? '<div class="ak-actions pp-copy">' + copy + "</div>" + donorSaid("copy") : ""),
+      true
+    );
+  }
+  // A cancel button: what it does said under it, the question it asks first, and what happened.
+  function donorCancel(key, id, label, says, question, yes) {
+    return (
+      '<div class="pp-danger">' +
+      '<button class="admin-btn ak-btn--danger" type="button" id="' + id + 'Btn">' + H.escapeHtml(label) + "</button>" +
+      '<span class="ak-says">' + H.escapeHtml(says) + "</span>" +
+      '<div class="pp-ask" id="' + id + 'Ask" role="group" aria-label="' + H.escapeHtml(label) + '" hidden>' +
+      '<p class="pp-ask__q">' + H.escapeHtml(question) + "</p>" +
+      '<div class="ak-actions"><button class="admin-btn ak-btn--danger" type="button" id="' + id + 'Yes">' + H.escapeHtml(yes) + "</button>" +
+      '<button class="admin-btn ak-btn--plain" type="button" id="' + id + 'No">No, keep it</button></div></div>' +
+      donorSaid(key) +
+      "</div>"
+    );
+  }
+  function donorMonthly(d, canWrite) {
+    var t = donorMonthlyTruth(d);
+    if (!t.has) {
+      return donorPart("monthly", "Monthly gift", '<p class="pp-state">' + ppMark("None", "quiet") + '</p><p class="ak-hint">They do not give every month.</p>', true);
+    }
+    var m = t.m;
+    var plan = cap(d.subscriptionPlan) + " plan";
+    var amount = m && typeof m.monthlyPence === "number" ? H.formatPence(m.monthlyPence) + " a month" : "";
+    var since = m && m.firstPaidAt ? "since " + ppDay(m.firstPaidAt) : "";
+    var lead = amount ? "<strong>" + H.escapeHtml(amount) + "</strong>" + (since ? ", " + H.escapeHtml(since) : "") : "";
+    var payments = m && m.payments ? ". " + (m.payments === 1 ? "1 payment" : m.payments + " payments") + " so far" : "";
+    var mark = "";
+    var more = "";
+    if (t.state === "cancelled") {
+      mark = ppMark("Cancelled", "quiet");
+      more = "Cancelled on " + ppDay(t.cancelledAt) + ". No more payments are taken.";
+    } else if (t.state === "lapsed") {
+      mark = ppMark("Stopped", "bad");
+      more = "Stopped" + (m.lapsedAt ? " on " + ppDay(m.lapsedAt) : "") + ", after the payments kept failing.";
+    } else if (t.state === "past_due") {
+      mark = ppMark("Payment failing", "wait");
+      more = "Their last payment did not go through" + (m.failedAttempts ? " (" + (m.failedAttempts === 1 ? "1 try" : m.failedAttempts + " tries") + " so far)" : "") +
+        ". It is tried again by itself for about two weeks, so there is nothing to do yet.";
+    } else if (t.live === null) {
+      more = "We could not check whether it is still running. Please try again.";
+    } else {
+      mark = ppMark("Giving", "ok");
+    }
+    var inner =
+      (mark ? '<p class="pp-state">' + mark + "</p>" : "") +
+      (lead ? '<p class="pp-lead">' + lead + "</p>" : "") +
+      '<p class="ak-hint">' + H.escapeHtml(plan + payments + ".") + "</p>" +
+      (more ? '<p class="pp-more">' + H.escapeHtml(more) + "</p>" : "");
+    if (canWrite) {
+      inner += t.state === "cancelled"
+        ? donorSaid("sub")
+        : donorCancel(
+            "sub", "cancelSub", "Cancel monthly donation",
+            "Stops their monthly gift with the card company (Stripe) straight away, so no more payments are taken. It cannot be undone: to give every month again they would set up a new gift on the donate page.",
+            "Cancel " + d.fullName + "'s monthly gift" + (amount ? " of " + amount : "") + "? No more payments will be taken, and it cannot be undone.",
+            "Yes, cancel their monthly gift"
+          );
+    }
+    return donorPart("monthly", "Monthly gift", inner, true);
+  }
+  function donorGiftAid(d, canWrite) {
+    var inner;
+    if (d.declaration) {
+      inner = '<p class="pp-state">' + ppMark("On", "ok") + '</p><p class="pp-more">' +
+        (d.declaration.scope === "all_donations" ? "Their declaration covers all their gifts." : "Their declaration covers one gift only.") + "</p>";
+    } else {
+      inner = '<p class="pp-state">' + ppMark("Off", "quiet") + '</p><p class="pp-more">' +
+        (d.giftAid
+          ? "There is no Gift Aid declaration in force for this donor. At least one of their gifts was given with Gift Aid."
+          : "They have not added Gift Aid.") + "</p>";
+    }
+    if (canWrite) {
+      inner += d.declaration
+        ? donorCancel(
+            "ga", "cancelGa", "Cancel Gift Aid",
+            "Ends their Gift Aid declaration from today. It cannot be undone: to add Gift Aid again they would make a new declaration.",
+            "Cancel " + d.fullName + "'s Gift Aid declaration? It ends today, and it cannot be undone.",
+            "Yes, cancel their Gift Aid"
+          )
+        : donorSaid("ga");
+    }
+    return donorPart("giftaid", "Gift Aid", inner, true);
   }
   function editField(id, label, type, val) {
     return (
@@ -9260,183 +9777,350 @@
   function editCheck(id, label, on) {
     return '<label class="admin-check"><input type="checkbox" id="edit-' + id + '"' + (on ? " checked" : "") + " /> " + H.escapeHtml(label) + "</label>";
   }
-  function donorStatus(msg) {
-    el("donorActionStatus").textContent = msg || "";
+  // The two forms, each folded away until it is wanted, and left open once it has been used.
+  function donorFold(key, id, title, formId, fields, button) {
+    return (
+      '<details class="ak-fold pp-fold" id="' + id + '"' + (donorPage.open[key] ? " open" : "") + "><summary>" + H.escapeHtml(title) + "</summary>" +
+      '<form class="ak-fold__body pp-form" id="' + formId + '" novalidate>' + fields +
+      '<div class="ak-actions"><button class="admin-btn" type="submit">' + H.escapeHtml(button) + "</button></div>" +
+      donorSaid(key) + "</form></details>"
+    );
   }
-  function openDonor(id) {
-    currentDonorId = id;
-    showOnly("view-donor");
-    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
-      b.classList.remove("is-active");
-    });
-    syncTabBar();
-    donorStatus("");
-    var wrap = el("donorDetail");
-    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/donors/" + id)
-      .then(function (res) {
-        if (res.status === 404) {
-          wrap.innerHTML = '<p class="admin-empty">Donor not found.</p>';
-          throw new Error("not found");
-        }
-        return okJson(res);
-      })
-      .then(renderDonor)
-      .catch(function (err) {
-        // TASK-476: a failure is not a record with nothing in it. "Not found" has said so already.
-        if (err && err.message === "not found") return;
-        wrap.innerHTML = unavailableHtml("Could not load this donor. Please try again.");
-      });
-  }
-  // Join the donor's house name/number + address line into one string for display; "None on file"
-  // when neither is set. Postcode is shown as its own row (d.postcode).
-  function donorAddress(d) {
-    var parts = [d.houseNameNumber, d.address].filter(function (p) { return p && String(p).trim(); });
-    return parts.length ? parts.join(", ") : "None on file";
-  }
-  function renderDonor(d) {
-    var canWrite = canEdit("donations");
-    var info =
-      '<dl class="admin-dl">' +
-      dl("Name", d.fullName) +
-      dl("Email", d.email || "None on file") +
-      dl("Email consent", d.emailConsent ? "Yes" : "No") +
-      dl("Anonymous", d.anonymous ? "Yes" : "No") +
-      dl("Hidden from supporters wall", d.hiddenFromSupporters ? "Yes" : "No") +
-      dl("Address", donorAddress(d)) +
-      dl("Postcode", d.postcode || "None on file") +
-      dl("Monthly plan", d.subscriptionPlan ? cap(d.subscriptionPlan) : "None") +
-      dl("Gift Aid", d.giftAid ? "Active" : "Not active") +
-      "</dl>";
-    var actions = "";
-    if (canWrite) {
-      actions =
-        '<form class="admin-edit" id="donorEditForm"><h3 class="admin-subhead">Edit donor</h3>' +
-        editField("fullName", "Name", "text", d.fullName || "") +
+  function donorForms(d) {
+    var forms = donorFold(
+      "edit", "donorEditFold", "Change their details", "donorEditForm",
+      editField("fullName", "Name", "text", d.fullName || "") +
         editField("email", "Email", "email", d.email || "") +
-        editCheck("emailConsent", "Email consent", d.emailConsent) +
+        editCheck("emailConsent", "Agreed to emails from us", d.emailConsent) +
         editCheck("anonymous", "Anonymous on the public page", d.anonymous) +
-        editCheck("hiddenFromSupporters", "Hide from supporters wall", d.hiddenFromSupporters) +
-        '<button class="btn btn-primary" type="submit">Save changes</button></form>';
-      // Gift Aid declaration details (TASK-130): correct identity/address on the active declaration.
-      if (d.declaration) {
-        var dec = d.declaration;
-        actions +=
-          '<form class="admin-edit" id="donorDeclForm"><h3 class="admin-subhead">Gift Aid declaration details</h3>' +
-          editField("declTitle", "Title", "text", dec.title || "") +
+        editCheck("hiddenFromSupporters", "Hide from the supporters wall", d.hiddenFromSupporters),
+      "Save changes"
+    );
+    // Gift Aid declaration details (TASK-130): correct identity/address on the active declaration.
+    if (d.declaration) {
+      var dec = d.declaration;
+      forms += donorFold(
+        "decl", "donorDeclFold", "Gift Aid declaration details", "donorDeclForm",
+        editField("declTitle", "Title", "text", dec.title || "") +
           editField("declFirstName", "First name", "text", dec.firstName || "") +
           editField("declLastName", "Last name", "text", dec.lastName || "") +
           editField("declHouse", "House name or number", "text", dec.houseNameNumber || "") +
           editField("declAddress", "Home address", "text", dec.address || "") +
           editField("declPostcode", "Postcode", "text", dec.postcode || "") +
-          editCheck("declNonUk", "No UK postcode (overseas address)", dec.nonUk) +
-          '<button class="btn btn-primary" type="submit">Save declaration details</button></form>';
-      }
-      actions += '<div class="admin-donor-actions">';
-      if (d.subscriptionPlan && d.subscriptionId) actions += '<button class="btn btn-ghost" type="button" id="cancelSubBtn">Cancel monthly donation</button>';
-      if (d.giftAid) actions += '<button class="btn btn-ghost" type="button" id="cancelGaBtn">Cancel Gift Aid</button>';
-      actions += "</div>";
+          editCheck("declNonUk", "No UK postcode (overseas address)", dec.nonUk),
+        "Save declaration details"
+      );
     }
-    el("donorDetail").innerHTML = info + actions;
-    if (canWrite) wireDonorActions(d);
+    return forms;
   }
-  function wireDonorActions(d) {
-    var form = el("donorEditForm");
-    if (form) {
-      form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var body = {
-          fullName: (el("edit-fullName").value || "").trim(),
-          email: (el("edit-email").value || "").trim(),
-          emailConsent: el("edit-emailConsent").checked,
-          anonymous: el("edit-anonymous").checked,
-          hiddenFromSupporters: el("edit-hiddenFromSupporters").checked,
-        };
-        if (!body.email) delete body.email; // email optional; PATCH rejects an empty string
-        authFetch("/api/admin/donors/" + currentDonorId, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        })
-          .then(function (res) {
-            return res.ok ? res.json() : null;
-          })
-          .then(function (snap) {
-            if (snap) {
-              renderDonor(snap);
-              donorStatus("Saved.");
-            } else donorStatus("Could not save the changes.");
-          })
-          .catch(function () {
-            donorStatus("Could not save the changes.");
-          });
-      });
+  function donorGiftCard(g) {
+    var pay = H.paymentLabel({ payment_status: g.status, amount_pence: g.amountPence, refunded_amount_pence: g.refundedPence });
+    var marks = '<span class="admin-pill admin-pill--' + pay.state + '">' + H.escapeHtml(pay.label) + "</span>" +
+      ppMark(g.mode === "monthly" ? "Monthly" : "One off", "quiet");
+    if (g.giftAid) marks += ppMark("Gift Aid");
+    if (g.source === "invoice") marks += ppMark("Invoice" + (g.invoiceId ? " " + invNumber(g.invoiceId) : ""), "quiet");
+    else if (PP_SOURCE_WORDS[g.source]) marks += ppMark(PP_SOURCE_WORDS[g.source], "quiet");
+    return (
+      '<li class="ak-card pp-gift"><span class="pp-gift__amount">' + H.escapeHtml(H.formatPence(g.amountPence)) + "</span>" +
+      '<span class="pp-gift__main"><span class="pp-gift__when">' + H.escapeHtml(ppDay(g.date)) + "</span>" +
+      '<span class="pp-gift__marks">' + marks + "</span>" +
+      (g.refundedPence > 0 ? '<span class="pp-gift__note">' + H.escapeHtml(H.formatPence(g.refundedPence)) + " refunded</span>" : "") +
+      "</span></li>"
+    );
+  }
+  function donorGifts() {
+    var g = donorPage.giving;
+    if (!g) return donorPart("gifts", "Their gifts", unavailableHtml("Their giving could not be loaded. Please try again."));
+    if (!g.gifts.length) return donorPart("gifts", "Their gifts", '<p class="admin-empty">No gifts on record yet.</p>');
+    var all = donorPage.allGifts || g.gifts.length <= PP_GIFTS_SHOWN;
+    var shown = all ? g.gifts : g.gifts.slice(0, PP_GIFTS_SHOWN);
+    var held = g.gifts.length;
+    var more = all
+      ? ""
+      : '<button class="admin-btn ak-btn--plain" type="button" id="donorMoreGifts">' +
+        (g.listed > held ? "Show the newest " + held + " gifts" : "Show all " + held + " gifts") + "</button>";
+    var capped = all && g.listed > held ? '<p class="ak-hint">These are the newest ' + held + " of " + Number(g.listed) + " gifts.</p>" : "";
+    return donorPart(
+      "gifts",
+      "Their gifts",
+      '<p class="ak-hint">Every gift under their email address, newest first. A gift that failed or is still waiting is shown here but is not in the figures.</p>' +
+        '<ul class="ak-list pp-gifts">' + shown.map(donorGiftCard).join("") + "</ul>" + more + capped
+    );
+  }
+  function donorChangeWho(actor) {
+    actor = String(actor || "");
+    if (actor.indexOf("admin:") === 0) return actor.slice(6);
+    if (actor === "donor") return "the donor";
+    if (actor === "stripe") return "the card company (Stripe)";
+    return "an automatic job";
+  }
+  function donorChange(line) {
+    var what = PP_CHANGE_WORDS[line.action] || cap(ppWords(line.action));
+    if (line.action === "donor.updated" && line.fields && line.fields.length) {
+      what += ": " + line.fields.map(function (f) { return PP_FIELD_WORDS[f] || ppWords(f); }).join(", ");
     }
-    var declForm = el("donorDeclForm");
-    if (declForm) {
-      declForm.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var nonUk = el("edit-declNonUk").checked;
-        var declBody = {
-          title: (el("edit-declTitle").value || "").trim() || undefined,
-          firstName: (el("edit-declFirstName").value || "").trim(),
-          lastName: (el("edit-declLastName").value || "").trim(),
-          houseNameNumber: (el("edit-declHouse").value || "").trim() || undefined,
-          address: (el("edit-declAddress").value || "").trim(),
-          nonUk: nonUk,
-        };
-        if (!nonUk) declBody.postcode = (el("edit-declPostcode").value || "").trim();
-        authFetch("/api/admin/donors/" + currentDonorId + "/declaration", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(declBody),
-        })
-          .then(function (res) {
-            return res.ok ? res.json() : null;
-          })
-          .then(function (snap) {
-            if (snap) {
-              renderDonor(snap);
-              donorStatus("Declaration details saved.");
-            } else donorStatus("Could not save the declaration details.");
-          })
-          .catch(function () {
-            donorStatus("Could not save the declaration details.");
-          });
-      });
+    return (
+      '<li class="pp-change"><span class="pp-change__what">' + H.escapeHtml(what) + "</span>" +
+      '<span class="pp-change__meta">' + H.escapeHtml(ppDay(line.at) + " at " + ppClock(line.at) + ", by " + donorChangeWho(line.actor)) + "</span></li>"
+    );
+  }
+  function donorHistory() {
+    var lines = donorPage.history;
+    var inner;
+    if (!lines) inner = unavailableHtml("Could not load what has changed.");
+    else if (!lines.length) inner = '<p class="admin-empty">Nothing recorded yet.</p>';
+    else {
+      inner = '<p class="ak-hint">Who changed what and when, newest first, from the audit trail.</p><ul class="pp-changes">' + lines.map(donorChange).join("") + "</ul>";
     }
-    bindClick("cancelSubBtn", function () {
-      if (!window.confirm("Cancel this donor's monthly donation?")) return;
-      authFetch("/api/admin/donors/" + currentDonorId + "/subscription/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriptionId: d.subscriptionId, accepted: "cancel" }),
-      })
-        .then(function (res) {
-          donorStatus(res.ok ? "Monthly donation cancelled." : "Could not cancel the monthly donation.");
-          if (res.ok) openDonor(currentDonorId);
-        })
-        .catch(function () {
-          donorStatus("Could not cancel the monthly donation.");
-        });
+    return donorPart("history", "What has changed", inner);
+  }
+
+  // What is half typed in a form, which fold is open and where the keyboard is, taken before a
+  // redraw and put back after it: cancelling Gift Aid must not throw away a name being corrected.
+  function donorKeep() {
+    var wrap = el("donorDetail");
+    var kept = { values: {}, focus: null };
+    Array.prototype.forEach.call(wrap.querySelectorAll("form input[id]"), function (i) {
+      if (i.type === "checkbox") {
+        if (i.checked !== i.defaultChecked) kept.values[i.id] = i.checked;
+      } else if (i.value !== i.defaultValue) kept.values[i.id] = i.value;
     });
-    bindClick("cancelGaBtn", function () {
-      if (!window.confirm("Cancel this donor's Gift Aid declaration?")) return;
-      authFetch("/api/admin/donors/" + currentDonorId + "/gift-aid/cancel", { method: "POST" })
-        .then(function (res) {
-          donorStatus(res.ok ? "Gift Aid cancelled." : "Could not cancel Gift Aid.");
-          if (res.ok) openDonor(currentDonorId);
-        })
-        .catch(function () {
-          donorStatus("Could not cancel Gift Aid.");
-        });
+    [["edit", "donorEditFold"], ["decl", "donorDeclFold"]].forEach(function (f) {
+      var fold = el(f[1]);
+      if (fold) donorPage.open[f[0]] = !!fold.open;
+    });
+    var at = doc.activeElement;
+    if (at && at.id && wrap.contains(at)) kept.focus = at.id;
+    return kept;
+  }
+  function donorPutBack(kept) {
+    Object.keys(kept.values).forEach(function (id) {
+      var i = el(id);
+      if (!i) return;
+      if (i.type === "checkbox") i.checked = kept.values[id];
+      else i.value = kept.values[id];
+    });
+    var at = kept.focus ? el(kept.focus) : null;
+    if (at && at.focus) at.focus();
+  }
+  function renderDonor() {
+    var d = donorPage.data;
+    var canWrite = canEdit("donations");
+    var kept = donorKeep();
+    el("donor-heading").textContent = d.fullName || "Donor";
+    el("donorMarks").innerHTML = donorMarks(d);
+    el("donorDetail").innerHTML =
+      donorSums() +
+      '<div class="pp-cols"><div class="pp-col">' +
+      donorWho(d) + donorMonthly(d, canWrite) + donorGiftAid(d, canWrite) + (canWrite ? donorForms(d) : "") +
+      '</div><div class="pp-col">' + donorGifts() + donorHistory() + "</div></div>";
+    donorPutBack(kept);
+  }
+
+  // Asking first, in the page: the button steps aside for the question, and comes back on a no.
+  function donorAsk(id, asking) {
+    var btn = el(id + "Btn");
+    var ask = el(id + "Ask");
+    if (!btn || !ask) return;
+    btn.hidden = asking;
+    ask.hidden = !asking;
+    var to = asking ? el(id + "No") : btn;
+    if (to && to.focus) to.focus();
+  }
+  function donorSaveDetails() {
+    var page = donorPage;
+    if (page.busy.edit) return;
+    var body = {
+      fullName: (el("edit-fullName").value || "").trim(),
+      email: (el("edit-email").value || "").trim(),
+      emailConsent: el("edit-emailConsent").checked,
+      anonymous: el("edit-anonymous").checked,
+      hiddenFromSupporters: el("edit-hiddenFromSupporters").checked,
+    };
+    if (!body.email) delete body.email; // email optional; PATCH rejects an empty string
+    page.busy.edit = true;
+    // The form stays open through the redraw, so what happened is not folded away.
+    el("donorEditFold").open = true;
+    donorSay("edit", "Saving…", null);
+    authFetch("/api/admin/donors/" + page.id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        if (res.ok) return res.json();
+        var err = new Error("status " + res.status);
+        err.status = res.status;
+        throw err;
+      })
+      .then(function (snap) {
+        if (donorPage !== page) return;
+        // The answer is the snapshot alone (no address, no declaration): it is laid over what is
+        // held, never drawn in its place, in case the read that follows fails.
+        if (snap && page.data) Object.assign(page.data, snap);
+        page.said.edit = { msg: "Saved.", ok: true };
+        el("donorActionStatus").textContent = "Saved.";
+        return donorReload();
+      })
+      .catch(function (err) {
+        if (donorPage !== page) return;
+        donorSay(
+          "edit",
+          err && err.status === 400
+            ? "Could not save the changes. Check the name is filled in and the email address is a real one."
+            : "Could not save the changes.",
+          false
+        );
+      })
+      .then(function () {
+        page.busy.edit = false;
+      });
+  }
+  function donorSaveDeclaration() {
+    var page = donorPage;
+    if (page.busy.decl) return;
+    var nonUk = el("edit-declNonUk").checked;
+    var declBody = {
+      title: (el("edit-declTitle").value || "").trim() || undefined,
+      firstName: (el("edit-declFirstName").value || "").trim(),
+      lastName: (el("edit-declLastName").value || "").trim(),
+      houseNameNumber: (el("edit-declHouse").value || "").trim() || undefined,
+      address: (el("edit-declAddress").value || "").trim(),
+      nonUk: nonUk,
+    };
+    if (!nonUk) declBody.postcode = (el("edit-declPostcode").value || "").trim();
+    page.busy.decl = true;
+    el("donorDeclFold").open = true;
+    donorSay("decl", "Saving…", null);
+    authFetch("/api/admin/donors/" + page.id + "/declaration", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(declBody),
+    })
+      .then(okJson)
+      .then(function (answer) {
+        if (donorPage !== page) return;
+        // This answer is the whole donor again, plus what was done; "outcome" is not theirs to keep.
+        if (answer && page.data) {
+          Object.assign(page.data, answer);
+          delete page.data.outcome;
+        }
+        page.said.decl = { msg: "Declaration details saved.", ok: true };
+        el("donorActionStatus").textContent = "Declaration details saved.";
+        return donorReload();
+      })
+      .catch(function () {
+        if (donorPage !== page) return;
+        donorSay("decl", "Could not save the declaration details.", false);
+      })
+      .then(function () {
+        page.busy.decl = false;
+      });
+  }
+  function donorCancelMonthly() {
+    var page = donorPage;
+    var d = page.data;
+    if (page.busy.sub || !d) return;
+    page.busy.sub = true;
+    donorSay("sub", "Cancelling…", null);
+    authFetch("/api/admin/donors/" + page.id + "/subscription/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscriptionId: d.subscriptionId, accepted: "cancel" }),
+    })
+      .then(okJson)
+      .then(function () {
+        if (donorPage !== page) return;
+        // The server has said it is cancelled: that stays true here even if the next read fails.
+        page.subCancelled = d.subscriptionId;
+        page.subCancelledAt = new Date().toISOString();
+        page.said.sub = { msg: "Monthly donation cancelled.", ok: true };
+        el("donorActionStatus").textContent = "Monthly donation cancelled.";
+        return donorReload("sub");
+      })
+      .catch(function () {
+        if (donorPage !== page) return;
+        donorAsk("cancelSub", false);
+        donorSay("sub", "Could not cancel the monthly donation.", false);
+      })
+      .then(function () {
+        page.busy.sub = false;
+      });
+  }
+  function donorCancelGiftAid() {
+    var page = donorPage;
+    if (page.busy.ga || !page.data) return;
+    page.busy.ga = true;
+    donorSay("ga", "Cancelling…", null);
+    authFetch("/api/admin/donors/" + page.id + "/gift-aid/cancel", { method: "POST" })
+      .then(okJson)
+      .then(function () {
+        if (donorPage !== page) return;
+        // The declaration has gone: true here even if the next read fails. An individual's address
+        // lived on it, so that goes with it, as the donor read will say.
+        page.data.declaration = null;
+        page.said.ga = { msg: "Gift Aid cancelled.", ok: true };
+        el("donorActionStatus").textContent = "Gift Aid cancelled.";
+        return donorReload("ga");
+      })
+      .catch(function () {
+        if (donorPage !== page) return;
+        donorAsk("cancelGa", false);
+        donorSay("ga", "Could not cancel Gift Aid.", false);
+      })
+      .then(function () {
+        page.busy.ga = false;
+      });
+  }
+  function donorCopy(words, done) {
+    ppCopy(words).then(function (ok) {
+      donorSay("copy", ok ? done : "Could not copy. Select it and copy by hand.", ok);
+    });
+  }
+  // One listener each for the page's buttons and its two forms: the page is redrawn after every
+  // change, so nothing is bound to a button that may not be there a moment later.
+  var donorDetailEl = el("donorDetail");
+  if (donorDetailEl) {
+    donorDetailEl.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("button[id]") : null;
+      if (!t || !donorPage || !donorPage.data) return;
+      var d = donorPage.data;
+      if (t.id === "donorCopyEmail") donorCopy(d.email, "Email address copied.");
+      else if (t.id === "donorCopyAddress") donorCopy([donorAddress(d), d.postcode].filter(Boolean).join("\n"), "Address copied.");
+      else if (t.id === "donorMoreGifts") {
+        donorPage.allGifts = true;
+        renderDonor();
+      } else if (!canEdit("donations")) return;
+      else if (t.id === "cancelSubBtn") donorAsk("cancelSub", true);
+      else if (t.id === "cancelSubNo") donorAsk("cancelSub", false);
+      else if (t.id === "cancelSubYes") donorCancelMonthly();
+      else if (t.id === "cancelGaBtn") donorAsk("cancelGa", true);
+      else if (t.id === "cancelGaNo") donorAsk("cancelGa", false);
+      else if (t.id === "cancelGaYes") donorCancelGiftAid();
+    });
+    donorDetailEl.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form || !donorPage || !donorPage.data) return;
+      if (form.id === "donorEditForm") {
+        e.preventDefault();
+        donorSaveDetails();
+      } else if (form.id === "donorDeclForm") {
+        e.preventDefault();
+        donorSaveDeclaration();
+      }
     });
   }
 
-  // Back from donor detail, and delegated actions on any table (view donor / submit / export).
+  // Back from the donor: to the screen it was opened from. Search is as it was left, at the place
+  // on the page it was left, and is asked again (quietly) only when something on the donor changed.
   bindClick("donorBack", function () {
-    selectView("donations");
+    var from = (donorPage && donorPage.from) || { view: "donations", y: 0 };
+    var changed = !!(donorPage && donorPage.changed);
+    var id = donorPage ? donorPage.id : null;
+    selectView(from.view);
+    if (from.view === "search") searchReturn(from.y, id, changed);
   });
+
   var content = doc.querySelector(".admin-content");
   if (content) {
     content.addEventListener("click", function (e) {

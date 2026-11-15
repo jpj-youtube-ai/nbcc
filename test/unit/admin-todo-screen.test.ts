@@ -152,7 +152,9 @@ describe("needs you today", () => {
 
   it("refreshes itself when an outcome is recorded, because that changes the list", () => {
 
-    expect(app).toMatch(/openBusiness\(businessId\);\s*\r?\n\s*loadOutreachTodo\(\);/);
+    // Admin refresh (2026-11-14): redrawn by businessReload, which keeps "Saved." on the screen
+    // (openBusiness clears the messages, and used to wipe it the moment it was written).
+    expect(app).toMatch(/businessReload\(\);\s*\r?\n\s*loadOutreachTodo\(\);/);
 
   });
 

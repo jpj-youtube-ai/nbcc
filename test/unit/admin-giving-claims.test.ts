@@ -404,7 +404,9 @@ describe("Claims: the batches", () => {
     await open();
     const card = text(batchCard(8));
     expect(card).toContain("Batch 8");
-    expect(card).toContain("12 donations, £340 given, about £85 to claim back");
+    // Sent already, so no "about £X to claim back": that is only for a batch still being put together.
+    expect(card).toContain("12 donations, £340 given");
+    expect(card).not.toContain("to claim back");
     expect(card).toContain("1 November 2026");
     expect(card).toContain("2 October 2026");
     expect(card).toContain("REF-INVENTED");

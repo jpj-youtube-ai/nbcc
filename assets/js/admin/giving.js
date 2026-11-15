@@ -490,7 +490,8 @@
       var canWrite = host.canEdit("claims");
       var open = !!claims.openBatches[id] && n > 0;
       var sumWords = n
-        ? some(n, "donation", "donations") + ", " + money(total) + " given, about " + money(claimBack(total)) + " to claim back"
+        ? some(n, "donation", "donations") + ", " + money(total) + " given" +
+          (b.status === "open" ? ", about " + money(claimBack(total)) + " to claim back" : "")
         : "No donations in it yet";
       var facts =
         "<dt>Started</dt><dd>" + esc(dayWords(b.created_at) || "Not recorded") + "</dd>" +
@@ -1041,7 +1042,7 @@
       var failed = function () { sayMark("Could not undo that. Nothing was changed.", true); };
       var question =
         "Undo this mark? " + (ids.length === 1 ? "1 small donation goes" : count(ids.length) + " small donations go") +
-        " back into the list as not yet claimed.";
+        " back into the list as not yet claimed. Only undo it if they were not in a claim already sent to HMRC, or they could be claimed twice.";
       if (!win.confirm(question)) return;
       send(GASDS_QUEUE + "/unmark-claimed", { donationIds: ids }).then(function (out) {
         if (!out.ok) return failed();
@@ -1081,7 +1082,7 @@
           var year = Number(p.year);
           wrap.innerHTML =
             tile(money(p.gasdsPoolTotalPence), "Small donations pool (" + year + ")", "Small donations collected from January to December " + year + ".") +
-            tile(money(p.giftAidClaimedPence), "Gift Aid claimed this year", "The donations in Gift Aid claims in " + year + ", not the tax claimed back.") +
+            tile(money(p.giftAidClaimedPence), "Gift Aid claimed this year", "Gift Aided donations given in " + year + " that are in a batch, sent or not. Not the tax claimed back.") +
             tile(money(p.remainingHeadroomPence), "Remaining GASDS headroom", "Room left under the scheme’s yearly limits, as this site works it out. Check it with the treasurer before relying on it.");
         },
         function () { wrap.innerHTML = unavailableHtml("The small donations pool is unavailable."); }

@@ -7197,8 +7197,9 @@ Tests: `admin-overview-screen`, `admin-contact-screen`, `admin-phone-menu` and `
 (`test/unit/`), with `admin-overview`, `admin-overview-numbers`, `admin-app`, `admin-red-bag`,
 `admin-get-involved-tab` and `admin-screen-styles` updated for the new markup and stylesheet.
 
-CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 4 GB of heap
-(`NODE_OPTIONS=--max-old-space-size=4096`). With these screen tests added, three workers ran out at
+CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 6 GB of heap
+(`NODE_OPTIONS=--max-old-space-size=6144`; 4 GB until 15 Nov 2026, when the admin refresh's screen tests ran one
+worker out at 898 of 899 files). With these screen tests added, three workers ran out at
 Node's default of about 2 GB and the run failed with 872 of 875 files passed.
 
 ## Admin: the kit, one look for every screen (2026-11-14)

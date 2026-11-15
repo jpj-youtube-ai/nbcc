@@ -1,4 +1,6 @@
 import type { NewsletterDoc } from "./blocks";
+// The rule for "a link we would send" lives in one place, shared with the paper look blocks.
+import { looksSendable } from "./link-safety";
 
 // TASK-277 (letter P): the checks that run before a newsletter goes out.
 //
@@ -32,13 +34,6 @@ export interface PreflightContext {
 function str(data: Record<string, unknown>, key: string): string {
   const value = data[key];
   return typeof value === "string" ? value : "";
-}
-
-// A link we would be happy to put in front of a donor.
-function looksSendable(href: string): boolean {
-  const url = href.trim();
-  if (!url) return false;
-  return /^(https?:\/\/|mailto:|tel:)/i.test(url);
 }
 
 export function preflightNewsletter(doc: NewsletterDoc, ctx: PreflightContext): PreflightFinding[] {

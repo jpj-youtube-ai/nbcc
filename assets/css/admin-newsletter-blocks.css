@@ -1,0 +1,29 @@
+/* NBCC admin: the newsletter composer's paper look blocks (14 November 2026).
+ * Design: docs/superpowers/specs/2026-11-14-newsletter-paper-blocks-design.md.
+ *
+ * Only what the paper look blocks add to the composer: the palette's two labelled groups, and the
+ * list and tick-box fields. Everything is named through #view-newsletter, so no other screen is
+ * touched. House rules: no !important; nothing scrolls inside a box or sideways; 44px for anything
+ * pressed; a field's words are 16px. */
+
+/* The palette: two groups, each a heading over its own wrapping row of chips. */
+#view-newsletter .nl-palette-group { display: flex; flex-wrap: wrap; gap: .4rem; flex-basis: 100%; min-width: 0; }
+#view-newsletter .nl-palette-group + .nl-palette-group { margin-top: .5rem; padding-top: .6rem; border-top: 1px solid var(--line); }
+#view-newsletter .nl-palette-head {
+  flex-basis: 100%; margin: 0 0 .1rem; font-size: .78rem; font-weight: 700; letter-spacing: .04em; color: var(--slate-soft);
+}
+#view-newsletter .nl-palette-group .nl-add { min-height: 44px; }
+
+/* A list to pick from, and a tick box, in the composer's field style. */
+#view-newsletter .nl-block .nl-field select {
+  width: 100%; min-height: 44px; font-family: var(--font-body); font-size: 16px; color: var(--slate);
+  background: var(--cream); border: 1.4px solid var(--line); border-radius: 10px; padding: 9px 11px;
+}
+#view-newsletter .nl-block .nl-field select:focus {
+  outline: none; border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(192,34,56,.12);
+}
+#view-newsletter .nl-block .nl-check { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; min-height: 44px; cursor: pointer; }
+#view-newsletter .nl-block .nl-check input[type="checkbox"] { width: 22px; height: 22px; margin: 0; flex: 0 0 auto; accent-color: var(--crimson); }
+#view-newsletter .nl-block .nl-check .nl-field-label { margin: 0; flex: 1 1 12rem; font-size: .9rem; }
+#view-newsletter .nl-block .nl-check .nl-field-hint { flex-basis: 100%; margin-top: 0; }
+#view-newsletter .nl-block .nl-field input[type="date"] { min-height: 44px; font-size: 16px; }

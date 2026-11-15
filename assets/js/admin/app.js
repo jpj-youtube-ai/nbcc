@@ -3038,7 +3038,7 @@
     var badges = '<span class="admin-pill ' + scopeClass + '">' + H.escapeHtml(H.storyLabel("useScope", r.use_scope)) + "</span>";
     if (r.consent_share_first_name) badges += ' <span class="admin-pill">First name</span>';
     if (r.consent_share_town) badges += ' <span class="admin-pill">Town</span>';
-    if (r.third_party_consent) badges += ' <span class="admin-pill">3rd-party OK</span>';
+    if (r.third_party_consent) badges += ' <span class="admin-pill">Permission from the person</span>';
     return badges;
   }
   // TASK-560: "read" is the status that already says so. New is unread. Reviewed is read and can be

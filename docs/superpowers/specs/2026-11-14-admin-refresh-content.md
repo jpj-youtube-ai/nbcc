@@ -23,20 +23,21 @@ two rows of filters with no counts, and on a phone eight labelled lines a story.
 - Six tiles with counts, one chosen at a time: All, To read, Read, Used, Withdrawn (the live stories,
   fetched once and filtered in the browser) and Archived (the second fetch, `?view=archived`). They
   replace the status pills and the Live or Archived pair. "To read" is crimson while anything waits.
-- A search box: a first name, a town, a tag, a story's number, or a status word.
-- A card a story, at every width (no table): the Read tick, "Story 40" with the first name and town,
-  its status, the line they chose to be quoted (or the opening words), **what they agreed to as one
-  sentence**, "Check before using" when they agreed over a year ago, who sent it, when, its tags, and
-  "Open the story".
-- The status words match the tick: New is now "To read" and Reviewed is "Read".
+- The table stays on a laptop, framed in the kit's look, and stays a card a story below 760px (TASK-561,
+  pinned by tests). Its columns are plain words now: Read, ID, Their words (the line they chose to be
+  quoted, which the list always fetched and never drew), Sent by, Agreed to (the pills, then **what they
+  agreed to as one sentence**), Status, When agreed (with "Check before using" past a year), Sent, Open.
+- The status pills still say New and Reviewed (many tests and the "It is now ..." sentences use them);
+  the tiles say "To read" and "Read" with "New, not read yet" and "Marked as read" under them.
 - Folds at the foot: "Add stories from the old website" (editors, unchanged), "Erased stories" (new:
   reads `/api/admin/erasures`), and "Stories look missing?" (the storage check, now only for someone
   who may run it).
 
-**The server.** `listStories` gains exactly four columns, so a card can name its sender and the search
+**The server: not changed.** The search box and first name, town and opening words on the card were
+"should" items, left out for the deadline (14 Nov). The plan for them: `listStories` gains exactly four columns, so a card can name its sender and the search
 can find them: `submitter_first_name`, `submitter_town`, `admin_tags`, and `opening` (the first 160
 characters of the story, cut in the database so the whole story never leaves it for a list). Still no
-email, no phone and no full story. Same guard as before (`authorizeSection(..., "stories", "view")`).
+email, no phone and no full story.
 
 ## Stories: one story
 
@@ -77,7 +78,8 @@ names scroll under the menu on every public page and appear on the Supporters pa
 thumb apart; Hide, Show and Delete said nothing when they worked and nothing when they failed.
 
 **Now.**
-- One sentence, then three tiles that filter in the browser: Showing, Hidden, All.
+- One sentence, then three tiles that filter in the browser: Showing, Hidden, All. The old "N total ·
+  M showing" line is kept, in the heading of "How it looks on the website".
 - "Add a partner": the name, and "Already on the list" as you type (with "Show it" when the match is
   hidden). A name already there is not added twice. Folded under it, "Add several at once", one name
   a line.

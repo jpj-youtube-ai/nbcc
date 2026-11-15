@@ -1,6 +1,229 @@
 /* NBCC admin: the Newsletter's own screens, in the kit's look (assets/css/admin-kit.css).
- * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md.
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-newsletter-screens.md.
  *
  * Only what the kit does not already give these screens. The kit's house rules hold here too: no
  * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
- * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+ * moving only transform and opacity; 44px for anything pressed. A phone is below 860px.
+ * Every selector is named through #view-newsletter, so it outranks the old .nl- rules in admin.css
+ * (left where they are: tests read them there) and the kit's own. */
+
+/* ---- the row of places, and Write a newsletter ---- */
+#view-newsletter .nl-dests { gap: 8px; padding: 0; margin: 0 0 22px; background: none; border-radius: 0; }
+#view-newsletter .nl-dest, #view-newsletter .nl-dest-write {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 8px 16px; border: var(--ov-thin); border-radius: 999px;
+  background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.92rem; font-weight: 600;
+}
+#view-newsletter .nl-dest:hover:not(.is-active) { background: var(--ov-hover); }
+#view-newsletter .nl-dest.is-active { background: var(--ov-maroon); color: var(--ov-on-dark); transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+#view-newsletter .nl-dest-write { background: var(--ov-holly); color: var(--ov-on-dark); border-radius: 14px; }
+#view-newsletter .nl-dest-write:hover { background: var(--ov-holly-dark); }
+#view-newsletter .nl-dest:active, #view-newsletter .nl-dest-write:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+#view-newsletter .nl-stage-head { margin: 0 0 8px; font-family: var(--ov-head); font-weight: 800; font-size: 1.3rem; color: var(--ov-maroon); }
+#view-newsletter .admin-subhead:first-child { margin-top: 0; }
+
+/* ---- Overview ---- */
+#view-newsletter .nl-inflight { border: var(--ov-thin); border-radius: 14px; background: var(--ov-gold-soft); padding: 12px 16px; }
+#view-newsletter .nl-tiles { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 12px; margin: 0 0 8px; }
+#view-newsletter .nl-attn { margin: 0 0 22px; }
+#view-newsletter .nl-attn li { display: block; padding: 0; border: 0; }
+#view-newsletter .nl-attn .ak-row__meta { font-size: 0.86rem; }
+#view-newsletter .nl-attn .nl-attn-note, #view-newsletter .nl-attn .nl-attn-ok {
+  display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border: 2.5px dashed var(--ov-rule); border-radius: 18px; background: var(--ov-warm);
+}
+#view-newsletter .nl-attn .nl-attn-ok { display: grid; gap: 2px; }
+#view-newsletter .nl-attn b { font-size: 0.95rem; color: var(--ov-ink); }
+#view-newsletter .nl-attn span { font-size: 0.86rem; color: var(--ov-soft); }
+#view-newsletter .nl-act { border: var(--ov-line); border-radius: 22px; box-shadow: var(--ov-pop-lg); background: var(--ov-maroon); margin: 0 0 26px; }
+#view-newsletter .nl-act h3 { font-family: var(--ov-head); font-weight: 800; color: var(--ov-on-dark); }
+#view-newsletter .nl-act p { color: var(--ov-on-dark-soft); }
+#view-newsletter .nl-act .nl-act-says { margin-top: 6px; font-weight: 600; color: var(--ov-on-dark); }
+#view-newsletter .nl-act .nl-act-says:empty { display: none; }
+#view-newsletter .nl-act-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+#view-newsletter .nl-act .admin-btn.nl-act-btn { background: var(--ov-card); color: var(--ov-maroon); }
+#view-newsletter .nl-act .admin-btn.nl-act-btn:hover { background: var(--ov-hover); }
+#view-newsletter .nl-ov-grid { gap: 26px; }
+#view-newsletter .nl-aud-snap { display: grid; gap: 10px; }
+#view-newsletter .nl-aud-snap .nl-aud-snap-row { display: grid; padding: 12px 42px 12px 16px; border: var(--ov-line); }
+#view-newsletter .nl-aud-snap .nl-aud-snap-nm { font-size: 1rem; }
+#view-newsletter .nl-unmeasured { font-size: 0.84rem; color: var(--ov-soft); }
+
+/* ---- the lists of newsletters: rows on a laptop, a card each on a phone ---- */
+#view-newsletter .nl-panel .admin-table-wrap { padding: 0; }
+#view-newsletter .nl-subj { color: var(--ov-ink); overflow-wrap: anywhere; }
+#view-newsletter .nl-row-acts { white-space: normal; }
+#view-newsletter .nl-row-acts .admin-link, #view-newsletter .nl-archive-acts .admin-link {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin: 2px 0; padding: 6px 12px;
+  border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink);
+  color: var(--ov-ink); font-size: 0.88rem; font-weight: 600; text-decoration: none;
+}
+#view-newsletter .nl-row-acts .admin-link:hover { background: var(--ov-hover); }
+#view-newsletter .nl-row-acts .admin-link:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+#view-newsletter .nl-row-acts .admin-link-danger { color: var(--ov-crimson); }
+#view-newsletter .nl-archive-acts { display: flex; flex-wrap: wrap; gap: 6px 8px; justify-content: flex-end; }
+#view-newsletter .nl-sends th:nth-child(2), #view-newsletter .nl-sends td:nth-child(2),
+#view-newsletter .nl-sends th:nth-child(3), #view-newsletter .nl-sends td:nth-child(3) { width: 8.5rem; }
+#view-newsletter .nl-sends th:last-child, #view-newsletter .nl-sends td:last-child { width: 7rem; }
+#view-newsletter .nl-sends .nl-row-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+#view-newsletter .nl-archive th:nth-child(2), #view-newsletter .nl-archive td:nth-child(2) { width: 7.5rem; }
+#view-newsletter .nl-archive th:nth-child(3), #view-newsletter .nl-archive td:nth-child(3) { width: 7rem; }
+#view-newsletter .nl-archive th:nth-child(4), #view-newsletter .nl-archive td:nth-child(4),
+#view-newsletter .nl-archive th:nth-child(5), #view-newsletter .nl-archive td:nth-child(5) { width: 8rem; }
+#view-newsletter .nl-archive th:last-child, #view-newsletter .nl-archive td:last-child { width: 10.5rem; }
+#view-newsletter .nl-fail-badge { display: block; margin-top: 2px; color: var(--ov-crimson); font-size: 0.8rem; font-weight: 600; }
+#view-newsletter .nl-rate-bar { background: var(--ov-cream); border: 1px solid var(--ov-rule); }
+#view-newsletter .nl-rate-bar i { background: var(--ov-holly); }
+#view-newsletter .nl-rate.is-mid .nl-rate-bar i { background: var(--ov-gold-ink); }
+#view-newsletter .nl-rate.is-low .nl-rate-bar i { background: var(--ov-crimson); }
+
+/* ---- Results ---- */
+#view-newsletter .nl-res-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 14px; margin: 0 0 12px; }
+#view-newsletter .nl-res-title { margin: 2px 0 4px; font-family: var(--ov-head); font-weight: 800; font-size: 1.5rem; line-height: 1.15; color: var(--ov-maroon); overflow-wrap: anywhere; }
+#view-newsletter .nl-res-meta { margin: 0; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-newsletter .nl-eyebrow { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ov-soft); }
+#view-newsletter .nl-res-tiles { margin: 0 0 6px; }
+#view-newsletter .nl-res-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; margin: 12px 0 16px; }
+#view-newsletter .nl-card { padding: 16px 18px; }
+#view-newsletter .nl-card h4 { margin: 0 0 6px; font-family: var(--ov-head); font-weight: 800; font-size: 1.12rem; color: var(--ov-maroon); }
+#view-newsletter .nl-clicked { display: grid; gap: 10px; margin: 0 0 10px; padding: 0; list-style: none; }
+#view-newsletter .nl-clicked li { display: grid; gap: 2px; padding: 0 0 10px; border-bottom: 1px solid var(--ov-rule); }
+#view-newsletter .nl-clicked li:last-child { border-bottom: 0; }
+#view-newsletter .nl-clicked-link { display: inline-block; padding: 8px 0; color: var(--ov-maroon); font-weight: 600; overflow-wrap: anywhere; text-underline-offset: 3px; }
+#view-newsletter .nl-clicked span { font-size: 0.86rem; color: var(--ov-soft); }
+#view-newsletter .nl-res-bounced { margin: 0 0 16px; }
+#view-newsletter .nl-res-bounced[hidden] { display: none; }
+#view-newsletter .nl-bounced-list { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 12px; user-select: all; }
+#view-newsletter .nl-bounced-addr { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+/* ---- Who got it, in the page ---- */
+#view-newsletter .nl-who { margin: 8px 0 0; }
+#view-newsletter .nl-who[hidden] { display: none; }
+#view-newsletter .nl-who-body { max-height: none; overflow: visible; }
+#view-newsletter .nl-note { max-width: 70ch; margin: 0 0 14px; color: var(--ov-soft); font-size: 0.9rem; line-height: 1.5; }
+#view-newsletter .nl-seg-n { padding: 0 7px; border-radius: 999px; background: var(--ov-cream); color: var(--ov-ink); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+#view-newsletter .admin-seg.is-active .nl-seg-n { background: var(--ov-card); color: var(--ov-maroon); }
+#view-newsletter .nl-list-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 0 0 8px; }
+#view-newsletter .nl-list-search { flex: 1 1 260px; }
+#view-newsletter .nl-list-count { margin: 8px 0; color: var(--ov-soft); font-size: 0.9rem; }
+#view-newsletter .nl-list-count:empty { display: none; }
+#view-newsletter .nl-more { margin: 14px 0 0; }
+#view-newsletter .nl-more[hidden] { display: none; }
+#view-newsletter .nl-who-table td:first-child { overflow-wrap: anywhere; }
+#view-newsletter .nl-who-table th:nth-child(2), #view-newsletter .nl-who-table td:nth-child(2) { width: 12rem; }
+#view-newsletter .nl-who-table th:nth-child(3), #view-newsletter .nl-who-table td:nth-child(3) { width: 11rem; }
+
+/* ---- Audiences & people ---- */
+#view-newsletter .nl-subscriber-card { padding: clamp(16px, 2.4vw, 26px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+#view-newsletter .nl-audience-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+#view-newsletter .nl-audience-bar label { flex: 1 1 100%; margin: 0; font-family: var(--ov-head); font-weight: 700; color: var(--ov-ink); }
+#view-newsletter .nl-audience-bar select { flex: 1 1 240px; min-width: 0; }
+#view-newsletter .nl-audience-bar input { flex: 1 1 220px; min-width: 0; }
+#view-newsletter .nl-audience-bar button, #view-newsletter .nl-subscriber-form button, #view-newsletter .nl-import-bar button,
+#view-newsletter .nl-manage-tools button, #view-newsletter #importCommitBtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 16px;
+  border: var(--ov-thin); border-radius: 14px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink);
+  color: var(--ov-ink); font: inherit; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+}
+#view-newsletter .nl-audience-bar button:hover, #view-newsletter .nl-subscriber-form button:hover, #view-newsletter .nl-import-bar button:hover,
+#view-newsletter .nl-manage-tools button:hover { background: var(--ov-hover); }
+#view-newsletter .nl-audience-bar button:disabled, #view-newsletter .nl-subscriber-form button:disabled, #view-newsletter .nl-import-bar button:disabled,
+#view-newsletter #importCommitBtn:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
+#view-newsletter .nl-subscriber-form button[type="submit"], #view-newsletter #importCommitBtn:not(:disabled) { background: var(--ov-holly); color: var(--ov-on-dark); }
+#view-newsletter .nl-audience-bar button[hidden], #view-newsletter .nl-audience-bar input[hidden] { display: none; }
+#view-newsletter .nl-subscriber-form input:not([type="checkbox"]) { min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); font-size: 1rem; }
+#view-newsletter .nl-manage-tools input { min-height: 46px; font-size: 1rem; }
+#view-newsletter .nl-audience-kind { margin: 12px 0; color: var(--ov-soft); }
+#view-newsletter .nl-audience-kind:empty { display: none; }
+#view-newsletter .nl-tick { min-height: 44px; }
+#view-newsletter .nl-sub-msg { font-weight: 600; color: var(--ov-holly); }
+#view-newsletter .nl-sub-msg.is-error { color: var(--ov-crimson); }
+#view-newsletter .nl-sub-msg:empty { display: none; }
+#view-newsletter .nl-manage { margin: 0 0 14px; border: var(--ov-thin); border-radius: 16px; background: var(--ov-card); }
+#view-newsletter .nl-manage > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 10px 16px; border-radius: 14px;
+  color: var(--ov-ink); font-family: var(--ov-head); font-size: 1.02rem; font-weight: 700; cursor: pointer; list-style: none;
+}
+#view-newsletter .nl-manage > summary::-webkit-details-marker { display: none; }
+#view-newsletter .nl-manage > summary::after { content: ""; flex: none; width: 9px; height: 9px; margin-right: 4px; border: solid var(--ov-maroon); border-width: 0 2.5px 2.5px 0; transform: translateY(-3px) rotate(45deg); }
+#view-newsletter .nl-manage[open] > summary::after { transform: translateY(2px) rotate(225deg); }
+#view-newsletter .nl-manage[open] > summary { border-bottom: 2px dashed var(--ov-rule); border-radius: 14px 14px 0 0; }
+#view-newsletter .nl-manage > summary:hover { background: var(--ov-hover); }
+#view-newsletter .nl-manage-body { padding: 14px 16px 16px; }
+#view-newsletter .nl-people td:last-child .admin-link, #view-newsletter #suppressionList .admin-link, #view-newsletter #subList .admin-link,
+#view-newsletter #audienceArchivedList .admin-link {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 6px 12px; border: var(--ov-thin); border-radius: 12px;
+  background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); font-size: 0.88rem; font-weight: 600; text-decoration: none;
+}
+
+/* ---- the composer (Write, Who, Send): the look, 16px fields, 44px targets, no hidden foot ---- */
+/* The kit's segmented, table and button rules would flatten these; they keep their own shape. */
+#view-newsletter .nl-variants.admin-segmented { flex-wrap: wrap; gap: 6px; }
+#view-newsletter .nl-variants .admin-seg { flex: 1 1 auto; min-height: 44px; padding: 8px 14px; font-size: 0.86rem; white-space: normal; }
+#view-newsletter .nl-cp-next { background: var(--ov-holly); color: var(--ov-on-dark); }
+#view-newsletter .nl-cp-next:hover { background: var(--ov-holly-dark); }
+#view-newsletter .nl-cp-bar, #view-newsletter .nl-cp-foot { border: var(--ov-thin); border-radius: 16px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); backdrop-filter: none; }
+#view-newsletter .nl-cp-close { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); color: var(--ov-ink); }
+#view-newsletter .nl-cp-step { min-height: 44px; }
+#view-newsletter .nl-cp-step.is-active .nl-cp-n { background: var(--ov-maroon); border-color: var(--ov-maroon); }
+/* Every field the composer draws: 16px, so an iPhone does not zoom in when one is tapped. */
+#view-newsletter .nl-compose :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea),
+#view-newsletter .nl-block .nl-field input, #view-newsletter .nl-block .nl-field textarea, #view-newsletter .nl-block .nl-field select,
+#view-newsletter .nl-fallback-row input, #view-newsletter #sendListPick { font-size: 1rem; min-height: 46px; }
+#view-newsletter .nl-block .nl-field textarea { min-height: 0; }
+/* Targets a finger can hit. */
+#view-newsletter .nl-add, #view-newsletter .nl-canvas-toggle, #view-newsletter .nl-actions button, #view-newsletter .nl-templates button,
+#view-newsletter .nl-template-save button, #view-newsletter .nl-schedule button, #view-newsletter .nl-progress-actions button,
+#view-newsletter #nlComposeBack, #view-newsletter #nlComposeNext, #view-newsletter .nl-attach-list .admin-link { min-height: 44px; }
+#view-newsletter .nl-block-ctrls button, #view-newsletter .nl-ctrl { min-width: 44px; min-height: 44px; }
+#view-newsletter .nl-block-toggle { min-width: 44px; min-height: 44px; }
+#view-newsletter .nl-emph button { min-width: 44px; min-height: 44px; }
+#view-newsletter .nl-item-remove, #view-newsletter .nl-size button { min-height: 44px; }
+#view-newsletter .nl-attach-list .admin-link { display: inline-flex; align-items: center; padding: 0 10px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  #view-newsletter .nl-dest, #view-newsletter .nl-dest-write, #view-newsletter .nl-row-acts .admin-link { transition: transform 0.12s var(--ov-ease); }
+}
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  #view-newsletter .nl-dests { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-newsletter .nl-dests-gap { display: none; }
+  #view-newsletter .nl-dest, #view-newsletter .nl-dest-write { justify-content: center; text-align: center; }
+  #view-newsletter .nl-dest-write { grid-column: 1 / -1; }
+  #view-newsletter .nl-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-newsletter .nl-ov-grid, #view-newsletter .nl-res-grid { grid-template-columns: minmax(0, 1fr); }
+  #view-newsletter .nl-act { padding: 18px; }
+  #view-newsletter .nl-act-btns, #view-newsletter .nl-act-btns .admin-btn { width: 100%; }
+  /* A card each: the fixed laptop widths would squeeze a card's cells. */
+  /* Named strongly enough to outrank the laptop column widths above (each a :nth-child). */
+  #view-newsletter table.ak-cards th:nth-child(n), #view-newsletter table.ak-cards td:nth-child(n) { width: auto; }
+  #view-newsletter .ak-cards td.nl-r { text-align: left; }
+  #view-newsletter .ak-cards .nl-rate { justify-content: flex-start; }
+  #view-newsletter .ak-cards .nl-row-acts, #view-newsletter .ak-cards .nl-archive-acts {
+    display: flex; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 8px; padding-top: 10px;
+  }
+  #view-newsletter .ak-cards tr.nl-click:hover { background: var(--ov-card); }
+  #view-newsletter .nl-res-acts { width: 100%; }
+  #view-newsletter .nl-list-tools .admin-btn { width: 100%; }
+  /* The foot's button stayed under the bottom tab bar (84px, z 30) until the page's end: sit above it. */
+  #view-newsletter.is-composing .nl-cp-foot { bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 31; }
+  #view-newsletter .nl-cp-bar { top: 64px; }
+  /* The preview shows whole, in the page, rather than scrolling inside its own box. */
+  #view-newsletter .nl-preview-wrap { height: auto; overflow: visible; }
+}
+
+/* ---- Audiences & people: the search, the count and Show more over the list (2026-11-14) ---- */
+#view-newsletter .nl-people-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 22px 0 6px; }
+#view-newsletter .nl-people-head[hidden] { display: none; }
+#view-newsletter .nl-donors-note p { margin: 0; }
+#view-newsletter .nl-people-tools { margin: 18px 0 8px; }
+#view-newsletter .nl-import-rows { margin: 10px 0; }
+#view-newsletter .nl-import-rows[hidden] { display: none; }
+#view-newsletter .nl-import-table td { overflow-wrap: anywhere; }
+
+/* A subject is read whole, not cut to "A very long invented subject line about...", and the list never
+   becomes a box that scrolls sideways (admin.css gave #nlRecentSends overflow-x: auto). */
+#view-newsletter #nlRecentSends { overflow: visible; overflow: clip; }
+#view-newsletter .nl-sends .nl-subj, #view-newsletter .nl-sends .nl-meta { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* With 44px controls a block's head holds them on a second line on a phone, rather than past the edge. */
+#view-newsletter .nl-block-head { flex-wrap: wrap; }
+#view-newsletter .nl-block-ctrls { flex-wrap: wrap; justify-content: flex-end; }

@@ -749,8 +749,13 @@
             </section>
 
                         <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
-            <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
+            <!-- 2026-11-14: in the kit's look (the class ak; assets/css/admin-kit.css, with the section's own
+                 rules in assets/css/admin-newsletter.css). Design:
+                 docs/superpowers/specs/2026-11-14-admin-refresh-newsletter-screens.md. The class goes on
+                 the section only: every .nl-panel keeps exactly class="nl-panel" (newsletter-studio-ui.test.ts). -->
+            <section class="admin-view ak" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
+              <p class="admin-view-intro">Write to the people who asked to hear from us, see who they are, and see how each newsletter did.</p>
 
               <!-- TASK-279 made the tab four switchable panels instead of one ~19,000-character
                    scroll. TASK-283 fixes what that left: ONE four-step rail was doing two unrelated
@@ -767,13 +772,18 @@
                 <button type="button" class="nl-dest" data-nl-panel="nlPanelAudience">Audiences &amp; people</button>
                 <button type="button" class="nl-dest" data-nl-panel="nlPanelHistory">All newsletters</button>
                 <span class="nl-dests-gap"></span>
-                <button type="button" class="nl-dest-write" data-nl-panel="nlPanelWrite" data-edit-gate="newsletter">Write a newsletter</button>
+                <!-- 2026-11-14: no longer a plain switch of panel. It carries on the latest draft that has not
+                     been sent, or starts a new one (app.js, nlStartWriting), as the Overview's band does. -->
+                <button type="button" class="nl-dest-write" id="nlWriteBtn" data-edit-gate="newsletter">Write a newsletter</button>
               </nav>
 
               <!-- The front door. Opening the tab used to drop you straight into the composer,
                    mid-task, with no sense of state. This answers the questions you actually arrive
                    with: who can I reach, what went out, where did it land, what needs a look.
-                   Every figure is rendered by app.js from endpoints that already existed. -->
+                   Every figure is rendered by app.js from endpoints that already existed.
+                   2026-11-14: what needs you comes before the rest (Worth a look sits under the four
+                   figures), the figures are buttons that go where their number lives, and a recent
+                   send is a card on a phone. -->
               <div class="nl-panel" id="nlPanelOverview" hidden>
                 <div class="nl-inflight" id="nlInflight" hidden aria-live="polite">
                   <span class="nl-inflight-dot" aria-hidden="true"></span>
@@ -781,27 +791,36 @@
                   <button type="button" class="admin-btn" id="nlInflightOpen">Review it</button>
                 </div>
 
-                <div class="nl-tiles" id="nlOverviewTiles" aria-live="polite"></div>
+                <div class="ak-tiles nl-tiles" id="nlOverviewTiles" aria-live="polite"></div>
 
+                <h3 class="admin-subhead">Worth a look</h3>
+                <ul class="nl-attn ak-list" id="nlAttention" aria-live="polite"></ul>
+
+                <!-- The band starts a newsletter. It used to open whatever was newest, which could be one
+                     already sent, read only. app.js (nlPaintStart) names what the button will do: carry on
+                     the latest draft that has not been sent, or start a new one. -->
                 <div class="nl-act">
                   <div>
                     <h3>Write a newsletter</h3>
-                    <p>Three steps — write it, choose who gets it, send. It saves as you go, so you can leave and come back.</p>
+                    <p>Three steps: write it, choose who gets it, send. Press Save as you go and you can leave and come back.</p>
+                    <p class="nl-act-says" id="nlStartSays" aria-live="polite"></p>
                   </div>
-                  <button type="button" class="admin-btn nl-act-btn" data-nl-panel="nlPanelWrite" data-edit-gate="newsletter">Start writing</button>
+                  <div class="nl-act-btns">
+                    <button type="button" class="admin-btn nl-act-btn" id="nlStartWriting">Start a new newsletter</button>
+                    <button type="button" class="admin-btn ak-btn--plain" id="nlStartNew" hidden>Start a new one</button>
+                  </div>
                 </div>
 
                 <div class="nl-ov-grid">
                   <div class="nl-ov-main">
                     <h3 class="admin-subhead">Recent sends</h3>
-                    <p class="admin-help">Click any one to see exactly where it landed — delivered, bounced, clicked, unsubscribed.</p>
+                    <p class="admin-help">Press Results on any one to see how it did: delivered, bounced, clicked, unsubscribed. Delivered means a mailbox confirmed it arrived. A send from before we began recording that says Not measured.</p>
                     <div class="admin-table-wrap" id="nlRecentSends" aria-live="polite"><p class="admin-loading">Loading…</p></div>
                   </div>
                   <div class="nl-ov-side">
-                    <h3 class="admin-subhead">Worth a look</h3>
-                    <ul class="nl-attn" id="nlAttention" aria-live="polite"></ul>
                     <h3 class="admin-subhead">Your audiences</h3>
-                    <div class="nl-aud-snap" id="nlAudienceSnapshot" aria-live="polite"></div>
+                    <p class="admin-help">An audience is a list of people a newsletter can go to. Press one to see who is on it.</p>
+                    <div class="nl-aud-snap ak-list" id="nlAudienceSnapshot" aria-live="polite"></div>
                   </div>
                 </div>
               </div>
@@ -816,6 +835,9 @@
               <!-- Stage 1. Editor+ only; app.js hides this whole card in read mode, which is why the
                    audience picker and member list live inside it (they carry Remove controls). -->
               <div class="nl-panel" id="nlPanelAudience" hidden>
+              <!-- 2026-11-14: the card below is for people who can edit, so someone who may only look saw an
+                   empty panel. This says why (app.js shows it, beside hiding the card). -->
+              <p class="ak-notice" id="nlAudienceViewerNote" hidden>Adding and taking people off audiences, and seeing who is on them, needs someone who can edit the newsletter. Ask one of them, or an admin, if you need a change made.</p>
               <div class="nl-subscriber-card" id="nlSubscriberCard">
                 <h3 class="nl-stage-head" id="nlStageAudience"><span class="nl-stage-num">1</span> Audiences &amp; people</h3>
                 <p class="admin-help">
@@ -840,8 +862,6 @@
                 <!-- What the selected audience MEANS, in its own words — a live audience explains why
                      it has no Add form, an archived one explains why it cannot be sent to. -->
                 <p class="nl-audience-kind" id="audienceKindNote" aria-live="polite"></p>
-                <div id="audienceMembers" aria-live="polite"></div>
-
                 <!-- ONE way to add a person, and it names the audience it is adding to. There used to
                      be two forms twenty lines apart writing to different tables: "Add a subscriber"
                      (a donors row, no audience choice) and "Add to audience". -->
@@ -897,6 +917,8 @@
                   <div id="importPreview" hidden>
                     <p id="importSummary" class="nl-import-summary"></p>
                     <ul id="importIssues" class="nl-import-issues"></ul>
+                    <!-- 2026-11-14: every row of the sheet and what will happen to it; the preview already returned them. -->
+                    <details class="nl-manage nl-import-rows" id="importRows" hidden><summary>See the rows before importing</summary><div class="nl-manage-body" id="importRowsBody"></div></details>
                     <label class="nl-import-attest">
                       <input type="checkbox" id="importAttest" />
                       <span>These people have agreed to hear from NBCC (for example they signed up at an event or asked to be added).</span>
@@ -906,6 +928,20 @@
                   <p id="importMsg" class="nl-sub-msg" aria-live="polite"></p>
                 </div>
                 </div>
+
+                <!-- 2026-11-14: who is on the audience, found by a search and shown fifty at a time (app.js,
+                     nlRenderAudienceMembers), with how many joined this month and a download of it. Add a person and
+                     the import sit above it: on a phone they were 3,476px down, under the whole list. -->
+                <div class="nl-people-head" id="nlPeopleHead" hidden>
+                  <label class="ak-field nl-list-search"><span>Find someone on this audience</span>
+                    <input type="search" id="nlPeopleSearch" placeholder="Part of a name or an email address" autocomplete="off" /></label>
+                  <button type="button" class="admin-btn ak-btn--plain" id="nlPeopleDownload">Download this audience</button>
+                </div>
+                <p class="nl-list-count" id="nlPeopleCount" aria-live="polite"></p>
+                <p class="admin-action-status" id="nlPeopleMsg" role="status"></p>
+                <div id="audienceMembers" aria-live="polite"></div>
+                <button type="button" class="admin-btn ak-btn--plain nl-more" id="nlPeopleMore" hidden>Show more</button>
+
 
                 <!-- Switching someone's emails back ON is its own deliberate action, behind a summary
                      and a confirm. It used to be a silent SIDE EFFECT of the plain "add a subscriber"
@@ -934,9 +970,10 @@
                 <details class="nl-manage" id="subManage">
                   <summary>Manage subscribers</summary>
                   <div class="nl-manage-body">
+                    <p class="admin-help">The donors who agreed to email: the people on <b>Donors</b>, and part of <b>Newsletter</b>. They join by ticking the box when they give, so nobody adds them here. <b>Stop their emails</b> switches off all our emails to that person.</p>
                     <div class="nl-manage-tools">
                       <input type="search" id="subSearch" placeholder="Search email or name…" aria-label="Search subscribers" />
-                      <button type="button" class="nl-item-add" id="subExport"><span>Export CSV</span></button>
+                      <button type="button" class="nl-item-add" id="subExport"><span>Download as a spreadsheet</span></button>
                     </div>
                     <div id="subList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
                   </div>
@@ -1257,9 +1294,14 @@
                    while the history table sat elsewhere — so answering "where did it land" meant
                    visiting two places and knowing to look. One click from any sent row now opens
                    the whole record: the five numbers, what people clicked, and who sent it. -->
+              <!-- 2026-11-14: Back goes to where you came from (app.js writes which, in #nlResultsBackTo);
+                   the six figures are kit tiles, delivered and clicked set against the send before; the
+                   links can be pressed; the addresses that bounced can be copied; and "Who got it" is in
+                   the page (#nlWhoGot) with a search, a filter and a download. It used to be a box over
+                   the page that scrolled 11,000px inside itself. -->
               <div class="nl-panel" id="nlPanelResults" hidden>
-                <button type="button" class="nl-back" id="nlResultsBack">
-                  <span aria-hidden="true">&#8249;</span> Back
+                <button type="button" class="admin-back nl-back" id="nlResultsBack">
+                  <span aria-hidden="true">&#8249;</span> <span id="nlResultsBackTo">Back</span>
                 </button>
                 <div class="nl-res-head">
                   <div>
@@ -1267,29 +1309,48 @@
                     <h3 class="nl-res-title" id="nlResultsTitle"></h3>
                     <p class="nl-res-meta" id="nlResultsMeta"></p>
                   </div>
-                  <div class="nl-res-acts">
+                  <div class="nl-res-acts ak-actions">
                     <button type="button" class="admin-btn" id="nlResultsWho">Who got it</button>
+                    <button type="button" class="admin-btn ak-btn--plain" id="nlResultsOpen">Open it</button>
+                    <button type="button" class="admin-btn ak-btn--plain" id="nlResultsAgain">Use this again</button>
                   </div>
                 </div>
-                <div class="nl-res-tiles" id="nlResultsTiles" aria-live="polite"></div>
+                <p class="admin-action-status" id="nlResultsMsg" role="status" aria-live="polite"></p>
+                <div class="ak-tiles nl-res-tiles" id="nlResultsTiles" aria-live="polite"></div>
+                <p class="admin-help" id="nlResultsHelp">Sent out is how many people our mail service took it for. Delivered is how many mailboxes confirmed it arrived, so that is the figure to trust.</p>
                 <div class="nl-res-grid">
-                  <div class="nl-card">
+                  <div class="ak-card nl-card">
                     <h4>What people clicked</h4>
-                    <p class="admin-help">Unique people, not total clicks — one keen reader pressing five times is still one person.</p>
+                    <p class="admin-help">How many different people pressed each link, not how many presses: one keen reader pressing five times is still one person. Press a link to open it.</p>
                     <div id="nlResultsLinks" aria-live="polite"></div>
                   </div>
-                  <div class="nl-card">
+                  <div class="ak-card nl-card">
                     <h4>Record</h4>
-                    <dl id="nlResultsRecord"></dl>
+                    <dl class="ak-facts" id="nlResultsRecord"></dl>
                     <p class="nl-sub-msg" id="nlResultsNote" aria-live="polite"></p>
                   </div>
                 </div>
+                <div class="ak-card nl-card nl-res-bounced" id="nlResultsBounced" hidden>
+                  <h4>Addresses that bounced</h4>
+                  <p class="admin-help">These mailboxes sent the newsletter back. An address that bounces for good is blocked from every later send, so there is nothing you must do. Copy them if you want to check them against a list of your own.</p>
+                  <p class="nl-bounced-list" id="nlResultsBouncedList"></p>
+                  <button type="button" class="admin-btn ak-btn--plain" id="nlResultsCopyBounced">Copy the addresses that bounced</button>
+                  <p class="admin-action-status" id="nlResultsCopyMsg" role="status" aria-live="polite"></p>
+                </div>
+                <section class="nl-who" id="nlWhoGot" aria-labelledby="nlWhoTitle" hidden>
+                  <h3 class="admin-subhead" id="nlWhoTitle">Who got this newsletter</h3>
+                  <div class="nl-who-body" aria-live="polite"></div>
+                </section>
               </div>
 
               <div class="nl-panel" id="nlPanelHistory" hidden>
               <!-- A destination, not the last step of writing. Carries the audience each send went
-                   to, and a row click opens that send's full results. -->
+                   to, and a row click opens that send's full results.
+                   2026-11-14: a card per newsletter on a phone, with Open, Results and Use this again;
+                   what happened (a draft deleted) is said here, beside the list. -->
               <h3 class="nl-stage-head">All newsletters</h3>
+              <p class="admin-help">Every newsletter, sent or not. Sent out is how many people our mail service took it for. Delivered is how many mailboxes confirmed it arrived.</p>
+              <p class="admin-action-status" id="nlHistoryMsg" role="status" aria-live="polite"></p>
               <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               </div>
             </section>

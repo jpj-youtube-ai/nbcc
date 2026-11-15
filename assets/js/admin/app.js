@@ -302,6 +302,8 @@
       // Manual add-subscriber + test-send are edit actions → hidden for read-only (Viewer) users.
       var subCard = el("nlSubscriberCard");
       if (subCard) subCard.hidden = !canEdit("newsletter");
+      // 2026-11-14: and say why, rather than leave someone who may only look an empty panel.
+      if (el("nlAudienceViewerNote")) el("nlAudienceViewerNote").hidden = canEdit("newsletter");
       var testBtn0 = el("newsletterTest");
       if (testBtn0) testBtn0.hidden = !canEdit("newsletter");
       var tmplBtn0 = el("newsletterTemplate");
@@ -6657,37 +6659,53 @@
   // to try, not an arrival. A send where every address hard-bounced still showed "150 / 150" under a
   // column headed Delivered. Real delivery is a webhook fact and lives in the stats panel; the column
   // is now labelled honestly rather than quietly overstating every send.
+  // 2026-11-14: the column is headed "Sent out" and reads "429 of 431", with how many could not be
+  // sent beside it. A draft has gone to nobody, so its cell is empty rather than a dash.
   function nlDeliveryCell(n) {
-    if (n.recipientCount == null) return "-";
+    if (n.recipientCount == null) return "";
     if (n.sentCount == null) return String(n.recipientCount);
-    var cell = n.sentCount + " / " + n.recipientCount;
-    if (n.failedCount) cell += ' <span class="nl-fail-badge">' + n.failedCount + " failed</span>";
+    var cell = n.sentCount + " of " + n.recipientCount;
+    if (n.failedCount) cell += ' <span class="nl-fail-badge">' + n.failedCount + " could not be sent</span>";
     return cell;
   }
 
   function renderNewsletterList(rows) {
-    if (!rows.length) return '<p class="admin-loading">No newsletters yet.</p>';
+    if (!rows.length) return '<p class="admin-empty">No newsletters yet.</p>';
     // TASK-271: WHO each one went to. The audience was stamped at send time but never read back, so
     // the history couldn't tell you whether a message reached volunteers or every donor. Older sends
     // predate audiences and were always the newsletter audience.
-    // TASK-287: four columns, not seven. The audience and the sender move into the meta line under
-    // the subject — they describe the send, they are not things you scan a column of. TASK-278's
-    // sent_by is still shown; it just lives with the date it belongs to.
-    var html = '<table class="admin-table nl-archive"><thead><tr><th>Newsletter</th><th>Status</th>' +
-      '<th class="nl-r">Accepted</th><th></th></tr></thead><tbody>';
+    // TASK-287: the audience and the sender sit in the meta line under the subject — they describe
+    // the send, they are not things you scan a column of. TASK-278's sent_by is still shown; it just
+    // lives with the date it belongs to.
+    // 2026-11-14: a card per newsletter on a phone (.ak-cards, each cell named for it); whether it
+    // went is said in words, never the database's own ("draft"); delivered and clicked are here as
+    // they are on the Overview; and a sent one can be used again as a new draft.
+    var canWrite = canEdit("newsletter");
+    var html = '<table class="admin-table nl-archive ak-cards"><thead><tr><th>Newsletter</th><th>Status</th>' +
+      '<th class="nl-r">Sent out</th><th class="nl-r">Delivered</th><th class="nl-r">Clicked</th>' +
+      '<th><span class="sr-only">What you can do</span></th></tr></thead><tbody>';
     rows.forEach(function (n) {
+      var isSent = n.status === "sent";
+      var out = nlSentOut(n);
       var meta = [
-        n.sentAt ? new Date(n.sentAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null,
+        n.sentAt ? nlWhen(n.sentAt) : null,
         n.sentBy || null,
-        n.audience || (n.status === "sent" ? "Newsletter" : null),
+        n.audience || (isSent ? "Newsletter" : null),
       ].filter(Boolean).map(H.escapeHtml);
       html +=
-        '<tr><td><span class="nl-subj">' + H.escapeHtml(n.subject) + "</span>" +
+        '<tr><td class="ak-cards__lead"><span class="nl-subj">' + H.escapeHtml(nlTitle(n)) + "</span>" +
         '<span class="nl-meta">' + (meta.length ? meta.join(" · ") : "Not sent yet") + "</span></td>" +
-        '<td><span class="nl-pill nl-pill-' + H.escapeHtml(n.status) + '">' + H.escapeHtml(n.status) + "</span></td>" +
-        '<td class="nl-r">' + nlDeliveryCell(n) + "</td>" +
-        '<td class="nl-r nl-archive-acts"><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button>' +
-        (n.status === "sent" ? '<button class="admin-link" type="button" data-who-got="' + n.id + '">Results</button>' : "") +
+        '<td data-label="Status"><span class="admin-pill ' + (isSent ? "ak-mark--ok" : "ak-mark--wait") + '">' +
+        (isSent ? "Sent" : "Draft, not sent") + "</span></td>" +
+        '<td class="nl-r" data-label="Sent out">' + nlDeliveryCell(n) + "</td>" +
+        '<td class="nl-r" data-label="Delivered">' + (isSent ? nlRateCell(n.deliveredCount, out) : "") + "</td>" +
+        '<td class="nl-r" data-label="Clicked">' +
+        (isSent ? nlRateCell(n.deliveredCount == null ? null : n.clickedCount, out) : "") + "</td>" +
+        '<td class="nl-r nl-row-acts nl-archive-acts">' + nlRowActions(n) +
+        // Nothing to copy once the content has been deleted, and nobody who may only look can write.
+        (isSent && !n.redactedAt && canWrite
+          ? '<button class="admin-link" type="button" data-use-again="' + n.id + '">Use this again</button>'
+          : "") +
         nlDeleteCell(n) + "</td></tr>";
     });
     return html + "</tbody></table>";
@@ -6704,11 +6722,27 @@
       '" data-newsletter-status="' + n.status + '">Delete</button>';
   }
 
+  /** What just happened, said in the page beside what was pressed: green when it worked, red when not. */
+  function nlSay(target, text, kind) {
+    var m = typeof target === "string" ? el(target) : target;
+    if (!m) return;
+    m.textContent = text || "";
+    m.classList.toggle("is-ok", kind === "ok");
+    m.classList.toggle("is-error", kind === "error");
+  }
+
+  /** The line for what happened on the screen the person is looking at: the list's, or the results'. */
+  function nlHereMsg() {
+    return nlLivePanel() === "nlPanelResults" ? "nlResultsMsg" : "nlHistoryMsg";
+  }
+
   // TASK-252: delete a newsletter. The confirm says exactly what will happen, because the two cases
   // differ in a way the user has to understand BEFORE clicking: a draft is really gone, while a sent
   // newsletter only loses its content — the record that you sent it stays, on purpose. Saying "this
   // cannot be undone" for a draft and being honest about the stub for a sent one is the difference
   // between an informed decision and a nasty surprise.
+  // 2026-11-14: what happened is said beside the list (#nlHistoryMsg). It used to be written to the
+  // line on the Send step, which is not on screen here, and the list then jumped to the Overview.
   function nlDelete(id, status) {
     if (!isAdmin()) return;
     var sent = status === "sent";
@@ -6718,23 +6752,51 @@
         "the addresses that bounced.\n\nThis cannot be undone."
       : "Delete this draft?\n\nIt was never sent to anyone. This cannot be undone.";
     if (!window.confirm(message)) return;
+    nlSay("nlHistoryMsg", "Deleting…");
     authFetch("/api/admin/newsletters/" + encodeURIComponent(id), { method: "DELETE" })
-      .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+      .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, status: res.status, b: b }; }); })
       .then(function (r) {
         if (!r.ok) {
-          el("newsletterMsg").textContent = (r.b && r.b.error) || "Could not delete that newsletter.";
+          // The server's own reason when it refused (it will not delete one that was sent); a plain
+          // "could not" when it fell over, which has nothing worth repeating.
+          nlSay("nlHistoryMsg", (r.status < 500 && r.b && r.b.error) || "Could not delete that newsletter.", "error");
           return;
         }
-        el("newsletterMsg").textContent = "Draft deleted.";
+        nlSay("nlHistoryMsg", "Draft deleted.", "ok");
         // The open editor may be showing what we just removed — reset it rather than leave a ghost.
         if (String(el("newsletterId").value) === String(id)) {
           el("newsletterId").value = "";
           nlDoc = { blocks: [] };
           nlRenderCanvas();
         }
-        loadNewsletters();
+        loadNewsletters(true);
       })
-      .catch(function () { el("newsletterMsg").textContent = "Could not delete that newsletter."; });
+      .catch(function () { nlSay("nlHistoryMsg", "Could not delete that newsletter.", "error"); });
+  }
+
+  // "Use this again" (2026-11-14): a past newsletter's content as a NEW draft, not saved, with its
+  // subject carried over. It used to take "Save as template" and then "Start from this". The sent
+  // newsletter is only read; saving the copy makes a newsletter of its own.
+  function nlUseAgain(id) {
+    if (!canEdit("newsletter")) return;
+    if (!nlMayLeave()) return;
+    var said = nlHereMsg();
+    var seq = ++nlLoadSeq;
+    nlSay(said, "Opening a copy…");
+    authFetch("/api/admin/newsletters/" + encodeURIComponent(id))
+      .then(okJson)
+      .then(function (n) {
+        if (seq !== nlLoadSeq) return;
+        nlSay(said, "");
+        var from = n.bodyJson && Array.isArray(n.bodyJson.blocks)
+          ? n.bodyJson
+          : { blocks: [{ type: "rawHtml", variant: 0, data: { html: n.bodyHtml || "" } }] };
+        nlStartNew(from, n.subject || "",
+          n.status === "sent" ? "A copy of a sent newsletter, not saved yet" : "A copy, not saved yet");
+      })
+      .catch(function () {
+        nlSay(said, "Could not open that newsletter to use it again. Please try again.", "error");
+      });
   }
 
   // TASK-279: the four stages as switchable panels instead of one long scroll. The tab was ~19,000
@@ -6873,18 +6935,45 @@
   }
 
   // --- TASK-285: where it landed, as its own destination ------------------------------------------
+  // 2026-11-14: Back goes to where you came from; delivered and clicked are set against the send
+  // before; the links can be pressed; the bounced addresses can be copied; and "Who got it" is in
+  // the page. Open tracking is off on purpose (see the README), so nothing here shows or implies
+  // how many people opened it.
+  var nlResultsFrom = "nlPanelOverview";
+
   function nlShowResults(id) {
+    var from = nlLivePanel();
+    if (from !== "nlPanelResults") nlResultsFrom = from === "nlPanelHistory" ? "nlPanelHistory" : "nlPanelOverview";
     nlShowPanel("nlPanelResults");
+    if (el("nlResultsBackTo")) {
+      el("nlResultsBackTo").textContent = nlResultsFrom === "nlPanelHistory" ? "Back to All newsletters" : "Back to the Overview";
+    }
     var row = nlLastNewsletters.filter(function (n) { return String(n.id) === String(id); })[0];
-    el("nlResultsTitle").textContent = row ? row.subject || "Untitled newsletter" : "Newsletter";
+    el("nlResultsTitle").textContent = row ? nlTitle(row) : "Newsletter";
     el("nlResultsMeta").textContent = row
       ? "Sent " + nlWhen(row.sentAt) + (row.sentBy ? " by " + row.sentBy : "") +
         (row.audience ? " to " + row.audience : "")
       : "";
     el("nlResultsWho").onclick = function () { nlShowRecipients(id); };
+    // Open it (read only, in the composer) and Use this again are heard by the section's one listener.
+    if (el("nlResultsOpen")) el("nlResultsOpen").setAttribute("data-edit-newsletter", String(id));
+    if (el("nlResultsAgain")) {
+      el("nlResultsAgain").setAttribute("data-nl-go", "again:" + id);
+      el("nlResultsAgain").hidden = !canEdit("newsletter") || !!(row && row.redactedAt);
+    }
     el("nlResultsTiles").innerHTML = '<p class="admin-loading">Loading…</p>';
     el("nlResultsLinks").innerHTML = "";
     el("nlResultsRecord").innerHTML = "";
+    el("nlResultsNote").textContent = "";
+    nlSay("nlResultsMsg", "");
+    nlSay("nlResultsCopyMsg", "");
+    if (el("nlResultsBounced")) el("nlResultsBounced").hidden = true;
+    // The list of who got it belongs to one send: it starts shut for the next one looked at.
+    nlWho = { id: null, rows: [], shown: NL_PAGE, filter: "", q: "", loaded: false };
+    if (el("nlWhoGot")) {
+      el("nlWhoGot").hidden = true;
+      el("nlWhoGot").querySelector(".nl-who-body").innerHTML = "";
+    }
     authFetch("/api/admin/newsletters/" + id + "/stats")
       .then(okJson)
       .then(function (st) { nlPaintResults(st, row); })
@@ -6892,6 +6981,33 @@
         el("nlResultsTiles").innerHTML = "";
         el("nlResultsNote").textContent = "Could not load the figures for this send.";
       });
+  }
+
+  /** The measured send that went before this one, by the day it went, if there is one. */
+  function nlSendBefore(row) {
+    if (!row || !row.sentAt) return null;
+    var at = new Date(row.sentAt).getTime();
+    return nlSentRows(nlLastNewsletters).filter(function (r) {
+      return r.id !== row.id && nlMeasured(r) && new Date(r.sentAt).getTime() <= at;
+    })[0] || null;
+  }
+
+  /** "Up from 91.2% on the send before." Nothing at all when either side has no figure. */
+  function nlAgainstBefore(n, of, wasN, wasOf) {
+    if (!of || !wasOf || n == null || wasN == null) return "";
+    var now = nlPct(n, of);
+    var was = nlPct(wasN, wasOf);
+    if (now === was) return "The same as the send before.";
+    return (n / of > wasN / wasOf ? "Up from " : "Down from ") + was + " on the send before.";
+  }
+
+  /** One of the Results figures: a kit tile that is not a button. */
+  function nlResTile(name, n, says, urgent) {
+    return (
+      '<div class="ak-tile' + (urgent ? " ak-tile--urgent" : "") + '"><span class="ak-tile__n">' + H.escapeHtml(String(n)) +
+      '</span><span class="ak-tile__name">' + H.escapeHtml(name) + '</span><span class="ak-tile__says">' +
+      H.escapeHtml(says || "") + "</span></div>"
+    );
   }
 
   function nlPaintResults(st, row) {
@@ -6902,50 +7018,274 @@
       return;
     }
     var acc = st.sends || 0;
-    // Accepted is what the relay TOOK, delivered is what a mailbox confirmed. Keeping them apart
-    // is the difference between a promise and a fact (TASK-272).
-    var tiles = [
-      ["Accepted", acc, "Handed to the mail service"],
-      ["Delivered", st.delivered, acc ? nlPct(st.delivered, acc) + " of accepted" : ""],
-      ["Clicked", st.clicked, acc ? nlPct(st.clicked, acc) + " of accepted" : ""],
-      ["Bounced", st.bounced, acc ? nlPct(st.bounced, acc) + " — now blocked" : ""],
-      ["Unsubscribed", st.unsubscribed, acc ? nlPct(st.unsubscribed, acc) : ""],
-    ];
-    el("nlResultsTiles").innerHTML = tiles
-      .map(function (t) {
-        return (
-          '<div class="nl-tile"><span class="nl-tile-k">' + t[0] + '</span>' +
-          '<span class="nl-tile-v">' + (t[1] == null ? "—" : t[1]) + '</span>' +
-          '<span class="nl-tile-m">' + H.escapeHtml(t[2] || "") + "</span></div>"
-        );
-      })
-      .join("");
+    var before = acc ? nlSendBefore(row) : null;
+    var beforeOf = before ? nlSentOut(before) : 0;
+    var of = function (n) { return acc && n != null ? nlPct(n, acc) + " of those sent out." : ""; };
+    // "Sent out" is what our mail service TOOK, "Delivered" is what a mailbox confirmed. Keeping
+    // them apart is the difference between a promise and a fact (TASK-272).
+    if (!acc) {
+      // Sent before deliveries were recorded (or its detail was deleted): only how many it was sent
+      // out to is on file. Six noughts would say nobody got it.
+      el("nlResultsTiles").innerHTML = nlResTile("Sent out", row && nlSentOut(row) ? nlSentOut(row) : "Not known",
+        "Taken by our mail service to deliver");
+    } else {
+      el("nlResultsTiles").innerHTML =
+        nlResTile("Sent out", acc, "Taken by our mail service to deliver") +
+        nlResTile("Delivered", st.delivered,
+          (of(st.delivered) + " " + nlAgainstBefore(st.delivered, acc, before && before.deliveredCount, beforeOf)).trim()) +
+        nlResTile("Clicked", st.clicked,
+          (of(st.clicked) + " " + nlAgainstBefore(st.clicked, acc, before && before.clickedCount, beforeOf)).trim()) +
+        nlResTile("Bounced", st.bounced, (of(st.bounced) + (st.bounced ? " Now blocked." : "")).trim()) +
+        nlResTile("Unsubscribed", st.unsubscribed, of(st.unsubscribed)) +
+        nlResTile("Marked as spam", st.complained == null ? "Not known" : st.complained,
+          st.complained ? "They pressed Spam or Junk on it. Now blocked." : "Nobody pressed Spam or Junk on it.", st.complained > 0);
+    }
+    var help = el("nlResultsHelp");
+    if (help) {
+      help.textContent =
+        "Sent out is how many people our mail service took it for. Delivered is how many mailboxes confirmed " +
+        "it arrived, so that is the figure to trust." +
+        (before ? " The send before was “" + nlTitle(before) + "” on " + nlWhen(before.sentAt) + "." : "");
+    }
 
-    var links = st.links || [];
-    el("nlResultsLinks").innerHTML = links.length
-      ? '<ul class="nl-attn">' +
-        links
-          .slice(0, 8)
-          .map(function (l) {
-            return (
-              "<li><div><b>" + H.escapeHtml(l.link) + "</b><span>" + l.uniqueClicks +
-              (l.uniqueClicks === 1 ? " person" : " people") +
-              (acc ? " · " + nlPct(l.uniqueClicks, acc) : "") + "</span></div></li>"
-            );
-          })
-          .join("") +
-        "</ul>"
-      : '<p class="admin-empty">No clicks recorded. Click tracking only counts links inside the ' +
-        "newsletter, and unsubscribe links are deliberately left out.</p>";
+    nlPaintClicked(st.links || [], acc, 8);
+
+    // The addresses that bounced, to read and to copy.
+    var bounced = st.bouncedEmails || [];
+    var box = el("nlResultsBounced");
+    if (box) {
+      box.hidden = !bounced.length;
+      el("nlResultsBouncedList").innerHTML = bounced
+        .map(function (e) { return '<span class="nl-bounced-addr">' + H.escapeHtml(e) + "</span>"; })
+        .join("");
+      el("nlResultsCopyBounced").onclick = function () {
+        var kit = window.AdminKit;
+        var done = kit && kit.copyText ? kit.copyText(bounced.join("\n")) : Promise.resolve(false);
+        done.then(function (ok) {
+          if (ok) nlSay("nlResultsCopyMsg", "Copied " + nlCount(bounced.length, "address", "addresses") + ".", "ok");
+          else nlSay("nlResultsCopyMsg", "Could not copy them. Select the addresses above and copy them yourself.", "error");
+        });
+      };
+    }
 
     el("nlResultsRecord").innerHTML =
-      nlPair("Sent by", row && row.sentBy ? H.escapeHtml(row.sentBy) : "—") +
-      nlPair("Audience", row && row.audience ? H.escapeHtml(row.audience) : "—") +
-      nlPair("Accepted", String(acc), true) +
-      nlPair("Marked us as spam", String(st.complained == null ? "—" : st.complained), true);
+      nlFact("Sent by", row && row.sentBy ? H.escapeHtml(row.sentBy) : "We did not record who") +
+      nlFact("Audience", row && row.audience ? H.escapeHtml(row.audience) : "Newsletter") +
+      nlFact("Sent out", String(acc || (row && nlSentOut(row)) || "Not known")) +
+      nlFact("Marked us as spam", acc ? String(st.complained == null ? "Not known" : st.complained) : "Not measured");
     note.textContent = acc
       ? ""
-      : "This send predates delivery tracking, so only the accepted count is on file.";
+      : "This newsletter went before we began recording deliveries, so only how many it was sent out to is on file.";
+  }
+
+  /** A name and its value, for a kit list of facts. The value is already safe to put on the page. */
+  function nlFact(k, v) {
+    return "<dt>" + H.escapeHtml(k) + "</dt><dd>" + v + "</dd>";
+  }
+
+  /** What people clicked: each a link you can press, the first `shown` with a button for the rest. */
+  function nlPaintClicked(links, acc, shown) {
+    var host = el("nlResultsLinks");
+    if (!host) return;
+    if (!links.length) {
+      host.innerHTML = '<p class="admin-empty">No clicks recorded. Only links inside the newsletter are ' +
+        "counted, and the unsubscribe link is left out on purpose.</p>";
+      return;
+    }
+    host.innerHTML =
+      '<ul class="nl-clicked">' +
+      links.slice(0, shown).map(function (l) {
+        // Only a web address becomes a link: anything else is shown as the words it is.
+        var web = /^https?:\/\//i.test(l.link || "");
+        return (
+          "<li>" +
+          (web
+            ? '<a class="nl-clicked-link" href="' + H.escapeHtml(l.link) + '" target="_blank" rel="noopener noreferrer">' +
+              H.escapeHtml(l.link) + "</a>"
+            : '<b class="nl-clicked-link">' + H.escapeHtml(l.link || "") + "</b>") +
+          "<span>" + nlCount(l.uniqueClicks, "person", "people") +
+          (acc ? " · " + nlPct(l.uniqueClicks, acc) + " of those sent out" : "") + "</span></li>"
+        );
+      }).join("") +
+      "</ul>" +
+      (links.length > shown
+        ? '<button type="button" class="admin-btn admin-btn--small ak-btn--plain" id="nlResultsLinksMore">Show all ' +
+          links.length + " links</button>"
+        : "");
+    var more = el("nlResultsLinksMore");
+    if (more) more.onclick = function () { nlPaintClicked(links, acc, links.length); };
+  }
+
+  // --- Who got it, in the page (2026-11-14) -------------------------------------------------------
+  // It was a box over the page holding every recipient at once: 60 people was 11,442px scrolling
+  // inside 506px on a phone. Now it is part of the Results page: fifty at a time, a card each on a
+  // phone, with a search, a filter by what happened, and a download of what is showing.
+  var NL_PAGE = 50;
+  var nlWho = { id: null, rows: [], shown: NL_PAGE, filter: "", q: "", loaded: false };
+
+  /** "12 November 2026, 9:04 am", or nothing when there is no time to give. */
+  function nlWhenTime(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return nlWhen(iso) + ", " + d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true });
+  }
+
+  /** A name for a file, from words a person wrote: "who-got-november-news". */
+  function nlFileName(lead, words) {
+    var slug = String(words || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/, "");
+    return lead + (slug ? "-" + slug : "") + ".csv";
+  }
+
+  /** Hands over a spreadsheet made from what is on the screen, or says in the page that it could not. */
+  function nlDownload(name, rows, msgTarget) {
+    var kit = window.AdminKit;
+    var ok = !!(kit && kit.downloadCsv && kit.downloadCsv(name, rows));
+    nlSay(msgTarget, ok ? "" : "Could not make the file in this browser.", ok ? "" : "error");
+    return ok;
+  }
+
+  var NL_WHO_ORDER = ["arrived", "sent-unconfirmed", "bounced", "waiting", "sending", "given-up"];
+  var NL_WHO_WORDS = {
+    arrived: "Arrived",
+    "sent-unconfirmed": "Sent, not yet confirmed",
+    bounced: "Blocked or bounced",
+    waiting: "Still to send",
+    sending: "Sending now",
+    "given-up": "Not sent - we gave up",
+  };
+
+  function nlWhoMatches() {
+    var q = nlWho.q.trim().toLowerCase();
+    return nlWho.rows.filter(function (r) {
+      if (nlWho.filter && r.outcome !== nlWho.filter) return false;
+      return !q || String(r.email || "").toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  function nlShowRecipients(newsletterId) {
+    var box = el("nlWhoGot");
+    if (!box) return;
+    var host = box.querySelector(".nl-who-body");
+    box.hidden = false;
+    if (box.scrollIntoView) box.scrollIntoView({ block: "start" });
+    if (nlWho.loaded && nlWho.id === String(newsletterId)) return; // already showing this send's list
+    nlWho = { id: String(newsletterId), rows: [], shown: NL_PAGE, filter: "", q: "", loaded: false };
+    host.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/newsletters/" + newsletterId + "/send-job/recipients")
+      // A newsletter sent before the send queue existed has no per person record, and the server
+      // says so with a 404: a true answer, shown as the message below, not as a failure.
+      .then(function (res) { return res.status === 404 ? null : okJson(res); })
+      .then(function (rows) {
+        if (nlWho.id !== String(newsletterId)) return; // another send has been opened since
+        if (!rows || !rows.length) {
+          host.innerHTML = '<p class="admin-empty">No per-person record for this send. Newsletters sent before we kept one only have totals.</p>';
+          return;
+        }
+        nlWho.rows = rows;
+        nlWho.loaded = true;
+        nlDrawWho(host);
+      })
+      .catch(function () {
+        if (nlWho.id !== String(newsletterId)) return;
+        host.innerHTML = unavailableHtml("Could not load the recipient list.");
+      });
+  }
+
+  // The frame of the list, drawn once: the filter, the search, the download and the count. Only the
+  // rows are redrawn as you type (nlDrawWhoRows), so the search box keeps its place.
+  function nlDrawWho(host) {
+    // TASK-303: the server decides each outcome (src/newsletter/recipient-outcome.ts) so there is
+    // one definition of "arrived". This used to call anything we had handed over "Received",
+    // which is a claim we were never in a position to make.
+    var counts = {};
+    var labels = {};
+    nlWho.rows.forEach(function (r) {
+      counts[r.outcome] = (counts[r.outcome] || 0) + 1;
+      if (!labels[r.outcome]) labels[r.outcome] = r.outcomeLabel || NL_WHO_WORDS[r.outcome] || "Something else";
+    });
+    var kinds = NL_WHO_ORDER.filter(function (k) { return counts[k]; })
+      .concat(Object.keys(counts).filter(function (k) { return NL_WHO_ORDER.indexOf(k) === -1; }));
+    var seg = function (key, words, n) {
+      return '<button type="button" class="admin-seg' + (nlWho.filter === key ? " is-active" : "") + '" aria-pressed="' +
+        (nlWho.filter === key ? "true" : "false") + '" data-who-filter="' + H.escapeHtml(key) + '">' + H.escapeHtml(words) +
+        ' <span class="nl-seg-n">' + n + "</span></button>";
+    };
+    host.innerHTML =
+      '<p class="nl-note">Only <b>arrived</b> means a mailbox confirmed it. "Sent, not yet confirmed" is' +
+      " normal for a while after a send: confirmations trickle in, and a young sending address is" +
+      " often held back briefly by the receiving server.</p>" +
+      '<div class="ak-filters"><div class="ak-filter-group"><p class="ak-filter-label" id="nlWhoShow">Show</p>' +
+      '<div class="admin-segmented" role="group" aria-labelledby="nlWhoShow">' +
+      seg("", "Everyone", nlWho.rows.length) +
+      kinds.map(function (k) { return seg(k, labels[k], counts[k]); }).join("") +
+      "</div></div></div>" +
+      '<div class="nl-list-tools">' +
+      '<label class="ak-field nl-list-search"><span>Find someone</span>' +
+      '<input type="search" id="nlWhoSearch" placeholder="Part of an email address" autocomplete="off" /></label>' +
+      '<button type="button" class="admin-btn ak-btn--plain" id="nlWhoDownload">Download this list</button>' +
+      "</div>" +
+      '<p class="admin-action-status" id="nlWhoMsg" role="status"></p>' +
+      '<p class="nl-list-count" id="nlWhoCount"></p>' +
+      '<div class="admin-table-wrap nl-who-list"></div>' +
+      '<button type="button" class="admin-btn ak-btn--plain nl-more" id="nlWhoMore">Show more</button>';
+
+    Array.prototype.forEach.call(host.querySelectorAll("[data-who-filter]"), function (b) {
+      b.addEventListener("click", function () {
+        nlWho.filter = b.getAttribute("data-who-filter");
+        nlWho.shown = NL_PAGE;
+        Array.prototype.forEach.call(host.querySelectorAll("[data-who-filter]"), function (o) {
+          var on = o === b;
+          o.classList.toggle("is-active", on);
+          o.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        nlDrawWhoRows(host);
+      });
+    });
+    el("nlWhoSearch").addEventListener("input", function () {
+      nlWho.q = el("nlWhoSearch").value || "";
+      nlWho.shown = NL_PAGE;
+      nlDrawWhoRows(host);
+    });
+    el("nlWhoMore").addEventListener("click", function () {
+      nlWho.shown += NL_PAGE;
+      nlDrawWhoRows(host);
+    });
+    el("nlWhoDownload").addEventListener("click", function () {
+      var title = el("nlResultsTitle") ? el("nlResultsTitle").textContent : "";
+      nlDownload(nlFileName("who-got", title),
+        [["Email", "What happened", "When", "Problem"]].concat(nlWhoMatches().map(function (r) {
+          return [r.email, r.outcomeLabel || NL_WHO_WORDS[r.outcome] || r.status || "", nlWhenTime(r.sentAt), r.lastError || ""];
+        })), "nlWhoMsg");
+    });
+    nlDrawWhoRows(host);
+  }
+
+  /** "Showing 50 of 120 people", "Showing all 11 people who match". */
+  function nlShowingText(shown, total, narrowed) {
+    var who = nlCount(total, "person", "people") + (narrowed ? " who match" : "");
+    return shown >= total ? "Showing all " + who : "Showing " + shown + " of " + who;
+  }
+
+  function nlDrawWhoRows(host) {
+    var list = host.querySelector(".nl-who-list");
+    var found = nlWhoMatches();
+    var narrowed = !!(nlWho.filter || nlWho.q.trim());
+    var page = found.slice(0, nlWho.shown);
+    el("nlWhoMore").hidden = found.length <= nlWho.shown;
+    el("nlWhoCount").textContent = found.length ? nlShowingText(page.length, found.length, narrowed) : "";
+    if (!found.length) {
+      list.innerHTML = '<p class="admin-empty">No one matches that.</p>';
+      return;
+    }
+    list.innerHTML =
+      '<table class="admin-table nl-who-table ak-cards"><thead><tr><th>Email</th><th>What happened</th><th>When</th><th>Problem</th></tr></thead><tbody>' +
+      page.map(function (r) {
+        return '<tr><td class="ak-cards__lead">' + H.escapeHtml(r.email) + '</td><td data-label="What happened" class="nl-who-' +
+          H.escapeHtml(r.outcome || "") + '">' + H.escapeHtml(r.outcomeLabel || NL_WHO_WORDS[r.outcome] || r.status || "") +
+          '</td><td data-label="When">' + H.escapeHtml(nlWhenTime(r.sentAt)) + '</td><td data-label="Problem">' +
+          (r.lastError ? '<span class="admin-muted">' + H.escapeHtml(r.lastError) + "</span>" : "") + "</td></tr>";
+      }).join("") + "</tbody></table>";
   }
 
   // The rows the overview and archive last rendered, so the results view can label itself without
@@ -7223,11 +7563,39 @@
 
   // opts.stay keeps the current panel — used on tab open, where the editor is prefilled in the
   // background but the Overview is what you should be looking at (TASK-283).
+  // 2026-11-14: only the newsletter asked for LAST fills the editor. Opening the tab loads the newest one
+  // in the background, and pressing "Start a new newsletter" before that had answered let it land on
+  // top of the new one a moment later. Whatever starts or opens a newsletter moves this on (nlStartNew
+  // too), and an answer to an earlier ask is dropped.
+  var nlLoadSeq = 0;
+
+  // What the editor held when it was last opened or saved, so a button that replaces it can tell
+  // whether there is work not saved (review of #763). Null until anything has been opened: the
+  // editor then starts empty.
+  var nlBaseline = null;
+  function nlEditorNow() {
+    return JSON.stringify({ subject: (el("newsletterSubject") && el("newsletterSubject").value) || "", doc: nlDoc });
+  }
+  function nlMarkBaseline() { nlBaseline = nlEditorNow(); }
+  function nlHasUnsaved() {
+    if (nlSent || !canEdit("newsletter")) return false;
+    var base = nlBaseline || JSON.stringify({ subject: "", doc: { blocks: [] } });
+    return nlEditorNow() !== base;
+  }
+  /** True when it is fine to replace what is in the editor: nothing unsaved, or the person said so. */
+  function nlMayLeave() {
+    if (!nlHasUnsaved()) return true;
+    var subject = ((el("newsletterSubject") && el("newsletterSubject").value) || "").trim() || "this newsletter";
+    return window.confirm("Your changes to “" + subject + "” are not saved. Leave them?");
+  }
+
   function loadNewsletterInto(id, opts) {
+    var seq = ++nlLoadSeq;
     if (!opts || !opts.stay) nlShowPanel("nlPanelWrite"); // open the one you clicked, where you write it
     authFetch("/api/admin/newsletters/" + id)
       .then(okJson)
       .then(function (n) {
+        if (seq !== nlLoadSeq) return;
         el("newsletterId").value = n.id;
         el("newsletterSubject").value = n.subject;
         nlSyncComposeTitle();
@@ -7273,8 +7641,10 @@
         nlRefreshPreview();
         nlRefreshAttachments();
         nlRefreshTemplates(); // TASK-249: fill the shared library picker when the tab opens
+        nlMarkBaseline();
       })
       .catch(function () {
+        if (seq !== nlLoadSeq) return;
         // TASK-476: a failure used to be read as the newsletter, filling the editor with
         // "undefined". Leave the editor as it was and say the newsletter did not open.
         el("newsletterMsg").textContent = "Could not open that newsletter. Please try again.";
@@ -7294,7 +7664,9 @@
 
   /** A rate as a bar plus a figure: a number alone makes you read every row to spot the odd one. */
   function nlRateCell(n, of) {
-    if (!of || n == null) return '<span class="nl-meta">—</span>';
+    // 2026-11-14: a send from before deliveries were recorded has no figure. A dash said nothing; the
+    // words do, and the line above the list says what they mean.
+    if (!of || n == null) return '<span class="nl-meta nl-unmeasured">Not measured</span>';
     var pct = (n / of) * 100;
     var band = pct >= 90 ? "" : pct >= 70 ? " is-mid" : " is-low";
     return (
@@ -7304,63 +7676,124 @@
     );
   }
 
+  // --- 2026-11-14: the section's own screens, in the kit's look ----------------------------------
+  // docs/superpowers/specs/2026-11-14-admin-refresh-newsletter-screens.md. What the Overview, All
+  // newsletters and Results share: which sends count, what a newsletter is called, and where a
+  // button goes.
+
+  /** How many people a send was handed to the mail service for: what every rate here is out of. */
+  function nlSentOut(r) {
+    return r.sentCount != null ? r.sentCount : r.recipientCount || 0;
+  }
+
+  /**
+   * A send we have delivery figures for. One from before deliveries were recorded has none (null),
+   * and that is "not measured", never "none arrived": counting it as nought is what made "Usually
+   * delivered" read 73% on a charity whose newsletters arrive.
+   */
+  function nlMeasured(r) {
+    return r.status === "sent" && r.deliveredCount != null && nlSentOut(r) > 0;
+  }
+
+  /** The sent newsletters, the latest first by the day they went, whatever order they were written in. */
+  function nlSentRows(rows) {
+    return rows
+      .filter(function (r) { return r.status === "sent"; })
+      .sort(function (a, b) {
+        return (new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime()) || (b.id - a.id);
+      });
+  }
+
+  /** The ones not sent yet, the newest first (the list arrives newest first). */
+  function nlDraftRows(rows) {
+    return rows.filter(function (r) { return r.status !== "sent"; });
+  }
+
+  /** What a newsletter is called on these screens. The name tag in a subject is shown as words. */
+  function nlTitle(r) {
+    var s = ((r && r.subject) || "").replace(/\{\{\s*firstName\s*\}\}/g, "(their first name)").trim();
+    return s || "Untitled newsletter";
+  }
+
+  /** "1 address", "2 addresses". */
+  function nlCount(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+
+  /** The buttons every newsletter carries, in a list or on a card: what is main depends on whether it went. */
+  function nlRowActions(r) {
+    var isSent = r.status === "sent";
+    return (
+      (isSent ? '<button class="admin-link" type="button" data-who-got="' + r.id + '">Results</button>' : "") +
+      '<button class="admin-link" type="button" data-edit-newsletter="' + r.id + '">Open</button>'
+    );
+  }
+
   function nlRenderOverview(rows) {
-    var sent = rows.filter(function (r) { return r.status === "sent"; });
-    var accepted = sent.reduce(function (a, r) { return a + (r.recipientCount || 0); }, 0);
-    var delivered = sent.reduce(function (a, r) { return a + (r.deliveredCount || 0); }, 0);
+    var sent = nlSentRows(rows);
+    var measured = sent.filter(nlMeasured);
+    var out = measured.reduce(function (a, r) { return a + nlSentOut(r); }, 0);
+    var delivered = measured.reduce(function (a, r) { return a + r.deliveredCount; }, 0);
     var thisYear = sent.filter(function (r) {
       return r.sentAt && new Date(r.sentAt).getFullYear() === new Date().getFullYear();
     }).length;
 
     var tiles = el("nlOverviewTiles");
     if (tiles) {
-      // "Delivered" is only shown once there is something to divide by. A confident 0.0% on a
-      // charity that has not sent yet reads as a broken system rather than an empty one.
+      // Each figure is a button that goes where its number lives. One that could not be read says so
+      // rather than showing a nought; "Usually delivered" counts only the sends that were measured,
+      // and says how many those are.
       tiles.innerHTML =
-        nlTile("People you can reach", nlReachTotal == null ? "—" : H.escapeHtml(String(nlReachTotal)), "Across every audience", true) +
-        nlTile("Sent this year", String(thisYear), sent.length ? "Last one " + H.escapeHtml(nlAgo(sent[0].sentAt)) : "Nothing sent yet") +
-        nlTile("Usually delivered", accepted ? nlPct(delivered, accepted) : "—", accepted ? "Across your last " + sent.length + " sends" : "No sends to measure yet") +
-        nlTile("Blocked", nlBlockedCount == null ? "—" : String(nlBlockedCount), "Bounced or marked us as spam");
+        nlTile("People you can reach", nlReachTotal == null ? "Not known" : String(nlReachTotal),
+          nlReachTotal == null ? "Could not be read just now" : "Across every audience", "audience", nlReachTotal == null) +
+        nlTile("Sent this year", String(thisYear),
+          sent.length ? "The last one went " + nlAgo(sent[0].sentAt) : "Nothing sent yet", "history", !sent.length) +
+        nlTile("Usually delivered", measured.length ? nlPct(delivered, out) : "Not yet",
+          measured.length
+            ? "Across the " + nlCount(measured.length, "send", "sends") + " we have delivery figures for"
+            : "No send has delivery figures yet", "history", !measured.length) +
+        nlTile("Blocked", nlBlockedCount == null ? "Not known" : String(nlBlockedCount),
+          nlBlockedCount == null ? "Could not be read just now" : "Bounced or marked us as spam", "blocked", !nlBlockedCount);
     }
 
     var recent = el("nlRecentSends");
     if (recent) {
       if (!sent.length) {
         recent.innerHTML =
-          '<p class="admin-help">Nothing has gone out yet. When it has, this is where you will see ' +
-          "how it landed — delivered, bounced, clicked and unsubscribed, for every send.</p>";
+          '<p class="admin-empty">Nothing has gone out yet. When it has, this is where you will see ' +
+          "how it did: delivered, bounced, clicked and unsubscribed, for every send.</p>";
       } else {
-        // TASK-286: THREE columns, not four. The overview's main column is ~620px in the real
-        // shell (1280 max-width minus the 210px nav and padding), and four columns needed ~750 —
-        // so the table scrolled sideways inside its own card. The audience moves into the meta
-        // line, where it reads better anyway: "9 June · Jaimie · Newsletter" is one fact about the
-        // send, not a column you scan.
+        // TASK-286: the audience and the sender sit in the line under the subject, not in columns.
+        // 2026-11-14: a card per send on a phone (.ak-cards; each cell named for it), and Results and
+        // Open as buttons, so a send can be reached without a mouse.
         var html =
-          '<table class="admin-table nl-sends"><thead><tr><th>Newsletter</th>' +
-          '<th class="nl-r">Delivered</th><th class="nl-r">Clicked</th></tr></thead><tbody>';
+          '<table class="admin-table nl-sends ak-cards"><thead><tr><th>Newsletter</th>' +
+          '<th class="nl-r">Delivered</th><th class="nl-r">Clicked</th>' +
+          '<th><span class="sr-only">What you can do</span></th></tr></thead><tbody>';
         sent.slice(0, 6).forEach(function (r) {
-          var n = r.recipientCount || 0;
+          var n = nlSentOut(r);
           var meta = [nlWhen(r.sentAt), r.sentBy, r.audience].filter(Boolean).map(H.escapeHtml);
           html +=
             '<tr class="nl-click" data-who-got="' + r.id + '">' +
-            '<td><span class="nl-subj">' + H.escapeHtml(r.subject || "Untitled") + "</span>" +
+            '<td class="ak-cards__lead"><span class="nl-subj">' + H.escapeHtml(nlTitle(r)) + "</span>" +
             '<span class="nl-meta">' + meta.join(" · ") + "</span></td>" +
-            '<td class="nl-r">' + nlRateCell(r.deliveredCount, n) + "</td>" +
-            '<td class="nl-r">' + nlRateCell(r.clickedCount, n) + "</td></tr>";
+            '<td class="nl-r" data-label="Delivered">' + nlRateCell(r.deliveredCount, n) + "</td>" +
+            '<td class="nl-r" data-label="Clicked">' + nlRateCell(r.deliveredCount == null ? null : r.clickedCount, n) + "</td>" +
+            '<td class="nl-r nl-row-acts">' + nlRowActions(r) + "</td></tr>";
         });
         recent.innerHTML = html + "</tbody></table>";
-        Array.prototype.forEach.call(recent.querySelectorAll("[data-who-got]"), function (tr) {
-          tr.addEventListener("click", function () { nlShowResults(tr.getAttribute("data-who-got")); });
-        });
       }
     }
-    nlRenderAttention(sent);
+    nlRenderAttention(rows);
+    nlPaintStart(rows);
   }
 
-  function nlTile(k, v, meta, lead) {
+  /** One of the Overview's four figures: a kit tile that is a button. `go` is where it takes you (nlGo). */
+  function nlTile(name, n, says, go, none) {
     return (
-      '<div class="nl-tile' + (lead ? " is-lead" : "") + '"><span class="nl-tile-k">' + H.escapeHtml(k) +
-      '</span><span class="nl-tile-v">' + v + '</span><span class="nl-tile-m">' + H.escapeHtml(meta) + "</span></div>"
+      '<button type="button" class="ak-tile' + (none ? " is-none" : "") + '" data-nl-go="' + go + '">' +
+      '<span class="ak-tile__n">' + H.escapeHtml(n) + '</span><span class="ak-tile__name">' + H.escapeHtml(name) +
+      '</span><span class="ak-tile__says">' + H.escapeHtml(says) + "</span></button>"
     );
   }
 
@@ -7389,14 +7822,56 @@
   // request of its own.
   var nlReachTotal = null;
   var nlBlockedCount = null;
+  // Whether the newsletter list has arrived, so a count that turns up after it can redraw the Overview.
+  var nlOverviewDrawn = false;
 
-  function nlRenderAttention(sent) {
+  /**
+   * The Overview again, from the newsletters already in hand. The audiences and the blocked list
+   * arrive on their own, sometimes after the newsletters: without this the Blocked tile stayed at
+   * "not known" although the list had loaded.
+   */
+  function nlRepaintOverview() {
+    if (nlOverviewDrawn) nlRenderOverview(nlLastNewsletters);
+  }
+
+  // "Worth a look": what needs someone, each a card that goes to the thing (2026-11-14). It used to
+  // list the blocked count and nothing else, and none of it could be pressed.
+  function nlRenderAttention(rows) {
     var box = el("nlAttention");
     if (!box) return;
+    var sent = nlSentRows(rows);
+    var drafts = nlDraftRows(rows);
     var items = [];
+    if (drafts.length && canEdit("newsletter")) {
+      items.push(
+        nlAttnCard("draft:" + drafts[0].id, "“" + nlTitle(drafts[0]) + "” is written but not sent",
+          "Press to carry on with it." +
+          (drafts.length > 1
+            ? " " + nlCount(drafts.length - 1, "older draft is", "older drafts are") + " under All newsletters."
+            : ""))
+      );
+    }
+    // Only among the latest few: a failure from last spring is not news.
+    var failed = sent.slice(0, 6).filter(function (r) { return r.failedCount > 0; })[0];
+    if (failed) {
+      items.push(
+        nlAttnCard("results:" + failed.id,
+          "“" + nlTitle(failed) + "” could not be sent to " + nlCount(failed.failedCount, "address", "addresses"),
+          "Press to see how it did and who did not get it.")
+      );
+    }
+    // The last send that was measured, and only that one.
+    var last = sent.filter(nlMeasured)[0];
+    if (last && (last.deliveredCount / nlSentOut(last)) * 100 < 90) {
+      items.push(
+        nlAttnCard("results:" + last.id,
+          "Only " + nlPct(last.deliveredCount, nlSentOut(last)) + " of “" + nlTitle(last) + "” arrived",
+          "We would expect 90% or more. Press to see what bounced.")
+      );
+    }
     if (nlBlockedCount) {
       items.push(
-        nlAttn("b", nlBlockedCount + " addresses are blocked",
+        nlAttnCard("blocked", nlCount(nlBlockedCount, "address is", "addresses are") + " blocked",
           "Dead mailboxes and spam complaints, taken out of every send automatically. Nothing to do unless you recognise one.")
       );
     }
@@ -7409,56 +7884,194 @@
       : '<li class="nl-attn-ok"><b>Nothing needs your attention</b><span>No bounces, no complaints, nothing waiting.</span></li>';
   }
 
+  /** Something to know, with nothing to press. */
   function nlAttn(kind, title, body) {
     return (
-      '<li><span class="nl-attn-ic is-' + kind + '" aria-hidden="true"></span>' +
+      '<li class="nl-attn-note"><span class="nl-attn-ic is-' + kind + '" aria-hidden="true"></span>' +
       "<div><b>" + H.escapeHtml(title) + "</b><span>" + H.escapeHtml(body) + "</span></div></li>"
     );
   }
 
-  function loadNewsletters() {
+  /** Something that needs someone: a card that is the button, and goes to the thing (nlGo). */
+  function nlAttnCard(go, title, body) {
+    return (
+      '<li><button type="button" class="ak-row" data-nl-go="' + H.escapeHtml(go) + '">' +
+      '<span class="ak-row__name">' + H.escapeHtml(title) + '</span>' +
+      '<span class="ak-row__meta">' + H.escapeHtml(body) + "</span></button></li>"
+    );
+  }
+
+  /** Opens a fold of the Audiences screen and brings it to the top of what you can see. */
+  function nlOpenFold(id) {
+    var fold = el(id);
+    if (!fold) return;
+    fold.open = true;
+    if (fold.scrollIntoView) fold.scrollIntoView({ block: "start" });
+  }
+
+  /**
+   * Where a tile or a card takes you: "history", "audience", "audience:3" (that audience),
+   * "blocked" and "donors" (a fold of the Audiences screen), "draft:12" (carry on with it),
+   * "results:11", "again:11" (its content as a new draft).
+   */
+  function nlGo(where) {
+    var parts = String(where || "").split(":");
+    var id = parts[1];
+    if (parts[0] === "history") nlShowPanel("nlPanelHistory");
+    else if (parts[0] === "audience") {
+      nlShowPanel("nlPanelAudience");
+      var pick = el("audiencePick");
+      if (id && pick) {
+        pick.value = id;
+        nlLoadAudienceMembers();
+        nlSyncAudienceContext();
+      }
+    } else if (parts[0] === "blocked") {
+      nlShowPanel("nlPanelAudience");
+      nlOpenFold("nlSuppressions");
+    } else if (parts[0] === "donors") {
+      nlShowPanel("nlPanelAudience");
+      nlOpenFold("subManage");
+      nlLoadSubscribers();
+    } else if (parts[0] === "draft") nlOpenDraft(id);
+    else if (parts[0] === "results") nlShowResults(id);
+    else if (parts[0] === "again") nlUseAgain(id);
+  }
+
+  // --- Starting a newsletter ----------------------------------------------------------------------
+  // "Start writing" used to show the Write step with whatever was loaded, which was the newest
+  // newsletter: often one already sent, read only. Now it carries on the latest draft that has not
+  // been sent, or starts a new one, and the button says which before it is pressed.
+  var nlStartDraftId = null;
+
+  function nlPaintStart(rows) {
+    var btn = el("nlStartWriting");
+    var other = el("nlStartNew");
+    var says = el("nlStartSays");
+    if (!btn) return;
+    if (!canEdit("newsletter")) {
+      // Someone who may only look: the composer opens read only on the newest, as it always has.
+      nlStartDraftId = null;
+      btn.textContent = "Read the newest newsletter";
+      btn.hidden = !rows.length;
+      if (other) other.hidden = true;
+      if (says) says.textContent = "You can read newsletters here. Writing and sending them needs someone who can edit this section.";
+      return;
+    }
+    var latest = nlDraftRows(rows)[0] || null;
+    nlStartDraftId = latest ? latest.id : null;
+    btn.hidden = false;
+    btn.textContent = latest ? "Carry on with your draft" : "Start a new newsletter";
+    if (other) other.hidden = !latest;
+    if (says) says.textContent = latest ? "“" + nlTitle(latest) + "” is written but not sent yet." : "";
+  }
+
+  function nlStartWriting() {
+    if (!canEdit("newsletter")) { nlShowPanel("nlPanelWrite"); return; }
+    if (nlStartDraftId != null) nlOpenDraft(nlStartDraftId);
+    else if (nlMayLeave()) nlStartNew();
+  }
+
+  function nlOpenDraft(id) {
+    // Already the one open: show it, changes and all, rather than reading it again over them.
+    if (String(el("newsletterId").value) === String(id)) { nlShowPanel("nlPanelWrite"); return; }
+    if (!nlMayLeave()) return;
+    loadNewsletterInto(id);
+    nlMarkSaved("Carrying on with your draft");
+  }
+
+  /**
+   * A new newsletter that has not been saved: empty, or holding a copy of `fromDoc` under `subject`
+   * ("Use this again"). The same steps "Start from this" takes for a saved template, with the bar's
+   * title, the name fallbacks and the last newsletter's send progress cleared as well, so nothing of
+   * the newsletter that was open before is left showing.
+   */
+  function nlStartNew(fromDoc, subject, said) {
+    if (!canEdit("newsletter")) return;
+    nlLoadSeq++; // a newsletter still loading must not land on top of this one
+    nlHideStats();
+    el("newsletterId").value = "";
+    el("newsletterSubject").value = subject || "";
+    nlDoc = fromDoc ? JSON.parse(JSON.stringify(fromDoc)) : { blocks: [] };
+    nlSent = false;
+    nlTestSent = false;
+    nlCollapseAllOnNextRender = !!fromDoc;
+    nlFillFallbacksFromDoc();
+    nlSyncComposeTitle();
+    if (nlSendPoll) { clearInterval(nlSendPoll); nlSendPoll = null; }
+    if (el("sendProgress")) el("sendProgress").hidden = true;
+    el("newsletterSend").hidden = true; // save first to get an id
+    el("newsletterSave").hidden = false;
+    el("newsletterSave").disabled = false;
+    el("newsletterTest").hidden = false;
+    el("newsletterNew").disabled = false;
+    if (el("newsletterTemplate")) el("newsletterTemplate").disabled = false;
+    el("newsletterMsg").textContent = "";
+    nlRenderPalette();
+    nlRenderCanvas();
+    nlRefreshPreview();
+    nlRefreshAttachments();
+    nlShowPanel("nlPanelWrite");
+    nlMarkSaved(said || "A new newsletter, not saved yet");
+    nlMarkBaseline();
+  }
+
+  // One listener for everything in the section that goes somewhere: the tiles, the cards, and the
+  // buttons on a newsletter's row. The nearest thing pressed wins, so a button inside a row that is
+  // itself pressable is one visit, not two.
+  if (el("view-newsletter")) {
+    el("view-newsletter").addEventListener("click", function (e) {
+      var hit = e.target && e.target.closest
+        ? e.target.closest("[data-nl-go], [data-use-again], [data-who-got], [data-edit-newsletter], [data-delete-newsletter]")
+        : null;
+      if (!hit || !el("view-newsletter").contains(hit)) return;
+      if (hit.hasAttribute("data-nl-go")) nlGo(hit.getAttribute("data-nl-go"));
+      else if (hit.hasAttribute("data-use-again")) nlUseAgain(hit.getAttribute("data-use-again"));
+      else if (hit.hasAttribute("data-edit-newsletter")) loadNewsletterInto(hit.getAttribute("data-edit-newsletter"));
+      else if (hit.hasAttribute("data-delete-newsletter")) {
+        nlDelete(hit.getAttribute("data-delete-newsletter"), hit.getAttribute("data-newsletter-status"));
+      } else nlShowResults(hit.getAttribute("data-who-got"));
+    });
+    if (el("nlStartWriting")) el("nlStartWriting").addEventListener("click", nlStartWriting);
+    if (el("nlWriteBtn")) el("nlWriteBtn").addEventListener("click", nlStartWriting);
+    if (el("nlStartNew")) el("nlStartNew").addEventListener("click", function () { if (nlMayLeave()) nlStartNew(); });
+  }
+
+  // keepPanel: the list is being read again from inside the section (a draft was deleted), so stay on
+  // the screen the person is looking at. Opening the tab passes nothing and lands on the Overview.
+  function loadNewsletters(keepPanel) {
     authFetch("/api/admin/newsletters")
       .then(okJson)
       .then(function (rows) {
+        var composing = NL_COMPOSE_PANELS.indexOf(nlLivePanel()) !== -1;
+        // keepPanel (a save, a send, a delete) reads the list again without touching the editor: the
+        // prefill used to put the NEWEST newsletter in place of the one just saved.
         el("newsletterList").innerHTML = renderNewsletterList(rows);
-        Array.prototype.forEach.call(doc.querySelectorAll("[data-edit-newsletter]"), function (b) {
-          b.addEventListener("click", function () {
-            loadNewsletterInto(b.getAttribute("data-edit-newsletter"));
-          });
-        });
-        // TASK-278: exactly who a send reached, and who it did not and why. newsletter_send_queue has
-        // held this per-recipient record since TASK-274; nothing ever read it back, so "did Margaret
-        // get it?" was unanswerable despite the answer being on file.
-        Array.prototype.forEach.call(doc.querySelectorAll("[data-who-got]"), function (b) {
-          b.addEventListener("click", function () {
-            nlShowResults(b.getAttribute("data-who-got"));
-          });
-        });
-        Array.prototype.forEach.call(doc.querySelectorAll("[data-delete-newsletter]"), function (b) {
-          b.addEventListener("click", function () {
-            nlDelete(b.getAttribute("data-delete-newsletter"), b.getAttribute("data-newsletter-status"));
-          });
-        });
+        // The buttons on each row (Open, Results, Delete, Use this again) are heard by the one
+        // listener on the section, beside nlGo: nothing is wired per row any more.
         // TASK-283: still prefill the editor from the most recent newsletter so it is never empty,
         // but do NOT jump to it. Opening the tab used to drop you into the composer mid-task; you
         // now land on the Overview, which answers the questions you actually arrive with.
-        if (rows.length) loadNewsletterInto(rows[0].id, { stay: true });
+        if (rows.length && keepPanel !== true) loadNewsletterInto(rows[0].id, { stay: true });
         nlLastNewsletters = rows;
+        nlOverviewDrawn = true;
         nlRenderOverview(rows);
         nlRefreshInflight();
         // Land on the Overview unless the user is already mid-compose. The old guard compared
         // against nlLivePanel(), which reported the one panel that started un-hidden - so it never
         // fired and nothing was shown at all.
-        if (NL_COMPOSE_PANELS.indexOf(nlLivePanel()) === -1) nlShowPanel("nlPanelOverview");
+        if (!composing && keepPanel !== true) nlShowPanel("nlPanelOverview");
       })
       .catch(function () {
         // TASK-476: say so where you land and in the history, rather than showing nothing at all
         // (or, from an earlier visit, figures that are no longer current).
         var msg = unavailableHtml("Newsletters are unavailable.");
+        nlOverviewDrawn = false;
         el("newsletterList").innerHTML = msg;
         if (el("nlRecentSends")) el("nlRecentSends").innerHTML = msg;
         if (el("nlOverviewTiles")) el("nlOverviewTiles").innerHTML = "";
-        if (NL_COMPOSE_PANELS.indexOf(nlLivePanel()) === -1) nlShowPanel("nlPanelOverview");
+        if (el("nlAttention")) el("nlAttention").innerHTML = "";
+        if (NL_COMPOSE_PANELS.indexOf(nlLivePanel()) === -1 && keepPanel !== true) nlShowPanel("nlPanelOverview");
       });
   }
 
@@ -7513,8 +8126,8 @@
     if (!subs.length) { host.innerHTML = '<p class="admin-empty">No subscribers found.</p>'; return; }
     var rows = subs.map(function (s) {
       return '<tr><td>' + H.escapeHtml(s.email) + "</td><td>" + H.escapeHtml(s.name || "") +
-        '</td><td><button class="admin-link nl-sub-remove" type="button" data-remove-sub="' + H.escapeHtml(s.email) +
-        '">Remove</button></td></tr>';
+        '</td><td><button class="admin-link admin-link-danger nl-sub-remove" type="button" data-remove-sub="' + H.escapeHtml(s.email) +
+        '">Stop their emails</button></td></tr>';
     }).join("");
     host.innerHTML = '<p class="nl-sub-count">' + subs.length + ' subscriber' + (subs.length === 1 ? "" : "s") + '</p>' +
       '<table class="admin-table"><thead><tr><th>Email</th><th>Name</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
@@ -7534,14 +8147,21 @@
   }
   function nlRemoveSubscriber(email) {
     if (!canEdit("newsletter")) return;
+    // 2026-11-14: this stopped ALL of a donor's emails at one press, without asking. It asks now, and
+    // says exactly what it does (the mirror of "Someone asked us to email them again").
+    if (!window.confirm(
+      "Stop all our emails to " + email + "?\n\nThis switches off all our emails to them, receipts and appeals too, " +
+      "not just the newsletter, and takes them off Donors and Newsletter. Only do this if they have asked. " +
+      "If they ask to hear from us again, use “Someone asked us to email them again”.",
+    )) return;
     authFetch("/api/admin/newsletters/subscribers/remove", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email }),
     })
       .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
-      .then(function () { nlLoadSubscribers(); })
-      .catch(function () { el("subMsg").textContent = "Could not remove " + email + "."; });
+      .then(function () { nlSay("subMsg", "Stopped all our emails to " + email + ".", "ok"); nlLoadSubscribers(); })
+      .catch(function () { nlSay("subMsg", "Could not stop the emails to " + email + ".", "error"); });
   }
   if (el("subManage")) {
     var subLoaded = false;
@@ -7561,7 +8181,8 @@
         // a dozen people and exporting handed you the whole list.
         var q = (el("subSearch") && el("subSearch").value ? el("subSearch").value : "").trim();
         authFetch("/api/admin/newsletters/subscribers.csv" + (q ? "?q=" + encodeURIComponent(q) : ""))
-          .then(function (res) { return res.text(); })
+          // 2026-11-14: a failed download handed over a file holding the error. Only a good answer is a file.
+          .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.text(); })
           .then(function (csv) {
             var blob = new Blob([csv], { type: "text/csv" });
             var url = URL.createObjectURL(blob);
@@ -7573,7 +8194,7 @@
             doc.body.removeChild(a);
             URL.revokeObjectURL(url);
           })
-          .catch(function () { el("subMsg").textContent = "Could not export subscribers."; });
+          .catch(function () { nlSay("subMsg", "Could not download the list just now. Please try again.", "error"); });
       });
     }
   }
@@ -7853,6 +8474,7 @@
         // TASK-283: the Overview needs this number too. Taken from the load that already runs on tab
         // open rather than a second request, so the tile and this panel can never disagree.
         nlBlockedCount = list.length;
+        nlRepaintOverview(); // the Blocked tile and its card, if the newsletters got here first
         if (!list.length) {
           host.innerHTML = '<p class="admin-empty">Nothing blocked — no permanent bounces or spam reports.</p>';
           return;
@@ -7902,6 +8524,7 @@
         // A convenience panel, so it never blocks the tab. But "nothing blocked" would be a claim
         // (TASK-476): unknown instead, which the Overview's Blocked tile already shows as unknown.
         nlBlockedCount = null;
+        nlRepaintOverview();
         host.innerHTML = unavailableHtml("Blocked addresses are unavailable.");
       });
   }
@@ -7940,37 +8563,102 @@
       .catch(function () { /* the archive box is a convenience — never block the tab */ });
   }
 
+  // Who is on the audience being looked at, kept so the search, Show more and the download work on
+  // what is already in hand (2026-11-14). The members call returns everyone on the audience.
+  var nlPeople = { list: [], shown: NL_PAGE, q: "", audience: null };
+
+  // TASK-278: the full provenance of a membership: when they joined, how consent arrived, and which
+  // of us added them. 2026-11-14: every way in has words (the Elf Detective School sign up was shown
+  // as the raw word "elf"), and "by not recorded" is left out: a blank means we did not record it.
+  var NL_HOW_JOINED = {
+    footer: "Signed up on the website",
+    import: "Imported",
+    admin: "Added by staff",
+    fundraise: "Signed up while fundraising",
+    elf: "Signed up through Elf Detective School",
+  };
+  function nlSelfSignup(m) { return m.consentSource === "footer" || m.consentSource === "fundraise" || m.consentSource === "elf"; }
+  function nlHowJoined(m) { return NL_HOW_JOINED[m.consentSource] || "Joined another way"; }
+  function nlAddedBy(m) { return m.addedBy ? m.addedBy : nlSelfSignup(m) ? "themselves" : ""; }
+
+  /** Joined in this calendar month. */
+  function nlThisMonth(iso) {
+    if (!iso) return false;
+    var d = new Date(iso);
+    var now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+
   function nlRenderAudienceMembers(members) {
     var host = el("audienceMembers");
     if (!host) return;
+    var a = el("audiencePick") ? nlAudienceById(el("audiencePick").value) : null;
+    nlPeople = { list: members, shown: NL_PAGE, q: "", audience: a };
+    if (el("nlPeopleSearch")) el("nlPeopleSearch").value = "";
+    nlSay("nlPeopleMsg", "");
+    nlDrawPeople();
+  }
+
+  function nlPeopleMatches() {
+    var q = nlPeople.q.trim().toLowerCase();
+    if (!q) return nlPeople.list;
+    return nlPeople.list.filter(function (m) {
+      return [m.name, m.email, m.phone].some(function (v) { return String(v || "").toLowerCase().indexOf(q) !== -1; });
+    });
+  }
+
+  function nlDrawPeople() {
+    var host = el("audienceMembers");
+    var a = nlPeople.audience;
+    var members = nlPeople.list;
+    var head = el("nlPeopleHead");
+    var more = el("nlPeopleMore");
+    var count = el("nlPeopleCount");
+    if (head) head.hidden = !members.length;
+    if (more) more.hidden = true;
     if (!members.length) {
-      host.innerHTML = '<p class="admin-loading">No one on this audience yet.</p>';
+      if (count) count.textContent = "";
+      // Donors is never kept here: it is every donor who agreed to email, read live. It used to show
+      // its count and then "No one on this audience yet." Say where those people are instead.
+      if (a && a.kind === "donors") {
+        host.innerHTML =
+          '<div class="ak-notice nl-donors-note"><p>Donors is ' +
+          (typeof a.memberCount === "number" ? nlCount(a.memberCount, "donor", "donors") : "the donors") +
+          " who agreed to email when they gave. Nobody is added here by hand, so they are kept under Manage subscribers, where you can find one or stop their emails.</p>" +
+          '<p><button type="button" class="admin-btn ak-btn--plain" id="nlSeeDonors" data-nl-go="donors">See the donors who get our emails</button></p></div>';
+        return;
+      }
+      host.innerHTML = '<p class="admin-empty">No one on this audience yet.</p>';
       return;
     }
+    var found = nlPeopleMatches();
+    var joined = members.filter(function (m) { return nlThisMonth(m.consentedAt); }).length;
+    if (count) {
+      count.textContent =
+        nlCount(members.length, "person", "people") + (a && a.kind === "everyone" ? " on its own sign-up list" : "") +
+        ", " + joined + " joined this month" +
+        (nlPeople.q.trim() ? ". " + (found.length ? nlShowingText(Math.min(found.length, nlPeople.shown), found.length, true) : "No one matches that.") : "");
+    }
+    if (!found.length) {
+      host.innerHTML = '<p class="admin-empty">No one matches that.</p>';
+      return;
+    }
+    var page = found.slice(0, nlPeople.shown);
+    if (more) more.hidden = found.length <= nlPeople.shown;
     var canWrite = canEdit("newsletter");
-    // TASK-278: the full provenance of a membership — when they joined, how consent arrived, and
-    // which of us added them. "Who put this person on the list?" is the first question asked when an
-    // address turns out to be wrong, or when someone says they never signed up.
-    var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff", fundraise: "Signed up while fundraising" };
-    var selfSignup = function (m) { return m.consentSource === "footer" || m.consentSource === "fundraise"; };
-    // TASK-287: three columns, not seven. Seven never fitted the card, and .admin-table sets
-    // white-space:nowrap on every cell, so the table grew to its longest email address and the card
-    // scrolled sideways with Remove pushed off the edge. Nothing is lost — the same six facts are
-    // here, grouped as the two questions people actually ask: "who is this?" and "how did they get
-    // here?".
-    var html = '<table class="admin-table nl-people"><thead><tr><th>Person</th><th>Added</th>' +
-      "<th></th></tr></thead><tbody>";
-    members.forEach(function (m) {
+    // TASK-287: three columns, grouped as the two questions people ask: "who is this?" and "how did
+    // they get here?". 2026-11-14: a card each on a phone (.ak-cards).
+    var html = '<table class="admin-table nl-people ak-cards"><thead><tr><th>Person</th><th>Added</th>' +
+      '<th><span class="sr-only">What you can do</span></th></tr></thead><tbody>';
+    page.forEach(function (m) {
       var contact = [m.email, m.phone].filter(Boolean).map(H.escapeHtml).join(" · ");
-      var by = m.addedBy
-        ? H.escapeHtml(m.addedBy)
-        : selfSignup(m) ? "themselves" : "not recorded";
-      var how = [H.escapeHtml(howLabel[m.consentSource] || m.consentSource), "by " + by].join(" · ");
+      var by = nlAddedBy(m);
+      var how = [H.escapeHtml(nlHowJoined(m))].concat(by ? ["by " + H.escapeHtml(by)] : []).join(" · ");
       html +=
-        '<tr><td><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
+        '<tr><td class="ak-cards__lead"><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
         '</span><span class="nl-meta">' + contact + "</span></td>" +
-        '<td><span class="nl-person-nm">' + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") +
-        rowNewPill("newsletter", selfSignup(m) ? m.consentedAt : null) +
+        '<td data-label="Added"><span class="nl-person-nm">' + (m.consentedAt ? H.escapeHtml(nlWhen(m.consentedAt)) : "Not known") +
+        rowNewPill("newsletter", nlSelfSignup(m) ? m.consentedAt : null) +
         '</span><span class="nl-meta">' + how + "</span></td>" +
         '<td class="nl-r">' +
         (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +
@@ -7988,6 +8676,29 @@
           })
           .catch(function () { nlAudienceMsg("Could not remove them."); });
       });
+    });
+  }
+
+  if (el("nlPeopleSearch")) {
+    el("nlPeopleSearch").addEventListener("input", function () {
+      nlPeople.q = el("nlPeopleSearch").value || "";
+      nlPeople.shown = NL_PAGE;
+      nlDrawPeople();
+    });
+  }
+  if (el("nlPeopleMore")) {
+    el("nlPeopleMore").addEventListener("click", function () {
+      nlPeople.shown += NL_PAGE;
+      nlDrawPeople();
+    });
+  }
+  if (el("nlPeopleDownload")) {
+    el("nlPeopleDownload").addEventListener("click", function () {
+      var a = nlPeople.audience;
+      nlDownload(nlFileName("audience", a ? a.name : ""),
+        [["Name", "Email", "Phone", "Joined", "How they joined", "Added by"]].concat(nlPeopleMatches().map(function (m) {
+          return [m.name || "", m.email, m.phone || "", m.consentedAt ? nlWhen(m.consentedAt) : "", nlHowJoined(m), nlAddedBy(m)];
+        })), "nlPeopleMsg");
     });
   }
 
@@ -8116,6 +8827,31 @@
     return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
   }
 
+  // "See the rows before importing" (2026-11-14): every row of the sheet and what will happen to it.
+  // The preview already returned the rows; only the counts were ever shown.
+  function nlPaintImportRows(b) {
+    var fold = el("importRows");
+    var body = el("importRowsBody");
+    if (!fold || !body) return;
+    var rows = (b && b.rows) || [];
+    fold.hidden = !rows.length;
+    fold.open = false;
+    var sum = fold.querySelector("summary");
+    if (sum) sum.textContent = "See the rows before importing (" + rows.length + ")";
+    var lower = function (list) { return (list || []).map(function (e) { return String(e).toLowerCase(); }); };
+    var every = lower(b && b.alreadyOnEvery);
+    var gone = lower(b && b.previouslyUnsubscribed);
+    body.innerHTML =
+      '<table class="admin-table nl-import-table ak-cards"><thead><tr><th>Name</th><th>Email</th><th>What will happen</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var e = String(r.email || "").toLowerCase();
+        var what = gone.indexOf(e) !== -1 ? "Asked us to stop, so will not be added"
+          : every.indexOf(e) !== -1 ? "Already on every audience you picked" : "Will be added";
+        return '<tr><td class="ak-cards__lead">' + (H.escapeHtml(r.name || "") || '<span class="admin-muted">No name</span>') +
+          '</td><td data-label="Email">' + H.escapeHtml(r.email || "") + '</td><td data-label="What will happen">' + what + "</td></tr>";
+      }).join("") + "</tbody></table>";
+  }
+
   function nlInvalidateImportPreview() {
     nlImportPreviewFor = null;
     var pv = el("importPreview");
@@ -8137,22 +8873,24 @@
       if (typeof a.memberCount === "number" && a.memberCount > widest) widest = a.memberCount;
     });
     nlReachTotal = nlAudiences.length ? widest : null;
+    nlRepaintOverview(); // the "People you can reach" tile, if the newsletters got here first
     if (!box) return;
     if (!nlAudiences.length) {
       box.innerHTML = '<p class="admin-empty">No audiences yet.</p>';
       return;
     }
+    // 2026-11-14: each is a card that opens that audience (nlGo), with its count said in words.
     box.innerHTML = nlAudiences
       .map(function (a) {
         var what =
-          a.kind === "everyone" ? "Everyone — donors plus the sign-up list"
+          a.kind === "everyone" ? "Everyone: donors plus the sign-up list"
             : a.kind === "donors" ? "Looks after itself"
               : "";
+        var count = typeof a.memberCount === "number" ? nlCount(a.memberCount, "person", "people") : "";
         return (
-          '<div class="nl-aud-snap-row"><span class="nl-aud-snap-nm">' + H.escapeHtml(a.name) +
-          (what ? "<em>" + H.escapeHtml(what) + "</em>" : "") +
-          '</span><span class="nl-aud-snap-ct">' +
-          (typeof a.memberCount === "number" ? a.memberCount : "—") + "</span></div>"
+          '<button type="button" class="ak-row nl-aud-snap-row" data-nl-go="audience:' + a.id + '">' +
+          '<span class="ak-row__name nl-aud-snap-nm">' + H.escapeHtml(a.name) + "</span>" +
+          '<span class="ak-row__meta">' + H.escapeHtml([count, what].filter(Boolean).join(" · ")) + "</span></button>"
         );
       })
       .join("");
@@ -8526,7 +9264,8 @@
     if (el("nlWhenNow")) el("nlWhenNow").addEventListener("click", function () { nlSetWhen(false); });
     if (el("nlWhenLater")) el("nlWhenLater").addEventListener("click", function () { nlSetWhen(true); });
     if (el("nlResultsBack")) {
-      el("nlResultsBack").addEventListener("click", function () { nlShowPanel("nlPanelOverview"); });
+      // 2026-11-14: back to where you came from (nlShowResults remembers it), not always the Overview.
+      el("nlResultsBack").addEventListener("click", function () { nlShowPanel(nlResultsFrom); });
     }
     if (el("newsletterSubject")) {
       el("newsletterSubject").addEventListener("input", function () {
@@ -8770,6 +9509,7 @@
                 bits.push(r.b.previouslyUnsubscribed.length + " previously opted out (they will NOT be re-added)");
               }
               el("importSummary").textContent = bits.join(" · ");
+              nlPaintImportRows(r.b);
               var issues = el("importIssues");
               issues.innerHTML = "";
               (r.b.issues || []).forEach(function (i) {
@@ -8881,7 +9621,8 @@
           // TASK-285: "Saved" has to be earned - said only where a save genuinely succeeded, so
           // the header can never claim your work is safe when it is not.
           nlMarkSaved("Saved just now");
-          loadNewsletters();
+          // true: read the list again for the Overview, but leave the newsletter just saved in the editor.
+          loadNewsletters(true);
           loadNewsletterInto(res.body.id);
         })
         .catch(function () {
@@ -8938,7 +9679,10 @@
         }
         nlShowPanel("nlPanelSend"); // TASK-279: watch it go, rather than leaving you on the editor
         nlWatchSendJob(id);
-        loadNewsletters();
+        loadNewsletters(true); // the list again, with the newsletter being sent left in the editor
+        // ...and read that newsletter again, so the editor shows it as sent and read only, as it did
+        // before the list stopped doing that (review of #763).
+        loadNewsletterInto(id, { stay: true });
       })
       .catch(function (err) {
         sendBtn.disabled = false;
@@ -8987,66 +9731,8 @@
       .catch(function () { /* progress is a convenience — the send continues regardless */ });
   }
 
-  // A plain, scannable list: who it reached, who it did not, and the reason. Reuses the modal shell
-  // the send confirmation uses so it looks like the rest of the admin rather than a bolted-on report.
-  function nlShowRecipients(newsletterId) {
-    var overlay = doc.createElement("div");
-    overlay.className = "nl-modal-overlay";
-    overlay.innerHTML =
-      '<div class="nl-modal nl-modal-wide" role="dialog" aria-modal="true" aria-labelledby="nlWhoTitle">' +
-      '<h3 class="nl-modal-title" id="nlWhoTitle">Who got this newsletter</h3>' +
-      '<div class="nl-who-body">Loading…</div>' +
-      '<div class="nl-modal-actions"><button type="button" class="nl-modal-cancel">Close</button></div>' +
-      "</div>";
-    doc.body.appendChild(overlay);
-    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
-    overlay.querySelector(".nl-modal-cancel").addEventListener("click", close);
-    overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) close(); });
-
-    authFetch("/api/admin/newsletters/" + newsletterId + "/send-job/recipients")
-      // A newsletter sent before the send queue existed has no per person record, and the server
-      // says so with a 404: a true answer, shown as the message below, not as a failure.
-      .then(function (res) { return res.status === 404 ? null : okJson(res); })
-      .then(function (rows) {
-        var host = overlay.querySelector(".nl-who-body");
-        if (!rows || !rows.length) {
-          host.innerHTML = '<p class="admin-empty">No per-person record for this send. Newsletters sent before the send queue existed only have totals.</p>';
-          return;
-        }
-        // TASK-303: the server decides each outcome (src/newsletter/recipient-outcome.ts) so there is
-        // one definition of "arrived". This used to call anything we had handed over "Received",
-        // which is a claim we were never in a position to make.
-        var counts = {};
-        rows.forEach(function (r) { counts[r.outcome] = (counts[r.outcome] || 0) + 1; });
-        var ORDER = ["arrived", "sent-unconfirmed", "bounced", "waiting", "sending", "given-up"];
-        var WORDS = {
-          arrived: "arrived",
-          "sent-unconfirmed": "sent, not yet confirmed",
-          bounced: "blocked or bounced",
-          waiting: "still to send",
-          sending: "sending now",
-          "given-up": "we gave up on",
-        };
-        var parts = ORDER.filter(function (k) { return counts[k]; }).map(function (k) {
-          return "<b>" + counts[k] + "</b> " + WORDS[k];
-        });
-        host.innerHTML =
-          '<p class="nl-who-summary">' + rows.length + " people: " + parts.join(" &middot; ") + "</p>" +
-          '<p class="nl-note">Only <b>arrived</b> means a mailbox confirmed it. "Sent, not yet confirmed" is' +
-          " normal for a while after a send - confirmations trickle in, and a young sending domain is" +
-          " often held back briefly by the receiving server.</p>" +
-          '<table class="admin-table"><thead><tr><th>Email</th><th>What happened</th><th>When</th><th>Problem</th></tr></thead><tbody>' +
-          rows.map(function (r) {
-            return "<tr><td>" + H.escapeHtml(r.email) + '</td><td class="nl-who-' + H.escapeHtml(r.outcome || "") + '">' +
-              H.escapeHtml(r.outcomeLabel || r.status) +
-              "</td><td>" + (r.sentAt ? H.fmtDate(r.sentAt) : "-") + "</td><td>" +
-              (r.lastError ? '<span class="admin-muted">' + H.escapeHtml(r.lastError) + "</span>" : "") + "</td></tr>";
-          }).join("") + "</tbody></table>";
-      })
-      .catch(function () {
-        overlay.querySelector(".nl-who-body").textContent = "Could not load the recipient list.";
-      });
-  }
+  // "Who got it" is drawn in the Results page now (nlShowRecipients, beside nlShowResults): it used to
+  // be a box over the page, built here.
 
   function nlSendJobAction(action) {
     var id = el("newsletterId") && el("newsletterId").value;

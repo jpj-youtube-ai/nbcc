@@ -8487,6 +8487,41 @@ saved, and the three buttons save exactly the server's `roleToPermissions` for t
 for everything else. `test/unit/admin-app.test.ts` presses each button and saves, and holds the save to
 the server's own schema.
 
+## Admin > Newsletter in the kit's look (2026-11-14)
+
+The Newsletter section's own screens (Overview, Audiences & people, All newsletters, Results) carry the
+kit's class `ak` on `<section id="view-newsletter">` (never on a panel), with the section's own rules in
+`assets/css/admin-newsletter.css`, each named through `#view-newsletter`. Design:
+`docs/superpowers/specs/2026-11-14-admin-refresh-newsletter-screens.md`. Tests:
+`test/unit/admin-newsletter-screens.test.ts`. No server change.
+
+- **Overview**: the four figures are buttons that go where their number lives. "Usually delivered"
+  counts only sends with delivery figures (a send from before deliveries were recorded is "Not
+  measured", never nought). "Worth a look" is cards that open the thing: a draft waiting, a send with
+  addresses that could not be sent to, the last measured send under 90% delivered, blocked addresses.
+  "Start writing" carries on the latest unsent draft or starts a new one, and says which; it never
+  opens a sent newsletter. Recent sends have Results and Open, and are a card each on a phone.
+- **All newsletters**: plain words for whether it went ("Draft, not sent", "Sent"), sent out, delivered
+  and clicked, a card each on a phone, and **Use this again** (a sent newsletter's content as a new,
+  unsaved draft with its subject; saving makes a new newsletter). Deleting a draft is reported beside
+  the list.
+- **Results**: Back goes to where you came from. Six figures (sent out, delivered, clicked, bounced,
+  unsubscribed, marked as spam), delivered and clicked set against the send before. Links people
+  clicked can be pressed (web addresses only). "Copy the addresses that bounced". "Who got it" is in the
+  page, not a box over it: fifty at a time with Show more, a search, a filter by what happened, and
+  "Download this list". Open tracking stays off on purpose: nothing shows an open rate.
+- **Audiences & people**: Add a person and the import sit above the list; search within an audience,
+  fifty at a time, how many joined this month, "Download this audience". Donors says where its people
+  are and opens Manage subscribers, whose "Stop their emails" (was "Remove") now asks first and says it
+  stops all our emails to that person. How someone joined is in words (an Elf Detective School sign up
+  was shown as "elf"). Someone who may only look is told why there is nothing to change. "See the rows
+  before importing" lists every row and what will happen to it. A failed donors download says so
+  instead of handing over a file holding the error.
+- **The composer (Write, Who, Send)**: CSS only. Fields 16px, controls 44px, the kit no longer flattens
+  its block styles or its foot button, the foot sits above the phone's bottom bar, and on a phone the
+  preview shows whole rather than scrolling in its box. Saving a draft no longer swaps the newest
+  newsletter into the editor.
+
 ## Newsletter links opened a security warning (TASK-466)
 
 Every link in a newsletter is rewritten so a click can be counted, and until this change that was to

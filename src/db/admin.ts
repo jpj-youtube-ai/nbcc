@@ -1167,10 +1167,11 @@ export interface AuditLogQuery {
   withSummary?: boolean;
 }
 
-// Staff stamp their lines "admin:<email>"; a few older routes stamp the bare email. Everything else
-// ("stripe", "system:schedule", "organiser:<email>", "family") is not a member of staff.
-const AUDIT_STAFF = `(a.actor LIKE 'admin:%' OR (a.actor LIKE '%@%' AND a.actor NOT LIKE '%:%'))`;
-const AUDIT_STAFF_EMAIL = `lower(CASE WHEN a.actor LIKE 'admin:%' THEN substr(a.actor, 7) ELSE a.actor END)`;
+// Staff stamp their lines "admin:<email>", or "self:<email>" for their own password; a few older
+// routes stamp the bare email. Everything else ("stripe", "system:schedule", "organiser:<email>",
+// "family") is not a member of staff.
+const AUDIT_STAFF = `(a.actor LIKE 'admin:%' OR a.actor LIKE 'self:%' OR (a.actor LIKE '%@%' AND a.actor NOT LIKE '%:%'))`;
+const AUDIT_STAFF_EMAIL = `lower(CASE WHEN a.actor LIKE 'admin:%' THEN substr(a.actor, 7) WHEN a.actor LIKE 'self:%' THEN substr(a.actor, 6) ELSE a.actor END)`;
 
 // The WHERE clause for the audit trail. Every value is a bound parameter; the only words that reach
 // the SQL are this file's own. `withEntities` false leaves the entities out, for the counts by
@@ -1188,7 +1189,7 @@ function auditWhere(opts: AuditLogQuery, withEntities: boolean): { sql: string; 
   const actor = typeof opts.actor === "string" ? opts.actor.trim().toLowerCase() : "";
   if (actor) {
     const at = arg(actor);
-    where.push(`lower(a.actor) IN ('admin:' || ${at}::text, ${at}::text)`);
+    where.push(`lower(a.actor) IN ('admin:' || ${at}::text, 'self:' || ${at}::text, ${at}::text)`);
   }
   if (opts.staffOnly) where.push(AUDIT_STAFF);
   const from = ukDateArg(opts.from);

@@ -61,13 +61,13 @@ describe("listAuditLog", () => {
 
   it("finds one member of staff by email, however their lines were stamped", async () => {
     await listAuditLog({ actor: " Fern@Example.com " });
-    expect(countCall().sql).toContain("lower(a.actor) IN ('admin:' || $1::text, $1::text)");
+    expect(countCall().sql).toContain("lower(a.actor) IN ('admin:' || $1::text, 'self:' || $1::text, $1::text)");
     expect(countCall().params).toEqual(["fern@example.com"]);
   });
 
   it("can leave out everything staff did not do", async () => {
     await listAuditLog({ staffOnly: true });
-    expect(countCall().sql).toMatch(/a\.actor like 'admin:%' or \(a\.actor like '%@%' and a\.actor not like '%:%'\)/i);
+    expect(countCall().sql).toContain("(a.actor LIKE 'admin:%' OR a.actor LIKE 'self:%' OR (a.actor LIKE '%@%' AND a.actor NOT LIKE '%:%'))");
     expect(countCall().params).toEqual([]);
   });
 

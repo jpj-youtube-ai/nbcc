@@ -4604,7 +4604,7 @@
     var esc = H.escapeHtml;
     var src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(page.svg);
     return (
-      '<article class="qr-card">' +
+      '<article class="qr-card" data-qr-page="' + esc(page.path) + '">' +
       '<img class="qr-img" src="' + src + '" alt="QR code for ' + esc(page.title) + '" width="132" height="132" />' +
       '<div class="qr-body">' +
       '<h3 class="qr-title">' + esc(page.title) + "</h3>" +
@@ -4613,7 +4613,9 @@
       '<p class="qr-actions">' +
       '<button type="button" class="admin-btn admin-btn--small" data-qr-path="' + esc(page.path) + '" data-qr-format="svg">Download SVG</button>' +
       '<button type="button" class="admin-btn admin-btn--small" data-qr-path="' + esc(page.path) + '" data-qr-format="png">Download PNG</button>' +
-      "</p></div></article>"
+      "</p>" + QR_WHICH +
+      '<p class="ty-status" data-qr-page-status="' + esc(page.path) + '" role="status" aria-live="polite"></p>' +
+      "</div></article>"
     );
   }
 
@@ -4621,7 +4623,11 @@
     return "/api/admin/qr-codes/image?path=" + encodeURIComponent(path) + "&format=" + format;
   }
 
-  function qrDownload(url, fileName) {
+  // Said under every pair of downloads, where it is read as it is pressed (2026-11-14).
+  var QR_WHICH = '<p class="ak-says set-qr-which">SVG for anything printed. PNG for slides, posts and documents.</p>';
+  // A failed download is said in the card that was pressed, and hands over no file.
+  function qrDownload(url, fileName, statusNode) {
+    qrSay(statusNode, "", false);
     authFetch(url)
       .then(function (r) { return r.ok ? r.blob() : Promise.reject(new Error("failed")); })
       .then(function (blob) {
@@ -4636,7 +4642,7 @@
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
-        window.alert("Could not download that QR code. Try again.");
+        qrSay(statusNode, "Could not download that QR code. Try again.", true);
       });
   }
 
@@ -4655,19 +4661,42 @@
           qrDownload(
             "/api/admin/qr-codes/named/" + named + "/image?format=" + format,
             "nbcc-qr-" + qrNameSlug(qrNamedById(Number(named)), named) + "." + format,
+            document.querySelector('[data-qr-card-status="' + named + '"]'),
           );
         } else {
           var path = btn.getAttribute("data-qr-path");
-          qrDownload(qrImageUrl(path, format), "nbcc-qr-" + qrSlug(path) + "." + format);
+          var card = btn.closest(".qr-card");
+          qrDownload(qrImageUrl(path, format), "nbcc-qr-" + qrSlug(path) + "." + format, card && card.querySelector("[data-qr-page-status]"));
         }
         return;
       }
+      var sortBtn = t.closest("[data-qr-sort]");
+      if (sortBtn) {
+        qrSortBy = sortBtn.getAttribute("data-qr-sort");
+        Array.prototype.forEach.call(document.querySelectorAll("#qrSort [data-qr-sort]"), function (b) {
+          var on = b === sortBtn;
+          b.classList.toggle("is-active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        return drawQrNamed();
+      }
+      var copy = t.closest("[data-qr-copy]");
+      if (copy) return qrCopy(Number(copy.getAttribute("data-qr-copy")));
+      var share = t.closest("[data-qr-share]");
+      if (share) return qrShare(Number(share.getAttribute("data-qr-share")));
       var edit = t.closest("[data-qr-edit]");
       if (edit) return qrOpenEdit(Number(edit.getAttribute("data-qr-edit")));
       if (t.closest("[data-qr-cancel]")) return drawQrNamed();
       var hide = t.closest("[data-qr-hide]");
-      if (hide) qrChange(Number(hide.getAttribute("data-qr-hide")), { hidden: hide.getAttribute("data-qr-to") === "hide" }, null);
+      if (hide) {
+        var hiding = hide.getAttribute("data-qr-to") === "hide";
+        var hid = qrNamedById(Number(hide.getAttribute("data-qr-hide")));
+        qrChange(Number(hide.getAttribute("data-qr-hide")), { hidden: hiding }, null).then(function (ok) {
+          if (ok && hid) qrSay(el("qrNamedSaid"), hiding ? "Hid " + hid.name + ". It is in Hidden codes below, and still works." : "Shown again: " + hid.name + ".", false, true);
+        });
+      }
     });
+    el("qrSearch").addEventListener("input", qrSearchDraw);
     el("view-qr").addEventListener("submit", function (e) {
       var form = e.target && e.target.closest && e.target.closest("[data-qr-edit-form]");
       if (!form) return;
@@ -4810,21 +4839,88 @@
       '<p class="qr-actions">' +
       '<button type="button" class="admin-btn admin-btn--small" data-qr-named="' + code.id + '" data-qr-format="svg">Download SVG</button>' +
       '<button type="button" class="admin-btn admin-btn--small" data-qr-named="' + code.id + '" data-qr-format="png">Download PNG</button>' +
-      "</p>" +
+      "</p>" + QR_WHICH +
+      '<p class="ak-actions set-qr-share">' +
+      '<button type="button" class="btn ak-btn--plain admin-btn--small" data-qr-copy="' + code.id + '">Copy the link</button>' +
+      '<button type="button" class="btn ak-btn--plain admin-btn--small" data-qr-share="' + code.id + '"' + (qrCanShare() ? "" : " hidden") + ">Share</button></p>" +
       (canEdit("site")
-        ? '<p class="qr-quiet-row">' +
-          '<button type="button" class="qr-quiet" data-qr-edit="' + code.id + '">Rename or change where it goes</button>' +
-          '<button type="button" class="qr-quiet" data-qr-hide="' + code.id + '" data-qr-to="' + (code.hidden ? "show" : "hide") + '">' +
+        ? '<p class="ak-actions set-qr-change">' +
+          '<button type="button" class="btn ak-btn--plain admin-btn--small" data-qr-edit="' + code.id + '">Rename or change where it goes</button>' +
+          '<button type="button" class="btn ak-btn--plain admin-btn--small" data-qr-hide="' + code.id + '" data-qr-to="' + (code.hidden ? "show" : "hide") + '">' +
           (code.hidden ? "Show it again" : "Hide it") + "</button></p>" +
-          '<p class="ty-status" data-qr-card-status="' + code.id + '" role="status" aria-live="polite"></p>'
+          '<p class="ak-says">' + (code.hidden ? "Puts it back in your named codes." : "Moves it to Hidden codes. It still works, and still counts its scans.") + "</p>"
         : "") +
+      '<p class="ty-status" data-qr-card-status="' + code.id + '" role="status" aria-live="polite"></p>' +
       "</div></article>"
     );
   }
 
+  var qrSortBy = "newest";
+  function qrCanShare() {
+    var nav = window.navigator;
+    return !!(nav && typeof nav.share === "function" && typeof nav.canShare === "function");
+  }
+  function qrCopy(id) {
+    var code = qrNamedById(id);
+    if (!code) return;
+    var node = document.querySelector('[data-qr-card-status="' + id + '"]');
+    var kit = window.AdminKit;
+    (kit && kit.copyText ? kit.copyText(code.link) : Promise.resolve(false)).then(function (ok) {
+      var shortLink = code.link.replace(/^https:\/\//, "");
+      qrSay(node, ok ? "Copied " + shortLink + "." : "Could not copy it. The link is " + shortLink + ".", !ok, ok);
+    });
+  }
+  // Hands the PNG to another app on the phone (WhatsApp, email), where the browser can.
+  function qrShare(id) {
+    var code = qrNamedById(id);
+    if (!code) return;
+    var node = document.querySelector('[data-qr-card-status="' + id + '"]');
+    var name = "nbcc-qr-" + qrNameSlug(code, id) + ".png";
+    authFetch("/api/admin/qr-codes/named/" + id + "/image?format=png")
+      .then(function (r) { return r.ok ? r.blob() : Promise.reject(new Error("failed")); })
+      .then(function (blob) {
+        var file = new File([blob], name, { type: "image/png" });
+        var data = { files: [file], title: code.name, text: code.name };
+        if (!window.navigator.canShare(data)) throw new Error("cannot");
+        return window.navigator.share(data);
+      })
+      .catch(function (err) {
+        if (err && (err.message === "unauthorized" || err.name === "AbortError")) return;
+        qrSay(node, "Could not share it. Download the PNG instead.", true);
+      });
+  }
+  function qrSorted(list) {
+    var out = list.slice();
+    if (qrSortBy === "scans") out.sort(function (a, b) { return ((b.scans && b.scans.total) || 0) - ((a.scans && a.scans.total) || 0); });
+    else if (qrSortBy === "name") out.sort(function (a, b) { return a.name.localeCompare(b.name, "en-GB", { sensitivity: "base" }); });
+    return out;
+  }
+  function qrTilesDraw() {
+    var all = qrNamed.codes;
+    var sum = function (k) { return all.reduce(function (n, c) { return n + ((c.scans && c.scans[k]) || 0); }, 0); };
+    var tile = function (n, name, says) {
+      return '<div class="ak-tile' + (n ? "" : " is-none") + '"><span class="ak-tile__n">' + n + '</span><span class="ak-tile__name">' + name +
+        '</span><span class="ak-tile__says">' + says + "</span></div>";
+    };
+    el("qrTiles").innerHTML = tile(all.length, "Named codes", "Hidden ones too: they still work") +
+      tile(sum("week"), "Scans in the last 7 days", "Of every named code") + tile(sum("total"), "Scans in all", "Since each code was made");
+  }
+  function qrSearchDraw() {
+    var term = (el("qrSearch").value || "").trim().toLowerCase();
+    var cards = Array.prototype.slice.call(document.querySelectorAll("#qrList .qr-card"));
+    var n = 0;
+    cards.forEach(function (c) {
+      var hit = !term || c.textContent.toLowerCase().indexOf(term) !== -1;
+      c.hidden = !hit;
+      if (hit) n += 1;
+    });
+    el("qrSearchCount").textContent = term ? (n ? "Showing " + n + " of " + cards.length + " pages." : "No page matches.") : "";
+  }
   function drawQrNamed() {
     var today = qrUkDay(new Date());
-    var shown = qrNamed.codes.filter(function (c) { return !c.hidden; });
+    qrTilesDraw();
+    var shown = qrSorted(qrNamed.codes.filter(function (c) { return !c.hidden; }));
+    el("qrSortWrap").hidden = shown.length < 2;
     var hidden = qrNamed.codes.filter(function (c) { return c.hidden; });
     el("qrNamedList").innerHTML = shown.length
       ? shown.map(function (c) { return qrNamedCard(c, today); }).join("")
@@ -4848,7 +4944,7 @@
       '<label class="qr-field">Goes to<select data-qr-edit-target>' + qrOptions(code.target) + "</select></label>" +
       '<p class="qr-hint">Every copy already printed goes to the new choice from the moment you save.</p>' +
       '<p class="qr-actions"><button type="submit" class="btn btn-primary">Save</button>' +
-      '<button type="button" class="qr-quiet" data-qr-cancel>Cancel</button></p>' +
+      '<button type="button" class="btn ak-btn--plain" data-qr-cancel>Cancel</button></p>' +
       '<p class="ty-status" data-qr-edit-status role="status" aria-live="polite"></p>' +
       "</form>";
     body.querySelector("[data-qr-edit-name]").focus();
@@ -4863,10 +4959,11 @@
       body: JSON.stringify(change),
     })
       .then(okJsonOrSaid)
-      .then(function () { return loadQrNamed(); })
+      .then(function () { return loadQrNamed().then(function () { return true; }); })
       .catch(function (err) {
-        if (err && err.message === "unauthorized") return;
+        if (err && err.message === "unauthorized") return false;
         qrSay(node, (err && err.said) || "Could not save that. Please try again.", true);
+        return false;
       });
   }
 
@@ -4882,6 +4979,21 @@
         sel.innerHTML = qrOptions("");
         if (keep) sel.value = keep;
         drawQrNamed();
+        // Sent here from a card on Site pages to make a code for that page.
+        if (qrWanted) {
+          var wanted = qrWanted;
+          qrWanted = null;
+          var known = qrNamed.destinations.filter(function (d) { return d.value === wanted; })[0];
+          if (canEdit("site") && known) {
+            sel.value = wanted;
+            qrSay(el("qrNewStatus"), "Goes to is set to " + known.title + ". Give the code a name, then make it.", false, true);
+            el("qrNewName").focus();
+          } else {
+            el("qrQuick").open = true;
+            el("qrSearch").value = wanted;
+            qrSearchDraw();
+          }
+        }
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
@@ -4900,6 +5012,7 @@
         el("qrList").innerHTML = pages.length
           ? pages.map(qrCard).join("")
           : '<p class="admin-empty">There are no pages to make codes for.</p>';
+        qrSearchDraw();
       })
       .catch(function () {
         el("qrList").innerHTML = unavailableHtml("The QR codes could not load.");
@@ -5845,7 +5958,7 @@
     "email-audit": "Every email the website has tried to send, and to whom. Holds donors' addresses.",
     site: "Every page of the website, spare addresses and what search engines are shown.",
     outreach: "Asking local businesses to become monthly supporters. Holds businesses' contact details.",
-    "business-supporters": "Thanking each business supporter as it asked. Holds postal addresses.",
+    "business-supporters": "Thanking each business supporter as it asked. Holds postal addresses. Its screen opens only with Edit.",
     analytics: "How many people visit the website, where from, and what they look at.",
     "red-bag": "The list of gifts on Fill a Red Bag. Edit includes publishing it to the live page.",
     elf: "Elf Detective School: children's first names and families' emails.",
@@ -5906,7 +6019,8 @@
       })
       .join("");
     var place = places[section];
-    var rides = place && place.rides.length ? " Also opens " + setList(place.rides) + "." : "";
+    var others = place ? place.rides.filter(function (r) { return r.indexOf(sectionLabel(section)) !== 0; }) : [];
+    var rides = others.length ? " Also opens " + setList(others) + "." : "";
     var differs = roleUsual[section] !== level;
     return (
       '<div class="admin-perm-row' + (differs ? " is-different" : "") + '" data-perm-row="' + section + '">' +

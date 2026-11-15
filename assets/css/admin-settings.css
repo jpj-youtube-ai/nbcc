@@ -1,6 +1,123 @@
 /* NBCC admin: Admin: Site pages, QR codes, Team and My account, in the kit's look (assets/css/admin-kit.css).
- * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md.
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md, and this area's own:
+ * docs/superpowers/specs/2026-11-14-admin-refresh-settings.md.
  *
  * Only what the kit does not already give these screens. The kit's house rules hold here too: no
  * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
- * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+ * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. Every rule is
+ * named through one of the five views, or a set- part of their own (test/unit/admin-settings-styles.test.ts).
+ * The qr- and sa- rules that older tests read stay in admin.css; the ones here win by being named
+ * through the view and loaded later. */
+
+/* ---- shared: forms, a search box, a count, a question asked first ---- */
+#view-site .set-form, #view-team .set-form, #view-account .set-form { display: grid; gap: 12px; max-width: 760px; margin: 0 0 16px; }
+#view-site .set-form__title, #view-team .set-form__title { margin: 0; font-family: var(--ov-head); font-weight: 800; font-size: 1.15rem; color: var(--ov-maroon); }
+#view-site .set-form .ak-actions, #view-team .set-form .ak-actions, #view-account .set-form .ak-actions { margin: 4px 0 0; }
+#view-site .set-form .ak-says, #view-team .set-form .ak-says, #view-account .set-form .ak-says { margin: 0; }
+#view-site .set-form .admin-help, #view-team .set-form .admin-help { margin: 0; }
+#view-account .admin-field { margin: 0; }
+#view-account .admin-field input { max-width: 100%; }
+#view-site .set-search, #view-qr .set-search { max-width: 420px; margin: 0 0 8px; }
+#view-site .set-count, #view-qr .set-count { margin: 0 0 12px; font-size: 0.9rem; color: var(--ov-soft); }
+#view-site .set-count:empty, #view-qr .set-count:empty { margin: 0; }
+.set-ask { margin: 12px 0 0; }
+.set-ask__q { margin: 0; font-weight: 700; color: var(--ov-ink); }
+.set-ask__says { margin: 0; font-size: 0.92rem; color: var(--ov-text); }
+.set-ask .ak-actions { margin: 6px 0 0; }
+.set-inline-btn { margin: 8px 0 0; }
+#view-site .ty-status:empty, #view-qr .ty-status:empty, #view-team .ty-status:empty { margin: 0; }
+
+/* ---- Site pages: a card a page ---- */
+#view-site .set-page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; margin: 0 0 8px; }
+#view-site .set-page { display: grid; align-content: start; gap: 6px; }
+#view-site .set-page__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+#view-site .set-page__name { margin: 0; font-family: var(--ov-head); font-weight: 700; font-size: 1.1rem; line-height: 1.2; color: var(--ov-ink); overflow-wrap: anywhere; }
+#view-site .set-page__addr, #view-site .set-page__why, #view-site .set-page__spares, #view-site .set-page__seo { margin: 0; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+#view-site .set-page__addr a { color: var(--ov-maroon); font-weight: 600; text-underline-offset: 3px; }
+#view-site .set-page__why { color: var(--ov-soft); }
+#view-site .set-page__spares { color: var(--ov-text); }
+#view-site .set-page__seo { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--ov-text); }
+#view-site .set-page__seo small { color: var(--ov-soft); }
+#view-site .set-page__actions { margin: 4px 0 0; }
+#view-site #siteAliasTable { margin-top: 14px; }
+#view-site #siteAliasAsk:empty { display: none; }
+#view-site #siteAliasAsk { padding: 0 14px 14px; }
+
+/* ---- QR codes: the cards in the look, the order bar, the fold ---- */
+#view-qr .qr-card { align-items: flex-start; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+#view-qr .qr-body .btn { max-width: 100%; white-space: normal; }
+#view-qr .qr-hidden .qr-card { background: var(--ov-warm); box-shadow: none; }
+#view-qr .qr-img { border: var(--ov-thin); border-radius: 10px; }
+#view-qr .qr-title { color: var(--ov-ink); }
+#view-qr .qr-new { border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); padding: clamp(16px, 2.4vw, 24px); }
+#view-qr .qr-new-title { font-weight: 800; color: var(--ov-maroon); }
+#view-qr .qr-new input, #view-qr .qr-new select, #view-qr .qr-edit input, #view-qr .qr-edit select { min-height: 46px; border: var(--ov-thin); font-size: 1rem; }
+#view-qr .qr-actions .admin-btn { min-height: 44px; border: var(--ov-thin); background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); }
+#view-qr .qr-actions .admin-btn:hover { background: var(--ov-hover); }
+#view-qr .set-qr-which { margin: 0; }
+#view-qr .set-qr-share, #view-qr .set-qr-change { margin: 2px 0 0; }
+#view-qr .qr-count b { color: var(--ov-holly); }
+#view-qr .qr-hidden summary { display: flex; align-items: center; min-height: 44px; }
+#view-qr .set-sort { margin: 0 0 14px; }
+#view-qr .set-sort[hidden] { display: none; }
+#view-qr .set-quick { margin-top: 26px; }
+#view-qr .set-quick .qr-grid { margin-bottom: 0; }
+#view-qr .qr-card[hidden] { display: none; }
+
+/* ---- Team: a card a person ---- */
+#view-team .set-people { margin-top: 18px; }
+#view-team .set-person { display: grid; gap: 10px; }
+#view-team .set-person__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+#view-team .set-person__name { margin: 0; font-family: var(--ov-head); font-weight: 700; font-size: 1.15rem; line-height: 1.2; color: var(--ov-ink); overflow-wrap: anywhere; }
+#view-team .set-person__you { font-family: inherit; font-weight: 500; font-size: 0.9rem; color: var(--ov-soft); }
+#view-team .set-person__email { margin: -4px 0 0; color: var(--ov-soft); font-size: 0.92rem; overflow-wrap: anywhere; }
+#view-team .set-person__facts { max-width: none; }
+#view-team .set-person__rolefield { max-width: 260px; }
+#view-team .set-person__actions { margin: 2px 0 0; }
+#view-team .set-role { margin: 0 0 10px; font-size: 0.93rem; line-height: 1.5; }
+#view-team .set-role b { color: var(--ov-maroon); }
+#view-team #teamRoles { margin-bottom: 18px; }
+
+/* ---- Manage access ---- */
+#view-team-permissions #teamPermAsk:empty { display: none; }
+#view-team-permissions #teamPermAsk { margin: 0 0 16px; }
+#view-team-permissions .set-perm-key { margin: 0 0 16px; }
+#view-team-permissions .set-perm-key p { margin: 0; }
+#view-team-permissions .set-perm-fill { display: grid; gap: 10px; margin: 0 0 18px; padding: 14px 16px; border-radius: 16px; }
+#view-team-permissions .set-perm-fill__q { margin: 0; font-family: var(--ov-head); font-weight: 700; color: var(--ov-ink); }
+#view-team-permissions .set-perm-fill .admin-perm-presets { margin: 0; }
+#view-team-permissions .set-perm-fill .ak-says { margin: 0; }
+#view-team-permissions .set-perm-copy { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 12px; }
+#view-team-permissions .set-perm-copy .ak-field { flex: 1 1 220px; max-width: 340px; }
+#view-team-permissions .set-perm-save { display: grid; gap: 6px; margin: 18px 0; }
+#view-team-permissions .set-perm-save .btn { justify-self: start; }
+#view-team-permissions .set-perm-summary { margin: 0; font-weight: 600; color: var(--ov-ink); }
+#view-team-permissions .set-perm-reset { margin: 0; }
+#view-team-permissions .set-perm-group { margin: 20px 0 6px; }
+#view-team-permissions .admin-perm-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 18px; max-width: 860px; padding: 12px 12px; border-bottom: 1px solid var(--ov-rule); border-radius: 12px; }
+#view-team-permissions .admin-perm-row.is-different { background: var(--ov-gold-soft); }
+#view-team-permissions .set-perm-words { display: grid; gap: 3px; min-width: 0; }
+#view-team-permissions .admin-perm-label { font-weight: 700; font-size: 1rem; color: var(--ov-ink); }
+#view-team-permissions .set-perm-says { font-size: 0.88rem; line-height: 1.4; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-team-permissions .set-perm-mark { justify-self: start; }
+#view-team-permissions .admin-perm-row .admin-segmented { flex-wrap: nowrap; }
+
+/* ---- My account ---- */
+#view-account .set-match { margin: -4px 0 0; min-height: 1.3em; font-size: 0.92rem; font-weight: 600; color: var(--ov-soft); }
+#view-account .set-match.is-ok { color: var(--ov-holly); }
+#view-account .set-access .ak-group:first-child { margin-top: 0; }
+#view-account .set-access__list { display: grid; gap: 6px; margin: 8px 0 14px; padding: 0; list-style: none; }
+#view-account .set-access__list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.95rem; }
+#view-account .set-access__name { font-weight: 600; color: var(--ov-ink); }
+#view-account .set-access__none { margin: 4px 0 0; font-size: 0.9rem; color: var(--ov-soft); }
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  #view-team-permissions .admin-perm-row { grid-template-columns: minmax(0, 1fr); padding: 12px 8px; }
+  #view-team-permissions .admin-perm-row .admin-segmented { flex-wrap: wrap; }
+  #view-team .set-person__rolefield { max-width: none; }
+  #view-site .set-search, #view-qr .set-search { max-width: none; }
+  /* The spare addresses are cards here (.sa-table, admin.css): one rule round each card, not one per line. */
+  #view-site .sa-table tr td { border-bottom: 0; }
+  #view-team .set-person__actions .btn, #view-site .set-page__actions .btn, #view-qr .set-qr-share .btn, #view-qr .set-qr-change .btn { flex: 1 1 auto; }
+}

@@ -32,9 +32,9 @@
 .gv-row--head { padding-top: 10px; padding-bottom: 10px; border-bottom: 2px solid var(--ov-ink); background: var(--ov-warm); font-family: var(--ov-head); font-size: 0.9rem; font-weight: 700; color: var(--ov-ink); }
 .gv-row__tick { display: flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; cursor: pointer; }
 .gv-row__who { min-width: 0; overflow-wrap: anywhere; }
-.gv-row__meta { display: flex; flex-wrap: wrap; gap: 2px 14px; min-width: 0; font-size: 0.88rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+.gv-row__meta { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px 14px; min-width: 0; font-size: 0.88rem; color: var(--ov-soft); overflow-wrap: anywhere; }
 .gv-row--head .gv-row__meta { font-size: 0.9rem; color: var(--ov-ink); }
-.gv-row__meta > span:empty { display: none; }
+#view-claims .gv-row__tick input, #view-gasds .gv-row__tick input { width: 22px; height: 22px; margin: 0; accent-color: var(--ov-maroon); cursor: pointer; }
 .gv-row__amount { justify-self: end; font-weight: 600; color: var(--ov-ink); font-variant-numeric: tabular-nums; }
 .gv-name { font-weight: 600; color: var(--ov-ink); text-align: left; }
 .gv-name.admin-link { padding: 0; }
@@ -69,14 +69,16 @@
 .gv-how__note { margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--ov-rule); font-size: 0.88rem; color: var(--ov-soft); }
 .gv-how a { color: var(--ov-maroon); font-weight: 600; }
 
-#view-claims .admin-guide { max-width: 78ch; }
+/* admin.css draws a little arrow in front of the guide's heading; the kit draws its own chevron after it. */
+#view-claims .admin-guide > summary::before { content: none; }
 #view-gasds .ak-fold { margin-top: 26px; }
 
 /* ---- a phone ---- */
 @media (max-width: 860px) {
   .gv-row--head { display: none; }
   .gv-row { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 14px; }
-  .gv-row__meta { grid-column: 1 / -1; grid-row: 2; }
+  .gv-row__meta { display: flex; flex-wrap: wrap; grid-column: 1 / -1; grid-row: 2; }
+  .gv-row__meta > span:empty { display: none; }
   .gv-rows--tick .gv-row { grid-template-columns: 44px minmax(0, 1fr) auto; padding-left: 4px; }
   .gv-rows--tick .gv-row__meta { grid-column: 2 / -1; }
   .gv-pickbar__add .ak-field { max-width: none; }

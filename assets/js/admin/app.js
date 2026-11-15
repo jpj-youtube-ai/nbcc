@@ -746,6 +746,8 @@
     // "events" or "fundraising", left by a browser tab from before they became Get involved: only
     // if this person may see that part of it.
     if (GI_OLD_VIEWS[name]) return canView(name) ? name : null;
+    // My account has no menu link, and is everyone's (2026-11-14): a refresh there comes back to it.
+    if (name === "account") return name;
     var link = doc.querySelector('.admin-nav-link[data-view="' + name.replace(/"/g, "") + '"]');
     if (!link || link.hidden || link.offsetParent === null) return null;
     return name;
@@ -4309,6 +4311,24 @@
     s.className = "ty-status" + (cls === "err" ? " is-error" : cls === "ok" ? " is-ok" : "");
     s.textContent = msg || "";
   }
+  // 2026-11-14 (docs/superpowers/specs/2026-11-14-admin-refresh-settings.md): one card a page, with
+  // its spare addresses and its search engine switch; tiles that filter; a search box; Remove asks
+  // first and says what stops working; every message said in the card that was pressed.
+  var siteState = { pages: [], privatePages: [], aliases: [], canWrite: false, filter: "all", q: "" };
+  // "admin:jo@example.com" as "Jo", "seed" as the website's own: who added a spare address.
+  function siteWho(createdBy) {
+    var who = String(createdBy || "");
+    if (who === "seed") return "Set up with the website";
+    if (who.indexOf("admin:") === 0) who = who.slice(6);
+    var at = who.indexOf("@");
+    if (at > 0) who = who.slice(0, at);
+    return who ? who.charAt(0).toUpperCase() + who.slice(1) : "Unknown";
+  }
+  function siteAddedBy(a) {
+    var who = siteWho(a.createdBy);
+    if (a.createdBy === "seed") return who;
+    return a.createdAt ? who + " on " + setDay(a.createdAt) : who;
+  }
   function renderSiteAliases(aliases, canWrite) {
     var wrap = el("siteAliasTable");
     if (!aliases.length) {
@@ -4318,7 +4338,7 @@
     var body = aliases
       .map(function (a) {
         var remove = canWrite
-          ? '<button class="admin-link" type="button" data-site-alias-remove="' + a.id + '">Remove</button>'
+          ? '<button class="btn ak-btn--danger admin-btn--small" type="button" data-site-alias-remove="' + a.id + '">Remove</button>'
           : "";
         // TASK-568: a forward that leaves the main site for one of our subdomains says so. Shown
         // without its https://, the way staff typed it.
@@ -4331,27 +4351,40 @@
         return (
           '<tr><td data-label="Spare address">' + H.escapeHtml(a.fromPath) +
           '</td><td data-label="Sends people to"><span class="sa-to">' + to +
-          '</span></td><td data-label="Added by"><span class="sa-to">' + H.escapeHtml(a.createdBy) +
+          '</span></td><td data-label="Added by"><span class="sa-to">' + H.escapeHtml(siteAddedBy(a)) +
           '</span></td><td data-label="">' + remove + "</td></tr>"
         );
       })
       .join("");
     wrap.innerHTML =
       '<table class="admin-table sa-table"><thead><tr><th>Spare address</th><th>Sends people to</th><th>Added by</th><th></th></tr></thead><tbody>' +
-      body + "</tbody></table>";
-    if (canWrite) {
-      Array.prototype.forEach.call(wrap.querySelectorAll("[data-site-alias-remove]"), function (b) {
-        b.addEventListener("click", function () {
-          authFetch("/api/admin/site-aliases/" + b.getAttribute("data-site-alias-remove"), { method: "DELETE" })
-            .then(function (res) {
-              if (!res.ok) throw new Error();
-              siteStatus("Spare address removed.", "ok");
-              loadSite();
-            })
-            .catch(function () { siteStatus("Could not remove that address.", "err"); });
-        });
-      });
-    }
+      body + '</tbody></table><div id="siteAliasAsk"></div>';
+  }
+  function siteAliasRemove(id) {
+    var a = siteState.aliases.filter(function (x) { return String(x.id) === String(id); })[0];
+    if (!a) return;
+    var page = siteState.pages.filter(function (p) { return p.path === a.toPath; })[0];
+    var where = page ? page.title : a.toPath.replace(/^https:\/\//, "");
+    askFirst(
+      el("siteAliasAsk"),
+      {
+        q: "Remove nbcc.scot" + a.fromPath + "?",
+        says: "It stops working at once. Anyone who types it, or follows it from a poster, a leaflet or an old link, gets the page not found page instead of " + where + ".",
+        yes: "Remove it", no: "Keep it", danger: true,
+      },
+      function () {
+        authFetch("/api/admin/site-aliases/" + a.id, { method: "DELETE" })
+          .then(function (res) {
+            if (!res.ok) throw new Error();
+            siteStatus("Spare address removed.", "ok");
+            loadSite();
+          })
+          .catch(function (err) {
+            if (err && err.message === "unauthorized") return;
+            siteStatus("Could not remove that address.", "err");
+          });
+      },
+    );
   }
   // The whole website in one list (TASK-402). Two sources, on purpose: the public registry that
   // feeds /sitemap and sitemap.xml, and the private pages that must never appear in either. The
@@ -4362,72 +4395,158 @@
     unlisted: { label: "Not listed", why: "A real page, but nothing links to it." },
     staff: { label: "Staff only", why: "Behind a password and a code." },
   };
-  function renderSiteAll(pages, privatePages) {
-    var wrap = el("siteAllTable");
-    if (!wrap) return;
-    var rows = (pages || []).map(function (p) {
+  function siteRows() {
+    var rows = (siteState.pages || []).map(function (p) {
       var reach = p.listed ? "On the site map" : "Not listed";
       var why = p.ballGated
         ? "Hidden everywhere until the ball is published."
         : p.listed ? "Anyone can find this page." : "A real page, but nothing links to it.";
-      return { title: p.title, path: p.path, reach: reach, why: why };
+      return { title: p.title, path: p.path, reach: reach, why: why, page: p };
     });
-    (privatePages || []).forEach(function (p) {
+    (siteState.privatePages || []).forEach(function (p) {
       var kind = SITE_REACH[p.reach] || { label: p.reach, why: "" };
-      rows.push({ title: p.title, path: p.path, reach: kind.label, why: p.note || kind.why });
+      rows.push({ title: p.title, path: p.path, reach: kind.label, why: p.note || kind.why, page: null });
     });
-    wrap.innerHTML =
-      '<table class="admin-table"><thead><tr><th>Page</th><th>Address</th><th>Who can reach it</th>' +
-      "<th>What it is</th></tr></thead><tbody>" +
-      rows
-        .map(function (r) {
-          // The address is a real link: the quickest way to check a page is still right is to look.
-          return "<tr><td>" + H.escapeHtml(r.title) + '</td><td><a href="' + H.escapeHtml(r.path) +
-            '" target="_blank" rel="noopener">' + H.escapeHtml(r.path) + "</a></td><td>" +
-            H.escapeHtml(r.reach) + "</td><td>" + H.escapeHtml(r.why) + "</td></tr>";
-        })
-        .join("") +
-      "</tbody></table>";
+    return rows;
+  }
+  var SITE_TILES = [
+    { key: "all", name: "All", says: "Every page", test: function () { return true; } },
+    { key: "map", name: "On the site map", says: "Anyone can find these", test: function (r) { return r.reach === "On the site map"; } },
+    { key: "unlisted", name: "Not listed", says: "Nothing links to them", test: function (r) { return r.reach === "Not listed"; } },
+    { key: "link", name: "Personal link only", says: "Reached from a link we send", test: function (r) { return r.reach === "Personal link only"; } },
+    { key: "staff", name: "Staff only", says: "Behind a password", test: function (r) { return r.reach === "Staff only"; } },
+    { key: "hidden", name: "Hidden from search", says: "Search engines are not shown these", test: function (r) { return !!r.page && !r.page.listed; } },
+  ];
+  function siteDrawTiles() {
+    var rows = siteRows();
+    el("siteTiles").innerHTML = SITE_TILES.map(function (t) {
+      var n = rows.filter(t.test).length;
+      var on = siteState.filter === t.key;
+      return '<button type="button" class="ak-tile' + (on ? " is-active" : "") + (n ? "" : " is-none") + '" data-site-filter="' + t.key +
+        '" aria-pressed="' + (on ? "true" : "false") + '"><span class="ak-tile__n">' + n + '</span><span class="ak-tile__name">' + t.name +
+        '</span><span class="ak-tile__says">' + t.says + "</span></button>";
+    }).join("");
+  }
+  function siteSpares(path) {
+    return (siteState.aliases || []).filter(function (a) { return a.toPath === path; }).map(function (a) { return a.fromPath; });
+  }
+  function siteMark(reach) {
+    var cls = reach === "On the site map" ? "ak-mark--ok" : reach === "Staff only" ? "ak-mark--bad" : reach === "Not listed" ? "ak-mark--quiet" : "ak-mark--wait";
+    return '<span class="ak-mark ' + cls + '">' + H.escapeHtml(reach) + "</span>";
+  }
+  function siteCard(r) {
+    var esc = H.escapeHtml;
+    var spares = siteSpares(r.path);
+    var p = r.page;
+    var seo = "";
+    if (p) {
+      var note = p.ballGated ? ' <small>(only while the ball is published)</small>' : "";
+      seo = siteState.canWrite
+        ? '<label class="admin-check set-page__seo"><input type="checkbox" data-site-seo="' + esc(p.path) + '"' + (p.listed ? " checked" : "") +
+          ' aria-label="Show ' + esc(p.title) + ' to search engines" /> <span>Show to search engines' + note + "</span></label>"
+        : '<p class="set-page__seo">Search engines: ' + (p.listed ? "Shown" : "Hidden") + note + "</p>";
+    } else {
+      seo = '<p class="set-page__seo">Search engines: never shown</p>';
+    }
+    return (
+      '<article class="ak-card set-page" data-site-page="' + esc(r.path) + '">' +
+      '<div class="set-page__head"><h4 class="set-page__name">' + esc(r.title) + "</h4>" + siteMark(r.reach) + "</div>" +
+      // The address is a real link: the quickest way to check a page is still right is to look.
+      '<p class="set-page__addr"><a href="' + esc(r.path) + '" target="_blank" rel="noopener">nbcc.scot' + esc(r.path) + "</a></p>" +
+      '<p class="set-page__why">' + esc(r.why) + "</p>" +
+      (spares.length ? '<p class="set-page__spares">Spare addresses that lead here: ' + esc(spares.join(", ")) + "</p>" : "") +
+      seo +
+      '<p class="ak-actions set-page__actions"><button type="button" class="btn ak-btn--plain admin-btn--small" data-site-copy="' + esc(r.path) + '">Copy the address</button>' +
+      (p ? '<button type="button" class="btn ak-btn--plain admin-btn--small" data-site-qr="' + esc(r.path) + '">Make a QR code</button>' : "") +
+      "</p>" +
+      '<p class="ty-status" data-site-said="' + esc(r.path) + '" role="status" aria-live="polite"></p>' +
+      "</article>"
+    );
+  }
+  function renderSiteAll(pages, privatePages) {
+    var wrap = el("siteAllTable");
+    if (!wrap) return;
+    siteState.pages = pages || [];
+    siteState.privatePages = privatePages || [];
+    siteDrawTiles();
+    var tile = SITE_TILES.filter(function (t) { return t.key === siteState.filter; })[0] || SITE_TILES[0];
+    var q = siteState.q.trim().toLowerCase();
+    var all = siteRows();
+    var rows = all.filter(tile.test).filter(function (r) {
+      if (!q) return true;
+      return [r.title, r.path, r.why, r.reach, siteSpares(r.path).join(" ")].join(" ").toLowerCase().indexOf(q) !== -1;
+    });
+    el("siteCount").textContent = rows.length === all.length ? "" : "Showing " + rows.length + " of " + all.length + " pages.";
+    wrap.innerHTML = rows.length
+      ? '<div class="set-page-grid">' + rows.map(siteCard).join("") + "</div>"
+      : '<p class="admin-empty">No page matches. Choose All, or clear the search box.</p>';
+  }
+  function siteSay(path, msg, cls) {
+    var node = doc.querySelector('[data-site-said="' + path.replace(/"/g, "") + '"]');
+    if (!node) return;
+    node.className = "ty-status" + (cls ? " " + cls : "");
+    node.textContent = msg || "";
+  }
+  function siteSeoChange(box) {
+    var path = box.getAttribute("data-site-seo");
+    var listed = box.checked;
+    authFetch("/api/admin/site-seo", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: path, listed: listed }),
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error();
+        siteState.pages.forEach(function (p) { if (p.path === path) p.listed = listed; });
+        siteDrawTiles();
+        siteSay(path, listed ? "Saved. Search engines are shown this page." : "Saved. Search engines are no longer shown this page.", "is-ok");
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        box.checked = !listed;
+        siteSay(path, "Could not save that change.", "is-error");
+      });
+  }
+  function siteCopy(path) {
+    var words = "nbcc.scot" + path;
+    var kit = window.AdminKit;
+    var done = kit && kit.copyText ? kit.copyText("https://" + words) : Promise.resolve(false);
+    done.then(function (ok) {
+      siteSay(path, ok ? "Copied " + words + "." : "Could not copy it. The address is " + words + ".", ok ? "is-ok" : "is-error");
+    });
+  }
+  function wireSiteCards() {
+    el("siteTiles").addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("[data-site-filter]") : null;
+      if (!t) return;
+      siteState.filter = t.getAttribute("data-site-filter");
+      renderSiteAll(siteState.pages, siteState.privatePages);
+    });
+    el("siteSearch").addEventListener("input", function () {
+      siteState.q = el("siteSearch").value || "";
+      renderSiteAll(siteState.pages, siteState.privatePages);
+    });
+    el("siteAllTable").addEventListener("change", function (e) {
+      var box = e.target;
+      if (box && box.matches && box.matches("[data-site-seo]")) siteSeoChange(box);
+    });
+    el("siteAllTable").addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target : null;
+      if (!t) return;
+      var copy = t.closest("[data-site-copy]");
+      if (copy) return siteCopy(copy.getAttribute("data-site-copy"));
+      var qr = t.closest("[data-site-qr]");
+      if (qr) {
+        qrWanted = qr.getAttribute("data-site-qr");
+        selectView("qr");
+      }
+    });
+    el("siteAliasTable").addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("[data-site-alias-remove]") : null;
+      if (t && siteState.canWrite) siteAliasRemove(t.getAttribute("data-site-alias-remove"));
+    });
   }
 
-  function renderSiteSeo(pages, canWrite) {
-    var wrap = el("siteSeoTable");
-    var body = pages
-      .map(function (p) {
-        var note = p.ballGated ? " <small>(only while the ball is published)</small>" : "";
-        var control = canWrite
-          ? '<input type="checkbox" data-site-seo="' + H.escapeHtml(p.path) + '"' + (p.listed ? " checked" : "") +
-            ' aria-label="Show ' + H.escapeHtml(p.title) + ' to search engines" />'
-          : p.listed ? "Shown" : "Hidden";
-        return (
-          "<tr><td>" + H.escapeHtml(p.title) + note + "</td><td>" + H.escapeHtml(p.path) +
-          "</td><td>" + control + "</td></tr>"
-        );
-      })
-      .join("");
-    wrap.innerHTML =
-      '<table class="admin-table"><thead><tr><th>Page</th><th>Address</th><th>Show to search engines</th></tr></thead><tbody>' +
-      body + "</tbody></table>";
-    if (canWrite) {
-      Array.prototype.forEach.call(wrap.querySelectorAll("[data-site-seo]"), function (box) {
-        box.addEventListener("change", function () {
-          authFetch("/api/admin/site-seo", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: box.getAttribute("data-site-seo"), listed: box.checked }),
-          })
-            .then(function (res) {
-              if (!res.ok) throw new Error();
-              siteStatus("Saved.", "ok");
-            })
-            .catch(function () {
-              box.checked = !box.checked;
-              siteStatus("Could not save that change.", "err");
-            });
-        });
-      });
-    }
-  }
   // TASK-568: "Sends people to" ends with one choice that is not a page: an NBCC subdomain, typed in
   // a box that only shows (and is only required) while that choice is picked. The server decides
   // what is allowed (forwardTarget in src/site/pages.ts); this only shows and hides the box.
@@ -4441,6 +4560,7 @@
   function wireSite() {
     if (siteWired) return;
     siteWired = true;
+    wireSiteCards();
     var form = el("siteAliasForm");
     el("siteAliasTo").addEventListener("change", siteSyncHost);
     if (form) form.addEventListener("submit", function (e) {
@@ -4473,6 +4593,7 @@
   // as an SVG for its preview. The downloads come from /api/admin/qr-codes/image, fetched with the
   // session and handed to the browser to save, as the Festive Ball's CSVs are.
   var qrWired = false;
+  var qrWanted = null; // a page Site pages sent us to make a code for (2026-11-14)
 
   // "/ball/terms" as "ball-terms", "/" as "home": the name of the file, as the server names it.
   function qrSlug(path) {
@@ -5211,14 +5332,15 @@
         // A reload after adding or removing redraws the list: keep the choice the person had made.
         if (keep === SITE_SUBDOMAIN) sel.value = keep;
         siteSyncHost();
+        siteState.canWrite = canWrite;
+        siteState.aliases = d.aliases || [];
         renderSiteAll(d.pages || [], d.privatePages || []);
         renderSiteAliases(d.aliases || [], canWrite);
-        renderSiteSeo(d.pages || [], canWrite);
       })
       .catch(function () {
         el("siteAliasTable").innerHTML = unavailableHtml("Site pages are unavailable.");
-        el("siteSeoTable").innerHTML = "";
-        el("siteAllTable").innerHTML = "";
+        el("siteTiles").innerHTML = "";
+        el("siteAllTable").innerHTML = unavailableHtml("Site pages are unavailable.");
       });
   }
 
@@ -5228,9 +5350,24 @@
   // (GET/POST/PATCH/DELETE /api/admin/users*) requires team:edit on the server, so every write
   // control here is also gated behind canEdit("team") - a person without it never reaches this view
   // at all (applyNavFiltering hides the nav entry), but the gating stays defence in depth.
+  //
+  // 2026-11-14 (docs/superpowers/specs/2026-11-14-admin-refresh-settings.md): a card a person, in the
+  // kit's look. Every big button asks first, in the card, and what happened is said in the card. A
+  // change of role tells the truth: someone with saved access of their own keeps it whatever their
+  // role (effectivePermissions in src/admin/permissions.ts), so the screen says so, before and after,
+  // rather than "Role updated." as if what they can open had changed.
   var teamWired = false;
+  var teamFilter = "all";
+  var teamSaid = {}; // person id -> { msg, cls, perms }: what was last done to them, kept through a redraw
   function teamStatus(msg, cls) {
     var s = el("teamStatus");
+    if (!s) return;
+    s.className = "ty-status" + (cls ? " " + cls : "");
+    s.textContent = msg || "";
+  }
+  // What was done to someone whose card has gone from the list (removed).
+  function teamListSay(msg, cls) {
+    var s = el("teamSaid");
     if (!s) return;
     s.className = "ty-status" + (cls ? " " + cls : "");
     s.textContent = msg || "";
@@ -5241,68 +5378,316 @@
     return '<span class="ty-pill ty-pill-thanked">Invited</span>';
   }
   var TEAM_ROLES = ["viewer", "editor", "admin"];
+  function teamHasOwn(u) {
+    return !!(u && u.permissions && Object.keys(u.permissions).length > 0);
+  }
+  function teamPersonName(u) {
+    return (u && (u.full_name || u.email)) || "This person";
+  }
+  // "12 November", with the year when it is not this one. UK time.
+  function setDay(iso) {
+    if (!iso) return "";
+    var day = qrUkDay(new Date(iso)).split("-");
+    var thisYear = qrUkDay(new Date()).slice(0, 4);
+    return Number(day[2]) + " " + QR_MONTHS[Number(day[1]) - 1] + (day[0] === thisYear ? "" : " " + day[0]);
+  }
+  // "today", "yesterday", "3 days ago", else "on 12 November". UK time.
+  function setAgo(iso) {
+    if (!iso) return "";
+    var today = qrUkDay(new Date());
+    var day = qrUkDay(new Date(iso));
+    var n = Math.round((Date.parse(today + "T12:00:00Z") - Date.parse(day + "T12:00:00Z")) / 864e5);
+    if (n <= 0) return "today";
+    if (n === 1) return "yesterday";
+    if (n < 14) return n + " days ago";
+    return "on " + setDay(iso);
+  }
+  function setList(words) {
+    if (words.length < 2) return words.join("");
+    return words.slice(0, -1).join(", ") + " and " + words[words.length - 1];
+  }
+  function permCount(perms) {
+    var c = { edit: 0, view: 0, none: 0 };
+    SECTIONS.forEach(function (s) {
+      var l = perms[s] || "none";
+      c[l === "edit" || l === "view" ? l : "none"] += 1;
+    });
+    return c;
+  }
+  function teamOpens(u) {
+    if (!teamHasOwn(u)) return u.role === "admin" ? "Everything" : "The " + cap(u.role) + "'s usual access";
+    var c = permCount(completePermissions(u.permissions));
+    if (c.edit === SECTIONS.length) return "Their own access: everything";
+    return "Their own access: can change " + AdminKitPlural(c.edit, "area", "areas") + ", can look at " + c.view;
+  }
+  function AdminKitPlural(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+  // What a role can do, drawn from rolePresetPermissions so it cannot go out of date.
+  function roleLine(role) {
+    var p = completePermissions(rolePresetPermissions(role));
+    var edit = [], view = [], none = [];
+    SECTIONS.forEach(function (s) {
+      (p[s] === "edit" ? edit : p[s] === "view" ? view : none).push(sectionLabel(s));
+    });
+    if (!none.length && !view.length) return "Can open and change everything, including who is on the team.";
+    return (edit.length ? "Can change " + setList(edit) + ". " : "Cannot change anything. ") +
+      (view.length ? "Can look at " + setList(view) + ". " : "") +
+      (none.length ? "Cannot open " + setList(none) + "." : "");
+  }
+  function roleShort(role) {
+    var c = permCount(completePermissions(rolePresetPermissions(role)));
+    if (c.edit === SECTIONS.length) return "An Admin can open and change everything, including who is on the team.";
+    return "A" + (role === "editor" ? "n Editor" : " " + cap(role)) + " can change " + AdminKitPlural(c.edit, "area", "areas") +
+      ", look at " + c.view + " more, and cannot open " + c.none + ".";
+  }
+  function teamRolesHtml() {
+    return TEAM_ROLES.slice().reverse().map(function (r) {
+      return '<p class="set-role"><b>' + cap(r) + ".</b> " + H.escapeHtml(roleLine(r)) + "</p>";
+    }).join("") +
+      '<p class="admin-help">Someone given access of their own on Manage access keeps it whatever their role. The role still decides the few jobs only an Admin may do, such as sending a newsletter.</p>';
+  }
   function teamRoleCell(u, canWrite) {
-    if (!canWrite) return H.escapeHtml(cap(u.role));
+    if (!canWrite) return '<span class="set-person__role">' + H.escapeHtml(cap(u.role)) + "</span>";
     var opts = TEAM_ROLES.map(function (r) {
       return '<option value="' + r + '"' + (r === u.role ? " selected" : "") + ">" + cap(r) + "</option>";
     }).join("");
-    return '<select data-team-role="' + u.id + '" aria-label="Role for ' + H.escapeHtml(u.email) + '">' + opts + "</select>";
+    return '<label class="ak-field set-person__rolefield"><span>Role</span><select data-team-role="' + u.id +
+      '" aria-label="Role for ' + H.escapeHtml(u.email) + '">' + opts + "</select></label>";
   }
   function teamActionsCell(u, canWrite) {
     if (!canWrite) return "";
     var toggle =
       u.status === "disabled"
-        ? '<button class="admin-link" type="button" data-team-enable="' + u.id + '">Enable</button>'
-        : '<button class="admin-link" type="button" data-team-disable="' + u.id + '">Disable</button>';
+        ? '<button class="btn ak-btn--plain" type="button" data-team-enable="' + u.id + '">Enable</button>'
+        : '<button class="btn ak-btn--plain" type="button" data-team-disable="' + u.id + '">Disable</button>';
     return (
-      '<button class="admin-link" type="button" data-team-perms="' + u.id + '">Manage access</button> · ' +
-      '<button class="admin-link" type="button" data-team-reset="' + u.id + '">Reset password</button> · ' +
+      '<div class="ak-actions set-person__actions">' +
+      '<button class="btn btn-primary" type="button" data-team-perms="' + u.id + '">Manage access</button>' +
+      '<button class="btn ak-btn--plain" type="button" data-team-reset="' + u.id + '">Reset password</button>' +
       toggle +
-      " · " +
-      '<button class="admin-link ty-del" type="button" data-team-remove="' + u.id + '" data-team-email="' +
-      H.escapeHtml(u.email) + '">Remove</button>'
+      '<button class="btn ak-btn--danger ty-del" type="button" data-team-remove="' + u.id + '" data-team-email="' +
+      H.escapeHtml(u.email) + '">Remove</button></div>'
     );
+  }
+  function teamSaidHtml(u) {
+    var s = teamSaid[u.id];
+    var inner = s ? H.escapeHtml(s.msg) : "";
+    if (s && s.perms) {
+      inner += ' <button class="btn btn-primary set-inline-btn" type="button" data-team-said-perms="' + u.id + '">Manage access</button>';
+    }
+    return '<p class="ty-status' + (s && s.cls ? " " + s.cls : "") + '" data-team-said="' + u.id + '" role="status" aria-live="polite">' + inner + "</p>";
+  }
+  function teamCard(u, canWrite) {
+    var me = el("userEmail") && el("userEmail").textContent === u.email;
+    var when = u.last_login_at
+      ? "Last signed in " + setAgo(u.last_login_at)
+      : u.status === "invited"
+        ? "Invited " + (u.invited_at ? setDay(u.invited_at) : "") + ", not signed in yet"
+        : "Never signed in";
+    return (
+      '<article class="ak-card set-person" data-team-id="' + u.id + '">' +
+      '<div class="set-person__head"><h3 class="set-person__name">' + H.escapeHtml(u.full_name) +
+      (me ? ' <span class="set-person__you">(you)</span>' : "") + "</h3>" + teamStatusPill(u.status) + "</div>" +
+      '<p class="set-person__email">' + H.escapeHtml(u.email) + "</p>" +
+      '<dl class="ak-facts set-person__facts">' +
+      "<dt>Role</dt><dd>" + H.escapeHtml(cap(u.role)) + "</dd>" +
+      "<dt>Can open</dt><dd>" + H.escapeHtml(teamOpens(u)) + "</dd>" +
+      "<dt>Signed in</dt><dd>" + H.escapeHtml(when) + "</dd>" +
+      "</dl>" +
+      teamRoleCell(u, canWrite) +
+      '<div data-team-ask="' + u.id + '"></div>' +
+      teamActionsCell(u, canWrite) +
+      teamSaidHtml(u) +
+      "</article>"
+    );
+  }
+  var TEAM_TILES = [
+    { key: "all", name: "Everyone", says: "Everyone with an account", test: function () { return true; } },
+    { key: "active", name: "Can sign in", says: "Active accounts", test: function (u) { return u.status === "active"; } },
+    { key: "invited", name: "Invited", says: "Not signed in yet", test: function (u) { return u.status === "invited"; } },
+    { key: "disabled", name: "Disabled", says: "Cannot sign in", test: function (u) { return u.status === "disabled"; } },
+  ];
+  function teamTilesHtml(rows) {
+    return TEAM_TILES.map(function (t) {
+      var n = rows.filter(t.test).length;
+      return '<button type="button" class="ak-tile' + (teamFilter === t.key ? " is-active" : "") + (n ? "" : " is-none") +
+        '" data-team-filter="' + t.key + '" aria-pressed="' + (teamFilter === t.key ? "true" : "false") + '">' +
+        '<span class="ak-tile__n">' + n + '</span><span class="ak-tile__name">' + t.name +
+        '</span><span class="ak-tile__says">' + t.says + "</span></button>";
+    }).join("");
   }
   function teamTable(rows, canWrite) {
     if (!rows.length) return '<p class="admin-empty">No team members yet. Invite one above.</p>';
-    var body = rows
-      .map(function (u) {
-        return (
-          "<tr><td>" + H.escapeHtml(u.full_name) + "</td><td>" + H.escapeHtml(u.email) + "</td><td>" +
-          teamRoleCell(u, canWrite) + "</td><td>" + teamStatusPill(u.status) + "</td><td>" +
-          (H.fmtDate(u.last_login_at) || "Never") + "</td><td>" + teamActionsCell(u, canWrite) + "</td></tr>"
-        );
-      })
-      .join("");
-    return (
-      '<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>' +
-      "<th>Last login</th><th></th></tr></thead><tbody>" + body + "</tbody></table>"
-    );
+    var tile = TEAM_TILES.filter(function (t) { return t.key === teamFilter; })[0] || TEAM_TILES[0];
+    var shown = rows.filter(tile.test);
+    if (!shown.length) return '<p class="admin-empty">Nobody here. Choose Everyone to see the whole team.</p>';
+    return '<div class="ak-list">' + shown.map(function (u) { return teamCard(u, canWrite); }).join("") + "</div>";
   }
-  function loadTeam() {
+  function teamDraw() {
+    var canWrite = canEdit("team");
+    el("teamTiles").innerHTML = teamRows.length ? teamTilesHtml(teamRows) : "";
+    el("teamTable").innerHTML = teamTable(teamRows, canWrite);
+  }
+  // keep: a redraw after a change, which keeps what each card said. Opening the screen starts afresh.
+  function loadTeam(keep) {
     teamWire();
     teamPermWire();
+    if (keep !== true) {
+      teamSaid = {};
+      teamListSay("");
+    }
     var canWrite = canEdit("team");
     var form = el("teamInviteForm");
     if (form) form.hidden = !canWrite;
-    el("teamTable").innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/users")
+    el("teamRolesBody").innerHTML = teamRolesHtml();
+    teamInviteRoleSays();
+    if (keep !== true) el("teamTable").innerHTML = '<p class="admin-loading">Loading…</p>';
+    return authFetch("/api/admin/users")
       .then(okJson)
       .then(function (d) {
         teamRows = d.results || [];
-        el("teamTable").innerHTML = teamTable(teamRows, canWrite);
+        teamDraw();
       })
       .catch(function () {
         teamRows = []; // as before a failure was caught: nothing left over to edit access against
+        el("teamTiles").innerHTML = "";
         el("teamTable").innerHTML = '<p class="admin-empty">Could not load the team.</p>';
       });
+  }
+  function teamInviteRoleSays() {
+    var says = el("teamInviteRoleSays");
+    if (says) says.textContent = roleShort(el("teamInviteRole").value);
   }
   function teamLastAdminMessage() {
     return "That is the last admin. Promote someone else first.";
   }
+  function teamById(id) {
+    return teamRows.filter(function (r) { return r.id === Number(id); })[0] || null;
+  }
+  // Says what happened to one person, in their card, and keeps it through the redraw that follows.
+  function teamSay(id, msg, cls, perms) {
+    teamSaid[id] = { msg: msg, cls: cls, perms: !!perms };
+    var node = doc.querySelector('[data-team-said="' + id + '"]');
+    if (node && node.parentNode) node.outerHTML = teamSaidHtml({ id: Number(id) });
+  }
+  // A question in the page, beside what was pressed: what will happen, and buttons to do it or not.
+  // opts: { q, says, yes, no, other, danger }. onYes / onOther are called after the question goes.
+  function askFirst(box, opts, onYes, onOther, onNo) {
+    if (!box) return;
+    box.innerHTML =
+      '<div class="ak-notice set-ask" role="group" aria-label="' + H.escapeHtml(opts.q) + '">' +
+      '<p class="set-ask__q">' + H.escapeHtml(opts.q) + "</p>" +
+      (opts.says ? '<p class="set-ask__says">' + H.escapeHtml(opts.says) + "</p>" : "") +
+      '<p class="ak-actions">' +
+      '<button type="button" class="btn ' + (opts.danger ? "ak-btn--danger" : "btn-primary") + '" data-ask-yes>' + H.escapeHtml(opts.yes) + "</button>" +
+      (opts.other ? '<button type="button" class="btn ak-btn--plain" data-ask-other>' + H.escapeHtml(opts.other) + "</button>" : "") +
+      '<button type="button" class="btn ak-btn--plain" data-ask-no>' + H.escapeHtml(opts.no || "Leave it") + "</button></p></div>";
+    box.querySelector("[data-ask-yes]").addEventListener("click", function () {
+      box.innerHTML = "";
+      if (onYes) onYes();
+    });
+    var other = box.querySelector("[data-ask-other]");
+    if (other) other.addEventListener("click", function () {
+      box.innerHTML = "";
+      if (onOther) onOther();
+    });
+    box.querySelector("[data-ask-no]").addEventListener("click", function () {
+      box.innerHTML = "";
+      if (onNo) onNo();
+    });
+    var first = box.querySelector("[data-ask-yes]");
+    if (first && first.focus) first.focus();
+  }
+  function teamOwnSentence(u) {
+    return teamPersonName(u) + " has their own access, so changing the role does not change what they can open.";
+  }
+  function teamAskRole(select) {
+    var id = Number(select.getAttribute("data-team-role"));
+    var u = teamById(id);
+    if (!u) return;
+    var to = select.value;
+    if (to === u.role) {
+      el("teamTable").querySelector('[data-team-ask="' + id + '"]').innerHTML = "";
+      return;
+    }
+    var says;
+    if (teamHasOwn(u)) {
+      says = teamOwnSentence(u) + " Use Manage access to change that.";
+      if (to === "admin" || u.role === "admin") says += " The role does still decide the few jobs only an Admin may do, such as sending a newsletter.";
+    } else {
+      says = "They will have the " + cap(to) + "'s usual access. " + roleShort(to);
+    }
+    askFirst(
+      el("teamTable").querySelector('[data-team-ask="' + id + '"]'),
+      { q: "Change " + teamPersonName(u) + " from " + cap(u.role) + " to " + cap(to) + "?", says: says, yes: "Change the role", no: "Leave it as " + cap(u.role) },
+      function () { teamChangeRole(u, to); },
+      null,
+      function () { select.value = u.role; },
+    );
+  }
+  function teamChangeRole(u, to) {
+    var id = u.id;
+    authFetch("/api/admin/users/" + id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: to }),
+    })
+      .then(function (res) {
+        if (res.status === 409) {
+          teamSay(id, teamLastAdminMessage(), "is-error");
+          return loadTeam(true);
+        }
+        if (!res.ok) {
+          teamSay(id, "Could not change that role.", "is-error");
+          return loadTeam(true);
+        }
+        // The truth, from the server's own rule: saved access of their own wins over the role.
+        if (teamHasOwn(u)) {
+          teamSay(id, teamPersonName(u) + "'s role now reads " + cap(to) + ". " + teamOwnSentence(u) + " Use Manage access.", "is-ok", true);
+        } else {
+          teamSay(id, "Role updated. " + teamPersonName(u) + " is now a" + (to === "admin" ? "n " : " ") + cap(to) + ": " + roleShort(to), "is-ok");
+        }
+        return loadTeam(true);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        teamSay(id, "Could not change that role.", "is-error");
+      });
+  }
+  function teamPatchStatus(u, status, done, failed) {
+    authFetch("/api/admin/users/" + u.id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: status }),
+    })
+      .then(function (res) {
+        if (res.status === 409) {
+          teamSay(u.id, teamLastAdminMessage(), "is-error");
+          return;
+        }
+        if (!res.ok) {
+          teamSay(u.id, failed, "is-error");
+          return;
+        }
+        teamSay(u.id, done, "is-ok");
+        return loadTeam(true);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        teamSay(u.id, failed, "is-error");
+      });
+  }
   function teamWire() {
     if (teamWired) return;
     teamWired = true;
+    el("teamInviteRole").addEventListener("change", teamInviteRoleSays);
+    el("teamTiles").addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("[data-team-filter]") : null;
+      if (!t) return;
+      teamFilter = t.getAttribute("data-team-filter");
+      teamDraw();
+    });
     var form = el("teamInviteForm");
     if (form) {
       form.addEventListener("submit", function (e) {
@@ -5328,9 +5713,10 @@
             el("teamInviteEmail").value = "";
             el("teamInviteName").value = "";
             teamStatus("Invited. They will get an email with a link to set a password.", "is-ok");
-            loadTeam();
+            loadTeam(true);
           })
           .catch(function (e2) {
+            if (e2 && e2.message === "unauthorized") return;
             teamStatus(e2.message || "Could not send that invite.", "is-error");
           });
       });
@@ -5341,135 +5727,162 @@
     table.addEventListener("change", function (e) {
       var t = e.target;
       if (!t || !t.matches || !t.matches("[data-team-role]")) return;
-      var id = t.getAttribute("data-team-role");
-      authFetch("/api/admin/users/" + id, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: t.value }),
-      })
-        .then(function (res) {
-          if (res.status === 409) {
-            teamStatus(teamLastAdminMessage(), "is-error");
-            loadTeam();
-            return;
-          }
-          if (!res.ok) {
-            teamStatus("Could not change that role.", "is-error");
-            loadTeam();
-            return;
-          }
-          teamStatus("Role updated.", "is-ok");
-          loadTeam();
-        })
-        .catch(function () {
-          teamStatus("Could not change that role.", "is-error");
-        });
+      teamAskRole(t);
     });
     table.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
 
-      var manage = t.closest("[data-team-perms]");
+      var manage = t.closest("[data-team-perms], [data-team-said-perms]");
       if (manage) {
-        openTeamPermissions(Number(manage.getAttribute("data-team-perms")));
+        openTeamPermissions(Number(manage.getAttribute("data-team-perms") || manage.getAttribute("data-team-said-perms")));
         return;
       }
       var reset = t.closest("[data-team-reset]");
       if (reset) {
-        authFetch("/api/admin/users/" + reset.getAttribute("data-team-reset") + "/reset", { method: "POST" })
-          .then(function (res) {
-            teamStatus(res.ok ? "Password reset email sent." : "Could not send the reset email.", res.ok ? "is-ok" : "is-error");
-          })
-          .catch(function () {
-            teamStatus("Could not send the reset email.", "is-error");
-          });
+        var ru = teamById(reset.getAttribute("data-team-reset"));
+        if (!ru) return;
+        askFirst(
+          table.querySelector('[data-team-ask="' + ru.id + '"]'),
+          { q: "Send " + teamPersonName(ru) + " a password reset?", says: "Emails them a link to choose a new one. The link lasts an hour. Their old password works until they choose a new one.", yes: "Send the email", no: "Leave it" },
+          function () {
+            authFetch("/api/admin/users/" + ru.id + "/reset", { method: "POST" })
+              .then(function (res) {
+                teamSay(ru.id, res.ok ? "Password reset email sent." : "Could not send the reset email.", res.ok ? "is-ok" : "is-error");
+              })
+              .catch(function (err) {
+                if (err && err.message === "unauthorized") return;
+                teamSay(ru.id, "Could not send the reset email.", "is-error");
+              });
+          },
+        );
         return;
       }
       var disable = t.closest("[data-team-disable]");
       if (disable) {
-        authFetch("/api/admin/users/" + disable.getAttribute("data-team-disable"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "disabled" }),
-        })
-          .then(function (res) {
-            if (res.status === 409) {
-              teamStatus(teamLastAdminMessage(), "is-error");
-              return;
-            }
-            if (!res.ok) {
-              teamStatus("Could not disable that person.", "is-error");
-              return;
-            }
-            teamStatus("Disabled.", "is-ok");
-            loadTeam();
-          })
-          .catch(function () {
-            teamStatus("Could not disable that person.", "is-error");
-          });
+        var du = teamById(disable.getAttribute("data-team-disable"));
+        if (!du) return;
+        askFirst(
+          table.querySelector('[data-team-ask="' + du.id + '"]'),
+          { q: "Disable " + teamPersonName(du) + "?", says: "They cannot sign in until you enable them again. Nothing is deleted.", yes: "Disable", no: "Leave it", danger: true },
+          function () { teamPatchStatus(du, "disabled", "Disabled.", "Could not disable that person."); },
+        );
         return;
       }
       var enable = t.closest("[data-team-enable]");
       if (enable) {
-        authFetch("/api/admin/users/" + enable.getAttribute("data-team-enable"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "active" }),
-        })
-          .then(function (res) {
-            if (!res.ok) {
-              teamStatus("Could not enable that person.", "is-error");
-              return;
-            }
-            teamStatus("Enabled.", "is-ok");
-            loadTeam();
-          })
-          .catch(function () {
-            teamStatus("Could not enable that person.", "is-error");
-          });
+        var eu = teamById(enable.getAttribute("data-team-enable"));
+        if (eu) teamPatchStatus(eu, "active", "Enabled.", "Could not enable that person.");
         return;
       }
       var remove = t.closest("[data-team-remove]");
       if (remove) {
-        var name = remove.getAttribute("data-team-email") || "this person";
-        if (!window.confirm('Remove "' + name + '" from the team? This cannot be undone.')) return;
-        authFetch("/api/admin/users/" + remove.getAttribute("data-team-remove"), { method: "DELETE" })
-          .then(function (res) {
-            if (res.status === 409) {
-              teamStatus(teamLastAdminMessage(), "is-error");
-              return;
-            }
-            if (!res.ok) {
-              teamStatus("Could not remove that person.", "is-error");
-              return;
-            }
-            teamStatus("Removed.", "is-ok");
-            loadTeam();
-          })
-          .catch(function () {
-            teamStatus("Could not remove that person.", "is-error");
-          });
+        var xu = teamById(remove.getAttribute("data-team-remove"));
+        if (!xu) return;
+        askFirst(
+          table.querySelector('[data-team-ask="' + xu.id + '"]'),
+          { q: 'Remove "' + (remove.getAttribute("data-team-email") || "this person") + '" from the team? This cannot be undone.', says: "They can no longer sign in, and their account is deleted. What they did stays in the Audit trail. To have them back, invite them again.", yes: "Remove", no: "Keep them", danger: true },
+          function () {
+            authFetch("/api/admin/users/" + xu.id, { method: "DELETE" })
+              .then(function (res) {
+                if (res.status === 409) {
+                  teamSay(xu.id, teamLastAdminMessage(), "is-error");
+                  return;
+                }
+                if (!res.ok) {
+                  teamSay(xu.id, "Could not remove that person.", "is-error");
+                  return;
+                }
+                delete teamSaid[xu.id];
+                teamListSay("Removed. " + teamPersonName(xu) + " can no longer sign in.", "is-ok");
+                return loadTeam(true);
+              })
+              .catch(function (err) {
+                if (err && err.message === "unauthorized") return;
+                teamSay(xu.id, "Could not remove that person.", "is-error");
+              });
+          },
+        );
         return;
       }
     });
   }
 
   // ---- team access matrix (Admin Phase 2 · TASK-186) ----
-  // The 13-section none/view/edit grid for one team member, reached via "Manage access" on a Team
-  // row (gated to team:edit - see teamActionsCell). Mirrors the Story/Contact/Donor detail pattern
-  // (its own admin-view + Back button + aria-live container) rather than an inline expander, since
-  // the matrix is 13 rows and would make the Team table unreadably tall inline.
+  // The none/view/edit grid for one team member, reached via "Manage access" on a Team card (gated
+  // to team:edit - see teamActionsCell). Its own admin-view + Back button.
+  //
+  // 2026-11-14: grouped under the menu's own headings, each area saying what it covers and the
+  // screens that ride on it; None, View and Edit explained once; what saving will change said
+  // beside both Saves; rows that differ from the role marked, with a way back to the role's usual
+  // access; "Copy access from" another person. A failed save is red (it was drawn in the same green
+  // as "Access updated."), and Back asks before it throws away changes that are not saved.
   var teamPermWorking = {}; // the matrix being edited for currentTeamPermUserId
+  var teamPermSaved = {}; // what is saved for them now, complete: the working copy differs = unsaved
+  // The names of the areas that have no menu link of their own.
+  var SECTION_NAMES = {
+    events: "Get involved: our events",
+    fundraising: "Get involved: sign ups and fundraising",
+    "business-supporters": "Business supporters",
+  };
+  // What each area covers, in a line. The screens that ride on an area are added from the menu.
+  var SECTION_SAYS = {
+    overview: "The first screen: what needs someone today, and recent gifts.",
+    search: "Finding a donor, a Gift Aid declaration or a gift by name, email or postcode.",
+    donations: "Every gift, each donor's details, refunds and corrections.",
+    claims: "Gift Aid claims to HMRC: gathering gifts, downloading the claim, marking it paid.",
+    gasds: "Small cash and contactless gifts topped up under the Gift Aid Small Donations Scheme.",
+    subscriptions: "Monthly gifts whose card has failed.",
+    stories: "Stories families and supporters send in, and which may be shared.",
+    ticker: "The partners that scroll across the top of every page.",
+    ball: "The Festive Ball: tickets, bookings, guests and menus. Edit includes putting the ticket page live.",
+    events: "The events on What's on and the Get involved page.",
+    fundraising: "People raising money for us: their pages, tickets, pledges and the emails about them.",
+    contact: "Messages sent through the website's contact form.",
+    newsletter: "Writing newsletters. Only an Admin can send one.",
+    "thank-you": "Thank you letters to donors over the threshold.",
+    audit: "The record of who changed what, and when.",
+    "email-audit": "Every email the website has tried to send, and to whom. Holds donors' addresses.",
+    site: "Every page of the website, spare addresses and what search engines are shown.",
+    outreach: "Asking local businesses to become monthly supporters. Holds businesses' contact details.",
+    "business-supporters": "Thanking each business supporter as it asked. Holds postal addresses.",
+    analytics: "How many people visit the website, where from, and what they look at.",
+    "red-bag": "The list of gifts on Fill a Red Bag. Edit includes publishing it to the live page.",
+    elf: "Elf Detective School: children's first names and families' emails.",
+    team: "This screen: who can sign in, and what each person can open.",
+  };
   function sectionLabel(section) {
+    if (SECTION_NAMES[section]) return SECTION_NAMES[section];
     // Reuse the nav link's own text (e.g. "GASDS", "Partners" for ticker, "Thank you" for
     // thank-you) rather than duplicating labels that could drift out of sync with the nav.
     var btn = doc.querySelector('.admin-nav-link[data-view="' + section + '"]');
     if (!btn) return cap(section);
+    return navLinkWords(btn);
+  }
+  function navLinkWords(btn) {
     // Without its New pill (TASK-478), which is not part of the section's name.
     var copy = btn.cloneNode(true);
     var pillIn = copy.querySelector(".admin-new-pill");
     if (pillIn) pillIn.remove();
     return copy.textContent.trim();
+  }
+  // Each area's menu heading, and the other screens that ride on it, read from the menu itself.
+  function sectionPlaces() {
+    var places = {};
+    Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
+      var label = g.querySelector(".admin-nav-grouplabel");
+      var group = label ? label.textContent.trim() : "";
+      Array.prototype.forEach.call(g.querySelectorAll(".admin-nav-link[data-view]"), function (b) {
+        var view = b.getAttribute("data-view");
+        var gates = (b.getAttribute("data-view-gate-any") || b.getAttribute("data-view-gate") || b.getAttribute("data-edit-gate") || view).split(" ");
+        gates.forEach(function (s) {
+          if (SECTIONS.indexOf(s) === -1) return;
+          if (!places[s]) places[s] = { group: group, rides: [] };
+          if (view !== s) places[s].rides.push(navLinkWords(b) + (b.getAttribute("data-edit-gate") ? " (needs Edit)" : ""));
+        });
+      });
+    });
+    return places;
   }
   // A copy of perms naming every section, "none" wherever perms is silent. The permissions PATCH takes
   // only a complete matrix, and the editor role's defaults, like a map saved before a section existed,
@@ -5482,80 +5895,198 @@
     });
     return full;
   }
-  function teamPermMatrixHtml(perms) {
-    return SECTIONS.map(function (section) {
-      var level = perms[section] || "none";
-      var seg = ["none", "view", "edit"]
-        .map(function (lvl) {
-          return (
-            '<button class="admin-seg' + (level === lvl ? " is-active" : "") + '" type="button" data-perm-level="' +
-            lvl + '">' + cap(lvl) + "</button>"
-          );
-        })
-        .join("");
-      return (
-        '<div class="admin-perm-row"><span class="admin-perm-label">' + H.escapeHtml(sectionLabel(section)) + "</span>" +
-        '<div class="admin-segmented" role="group" aria-label="' + H.escapeHtml(sectionLabel(section)) +
-        ' access" data-perm-section="' + section + '">' + seg + "</div></div>"
-      );
+  function teamPermRowHtml(section, perms, roleUsual, places) {
+    var level = perms[section] || "none";
+    var seg = ["none", "view", "edit"]
+      .map(function (lvl) {
+        return (
+          '<button class="admin-seg' + (level === lvl ? " is-active" : "") + '" type="button" data-perm-level="' +
+          lvl + '" aria-pressed="' + (level === lvl ? "true" : "false") + '">' + cap(lvl) + "</button>"
+        );
+      })
+      .join("");
+    var place = places[section];
+    var rides = place && place.rides.length ? " Also opens " + setList(place.rides) + "." : "";
+    var differs = roleUsual[section] !== level;
+    return (
+      '<div class="admin-perm-row' + (differs ? " is-different" : "") + '" data-perm-row="' + section + '">' +
+      '<div class="set-perm-words"><span class="admin-perm-label">' + H.escapeHtml(sectionLabel(section)) + "</span>" +
+      '<span class="set-perm-says">' + H.escapeHtml((SECTION_SAYS[section] || "") + rides) + "</span>" +
+      (differs ? '<span class="ak-mark ak-mark--wait set-perm-mark">The role gives ' + cap(roleUsual[section]) + "</span>" : "") +
+      "</div>" +
+      '<div class="admin-segmented" role="group" aria-label="' + H.escapeHtml(sectionLabel(section)) +
+      ' access" data-perm-section="' + section + '">' + seg + "</div></div>"
+    );
+  }
+  function teamPermMatrixHtml(perms, role) {
+    var roleUsual = completePermissions(rolePresetPermissions(role || "viewer"));
+    var places = sectionPlaces();
+    var order = [];
+    var groups = {};
+    SECTIONS.forEach(function (s) {
+      var g = (places[s] && places[s].group) || "Other";
+      if (!groups[g]) {
+        groups[g] = [];
+        order.push(g);
+      }
+      groups[g].push(s);
+    });
+    return order.map(function (g) {
+      return '<h4 class="ak-group set-perm-group">' + H.escapeHtml(g) + "</h4>" +
+        groups[g].map(function (s) { return teamPermRowHtml(s, perms, roleUsual, places); }).join("");
     }).join("");
   }
+  // What saving would change, in words: "Sam Example will lose Donations and gain Stories."
+  function teamPermChanges(u) {
+    var gain = [], lose = [];
+    SECTIONS.forEach(function (s) {
+      var was = LEVEL_RANK[teamPermSaved[s]] || 0;
+      var now = LEVEL_RANK[teamPermWorking[s]] || 0;
+      if (now > was) gain.push(sectionLabel(s) + " (" + cap(teamPermWorking[s]) + ")");
+      if (now < was) lose.push(sectionLabel(s) + (teamPermWorking[s] === "none" ? "" : " (down to View)"));
+    });
+    if (!gain.length && !lose.length) return "";
+    var who = teamPersonName(u);
+    var parts = [];
+    if (lose.length) parts.push("lose " + setList(lose));
+    if (gain.length) parts.push("gain " + setList(gain));
+    return who + " will " + parts.join(" and ") + "." +
+      (teamHasOwn(u) ? "" : " Saving also gives them access of their own, so a later change of role will not change it.");
+  }
+  function teamPermDirty() {
+    return SECTIONS.some(function (s) { return teamPermSaved[s] !== teamPermWorking[s]; });
+  }
+  function teamPermSummaryHtml(u) {
+    var words = teamPermChanges(u);
+    return '<p class="ak-says set-perm-summary" data-perm-summary>' +
+      H.escapeHtml(words || "Nothing has changed yet. Saving now keeps exactly what they have.") + "</p>";
+  }
   function renderTeamPermMatrix(u) {
+    var c = permCount(teamPermWorking);
+    var roleUsual = completePermissions(rolePresetPermissions(u.role));
+    var differs = SECTIONS.some(function (s) { return roleUsual[s] !== teamPermWorking[s]; });
+    var others = teamRows.filter(function (r) { return r.id !== u.id; });
+    var tile = function (n, name, says) {
+      return '<div class="ak-tile' + (n ? "" : " is-none") + '"><span class="ak-tile__n">' + n + '</span><span class="ak-tile__name">' +
+        name + '</span><span class="ak-tile__says">' + says + "</span></div>";
+    };
+    var save = function (id) {
+      return '<div class="set-perm-save"><button class="btn btn-primary" type="button" id="' + id + '">Save access</button>' + teamPermSummaryHtml(u) + "</div>";
+    };
     el("teamPermDetail").innerHTML =
-      '<p class="admin-view-intro">' + H.escapeHtml(u.full_name) + " (" + H.escapeHtml(u.email) + "). Role: " +
-      H.escapeHtml(cap(u.role)) + "</p>" +
+      '<p class="admin-help">' + H.escapeHtml(u.full_name) + " (" + H.escapeHtml(u.email) + "). Role: " +
+      H.escapeHtml(cap(u.role)) + ". " + (teamHasOwn(u) ? "They have access of their own, which is what they can open whatever their role." : "They have the " + H.escapeHtml(cap(u.role)) + "'s usual access.") + "</p>" +
+      '<div class="ak-tiles set-perm-tiles">' + tile(c.edit, "Can change", "Areas they can look at and change") +
+      tile(c.view, "Can look at", "Areas they can only look at") + tile(c.none, "Cannot open", "Areas hidden from them") + "</div>" +
+      '<div class="ak-notice set-perm-key"><p><b>None</b>: cannot open it. <b>View</b>: can look. <b>Edit</b>: can look and change.</p></div>' +
+      '<div class="ak-card ak-card--flat set-perm-fill">' +
+      "<p class=\"set-perm-fill__q\">Fill every row from a role's usual access</p>" +
       '<div class="admin-perm-presets">' +
       '<button class="btn btn-ghost" type="button" data-perm-preset="viewer">Viewer</button>' +
       '<button class="btn btn-ghost" type="button" data-perm-preset="editor">Editor</button>' +
       '<button class="btn btn-ghost" type="button" data-perm-preset="admin">Admin</button>' +
       "</div>" +
-      '<div id="teamPermMatrix">' + teamPermMatrixHtml(teamPermWorking) + "</div>" +
-      '<button class="btn btn-primary" type="button" id="teamPermSave" style="margin-top:16px">Save access</button>';
+      '<p class="ak-says">This only fills in the rows below. It does not change their role, and nothing is saved until you press Save access.</p>' +
+      (others.length
+        ? '<div class="set-perm-copy"><label class="ak-field"><span>Copy access from</span><select id="teamPermCopyFrom">' +
+          others.map(function (r) { return '<option value="' + r.id + '">' + H.escapeHtml(r.full_name || r.email) + "</option>"; }).join("") +
+          '</select></label><button class="btn ak-btn--plain" type="button" data-perm-copy>Copy</button></div>' +
+          '<p class="ak-says">Fills the rows with what that person can open now. Nothing is saved until you press Save access.</p>'
+        : "") +
+      "</div>" +
+      save("teamPermSaveTop") +
+      (differs
+        ? '<p class="ak-actions set-perm-reset"><button class="btn ak-btn--plain" type="button" data-perm-reset>Put back to the ' +
+          H.escapeHtml(cap(u.role)) + "'s usual access</button></p>" +
+          '<p class="ak-says">Rows marked "The role gives" are not what the ' + H.escapeHtml(cap(u.role)) + " role gives on its own.</p>"
+        : "") +
+      '<div id="teamPermMatrix">' + teamPermMatrixHtml(teamPermWorking, u.role) + "</div>" +
+      save("teamPermSave");
+  }
+  function teamPermPerson() {
+    return teamRows.filter(function (r) { return r.id === currentTeamPermUserId; })[0] || null;
+  }
+  function teamPermRedraw(focusSel) {
+    var u = teamPermPerson();
+    if (!u) return;
+    renderTeamPermMatrix(u);
+    if (focusSel) {
+      var f = el("teamPermDetail").querySelector(focusSel);
+      if (f && f.focus) f.focus();
+    }
+  }
+  function teamPermSay(msg, cls) {
+    var s = el("teamPermStatus");
+    s.textContent = msg || "";
+    s.classList.toggle("is-error", cls === "is-error");
+    s.classList.toggle("is-ok", cls === "is-ok");
   }
   function openTeamPermissions(id) {
     var u = teamRows.filter(function (r) { return r.id === id; })[0];
     if (!u) return;
     currentTeamPermUserId = id;
     teamPermWorking = completePermissions(effectiveTeamPermissions(u));
+    teamPermSaved = Object.assign({}, teamPermWorking);
     showOnly("view-team-permissions");
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
     });
     syncTabBar();
-    el("teamPermStatus").textContent = "";
+    el("teamPermAsk").innerHTML = "";
+    el("team-permissions-heading").textContent = "Manage access: " + teamPersonName(u);
+    el("teamPermIntro").textContent = "Choose, area by area, what " + teamPersonName(u) + " can look at and what they can change.";
+    teamPermSay("");
     renderTeamPermMatrix(u);
   }
   bindClick("teamPermBack", function () {
-    selectView("team");
+    if (!teamPermDirty()) {
+      selectView("team");
+      return;
+    }
+    var u = teamPermPerson();
+    askFirst(
+      el("teamPermAsk"),
+      { q: "You have changes to " + teamPersonName(u) + "'s access that are not saved.", says: teamPermChanges(u), yes: "Leave without saving", other: "Save, then go back", no: "Stay here" },
+      function () { selectView("team"); },
+      function () {
+        saveTeamPermissions().then(function (ok) { if (ok) selectView("team"); });
+      },
+    );
   });
+  // Resolves true when the access was saved.
   function saveTeamPermissions() {
-    if (currentTeamPermUserId == null) return;
-    el("teamPermStatus").textContent = "Saving…";
-    authFetch("/api/admin/users/" + currentTeamPermUserId + "/permissions", {
+    if (currentTeamPermUserId == null) return Promise.resolve(false);
+    teamPermSay("Saving…");
+    return authFetch("/api/admin/users/" + currentTeamPermUserId + "/permissions", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ permissions: teamPermWorking }),
     })
       .then(function (res) {
         if (res.status === 409) {
-          el("teamPermStatus").textContent = teamLastAdminMessage();
+          teamPermSay(teamLastAdminMessage(), "is-error");
           return null;
         }
         if (!res.ok) {
-          el("teamPermStatus").textContent = "Could not save that access.";
+          teamPermSay("Could not save that access.", "is-error");
           return null;
         }
         return res.json();
       })
       .then(function (updated) {
-        if (!updated) return;
+        if (!updated) return false;
         teamRows = teamRows.map(function (r) {
           return r.id === updated.id ? updated : r;
         });
-        el("teamPermStatus").textContent = "Access updated.";
+        teamPermSaved = Object.assign({}, teamPermWorking);
+        teamPermRedraw();
+        teamPermSay("Access updated.", "is-ok");
+        return true;
       })
-      .catch(function () {
-        el("teamPermStatus").textContent = "Could not save that access.";
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return false;
+        teamPermSay("Could not save that access.", "is-error");
+        return false;
       });
   }
   var teamPermWired = false;
@@ -5571,17 +6102,35 @@
       if (levelBtn) {
         var group = levelBtn.closest("[data-perm-section]");
         if (!group) return;
-        teamPermWorking[group.getAttribute("data-perm-section")] = levelBtn.getAttribute("data-perm-level");
-        el("teamPermMatrix").innerHTML = teamPermMatrixHtml(teamPermWorking);
+        var section = group.getAttribute("data-perm-section");
+        var lvl = levelBtn.getAttribute("data-perm-level");
+        teamPermWorking[section] = lvl;
+        teamPermRedraw('[data-perm-section="' + section + '"] [data-perm-level="' + lvl + '"]');
         return;
       }
       var presetBtn = t.closest("[data-perm-preset]");
       if (presetBtn) {
         teamPermWorking = completePermissions(rolePresetPermissions(presetBtn.getAttribute("data-perm-preset")));
-        el("teamPermMatrix").innerHTML = teamPermMatrixHtml(teamPermWorking);
+        teamPermRedraw('[data-perm-preset="' + presetBtn.getAttribute("data-perm-preset") + '"]');
         return;
       }
-      if (t.closest("#teamPermSave")) {
+      if (t.closest("[data-perm-reset]")) {
+        var u = teamPermPerson();
+        if (u) teamPermWorking = completePermissions(rolePresetPermissions(u.role));
+        teamPermRedraw("#teamPermSaveTop");
+        return;
+      }
+      if (t.closest("[data-perm-copy]")) {
+        var from = teamById(el("teamPermCopyFrom").value);
+        if (from) teamPermWorking = completePermissions(effectiveTeamPermissions(from));
+        teamPermRedraw("[data-perm-copy]");
+        if (from) {
+          var copied = el("teamPermCopyFrom");
+          if (copied) copied.value = String(from.id);
+        }
+        return;
+      }
+      if (t.closest("#teamPermSave") || t.closest("#teamPermSaveTop")) {
         saveTeamPermissions();
       }
     });
@@ -11069,10 +11618,57 @@
     s.className = "ty-status" + (cls ? " " + cls : "");
     s.textContent = msg || "";
   }
+  // 2026-11-14: what you can open, from the access loaded at sign in (GET /api/admin/me), under
+  // the menu's own headings, and how much at a glance.
+  function accountAccessDraw() {
+    var perms = completePermissions(myPermissions || {});
+    var c = permCount(perms);
+    var tile = function (n, name, says) {
+      return '<div class="ak-tile' + (n ? "" : " is-none") + '"><span class="ak-tile__n">' + n + '</span><span class="ak-tile__name">' +
+        name + '</span><span class="ak-tile__says">' + says + "</span></div>";
+    };
+    el("accountTiles").innerHTML =
+      '<div class="ak-tile"><span class="ak-tile__n">' + H.escapeHtml(cap(currentRole)) + '</span><span class="ak-tile__name">Your role</span><span class="ak-tile__says">Set by an Admin in Team</span></div>' +
+      tile(c.edit, "Can change", "Areas you can look at and change") + tile(c.view, "Can look at", "Areas you can only look at");
+    var places = sectionPlaces();
+    var groups = [], by = {};
+    SECTIONS.forEach(function (s) {
+      var g = (places[s] && places[s].group) || "Other";
+      if (!by[g]) { by[g] = []; groups.push(g); }
+      by[g].push(s);
+    });
+    var none = SECTIONS.filter(function (s) { return perms[s] === "none"; }).map(sectionLabel);
+    el("accountAccess").innerHTML =
+      '<p class="admin-help">Your role is ' + H.escapeHtml(cap(currentRole)) + ". " +
+      "If you need to open something that is not here, ask an Admin: they choose what each person can open in Team.</p>" +
+      '<div class="ak-card set-access">' +
+      groups.map(function (g) {
+        var mine = by[g].filter(function (s) { return perms[s] !== "none"; });
+        if (!mine.length) return "";
+        return '<h4 class="ak-group">' + H.escapeHtml(g) + '</h4><ul class="set-access__list">' +
+          mine.map(function (s) {
+            return '<li><span class="set-access__name">' + H.escapeHtml(sectionLabel(s)) + ':</span> <span class="ak-mark ' +
+              (perms[s] === "edit" ? "ak-mark--ok\">can change" : "ak-mark--quiet\">can look") + "</span></li>";
+          }).join("") + "</ul>";
+      }).join("") +
+      (none.length ? '<p class="set-access__none">Not part of your access: ' + H.escapeHtml(setList(none)) + ".</p>" : "") +
+      "</div>";
+  }
+  function accountMatchSay() {
+    var next = el("accountNewPassword").value;
+    var confirm = el("accountConfirmPassword").value;
+    var m = el("accountMatch");
+    m.classList.remove("is-ok", "is-error");
+    if (!confirm) { m.textContent = ""; return; }
+    if (next === confirm) { m.textContent = "✓ These match."; m.classList.add("is-ok"); }
+    else m.textContent = "These do not match yet.";
+  }
   function loadAccount() {
     accountWire();
     accountStatus("accountNameStatus", "");
     accountStatus("accountPasswordStatus", "");
+    accountAccessDraw();
+    accountMatchSay();
     authFetch("/api/admin/me")
       .then(okJson)
       .then(function (d) {
@@ -11117,6 +11713,17 @@
       });
     }
 
+    ["accountNewPassword", "accountConfirmPassword"].forEach(function (id) {
+      el(id).addEventListener("input", accountMatchSay);
+    });
+    el("accountShow").addEventListener("change", function () {
+      var show = el("accountShow").checked;
+      ["accountCurrentPassword", "accountNewPassword", "accountConfirmPassword"].forEach(function (id) {
+        el(id).type = show ? "text" : "password";
+      });
+    });
+    bindClick("accountGoNotifications", function () { selectView("notifications"); });
+    bindClick("accountSignOut", function () { el("logoutBtn").click(); });
     var passwordForm = el("accountPasswordForm");
     if (passwordForm) {
       passwordForm.addEventListener("submit", function (e) {
@@ -11150,6 +11757,13 @@
                 );
               });
             }
+            // The server's own words when it says to wait (429), not a general failure.
+            if (res.status === 429) {
+              return res.json().then(
+                function (b) { accountStatus("accountPasswordStatus", (b && b.error) || "Too many attempts. Please try again shortly.", "is-error"); },
+                function () { accountStatus("accountPasswordStatus", "Too many attempts. Please try again shortly.", "is-error"); },
+              );
+            }
             // Honest-save: fields only clear and "Password changed" only shows on a real 200.
             if (!res.ok) {
               accountStatus("accountPasswordStatus", "Could not change your password.", "is-error");
@@ -11159,6 +11773,7 @@
               el("accountCurrentPassword").value = "";
               el("accountNewPassword").value = "";
               el("accountConfirmPassword").value = "";
+              accountMatchSay();
               accountStatus("accountPasswordStatus", "Password changed.", "is-ok");
             });
           })

@@ -2711,32 +2711,44 @@
                  page) and per-page "show to search engines" choices (drives /sitemap.xml).
                  Reads need site:view; writes site:edit (admins by default) - app.js hides the
                  write controls for read-only users and the server enforces regardless. -->
-            <section class="admin-view" id="view-site" aria-labelledby="site-heading" hidden>
+            <section class="admin-view ak" id="view-site" aria-labelledby="site-heading" hidden>
               <h2 id="site-heading">Site pages</h2>
-              <p class="admin-view-intro">Spare addresses quietly send visitors to the right page, so a mistyped or shortened address still lands well. A spare address can also send people on to an NBCC subdomain, so nbcc.scot/drop opens drop.nbcc.scot. The search engine ticks decide which pages appear in the site's public listing for Google and friends. The <a href="/sitemap" target="_blank" rel="noopener">site map page</a> shows every page as visitors can reach it.</p>
+              <p class="admin-view-intro">Every page on the website: who can reach it, the spare addresses that lead to it, and whether search engines are shown it. The <a href="/sitemap" target="_blank" rel="noopener">site map page</a> shows every page as visitors can reach it.</p>
+              <!-- The tiles are the filter: a count of each kind of page, and pressing one shows only those. -->
+              <div class="ak-tiles" id="siteTiles" role="group" aria-label="Which pages to show"></div>
+
               <h3 class="admin-subhead">Every page</h3>
               <p class="admin-help">The whole website in one list, including the pages nobody can find by browsing. If a page is here, it is somebody&rsquo;s to keep up to date.</p>
-              <div class="admin-table-wrap" id="siteAllTable" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              <p class="admin-help">The search engine ticks decide which pages appear in the site&rsquo;s public listing for Google and friends: the list of pages the website hands to search engines.</p>
+              <label class="ak-field set-search" for="siteSearch"><span>Find a page</span>
+                <input id="siteSearch" type="search" placeholder="A name, an address or a word" autocomplete="off" />
+              </label>
+              <p class="set-count" id="siteCount" role="status" aria-live="polite"></p>
+              <!-- One card a page (TASK-402's whole list and the search engine ticks, in one place). -->
+              <div class="set-pages" id="siteAllTable"><p class="admin-loading">Loading&hellip;</p></div>
 
               <h3 class="admin-subhead">Spare addresses</h3>
-              <form id="siteAliasForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Spare address
-                  <input id="siteAliasFrom" type="text" placeholder="/give" required style="width:160px" />
-                </label>
-                <label class="ty-inline">Sends people to
-                  <select id="siteAliasTo"></select>
-                </label>
-                <!-- TASK-568: shown only when "An NBCC subdomain" is chosen above. -->
-                <label class="ty-inline" id="siteAliasHostWrap" hidden>Subdomain
-                  <input id="siteAliasHost" type="text" placeholder="drop.nbcc.scot" style="width:220px" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" aria-describedby="siteAliasHostHelp" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="siteAliasAdd">Add</button>
+              <p class="admin-help">Spare addresses quietly send visitors to the right page, so a mistyped or shortened address still lands well. A spare address can also send people on to an NBCC subdomain, so nbcc.scot/drop opens drop.nbcc.scot. A subdomain is one of our own addresses with a word in front, such as drop.nbcc.scot.</p>
+              <form id="siteAliasForm" class="ak-panel set-form" autocomplete="off">
+                <h4 class="set-form__title">Add a spare address</h4>
+                <div class="ak-fields">
+                  <label class="ak-field"><span>Spare address</span>
+                    <input id="siteAliasFrom" type="text" placeholder="/give" required autocapitalize="none" autocorrect="off" spellcheck="false" />
+                  </label>
+                  <label class="ak-field"><span>Sends people to</span>
+                    <select id="siteAliasTo"></select>
+                  </label>
+                  <!-- TASK-568: shown only when "An NBCC subdomain" is chosen above. -->
+                  <label class="ak-field" id="siteAliasHostWrap" hidden><span>Subdomain</span>
+                    <input id="siteAliasHost" type="text" placeholder="drop.nbcc.scot" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" aria-describedby="siteAliasHostHelp" />
+                  </label>
+                </div>
+                <p class="admin-help" id="siteAliasHostHelp" hidden>The address must end in <b>.nbcc.scot</b>, like drop.nbcc.scot or drop.nbcc.scot/collect. The subdomain has to exist already: this only sends people to it.</p>
+                <p class="ak-actions"><button class="btn btn-primary" type="submit" id="siteAliasAdd">Add</button></p>
+                <p class="ak-says">It works the moment you add it.</p>
               </form>
-              <p class="admin-help" id="siteAliasHostHelp" hidden>The address must end in <b>.nbcc.scot</b>, like drop.nbcc.scot or drop.nbcc.scot/collect. The subdomain has to exist already: this only sends people to it.</p>
               <p class="ty-status" id="siteStatus" role="status" aria-live="polite"></p>
-              <div class="admin-table-wrap sa-list" id="siteAliasTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <h3 class="admin-subhead">Search engines</h3>
-              <div class="admin-table-wrap" id="siteSeoTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div class="admin-table-wrap sa-list" id="siteAliasTable"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- TASK-492: a QR code for every page, from the site's one page list (src/site/pages.ts),
@@ -2855,9 +2867,12 @@
               <div id="invList" class="inv-list" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
             </section>
 
-            <section class="admin-view" id="view-qr" aria-labelledby="qr-heading" hidden>
+            <section class="admin-view ak" id="view-qr" aria-labelledby="qr-heading" hidden>
               <h2 id="qr-heading">QR codes</h2>
-              <p class="admin-view-intro">Make a QR code for each place you print or show one, such as a billboard, a business card or a table card, and give it a name. Each code counts its own scans, so you can see which ones work. You can change where a code goes at any time, even after it is printed. Use the <b>SVG</b> for anything a printer or designer makes: it stays sharp at any size. Use the <b>PNG</b> for slides, social posts and documents.</p>
+              <p class="admin-view-intro">Make a QR code for each place you print or show one, such as a billboard, a business card or a table card, and give it a name.</p>
+              <p class="admin-help">Each code counts its own scans, so you can see which ones work. You can change where a code goes at any time, even after it is printed. Use the <b>SVG</b> for anything a printer or designer makes: it stays sharp at any size. Use the <b>PNG</b> for slides, social posts and documents.</p>
+              <!-- How the named codes are doing, at a glance. -->
+              <div class="ak-tiles" id="qrTiles"></div>
 
               <!-- TASK-588: named QR codes. The form is for Site pages editors only. -->
               <form id="qrNewForm" class="qr-new" autocomplete="off" hidden>
@@ -2875,39 +2890,72 @@
               </form>
 
               <h3 class="admin-subhead">Your named codes</h3>
-              <div id="qrNamedList" class="qr-grid" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              <div class="ak-filter-group set-sort" id="qrSortWrap" hidden>
+                <p class="ak-filter-label" id="qrSortLabel">Order</p>
+                <div class="admin-segmented" id="qrSort" role="group" aria-labelledby="qrSortLabel">
+                  <button class="admin-seg is-active" type="button" data-qr-sort="newest" aria-pressed="true">Newest</button>
+                  <button class="admin-seg" type="button" data-qr-sort="scans" aria-pressed="false">Most scanned</button>
+                  <button class="admin-seg" type="button" data-qr-sort="name" aria-pressed="false">A to Z</button>
+                </div>
+              </div>
+              <p class="ty-status" id="qrNamedSaid" role="status" aria-live="polite"></p>
+              <div id="qrNamedList" class="qr-grid"><p class="admin-loading">Loading&hellip;</p></div>
               <details id="qrHidden" class="qr-hidden" hidden>
                 <summary id="qrHiddenSummary">Hidden codes</summary>
                 <p class="admin-help">Codes you have finished with. They still work: anyone who scans one still gets to its page, and it still counts.</p>
                 <div id="qrHiddenList" class="qr-grid"></div>
               </details>
 
-              <h3 class="admin-subhead">A quick code for every page</h3>
-              <p class="admin-help">The codes this screen has always made, one for every page. A new page appears here by itself. Their scans show in Analytics under <b>QR code</b>, by page, not by where you printed them, so for anything new a named code above is better.</p>
-              <div id="qrList" class="qr-grid" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              <!-- Folded shut: about thirty cards that the screen itself says are second best. -->
+              <details id="qrQuick" class="ak-fold set-quick">
+                <summary>A quick code for every page</summary>
+                <div class="ak-fold__body">
+                  <p class="admin-help">The codes this screen has always made, one for every page. A new page appears here by itself. Their scans show in Analytics under <b>QR code</b>, by page, not by where you printed them, so for anything new a named code above is better.</p>
+                  <label class="ak-field set-search" for="qrSearch"><span>Find a page</span>
+                    <input id="qrSearch" type="search" placeholder="A name or an address" autocomplete="off" />
+                  </label>
+                  <p class="set-count" id="qrSearchCount" role="status" aria-live="polite"></p>
+                  <div id="qrList" class="qr-grid"><p class="admin-loading">Loading&hellip;</p></div>
+                </div>
+              </details>
             </section>
 
-            <section class="admin-view" id="view-team" aria-labelledby="team-heading" hidden>
+            <section class="admin-view ak" id="view-team" aria-labelledby="team-heading" hidden>
               <h2 id="team-heading">Team</h2>
-              <p class="admin-view-intro">Everyone who can sign in to this dashboard. Invite someone by email, change their role, or disable, re-enable or remove their access. Only an Admin can make changes here; there must always be at least one enabled Admin.</p>
-              <form id="teamInviteForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Email
-                  <input id="teamInviteEmail" type="email" required style="width:220px" />
-                </label>
-                <label class="ty-inline">Full name
-                  <input id="teamInviteName" type="text" required maxlength="120" style="width:180px" />
-                </label>
-                <label class="ty-inline">Role
-                  <select id="teamInviteRole">
-                    <option value="viewer">Viewer</option>
-                    <option value="editor" selected>Editor</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </label>
-                <button class="btn btn-primary" type="submit" id="teamInviteBtn">Invite</button>
+              <p class="admin-view-intro">Everyone who can sign in to this dashboard, and what each of them can open.</p>
+              <p class="admin-help">Invite someone by email, change their role, or disable, re-enable or remove their access. Only an Admin can make changes here; there must always be at least one enabled Admin.</p>
+              <!-- The tiles are the filter: how many people are in each state, and pressing one shows only them. -->
+              <div class="ak-tiles" id="teamTiles" role="group" aria-label="Who to show"></div>
+              <!-- A line a role, worked out from each role's own defaults (rolePresetPermissions in app.js). -->
+              <details class="ak-fold" id="teamRoles">
+                <summary>What each role can do</summary>
+                <div class="ak-fold__body" id="teamRolesBody"></div>
+              </details>
+              <form id="teamInviteForm" class="ak-panel set-form" autocomplete="off">
+                <h3 class="set-form__title">Invite someone</h3>
+                <div class="ak-fields">
+                  <label class="ak-field"><span>Email</span>
+                    <input id="teamInviteEmail" type="email" required autocapitalize="none" autocorrect="off" spellcheck="false" />
+                  </label>
+                  <label class="ak-field"><span>Full name</span>
+                    <input id="teamInviteName" type="text" required maxlength="120" />
+                  </label>
+                  <label class="ak-field"><span>Role</span>
+                    <select id="teamInviteRole" aria-describedby="teamInviteRoleSays">
+                      <option value="viewer">Viewer</option>
+                      <option value="editor" selected>Editor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </label>
+                </div>
+                <p class="ak-says" id="teamInviteRoleSays"></p>
+                <p class="ak-actions"><button class="btn btn-primary" type="submit" id="teamInviteBtn">Invite</button></p>
+                <p class="ak-says">Emails them a link to choose a password. The link lasts 48 hours.</p>
+                <p class="ty-status" id="teamStatus" role="status" aria-live="polite"></p>
               </form>
-              <p class="ty-status" id="teamStatus" role="status" aria-live="polite"></p>
-              <div class="admin-table-wrap" id="teamTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <!-- What was just done to someone whose card is no longer in the list (removed, or filtered out). -->
+              <p class="ty-status" id="teamSaid" role="status" aria-live="polite"></p>
+              <div class="set-people" id="teamTable"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Team access matrix (Admin Phase 2, Task 6): reached via "Manage access" on a Team
@@ -2915,10 +2963,13 @@
                  effective permissions; preset buttons fill it from a role's defaults. Mirrors the
                  Story/Contact/Donor detail pattern (its own view + Back button) rather than an inline
                  expander. Gated to team:edit (see loadTeam/teamActionsCell in app.js). -->
-            <section class="admin-view" id="view-team-permissions" aria-labelledby="team-permissions-heading" hidden>
+            <section class="admin-view ak" id="view-team-permissions" aria-labelledby="team-permissions-heading" hidden>
               <button class="admin-back" id="teamPermBack" type="button">&larr; Back</button>
+              <!-- Back, pressed with changes not yet saved, asks here before it throws them away. -->
+              <div id="teamPermAsk"></div>
               <h2 id="team-permissions-heading">Manage access</h2>
-              <div id="teamPermDetail" aria-live="polite"></div>
+              <p class="admin-view-intro" id="teamPermIntro">Choose, area by area, what one person can look at and what they can change.</p>
+              <div id="teamPermDetail"></div>
               <p class="admin-action-status" id="teamPermStatus" role="status" aria-live="polite"></p>
             </section>
 
@@ -2926,38 +2977,63 @@
                  only via the topbar accountBtn - every signed-in user manages their own account
                  here, so this view is intentionally NOT in the permission-filtered section nav
                  above (it has no data-view nav link and isn't part of SECTIONS in app.js). -->
-            <section class="admin-view" id="view-account" aria-labelledby="account-heading" hidden>
+            <section class="admin-view ak" id="view-account" aria-labelledby="account-heading" hidden>
               <h2 id="account-heading">My account</h2>
-              <p class="admin-view-intro">Manage your own display name and password. To change your email address, ask an Admin to update it in Team.</p>
+              <p class="admin-view-intro">Manage your own display name and password. To change your email address, ask an Admin to remove you and invite your new address.</p>
+              <!-- Your role and how much you can open, at a glance; the list is under What you can open. -->
+              <div class="ak-tiles" id="accountTiles"></div>
 
-              <div class="admin-field">
-                <label for="accountEmail">Email</label>
-                <input id="accountEmail" type="email" readonly style="max-width:320px" />
+              <div class="ak-panel set-form">
+                <div class="admin-field">
+                  <label for="accountEmail">Email</label>
+                  <input id="accountEmail" type="email" readonly aria-describedby="accountEmailSays" />
+                </div>
+                <p class="ak-says" id="accountEmailSays">The address you sign in with. It cannot be changed here.</p>
               </div>
 
               <h3 class="admin-subhead">Display name</h3>
-              <form id="accountNameForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Full name
-                  <input id="accountName" type="text" required maxlength="120" style="width:220px" />
+              <form id="accountNameForm" class="ak-panel set-form" autocomplete="off">
+                <label class="ak-field"><span>Full name</span>
+                  <input id="accountName" type="text" required maxlength="120" aria-describedby="accountNameSays" />
                 </label>
-                <button class="btn btn-primary" type="submit">Save name</button>
+                <p class="ak-says" id="accountNameSays">The name the Team screen lists you under, and how the emails that sign you in greet you.</p>
+                <p class="ak-actions"><button class="btn btn-primary" type="submit">Save name</button></p>
+                <p class="ty-status" id="accountNameStatus" role="status" aria-live="polite"></p>
               </form>
-              <p class="ty-status" id="accountNameStatus" role="status" aria-live="polite"></p>
 
               <h3 class="admin-subhead">Change password</h3>
-              <form id="accountPasswordForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Current password
-                  <input id="accountCurrentPassword" type="password" required autocomplete="current-password" style="width:220px" />
+              <form id="accountPasswordForm" class="ak-panel set-form" autocomplete="off">
+                <label class="ak-field"><span>Current password</span>
+                  <input id="accountCurrentPassword" type="password" required autocomplete="current-password" />
                 </label>
-                <label class="ty-inline">New password
-                  <input id="accountNewPassword" type="password" required autocomplete="new-password" minlength="10" style="width:220px" />
+                <label class="ak-field"><span>New password</span>
+                  <input id="accountNewPassword" type="password" required autocomplete="new-password" minlength="10" aria-describedby="accountRule" />
                 </label>
-                <label class="ty-inline">Confirm new password
-                  <input id="accountConfirmPassword" type="password" required autocomplete="new-password" minlength="10" style="width:220px" />
+                <p class="ak-says" id="accountRule">At least 10 characters.</p>
+                <label class="ak-field"><span>Confirm new password</span>
+                  <input id="accountConfirmPassword" type="password" required autocomplete="new-password" minlength="10" aria-describedby="accountMatch" />
                 </label>
-                <button class="btn btn-primary" type="submit">Change password</button>
+                <p class="set-match" id="accountMatch" role="status" aria-live="polite"></p>
+                <label class="admin-check" for="accountShow"><input type="checkbox" id="accountShow" /> <span>Show what I typed</span></label>
+                <p class="ak-actions"><button class="btn btn-primary" type="submit">Change password</button></p>
+                <p class="ak-says">You stay signed in. Use the new password the next time you sign in.</p>
+                <p class="ty-status" id="accountPasswordStatus" role="status" aria-live="polite"></p>
               </form>
-              <p class="ty-status" id="accountPasswordStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="admin-subhead">What you can open</h3>
+              <div id="accountAccess"></div>
+
+              <h3 class="admin-subhead">Also yours</h3>
+              <div class="ak-list">
+                <button type="button" class="ak-row" id="accountGoNotifications">
+                  <span class="ak-row__name">Notifications</span>
+                  <span class="ak-row__meta">Choose what buzzes your phone, and when it stays quiet.</span>
+                </button>
+                <button type="button" class="ak-row" id="accountSignOut">
+                  <span class="ak-row__name">Sign out</span>
+                  <span class="ak-row__meta">You will need your password to come back in.</span>
+                </button>
+              </div>
             </section>
 
             <!-- Donor detail (reached from a donor/donation row); role-gated actions. -->

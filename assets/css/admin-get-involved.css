@@ -118,3 +118,142 @@
 @media (max-width: 420px) {
   #view-get-involved .fr-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ---- the section buttons: a dot on Emails while an email waits for sign off (all-emails.js) ---- */
+#view-get-involved .gi-sections .ak-part-dot { display: inline-block; flex: none; margin-left: 7px; vertical-align: middle; }
+
+/* ---- Tickets and pledges, Emails and Settings, in the same look (2026-11-15) ----
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-get-involved-rest.md. The section does not
+ * carry the kit's class ak (Sign ups and Our events have this sheet's own rules above, and the kit would
+ * redraw their buttons and fields too), so the three parts' boxes carry .gi-rest and every rule here is
+ * named through it, with the kit's values (admin-kit.css). The kit's own .ak- parts (tiles, the line
+ * under a button, the dot) are used as they are. Nothing scrolls inside a box; anything pressed is 44px;
+ * a field's words are 16px; motion only for someone happy with it, and only transform. */
+
+/* Headings inside a part: the plain groups in Settings. */
+#view-get-involved .gi-rest .gi-group { margin: 26px 0 10px; font-family: var(--ov-head); font-weight: 800; font-size: 1.3rem; line-height: 1.15; color: var(--ov-maroon); }
+#view-get-involved .gi-rest .gi-group:first-child { margin-top: 4px; }
+#view-get-involved .gi-rest .ak-tiles { margin: 4px 0 18px; }
+#view-get-involved .gi-rest .ak-tiles[hidden] { display: none; }
+
+/* The cards: the ink edge and the hard shadow. */
+#view-get-involved .gi-rest .fr-card,
+#view-get-involved .gi-rest .ev-switch,
+#view-get-involved .gi-rest .fr-switch {
+  margin: 0 0 18px; padding: clamp(16px, 2.4vw, 22px); border: var(--ov-line); border-radius: 18px;
+  background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-text);
+}
+#view-get-involved .gi-rest .fr-card--fold { padding: 0; }
+#view-get-involved .gi-rest .ev-switch.is-on,
+#view-get-involved .gi-rest .fr-switch.is-on { background: var(--ov-holly-soft); }
+#view-get-involved .gi-rest .fr-switch { gap: 10px 16px; }
+#view-get-involved .gi-rest .fr-switch-text { display: block; }
+#view-get-involved .gi-rest .admin-subhead,
+#view-get-involved .gi-rest .fr-switch-title { margin: 0 0 6px; font-family: var(--ov-head); font-weight: 800; font-size: 1.25rem; line-height: 1.2; color: var(--ov-maroon); }
+#view-get-involved .gi-rest .fr-switch-state,
+#view-get-involved .gi-rest .ev-switch-state { margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--ov-text); }
+#view-get-involved .gi-rest .fr-switch-who,
+#view-get-involved .gi-rest .ev-switch-who { margin: 4px 0 0; font-size: 0.86rem; color: var(--ov-soft); }
+#view-get-involved .gi-rest .fr-card-intro { margin: 0 0 12px; max-width: 68ch; font-size: 0.94rem; line-height: 1.55; color: var(--ov-soft); }
+#view-get-involved .gi-rest .fr-card-subhead { margin: 22px 0 8px; font-family: var(--ov-head); font-weight: 700; font-size: 1.08rem; color: var(--ov-ink); }
+#view-get-involved .gi-rest .fr-field-hint,
+#view-get-involved .gi-rest .ak-says { font-size: 0.86rem; line-height: 1.45; color: var(--ov-soft); }
+#view-get-involved .gi-rest .ak-says:empty { display: none; }
+#view-get-involved .gi-rest > .ak-says { margin: -10px 0 14px; }
+
+/* Folded cards: the heading is the button, as the kit's fold. */
+#view-get-involved .gi-rest .fr-fold-bar { align-items: center; min-height: 52px; padding: 12px 18px; border-radius: 15px; }
+#view-get-involved .gi-rest .fr-fold-bar:hover { background: var(--ov-hover); }
+#view-get-involved .gi-rest .fr-fold[open] > .fr-fold-bar { border-bottom: 2px dashed var(--ov-rule); border-radius: 15px 15px 0 0; }
+#view-get-involved .gi-rest .fr-fold-bar .admin-subhead { margin: 0; }
+#view-get-involved .gi-rest .fr-fold-bar .fr-summary-state { color: var(--ov-soft); }
+#view-get-involved .gi-rest .fr-fold-body { padding: 16px 18px 18px; }
+#view-get-involved .gi-rest .fr-card--fold > .ak-tiles { margin: 16px 18px 0; }
+
+/* Buttons: holly for the main thing, the card colour for the rest, pressing in. */
+#view-get-involved .gi-rest :where(.admin-btn, .btn, .fr-link-btn) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 0; padding: 8px 18px;
+  border: var(--ov-thin); border-radius: 14px; background: var(--ov-holly); box-shadow: 2px 3px 0 var(--ov-ink);
+  color: var(--ov-on-dark); font: inherit; font-size: 0.92rem; font-weight: 600; line-height: 1.2; text-align: center; text-decoration: none; cursor: pointer;
+}
+#view-get-involved .gi-rest :where(.admin-btn, .btn, .fr-link-btn):active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+#view-get-involved .gi-rest :where(.admin-btn, .btn, .fr-link-btn):disabled { opacity: 0.55; box-shadow: none; cursor: default; }
+#view-get-involved .gi-rest :where(.admin-btn, .btn, .fr-link-btn)[hidden] { display: none; }
+#view-get-involved .gi-rest .admin-btn:hover { background: var(--ov-holly-dark); }
+#view-get-involved .gi-rest .btn::after { content: none; }
+#view-get-involved .gi-rest :where(.fr-btn-quiet, .btn-ghost, .fr-link-btn, .btn:not(.btn-primary)) { background: var(--ov-card); color: var(--ov-ink); }
+#view-get-involved .gi-rest :where(.fr-btn-quiet, .btn-ghost, .fr-link-btn, .btn:not(.btn-primary)):hover { background: var(--ov-hover); color: var(--ov-ink); }
+#view-get-involved .gi-rest .fr-link-btn { padding: 6px 14px; font-size: 0.88rem; }
+#view-get-involved .gi-rest .admin-link { min-height: 44px; color: var(--ov-maroon); font-weight: 600; text-underline-offset: 4px; }
+#view-get-involved .gi-rest .et-refund__go { background: var(--ov-crimson); color: var(--ov-on-dark); }
+#view-get-involved .gi-rest .fx-call-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+
+/* Fields: 46px, 16px words (an iPhone zooms in on anything smaller), and big ticks. */
+#view-get-involved .gi-rest :where(.fx-call-input, select, textarea, input[type="text"], input[type="email"], input[type="number"], input[type="search"], input[type="datetime-local"]) {
+  min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card);
+  box-shadow: inset 2px 3px 0 rgba(58, 11, 11, 0.08); color: var(--ov-text); font: inherit; font-size: 1rem;
+}
+#view-get-involved .gi-rest :where(.fx-call-input, select, textarea, input):focus { border-color: var(--ov-ink); outline: 3px solid var(--ov-gold-ink); outline-offset: 2px; }
+#view-get-involved .gi-rest input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--ov-maroon); }
+#view-get-involved .gi-rest .fx-call-label { font-family: var(--ov-head); font-weight: 700; font-size: 0.95rem; color: var(--ov-ink); }
+#view-get-involved .gi-rest :where(.fr-cat-sporty, .fr-impact-give) { min-height: 44px; gap: 10px; }
+#view-get-involved .gi-rest .fr-emails-search { max-width: 420px; margin: 4px 0 14px; }
+
+#view-get-involved .gi-rest .fr-switch .fr-switch-btn { min-height: 44px; padding: 8px 18px; font-size: 0.92rem; }
+
+/* What just happened, beside the button. */
+#view-get-involved .gi-rest .ty-status { font-weight: 600; overflow-wrap: anywhere; }
+#view-get-involved .gi-rest .ty-status.is-ok { color: var(--ov-holly); }
+#view-get-involved .gi-rest .ty-status.is-error { color: var(--ov-crimson); font-weight: 700; }
+#view-get-involved .gi-rest :where(.admin-empty, .fr-people-empty, .admin-loading) { color: var(--ov-soft); }
+#view-get-involved .gi-rest .admin-empty { margin: 0; padding: 22px 18px; border: 2.5px dashed var(--ov-rule); border-radius: 18px; background: var(--ov-warm); text-align: center; }
+#view-get-involved .gi-rest .admin-empty[hidden] { display: none; }
+
+/* Lists of people and settings: one row each, with a dashed rule, the buttons wrapping under. */
+#view-get-involved .gi-rest .fr-people { max-width: none; }
+#view-get-involved .gi-rest .fr-people li { gap: 8px 16px; padding: 12px 0; border-top: 2px dashed var(--ov-rule); }
+#view-get-involved .gi-rest .fr-people li:last-child { border-bottom: 2px dashed var(--ov-rule); }
+#view-get-involved .gi-rest .fr-people li.fr-people-empty { border: 0; }
+#view-get-involved .gi-rest .fr-people-who { color: var(--ov-text); }
+#view-get-involved .gi-rest .fr-people-actions { gap: 8px; }
+#view-get-involved .gi-rest .admin-pill { display: inline-flex; padding: 1px 9px; border: 2px solid currentColor; border-radius: 999px; background: var(--ov-card); color: var(--ov-maroon); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em; line-height: 1.5; text-transform: uppercase; }
+#view-get-involved .gi-rest :where(.admin-pill--paid, .et-pill--on) { color: var(--ov-holly); background: var(--ov-holly-soft); }
+#view-get-involved .gi-rest :where(.admin-pill--pending, .is-call-due) { color: var(--ov-gold-ink); background: var(--ov-gold-soft); }
+#view-get-involved .gi-rest .admin-pill--failed { color: var(--ov-crimson); background: var(--ov-blush); }
+
+/* Sponsor pledges: a fundraiser, then a card for each pledge. */
+#view-get-involved .gi-rest .fr-pledge-row { padding: 12px 14px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-warm); }
+#view-get-involved .gi-rest .fr-pledge-row.is-paid { background: var(--ov-holly-soft); }
+#view-get-involved .gi-rest .fr-pledge-row__head { color: var(--ov-ink); font-size: 1.02rem; }
+#view-get-involved .gi-rest .fr-pledge-row__amount { font-family: var(--ov-head); color: var(--ov-maroon); }
+#view-get-involved .gi-rest .fr-pledge-row__email { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+#view-get-involved .gi-rest .fr-pledge-row .ak-says { margin: 6px 0 0; }
+
+/* All emails: each group a fold, each email a card that opens in place, its email as tall as it is. */
+#view-get-involved .gi-rest .fr-emails-group { border: var(--ov-thin); border-radius: 16px; background: var(--ov-card); }
+#view-get-involved .gi-rest .fr-emails-group[hidden] { display: none; }
+#view-get-involved .gi-rest .fr-emails-group-name { font-family: var(--ov-head); color: var(--ov-maroon); }
+#view-get-involved .gi-rest .fr-emails-item { border: var(--ov-thin); border-radius: 14px; background: var(--ov-warm); }
+#view-get-involved .gi-rest .fr-emails-item[hidden] { display: none; }
+#view-get-involved .gi-rest .fr-emails-row { border-radius: 12px; }
+#view-get-involved .gi-rest .fr-emails-row:hover { background: var(--ov-hover); }
+#view-get-involved .gi-rest .fr-emails-row-name { color: var(--ov-ink); }
+#view-get-involved .gi-rest .fr-emails-row-who { color: var(--ov-text); }
+#view-get-involved .gi-rest .fr-touch-preview-wrap { border: var(--ov-thin); border-radius: 14px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  #view-get-involved .gi-rest :where(.admin-btn, .btn, .fr-link-btn) { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1); }
+}
+
+@media (max-width: 860px) {
+  #view-get-involved .gi-rest .fr-card,
+  #view-get-involved .gi-rest .ev-switch,
+  #view-get-involved .gi-rest .fr-switch { padding: 14px; border-radius: 16px; }
+  #view-get-involved .gi-rest .fr-card--fold { padding: 0; }
+  #view-get-involved .gi-rest .fr-fold-bar { padding: 12px 14px; }
+  #view-get-involved .gi-rest .fr-fold-body { padding: 14px; }
+  #view-get-involved .gi-rest .fr-card--fold > .ak-tiles { margin: 14px 14px 0; }
+  /* A switch's button takes the width of the card, under its words. */
+  #view-get-involved .gi-rest :where(.ev-switch, .fr-switch) .btn { width: 100%; }
+  #view-get-involved .gi-rest .fr-people-actions { width: 100%; }
+}

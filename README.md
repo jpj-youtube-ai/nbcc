@@ -10064,6 +10064,28 @@ Tests: `fundraising-giving.test.ts` (the sums, the rules, the drawn page), `fund
 `donate-checkout-pinned.test.ts`, and updates to the page, route, checkout and contract tests; BDD
 `features/fundraising-giving.feature`.
 
+## Admin > Get involved: Tickets and pledges, Emails and Settings in the new look (2026-11-15)
+
+The last three parts of Get involved, in the look Sign ups and Our events had on 13 November. Design:
+`docs/superpowers/specs/2026-11-14-admin-refresh-get-involved-rest.md`. The tab's section does not carry the
+kit's class `ak`; instead the four part boxes carry `gi-rest` and every rule for them in
+`assets/css/admin-get-involved.css` is named through it, with the kit's values, so Sign ups and Our events
+are untouched. The tickets card's cards are in `assets/css/admin-event-tickets.css`.
+
+- **Tickets and pledges**: tiles for tickets sold, ticket money and events waiting for you (a button that
+  lists only those events), drawn by `event-tickets.js` from `GET /api/admin/event-tickets`; tiles for
+  pledges promised, paid, still owed and to chase (unpaid two weeks after the event, listed first), a
+  spreadsheet of every pledge listed (`AdminKit.downloadCsv`) and Copy email beside each sponsor's email,
+  in `pledges.js` from `GET /api/admin/fundraising/pledges`. No new endpoint.
+- **Emails**: a Waiting for sign off tile and a dot on the Emails button while anything waits, from
+  `GET /api/admin/fundraising/emails/summary`, which is now also read when the tab opens; the tile opens All
+  emails at the first one waiting; Find an email searches names, subjects and who they go to
+  (`all-emails.js`).
+- **Settings**: headings On the website and The sign up form and the pages; a line under each website switch
+  (`#frSwitchSays`, `#evSwitchSays`) saying what pressing it does now.
+- On a phone nothing in the three parts is under 44px, fields have 16px words, and nothing scrolls inside a box.
+  Tests: `test/unit/admin-get-involved-rest.test.ts`.
+
 ## Community fundraising, the team's tools (TASK-503)
 
 Four tools for the staff who look after fundraisers, all in **Admin > Get involved** (section 5 of

@@ -8,7 +8,6 @@
 .et-event__head {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; width: 100%; padding: 14px 16px;
   border: 0; border-radius: 14px; background: none; font: inherit; text-align: left; color: var(--slate); cursor: pointer;
-  transition: background-color 0.2s ease;
 }
 .et-event__head:hover { background: var(--tint); }
 .et-event__head:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
@@ -49,6 +48,30 @@
 .et-refund__go:disabled { opacity: 0.5; cursor: not-allowed; }
 .et-admin .et-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
 .et-proposed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.et-admin .admin-btn { transition: background-color 0.2s ease, transform 0.1s ease; }
-.et-admin .admin-btn:active { transform: translateY(1px); }
 .et-admin .admin-btn:focus-visible, .et-admin .fx-call-input:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
+
+/* 2026-11-15: in the look of Sign ups and Our events (admin-get-involved.css, .gi-rest): each event a card
+   with the ink edge that opens where it is, its rows as cards inside it. Motion only for someone happy
+   with it, and only transform. */
+.et-admin .et-event { border: 2.5px solid var(--ov-ink); border-radius: 18px; background: var(--ov-card); box-shadow: 3px 4px 0 var(--ov-ink); }
+.et-admin .et-event.is-open { border-color: var(--ov-ink); box-shadow: 5px 6px 0 var(--ov-ink); }
+.et-admin .et-event__head { min-height: 56px; padding: 14px 16px; border-radius: 15px; color: var(--ov-text); }
+.et-admin .et-event__head:hover { background: var(--ov-hover); }
+.et-admin .et-event.is-open .et-event__head { border-bottom: 2px dashed var(--ov-rule); border-radius: 15px 15px 0 0; }
+.et-admin .et-event__name { font-family: var(--ov-head); color: var(--ov-ink); }
+.et-admin .et-event__meta { color: var(--ov-soft); }
+.et-admin .et-detail { padding: 16px; background: var(--ov-warm); border-radius: 0 0 15px 15px; }
+.et-admin .et-detail__money { font-family: var(--ov-head); font-size: 1.1rem; color: var(--ov-maroon); }
+.et-admin .et-row { border: 2px solid var(--ov-ink); border-radius: 14px; background: var(--ov-card); }
+.et-admin .et-row--proposed { border-color: var(--ov-ink); background: var(--ov-gold-soft); }
+.et-admin .et-row__price, .et-admin .et-row__ref { color: var(--ov-maroon); }
+.et-admin .et-edit, .et-admin .et-refund { border-top: 2px dashed var(--ov-rule); }
+.et-admin .et-add { border-top: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .et-admin .admin-btn { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1); }
+}
+@media (max-width: 860px) {
+  .et-admin .et-detail { padding: 12px 10px; }
+  .et-admin .et-row { padding: 12px; }
+  .et-admin .et-row__acts { width: 100%; }
+}

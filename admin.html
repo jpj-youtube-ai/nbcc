@@ -1383,7 +1383,8 @@
                    is an admin's; switched off, /get-involved and /whats-on are 404s and no page's menu mentions them. The
                    previews are the real renderer's output, in frames sized to their content. -->
               <div id="view-events" hidden>
-                <div class="gi-part" data-gi-part="settings" role="group" aria-label="The Get involved page" hidden>
+                <div class="gi-part gi-rest" data-gi-part="settings" role="group" aria-label="The Get involved page" hidden>
+                  <h3 class="gi-group">On the website</h3>
               <div class="ev-switch" id="evSwitch">
                 <div class="ev-switch-text">
                   <h3 class="admin-subhead">Is the Get involved page on the website?</h3>
@@ -1393,6 +1394,7 @@
                 <button class="btn" type="button" id="evSwitchBtn" hidden>Loading&hellip;</button>
                 <p class="ev-switch-note" id="evSwitchNote" hidden>Only an admin can put the page on the website or take it off.</p>
               </div>
+              <p class="ak-says" id="evSwitchSays"></p>
               <p class="ty-status" id="evSwitchStatus" role="status" aria-live="polite"></p>
                 </div>
                 <div class="gi-part" data-gi-part="events" role="group" aria-label="Our events" hidden>
@@ -1772,13 +1774,14 @@
                    status line inside the sign up. -->
               <div class="admin-table-wrap fr-list" id="frList"><p class="admin-loading">Loading&hellip;</p></div>
                 </div>
-                <div class="gi-part" data-gi-part="tickets" role="group" aria-label="Tickets and pledges" hidden>
+                <div class="gi-part gi-rest" data-gi-part="tickets" role="group" aria-label="Tickets and pledges" hidden>
               <!-- Event tickets (Jaimie, points 23 and 24): events where NBCC sells the tickets. Drawn by its
                    own script (assets/js/admin/event-tickets.js) and styles, apart from app.js. Approve each
                    kind of ticket, set the limit, close or open sales, print the guest list, download the
                    CSV, and (admins only) make a refund. Nothing scrolls inside a box. -->
               <section class="fr-card et-admin" id="etAdmin" aria-labelledby="etAdminHead" hidden>
                 <h3 class="admin-subhead" id="etAdminHead">Event tickets</h3>
+                <div class="ak-tiles" id="etTiles" hidden></div>
                 <p class="fr-card-intro">Events where NBCC sells the tickets, soonest first. Nothing goes on sale until you approve each kind of ticket here, and the event itself is approved and public. Ticket money is shown apart from gifts and never has Gift Aid. An organiser can only ask for a refund: an admin makes it here, and it goes back to the buyer&rsquo;s card.</p>
                 <div id="etAdminList"><p class="admin-loading">Loading&hellip;</p></div>
                 <p class="ty-status" id="etAdminStatus" role="status" aria-live="polite"></p>
@@ -1789,6 +1792,7 @@
                    approved in the All emails card: the button here opens it at "Sponsor pledges". Drawn by
                    assets/js/admin/pledges.js. Folded, with the totals in its bar. -->
               <section class="fr-card fr-card--fold" id="frPledges" aria-labelledby="frPledgesHead" hidden>
+                <div class="ak-tiles" id="frPledgesTiles" hidden></div>
                 <details class="fr-fold" id="frPledgesFold">
                   <summary class="fr-fold-bar">
                     <span class="admin-subhead fr-fold-title" id="frPledgesHead">Sponsor pledges</span>
@@ -1796,6 +1800,8 @@
                   </summary>
                   <div class="fr-fold-body">
                     <p class="fr-card-intro">People who chose &ldquo;Sponsor now, pay after&rdquo; on a fundraiser&rsquo;s page. A pledge is a promise, not money: it never counts on the meter until it is paid. A pledge only counts once its sponsor confirms it by email. Each sponsor is emailed a link to pay the day after the event, and one reminder a week later. Unpaid pledges lose their name and email 90 days after the pay link.</p>
+                    <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesCsv">Download as a spreadsheet</button></div>
+                    <p class="ak-says">Every pledge listed here, with the sponsor&rsquo;s email, to open in Excel.</p>
                     <div class="fr-pledges-list" id="frPledgesList"></div>
                     <div id="frPledgesTools" hidden>
                       <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesSendAll">Send new pay links to everyone unpaid</button></div>
@@ -1808,7 +1814,12 @@
                 </details>
               </section>
                 </div>
-                <div class="gi-part" data-gi-part="emails" role="group" aria-label="Emails" hidden>
+                <div class="gi-part gi-rest" data-gi-part="emails" role="group" aria-label="Emails" hidden>
+              <!-- 2026-11-15: what waits for an admin first, as a tile (all-emails.js fills it, and puts a dot on
+                   the Emails button while anything waits). Pressing it opens All emails at the first one waiting. -->
+              <div class="ak-tiles" id="frEmailsTiles" hidden>
+                <button class="ak-tile is-none" type="button" id="frEmailsWaitingTile"><span class="ak-tile__n" id="frEmailsWaitingN">0</span><span class="ak-tile__name">Waiting for sign off</span><span class="ak-tile__says">emails that only go once an admin approves their wording</span></button>
+              </div>
               <!-- TASK-503: the team's tools. Invite someone (editors and admins), and who gets the
                    Monday summary (admins). Both grow the page; nothing scrolls inside them. -->
               <section class="fr-card" id="frInvite" aria-labelledby="frInviteHead" hidden>
@@ -1878,13 +1889,15 @@
                   </summary>
                   <div class="fr-fold-body">
                     <p class="fr-card-intro">Every email the website sends about fundraising, sponsor pledges, event tickets and the Festive Ball. Open a group, then press an email to read it exactly as it arrives, with made-up names. The wording can&rsquo;t be changed here. A few emails only go once an admin has approved their wording: those say &ldquo;Waiting for sign off&rdquo; or &ldquo;Approved&rdquo;.</p>
+                    <div class="fr-field fr-emails-search"><label class="fx-call-label" for="frAllEmailsSearch">Find an email</label><input class="fx-call-input" id="frAllEmailsSearch" type="search" autocomplete="off" placeholder="Like pay, or thank you" /></div>
+                    <p class="admin-empty" id="frAllEmailsNone" hidden>No email has that in its name, its subject or who it goes to.</p>
                     <div class="fr-emails-groups" id="frAllEmailsGroups"></div>
                     <p class="ty-status" id="frAllEmailsStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
               </section>
                 </div>
-                <div class="gi-part" data-gi-part="settings" role="group" aria-label="Fundraising settings" hidden>
+                <div class="gi-part gi-rest" data-gi-part="settings" role="group" aria-label="Fundraising settings" hidden>
               <div class="fr-switch" id="frSwitch">
                 <div class="fr-switch-text">
                   <h3 class="fr-switch-title">Fundraising on the website</h3>
@@ -1894,7 +1907,10 @@
                 <button class="btn" type="button" id="frSwitchBtn" hidden>Loading&hellip;</button>
                 <p class="fr-switch-note" id="frSwitchNote" hidden>Only an admin can switch fundraising on or off.</p>
               </div>
+              <p class="ak-says" id="frSwitchSays"></p>
               <p class="ty-status" id="frSwitchStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="gi-group">The sign up form and the pages</h3>
 
               <!-- Fundraising categories: what people choose from on the sign up form, one each, A to
                    Z with Other last. Admins only. app.js draws the lists; nothing is ever

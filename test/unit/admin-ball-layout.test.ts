@@ -23,7 +23,8 @@ const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
 
 function ballView(): string {
   const start = admin.indexOf('id="view-ball"');
-  const end = admin.indexOf('<section class="admin-view"', start + 10);
+  // Up to the next screen, whatever classes it carries (a screen in the kit's look is "admin-view ak").
+  const end = admin.indexOf('<section class="admin-view', start + 10);
   return admin.slice(start, end === -1 ? undefined : end);
 }
 

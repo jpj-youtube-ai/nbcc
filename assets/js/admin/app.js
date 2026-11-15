@@ -12757,15 +12757,32 @@
     });
   }
 
-  // ---- thank-you letters (REQ-069 · TASK-163) ----
-  // Three panels: the eligible-donor list (GET /thank-you/eligible), a compose form with a LIVE A4
-  // letter preview (the letter the donor is emailed), and the sent history (GET /thank-you/sent).
-  // "Write" prefills the form from a listed donor; submitting POSTs /thank-you/send (Editor+, the
-  // server enforces). Bindings are wired once (tyWired); the preview mirrors src/thank-you/letter.ts.
+  // ---- thank-you letters (REQ-069 · TASK-163; in the kit's look and in three parts, 2026-11-14) ----
+  // Design: docs/superpowers/specs/2026-11-14-admin-refresh-thanks.md. One screen in three parts
+  // behind the kit's bar (AdminKit.wireParts), one showing at a time:
+  //   Who to thank      GET /thank-you/eligible. Tiles that filter, and a card a donor.
+  //   Write the letter  the form, the letter it makes, and Send (POST /thank-you/send, Editor+; the
+  //                     server enforces). "Write" on a donor fills the form and brings you here.
+  //   Letters sent      GET /thank-you/sent, 50 at a time, as cards that open in place.
+  // The letter on the screen mirrors the page a donor prints (src/thank-you/letter-page.ts; a test
+  // pins the two together). Bindings are wired once (tyWired).
   var tyWired = false;
   var tyEligibleById = {};
+  var tyRows = []; // the donors the server last listed, most generous first
+  var tyFilter = "auto"; // which tile is chosen. "auto" until one is pressed: ready when anyone is waiting, else everyone
+  var tyParts = null; // the bar of parts
+  var tyLetterFor = null; // the listed donor this letter is for; null for a letter started from nothing
+  var tySending = false; // a send is on its way, so a second press does nothing
+  var tyJustThanked = null; // set when a letter has gone, so the list read after it can say who is next
+  var tyViewChosen = null; // "read" or "page" once the person has chosen; until then it follows the screen
+  var tySentRows = []; // the letters fetched so far, most recent first
+  var tySentTotal = 0; // how many the server has in all
+  var tySentOpen = null; // the id of the card that is open
+  var tySentGone = null; // { before, name }: the card just deleted, said in the place it was
   var TY_A4W = 794; // 210mm @96dpi
   var TY_A4H = 1123; // 297mm @96dpi
+  var TY_PAGE = 50; // letters fetched at a time
+  var TY_OVER_KEY = "nbcc_ty_over"; // "Single donation over", remembered on this device: a number only
 
   function tyMoney(v) {
     var n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.]/g, "")) || 0;
@@ -12778,10 +12795,45 @@
       return "";
     }
   }
-  // Scale the A4 letter to fit the preview column.
+  // A date as people say it: "3 November 2026".
+  function tyDay(iso) {
+    var d = new Date(iso);
+    if (!iso || isNaN(d.getTime())) return "";
+    try {
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
+    } catch (e) {
+      return H.fmtDate(iso);
+    }
+  }
+  function tyPlural(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+  function tyTrimmed(id) {
+    return (el(id).value || "").trim();
+  }
+
+  // ---- the letter ----
+  // On a phone the A4 sheet shrunk to the screen drew its words at about 6px. So there the letter is
+  // the same words at normal size in one column ("read"), and the sheet ("page") is a press away. A
+  // laptop opens on the sheet. Once the person chooses, their choice stands.
+  function tyLetterView() {
+    if (tyViewChosen) return tyViewChosen;
+    return window.matchMedia && window.matchMedia("(max-width: 860px)").matches ? "read" : "page";
+  }
+  // Draw the letter in its view, and scale the A4 sheet to the column it is in. A hidden part has no
+  // width to fit to, so this is called again when Write the letter is shown.
   function tyFit() {
     var wrap = el("tyPaperWrap"), paper = el("tyPaper");
     if (!wrap || !paper) return;
+    var view = tyLetterView();
+    wrap.setAttribute("data-view", view);
+    var toggle = el("tyViewToggle");
+    if (toggle) toggle.textContent = view === "read" ? "See it as a page" : "Read it at normal size";
+    if (view === "read") {
+      paper.style.transform = "";
+      wrap.style.height = "";
+      return;
+    }
     var w = wrap.clientWidth;
     if (!w) return;
     var s = Math.min(1, w / TY_A4W);
@@ -12829,14 +12881,19 @@
     el("tyPSigName").textContent = opt.value;
     el("tyPSigRole").textContent = opt.getAttribute("data-role");
   }
+  function tyIsKind() {
+    return el("tyGtKind").getAttribute("aria-pressed") === "true";
+  }
+  function tyAmountPounds() {
+    return parseFloat(String(el("tyAmount").value).replace(/[^0-9.]/g, "")) || 0;
+  }
   function tyRenderGift() {
-    var kind = el("tyGtKind").getAttribute("aria-pressed") === "true";
     var callout = el("tyPCallout");
-    if (kind) {
+    if (tyIsKind()) {
       var items = el("tyInKind").value || "your kind donation";
       callout.innerHTML = "With heartfelt thanks for your donation of <b>" + H.escapeHtml(items) + "</b>.";
     } else {
-      var n = parseFloat(String(el("tyAmount").value).replace(/[^0-9.]/g, "")) || 0;
+      var n = tyAmountPounds();
       var html = "With heartfelt thanks for your donation of <b>" + tyMoney(n) + "</b>.";
       if (el("tyGiftAid").checked) {
         html +=
@@ -12856,179 +12913,325 @@
     tyRenderGift();
   }
 
-  function tyEligibleTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No donors over the threshold yet.</p>';
-    var body = rows
-      .map(function (r) {
-        var ga = r.giftAided ? '<span class="ty-pill ty-pill-ga">Gift Aided</span>' : "";
-        var status;
-        if (r.sendState === "no_email") status = '<span class="ty-pill ty-pill-blocked">No email</span>';
-        else if (r.sendState === "opted_out") status = '<span class="ty-pill ty-pill-blocked">Opted out</span>';
-        else if (r.alreadyThanked) status = '<span class="ty-pill ty-pill-thanked">Thanked ' + H.fmtDate(r.lastThankedAt) + "</span>";
-        else status = '<span class="ty-pill ty-pill-ready">Ready</span>';
-        var canEmail = r.sendState === "ready";
-        var action =
-          canWrite && canEmail
-            ? '<button class="admin-link" type="button" data-ty-donor="' + r.donorId + '">' + (r.alreadyThanked ? "Thank again" : "Write") + "</button>"
-            : "";
-        return (
-          "<tr><td>" + H.escapeHtml(r.name) + '<span class="admin-sub">' + H.escapeHtml(r.email || "no email") + "</span></td>" +
-          '<td class="admin-num">' + H.formatPence(r.maxGiftPence) + "</td><td>" + ga + "</td><td>" + status + "</td><td>" + action + "</td></tr>"
-        );
-      })
-      .join("");
-    return (
-      '<table class="admin-table"><thead><tr><th>Donor</th><th>Largest donation</th><th>Gift Aid</th><th>Status</th><th></th></tr></thead><tbody>' +
-      body +
-      "</tbody></table>"
-    );
+  // ---- the bar of parts ----
+  function tyPartShown(key) {
+    if (key === "write") tyFit();
   }
-  function tySentTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No thank-you letters sent yet.</p>';
-    var body = rows
-      .map(function (r) {
-        var gift =
-          r.giftType === "in_kind"
-            ? "Gift in kind" + (r.giftInKind ? ': <span class="admin-sub">' + H.escapeHtml(r.giftInKind) + "</span>" : "")
-            : H.formatPence(r.giftAmountPence) + (r.giftAided ? ' <span class="ty-pill ty-pill-ga">Gift Aided</span>' : "");
-        var view = r.printUrl
-          ? '<a class="admin-link" href="' + H.escapeHtml(r.printUrl) + '" target="_blank" rel="noopener">View letter</a>'
-          : "";
-        var del = canWrite
-          ? '<button class="admin-link ty-del" type="button" data-ty-delete="' + r.id + '" data-ty-name="' + H.escapeHtml(r.thankYouName) + '">Delete</button>'
-          : "";
-        // TASK-445: stacked, not separated by a middot. Side by side, "View letter · Delete" needs
-        // about 160px; the column had 75px and broke the words themselves into "Vie w lett er".
-        // One action per line reads at half the width.
-        var actions = view || del ? '<span class="ty-actions">' + view + del + "</span>" : "";
-        // TASK-444: one fact per column. The name and the email address used to be crammed into a
-        // single cell, and "addressed to" - the name at the top of the letter, which is often a
-        // person where the thank-you name is their company - was not shown at all despite being
-        // stored since the feature shipped.
-        var cc = r.ccEmail
-          ? H.escapeHtml(r.ccEmail)
-          : '<span class="admin-sub">None</span>';
-        return (
-          '<tr><td data-label="Sent">' + H.fmtDate(r.sentAt) +
-          '</td><td data-label="Thank you to">' + H.escapeHtml(r.thankYouName) +
-          '</td><td data-label="Addressed to">' + H.escapeHtml(r.addressedTo) +
-          '</td><td data-label="Email">' + H.escapeHtml(r.recipientEmail) +
-          '</td><td data-label="Copied to">' + cc +
-          "</td><td>" + gift +
-          '</td><td data-label="Signed by">' + H.escapeHtml(r.signedByName) +
-          '</td><td data-label="Sent by">' + H.escapeHtml(r.sentBy) +
-          "</td><td>" + actions + "</td></tr>"
-        );
-      })
-      .join("");
-    return (
-      '<table class="admin-table ty-sent-table"><thead><tr><th>Sent</th><th>Thank you to</th>' +
-      "<th>Addressed to</th><th>Email</th><th>Copied to</th><th>Gift</th><th>Signed by</th>" +
-      "<th>Sent by</th><th></th></tr></thead><tbody>" +
-      body +
-      "</tbody></table>"
-    );
+  function tyShowPart(key, scroll) {
+    if (tyParts) return tyParts.show(key, scroll);
+    // The kit's script did not arrive: the three parts are still there, one at a time.
+    Array.prototype.forEach.call(doc.querySelectorAll("#tyParts [data-akpart-body]"), function (p) {
+      p.hidden = p.getAttribute("data-akpart-body") !== key;
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("#tyParts [data-akpart]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-akpart") === key ? "true" : "false");
+    });
+    tyPartShown(key);
   }
 
-  function loadThankYouEligible() {
+  // ---- who to thank ----
+  // Which tile a donor is counted on. Someone who cannot be emailed is never "ready", thanked or not.
+  function tyState(r) {
+    if (r.sendState !== "ready") return "blocked";
+    return r.alreadyThanked ? "thanked" : "ready";
+  }
+  function tyFilterNow() {
+    if (tyFilter !== "auto") return tyFilter;
+    return tyRows.some(function (r) { return tyState(r) === "ready"; }) ? "ready" : "all";
+  }
+  function tyDonorCard(r, canWrite) {
+    var id = Number(r.donorId);
+    var marks = [];
+    if (r.sendState === "no_email") marks.push('<span class="ty-pill ty-pill-blocked">No email address</span>');
+    else if (r.sendState === "opted_out") marks.push('<span class="ty-pill ty-pill-blocked">Does not want emails</span>');
+    else if (!r.alreadyThanked) marks.push('<span class="ty-pill ty-pill-ready">Ready</span>');
+    if (r.alreadyThanked) marks.push('<span class="ty-pill ty-pill-thanked">Thanked ' + H.escapeHtml(tyDay(r.lastThankedAt)) + "</span>");
+    if (r.giftAided) marks.push('<span class="ty-pill ty-pill-ga">Gift Aided</span>');
+    if (r.anonymous) marks.push('<span class="ak-mark ak-mark--quiet">Asked to stay anonymous</span>');
+
+    var notes = [];
+    if (r.alreadyThanked && typeof r.givenSinceThankedPence === "number") {
+      notes.push(
+        r.givenSinceThankedPence > 0
+          ? "Has given " + H.formatPence(r.givenSinceThankedPence) + " in " + tyPlural(Number(r.giftsSinceThanked) || 0, "gift", "gifts") + " since then."
+          : "Nothing new since then.",
+      );
+    }
+    // Not just why not, but what can be done instead.
+    if (r.sendState === "no_email") {
+      notes.push("We have no email address for them, so a letter cannot be emailed. If you have one, add it on their donor page and they will be ready to thank. You can also thank them by post or by phone.");
+    } else if (r.sendState === "opted_out") {
+      notes.push("Our records say not to email them a thank you: they did not agree to emails from us, or asked us to stop. Thank them by post, by phone or in person instead.");
+    }
+
+    // The name opens their donor page (the shared [data-donor] handler), for someone who may open it.
+    var name = canView("donations")
+      ? '<button type="button" class="tyr-donor__name" data-donor="' + id + '" title="Open their donor page">' + H.escapeHtml(r.name) + "</button>"
+      : '<span class="tyr-donor__name">' + H.escapeHtml(r.name) + "</span>";
+    var act =
+      canWrite && r.sendState === "ready"
+        ? '<div class="tyr-donor__act"><button class="admin-btn' + (r.alreadyThanked ? " ak-btn--plain" : "") + '" type="button" data-ty-donor="' + id + '">' +
+          (r.alreadyThanked ? "Thank again" : "Write") + "</button></div>"
+        : "";
+    return (
+      '<li class="ak-card tyr-donor" data-ty-row="' + id + '">' +
+      '<div class="tyr-donor__amount">' + H.formatPence(r.maxGiftPence) + "<small>largest donation</small></div>" +
+      '<div class="tyr-donor__who">' + name +
+      (r.email ? '<span class="tyr-donor__email">' + H.escapeHtml(r.email) + "</span>" : "") +
+      '<span class="tyr-donor__marks">' + marks.join("") + "</span>" +
+      notes.map(function (n) { return '<span class="tyr-donor__note">' + H.escapeHtml(n) + "</span>"; }).join("") +
+      "</div>" + act + "</li>"
+    );
+  }
+  // The tiles, the line saying what is showing, and the cards. `failed` is a list that could not be
+  // read: the tiles then carry no number at all, never a nought (TASK-476).
+  function tyRenderWho(failed) {
     var canWrite = canEdit("thank-you");
-    var thr = parseFloat(String(el("tyThreshold").value).replace(/[^0-9.]/g, "")) || 1000;
-    var pence = Math.round(thr * 100);
+    var counts = { ready: 0, thanked: 0, blocked: 0 };
+    tyRows.forEach(function (r) { counts[tyState(r)] += 1; });
+    var now = failed ? "all" : tyFilterNow();
+    Array.prototype.forEach.call(doc.querySelectorAll("#tyTiles [data-ty-filter]"), function (b) {
+      var key = b.getAttribute("data-ty-filter");
+      var n = b.querySelector(".ak-tile__n");
+      if (n) n.textContent = failed ? "" : String(counts[key]);
+      b.classList.toggle("is-active", key === now);
+      b.classList.toggle("is-none", !counts[key]);
+      b.setAttribute("aria-pressed", key === now ? "true" : "false");
+    });
+    var dot = el("tyWhoDot");
+    if (dot) dot.hidden = !counts.ready;
+    var shown = now === "all" ? tyRows : tyRows.filter(function (r) { return tyState(r) === now; });
+    var people = shown.length === 1 ? "the 1 person" : "the " + shown.length + " people";
+    var showing = "";
+    if (failed || !tyRows.length) showing = "";
+    else if (now === "all") showing = "Showing everyone, biggest gift first.";
+    else if (!shown.length) showing = "";
+    else if (now === "ready") showing = "Showing " + people + " ready to thank.";
+    else if (now === "thanked") showing = "Showing " + people + " already thanked.";
+    else showing = "Showing " + people + " who cannot be emailed.";
+    el("tyShowing").textContent = showing;
+    el("tyShowAll").hidden = now === "all" || !tyRows.length;
+    if (failed) {
+      el("tyEligibleTable").innerHTML = '<p class="admin-empty">Could not load donors.</p>';
+      return;
+    }
+    if (shown.length) {
+      el("tyEligibleTable").innerHTML =
+        '<ul class="ak-list">' + shown.map(function (r) { return tyDonorCard(r, canWrite); }).join("") + "</ul>";
+      return;
+    }
+    var nobody = "Nobody has given that much in one gift yet.";
+    if (tyRows.length) {
+      nobody = now === "ready" ? "Nobody is waiting to be thanked."
+        : now === "thanked" ? "Nobody on this list has been thanked yet."
+        : "Everyone on this list can be emailed.";
+    }
+    el("tyEligibleTable").innerHTML = '<p class="admin-empty">' + nobody + "</p>";
+  }
+  // The amount in "Single donation over", in pounds, or null when it is not a number above nought.
+  function tyOverPounds() {
+    var n = parseFloat(String(el("tyThreshold").value).replace(/[^0-9.]/g, ""));
+    return isFinite(n) && n > 0 ? n : null;
+  }
+  // Remembered on this device, so the person who always works from £500 does not retype it. A
+  // number only: anything else found there is ignored, and nothing else is ever written.
+  function tyKeepOver() {
+    try {
+      var n = tyOverPounds();
+      if (n) window.localStorage.setItem(TY_OVER_KEY, String(n));
+      else window.localStorage.removeItem(TY_OVER_KEY);
+    } catch (e) {
+      // This browser will not keep it. The list still works, from £1,000 next time.
+    }
+  }
+  function tyRecallOver() {
+    try {
+      var kept = window.localStorage.getItem(TY_OVER_KEY);
+      if (kept && /^\d+(\.\d+)?$/.test(kept) && Number(kept) > 0) el("tyThreshold").value = kept;
+    } catch (e) {
+      // Nothing kept, or not allowed to look: the amount in the page stands.
+    }
+  }
+  function loadThankYouEligible() {
+    var pence = Math.round((tyOverPounds() || 1000) * 100);
     el("tyEligibleTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/thank-you/eligible?threshold=" + pence)
       .then(okJson)
       .then(function (d) {
-        var rows = d.results || [];
+        tyRows = d.results || [];
         tyEligibleById = {};
-        rows.forEach(function (r) {
+        tyRows.forEach(function (r) {
           tyEligibleById[r.donorId] = r;
         });
-        el("tyEligibleTable").innerHTML = tyEligibleTable(rows, canWrite);
-        var ready = rows.filter(function (r) {
-          return r.sendState === "ready" && !r.alreadyThanked;
-        }).length;
-        el("tyEligibleCount").textContent = rows.length + " listed · " + ready + " ready";
+        tyRenderWho(false);
+        var ready = tyRows.filter(function (r) { return tyState(r) === "ready"; }).length;
+        el("tyEligibleCount").textContent = tyRows.length + " listed · " + ready + " ready";
+        tyRenderNext();
       })
       .catch(function () {
-        el("tyEligibleTable").innerHTML = '<p class="admin-empty">Could not load donors.</p>';
+        tyRows = [];
+        tyEligibleById = {};
+        tyRenderWho(true);
         el("tyEligibleCount").textContent = "";
       });
   }
-  function loadThankYouSent() {
-    var canWrite = canEdit("thank-you");
-    el("tySentTable").innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/thank-you/sent")
-      .then(okJson)
-      .then(function (d) {
-        el("tySentTable").innerHTML = tySentTable(d.results || [], canWrite);
-      })
-      .catch(function () {
-        el("tySentTable").innerHTML = '<p class="admin-empty">Could not load the sent history.</p>';
-      });
-  }
-  // Delete a sent-letter row (Editor+; server enforces), after a confirm. Then refresh the history.
-  function tyDeleteSent(id, name) {
-    if (!window.confirm('Delete the thank-you letter to "' + name + '" from the history? This cannot be undone.')) return;
-    authFetch("/api/admin/thank-you/sent/" + encodeURIComponent(id), { method: "DELETE" })
-      .then(function (res) {
-        if (!res.ok) throw new Error("delete failed: " + res.status);
-        loadThankYouSent();
-      })
-      .catch(function () {
-        el("tySentTable").innerHTML = '<p class="admin-empty">Could not delete that letter. Please try again.</p>';
-      });
-  }
 
-  function tyPrefill(r) {
-    el("tyDonorId").value = r.donorId;
-    el("tyName").value = r.name;
-    el("tyDear").value = r.name;
-    el("tyEmail").value = r.email || "";
-    tySetMode(false);
-    el("tyAmount").value = String(r.maxGiftPence / 100);
-    el("tyGiftAid").checked = !!r.giftAided;
-    tyUpdateTitle();
-    tyUpdateDear();
-    tyRenderGift();
-    el("tyForm").scrollIntoView({ block: "nearest" });
+  // ---- write the letter ----
+  // Whose letter this is, said at the top of the form, and the warning when they have had one.
+  function tyRenderFor() {
+    var r = tyLetterFor;
+    el("tyForText").textContent = r
+      ? "This letter is for " + r.name + ". It will be kept against their record, and they will show as thanked."
+      : "This is a new letter, not tied to anyone on the list. Use it for a gift in kind, or for someone who is not a donor on the website.";
+    el("tyForNew").hidden = !r;
+    var again = el("tyAgain");
+    if (r && r.alreadyThanked) {
+      again.textContent = r.name + " was already sent a thank you on " + tyDay(r.lastThankedAt) + ". Sending this emails them another.";
+      again.hidden = false;
+    } else {
+      again.textContent = "";
+      again.hidden = true;
+    }
+    tyRenderSays();
   }
-  function tyNewLetter() {
+  // The line under Send: what pressing it does, with the address it will go to.
+  function tyRenderSays() {
+    var says = el("tySays");
+    if (!canEdit("thank-you")) {
+      says.textContent = "You can read letters here, but not send them.";
+      return;
+    }
+    var email = tyTrimmed("tyEmail");
+    says.textContent = email
+      ? "Emails this letter to " + email + " now and keeps a record."
+      : "Add their email address above. Send then emails this letter to them and keeps a record.";
+  }
+  function tyHideAsk() {
+    el("tyAsk").hidden = true;
+  }
+  // Starting another letter: what was said about the last one goes.
+  function tyClearSaid() {
+    var status = el("tyStatus");
+    status.className = "ty-status";
+    status.textContent = "";
+    el("tyNext").innerHTML = "";
+    tyJustThanked = null;
+    tyHideAsk();
+  }
+  function tyBlankLetter() {
+    tyLetterFor = null;
     el("tyDonorId").value = "";
-    el("tyName").value = "friend";
-    el("tyDear").value = "friend";
+    el("tyName").value = "";
+    el("tyDear").value = "";
     el("tyEmail").value = "";
     el("tyPersonal").value = "";
     el("tyInKind").value = "";
-    el("tyAmount").value = "1000";
-    el("tyGiftAid").checked = true;
+    el("tyAmount").value = "";
+    el("tyGiftAid").checked = false;
     tySetMode(false);
     tyUpdateTitle();
     tyUpdateDear();
     tyUpdatePersonal();
+    tyRenderFor();
   }
-  function tySubmit(e) {
-    e.preventDefault();
-    var kind = el("tyGtKind").getAttribute("aria-pressed") === "true";
+  function tyPrefill(r) {
+    tyClearSaid();
+    tyLetterFor = r;
+    el("tyDonorId").value = r.donorId;
+    el("tyName").value = r.name;
+    el("tyDear").value = r.name;
+    el("tyEmail").value = r.email || "";
+    // A message written for somebody else must not ride along into this one.
+    el("tyPersonal").value = "";
+    el("tyInKind").value = "";
+    el("tyAmount").value = String(r.maxGiftPence / 100);
+    el("tyGiftAid").checked = !!r.giftAided;
+    tySetMode(false);
+    tyUpdateTitle();
+    tyUpdateDear();
+    tyUpdatePersonal();
+    tyRenderFor();
+    tyShowPart("write", true);
+  }
+  function tyNewLetter() {
+    tyClearSaid();
+    tyBlankLetter();
+    tyShowPart("write", true);
+  }
+  // What is missing from the letter, top to bottom: [the field to go to, what to say], or null.
+  function tyProblem() {
+    if (!tyTrimmed("tyName")) return ["tyName", "Add the name for the top of the letter first."];
+    if (!tyTrimmed("tyDear")) return ["tyDear", "Add who the letter is addressed to."];
+    if (tyIsKind()) {
+      if (!tyTrimmed("tyInKind")) return ["tyInKind", "Say what was given."];
+    } else if (!(tyAmountPounds() > 0)) {
+      return ["tyAmount", "Add the amount of the gift, in pounds."];
+    }
+    var email = tyTrimmed("tyEmail");
+    if (!email) return ["tyEmail", "Add their email address."];
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return ["tyEmail", "That email address does not look right. Check it and try again."];
+    return null;
+  }
+  function tyLetterIsBlank() {
+    return !["tyName", "tyDear", "tyEmail", "tyAmount", "tyInKind", "tyPersonal"].some(tyTrimmed);
+  }
+  // Send emails a donor the moment it is agreed to, so it asks first, in the page beside the button.
+  function tyAskFirst() {
+    if (tySending || !canEdit("thank-you")) return;
+    // A second press straight after a letter has gone: the form is empty and there is nothing to
+    // send. What the page says about the letter that went stays where it is.
+    if (tyJustThanked && tyLetterIsBlank()) return;
+    var status = el("tyStatus");
+    var problem = tyProblem();
+    el("tyNext").innerHTML = "";
+    tyJustThanked = null;
+    if (problem) {
+      tyHideAsk();
+      status.className = "ty-status is-error";
+      status.textContent = problem[1];
+      if (el(problem[0]).focus) el(problem[0]).focus();
+      return;
+    }
+    status.className = "ty-status";
+    status.textContent = "";
+    var who = tyTrimmed("tyName");
+    var email = tyTrimmed("tyEmail");
+    el("tyAskText").textContent =
+      tyLetterFor && tyLetterFor.alreadyThanked
+        ? who + " has already been thanked. Email this letter to them again, at " + email + ", now?"
+        : "Email this letter to " + who + " at " + email + " now?";
+    el("tyAsk").hidden = false;
+    if (el("tyAskYes").focus) el("tyAskYes").focus();
+  }
+  function tySetSending(on) {
+    tySending = on;
+    el("tySend").disabled = on;
+    el("tyAskYes").disabled = on;
+    el("tyAskNo").disabled = on;
+  }
+  function tySendNow() {
+    if (tySending || !canEdit("thank-you")) return;
+    if (tyProblem()) return tyAskFirst(); // the letter was changed under the question
+    var kind = tyIsKind();
     var status = el("tyStatus");
     var donorIdRaw = el("tyDonorId").value;
-    var amount = parseFloat(String(el("tyAmount").value).replace(/[^0-9.]/g, "")) || 0;
+    var forDonor = tyLetterFor;
     var payload = {
       donorId: donorIdRaw ? Number(donorIdRaw) : null,
-      thankYouName: (el("tyName").value || "").trim(),
-      addressedTo: (el("tyDear").value || "").trim(),
-      recipientEmail: (el("tyEmail").value || "").trim(),
+      thankYouName: tyTrimmed("tyName"),
+      addressedTo: tyTrimmed("tyDear"),
+      recipientEmail: tyTrimmed("tyEmail"),
       giftType: kind ? "in_kind" : "money",
-      giftAmountPence: kind ? null : Math.round(amount * 100),
-      giftInKind: kind ? (el("tyInKind").value || "").trim() || null : null,
+      giftAmountPence: kind ? null : Math.round(tyAmountPounds() * 100),
+      giftInKind: kind ? tyTrimmed("tyInKind") || null : null,
       giftAided: kind ? false : el("tyGiftAid").checked,
-      personalMessage: (el("tyPersonal").value || "").trim() || null,
+      personalMessage: tyTrimmed("tyPersonal") || null,
       signedByName: el("tySigner").value,
       signedByRole: el("tySigner").selectedOptions[0].getAttribute("data-role"),
-      letterDate: (el("tyDate").value || "").trim(),
-      ccEmail: (el("tyCc").value || "").trim() || null,
+      letterDate: tyTrimmed("tyDate"),
+      ccEmail: tyTrimmed("tyCc") || null,
     };
-    var btn = el("tySend");
-    btn.disabled = true;
+    tySetSending(true);
     status.className = "ty-status";
     status.textContent = "Sending…";
     authFetch("/api/admin/thank-you/send", {
@@ -13037,26 +13240,261 @@
       body: JSON.stringify(payload),
     })
       .then(function (res) {
-        return res.json().then(function (b) {
-          return { ok: res.ok, code: res.status, body: b };
-        });
+        return res.json().then(
+          function (b) { return { ok: res.ok, code: res.status, body: b || {} }; },
+          function () { return { ok: res.ok, code: res.status, body: {} }; },
+        );
       })
       .then(function (r) {
-        btn.disabled = false;
-        if (r.ok) {
+        tySetSending(false);
+        tyHideAsk();
+        // The server says whether the email went. Only then is the letter kept and the donor thanked.
+        if (r.ok && r.body.emailed !== false) {
+          // Cleared, so a second press has nothing to send.
+          tyBlankLetter();
           status.className = "ty-status is-ok";
-          status.textContent = "Sent and logged: the donor has been emailed this letter.";
-          loadThankYouSent();
+          status.textContent = "Sent to " + payload.thankYouName + " at " + payload.recipientEmail + ". It is kept in Letters sent.";
+          tyJustThanked = { donorId: forDonor ? forDonor.donorId : null };
+          loadThankYouSent(false);
           loadThankYouEligible();
+          return;
+        }
+        status.className = "ty-status is-error";
+        if (r.body.emailed === false) {
+          var kept =
+            r.body.recorded === false
+              ? "Nothing was recorded" + (forDonor ? ", so " + forDonor.name + " has not been marked as thanked" : "") + ". "
+              : "Check Letters sent before you try again. ";
+          status.textContent = "The email to " + payload.recipientEmail + " did not go. " + kept + "Please try again in a few minutes.";
+        } else if (r.code === 403) {
+          status.textContent = "You can read letters here, but not send them.";
+        } else if (r.code >= 400 && r.code < 500) {
+          status.textContent = "The letter was not sent: something in it is not right. Check the names, the gift and the email addresses.";
         } else {
-          status.className = "ty-status is-error";
-          status.textContent = (r.body && r.body.error) || "Could not send (" + r.code + ").";
+          status.textContent = "Could not send the letter. Please try again.";
         }
       })
       .catch(function () {
-        btn.disabled = false;
+        tySetSending(false);
+        tyHideAsk();
         status.className = "ty-status is-error";
-        status.textContent = "Could not send the letter.";
+        status.textContent = "Could not send the letter. Check your connection and try again.";
+      });
+  }
+  // After a letter has gone, and the list has been read again: who is waiting next.
+  function tyRenderNext() {
+    if (!tyJustThanked) return;
+    var next = null;
+    tyRows.some(function (r) {
+      if (tyState(r) !== "ready" || r.donorId === tyJustThanked.donorId) return false;
+      next = r;
+      return true;
+    });
+    el("tyNext").innerHTML = next
+      ? "<p>Next to thank: <strong>" + H.escapeHtml(next.name) + "</strong>, whose largest donation was " + H.formatPence(next.maxGiftPence) + ".</p>" +
+        '<button class="admin-btn" type="button" data-ty-donor="' + Number(next.donorId) + '">Write to ' + H.escapeHtml(next.name) + "</button>"
+      : "<p>Nobody else is waiting to be thanked.</p>";
+  }
+
+  // ---- letters sent ----
+  function tySentBy(sentBy) {
+    if (sentBy === "automatic") return "Automatically, by the website";
+    if (String(sentBy || "").indexOf("script:") === 0) return "A one-off catch up, run by hand (" + String(sentBy).slice(7) + ")";
+    return sentBy || "";
+  }
+  function tySentMatches(r, q) {
+    return [r.thankYouName, r.addressedTo, r.recipientEmail, r.giftInKind, r.signedByName, r.sentBy, r.ccEmail, r.personalMessage]
+      .some(function (v) { return v && String(v).toLowerCase().indexOf(q) !== -1; });
+  }
+  function tySentCard(r, canWrite) {
+    var id = Number(r.id);
+    var open = tySentOpen === id;
+    var kindWords = "Gift in kind" + (r.giftInKind ? ": " + r.giftInKind : "");
+    var gift =
+      r.giftType === "in_kind"
+        ? "<span>" + H.escapeHtml(kindWords) + "</span>"
+        : "<span>" + H.formatPence(r.giftAmountPence) + "</span>" + (r.giftAided ? '<span class="ty-pill ty-pill-ga">Gift Aided</span>' : "");
+    var giftWords = r.giftType === "in_kind" ? kindWords : H.formatPence(r.giftAmountPence) + (r.giftAided ? ", Gift Aided" : "");
+    var facts = [
+      ["Addressed to", r.addressedTo],
+      ["Email", r.recipientEmail],
+      ["Copied to", r.ccEmail || "Nobody"],
+      ["Gift", giftWords],
+      ["Signed by", r.signedByName + (r.signedByRole ? ", " + r.signedByRole : "")],
+      ["Sent by", tySentBy(r.sentBy)],
+      ["Sent", tyDay(r.sentAt)],
+    ]
+      .map(function (f) { return "<dt>" + f[0] + "</dt> <dd>" + H.escapeHtml(f[1]) + "</dd>"; })
+      .join(" ");
+    facts += ' <dt>Personal message</dt> <dd class="tyr-message">' + H.escapeHtml(r.personalMessage || "None") + "</dd>";
+    var actions =
+      (r.printUrl
+        ? '<a class="admin-btn ak-btn--plain" href="' + H.escapeHtml(r.printUrl) + '" target="_blank" rel="noopener">View letter</a>' +
+          '<button class="admin-btn ak-btn--plain" type="button" data-ty-copy="' + id + '">Copy the link</button>'
+        : "") +
+      (canWrite ? '<button class="admin-btn ak-btn--danger" type="button" data-ty-delete="' + id + '">Delete</button>' : "");
+    var del = canWrite
+      ? '<small class="ak-says">Delete takes this letter off the list for good, and they no longer show as thanked for it. It does not take back the email.</small>' +
+        '<div class="ak-notice ak-notice--bad" data-ty-delete-ask hidden><p>Delete the thank-you letter to "' + H.escapeHtml(r.thankYouName) +
+        '" from the history? This cannot be undone.</p><div class="ak-actions">' +
+        '<button class="admin-btn ak-btn--danger" type="button" data-ty-delete-yes="' + id + '">Yes, delete it</button>' +
+        '<button class="admin-btn ak-btn--plain" type="button" data-ty-delete-no>Keep it</button></div></div>'
+      : "";
+    return (
+      '<li class="ak-item' + (open ? " is-open" : "") + '" data-ty-sent="' + id + '">' +
+      '<button type="button" class="ak-item__face" aria-expanded="' + (open ? "true" : "false") + '" aria-controls="tySentBody' + id + '">' +
+      '<span class="ak-item__main"><span class="ak-item__name">' + H.escapeHtml(r.thankYouName) + "</span>" +
+      '<span class="ak-item__meta">' + gift + "<span>" + H.escapeHtml(tyDay(r.sentAt)) + "</span></span></span>" +
+      '<span class="ak-item__chev"></span></button>' +
+      '<div class="ak-item__more" id="tySentBody' + id + '"' + (open ? "" : " hidden") + ">" +
+      '<dl class="ak-facts">' + facts + "</dl>" +
+      (actions ? '<div class="ak-actions">' + actions + "</div>" : "") +
+      del +
+      '<p class="ty-status" data-ty-said role="status"></p>' +
+      "</div></li>"
+    );
+  }
+  function tyRenderSent() {
+    var canWrite = canEdit("thank-you");
+    var q = tyTrimmed("tySentSearch").toLowerCase();
+    var rows = q ? tySentRows.filter(function (r) { return tySentMatches(r, q); }) : tySentRows;
+    var loaded = tySentRows.length;
+    // A card just deleted is said in the place it was, where the person is looking.
+    var gone = tySentGone
+      ? '<li class="ak-notice ak-notice--ok" data-ty-gone role="status">The letter to ' + H.escapeHtml(tySentGone.name) + " was deleted.</li>"
+      : "";
+    var cards = "";
+    var placed = false;
+    rows.forEach(function (r) {
+      if (gone && !placed && tySentGone.before === r.id) {
+        cards += gone;
+        placed = true;
+      }
+      cards += tySentCard(r, canWrite);
+    });
+    if (gone && !placed) cards += gone;
+    var box = el("tySentTable");
+    if (cards) box.innerHTML = '<ul class="ak-list">' + cards + "</ul>" + (rows.length ? "" : '<p class="admin-empty">' + (loaded ? "No letter matches that." : "No thank-you letters sent yet.") + "</p>");
+    else box.innerHTML = '<p class="admin-empty">' + (loaded ? "No letter matches that." : "No thank-you letters sent yet.") + "</p>";
+
+    var more = tySentTotal - loaded;
+    var count = "";
+    if (q) {
+      count = rows.length + " of " + tyPlural(loaded, "letter", "letters") + " match." +
+        (more > 0 ? " Only the " + loaded + " most recent are searched: Show more to look further back." : "");
+    } else if (more > 0) {
+      count = "Showing " + loaded + " of " + tySentTotal + " letters, most recent first.";
+    } else if (loaded) {
+      count = tyPlural(loaded, "letter", "letters") + ", most recent first.";
+    }
+    el("tySentCount").textContent = count;
+    var btn = el("tySentMore");
+    btn.hidden = more <= 0;
+    btn.textContent = "Show " + Math.min(TY_PAGE, Math.max(more, 0)) + " more";
+  }
+  // The first 50, or (more) the next 50 added under them. The server gives the total, so the screen
+  // can say how many there are and offer the rest: it used to stop at 50 without a word.
+  function loadThankYouSent(more) {
+    var offset = more ? tySentRows.length : 0;
+    var said = el("tySentSaid");
+    said.className = "ty-status";
+    said.textContent = more ? "Loading…" : "";
+    if (!more) el("tySentTable").innerHTML = '<p class="admin-loading">Loading…</p>';
+    el("tySentMore").disabled = true;
+    authFetch("/api/admin/thank-you/sent?limit=" + TY_PAGE + "&offset=" + offset)
+      .then(okJson)
+      .then(function (d) {
+        var got = d.results || [];
+        if (more) {
+          // A letter sent since the first page was read shifts the rest along by one: never twice.
+          var have = {};
+          tySentRows.forEach(function (r) { have[r.id] = true; });
+          tySentRows = tySentRows.concat(got.filter(function (r) { return !have[r.id]; }));
+        } else {
+          tySentRows = got;
+          tySentOpen = null;
+        }
+        tySentTotal = Math.max(typeof d.total === "number" ? d.total : 0, tySentRows.length);
+        tySentGone = null;
+        said.textContent = "";
+        el("tySentMore").disabled = false;
+        tyRenderSent();
+      })
+      .catch(function () {
+        el("tySentMore").disabled = false;
+        if (more) {
+          // What is on the screen stays; the button is still there to try again.
+          said.className = "ty-status is-error";
+          said.textContent = "Could not load more letters. Please try again.";
+          return;
+        }
+        tySentRows = [];
+        tySentTotal = 0;
+        el("tySentTable").innerHTML = '<p class="admin-empty">Could not load the sent history.</p>';
+        el("tySentCount").textContent = "";
+        el("tySentMore").hidden = true;
+      });
+  }
+  function tySentRow(id) {
+    var found = null;
+    tySentRows.some(function (r) {
+      if (Number(r.id) !== Number(id)) return false;
+      found = r;
+      return true;
+    });
+    return found;
+  }
+  // What happened to a letter, said in its own card beside the button that was pressed.
+  function tySentSay(card, words, bad) {
+    var said = card && card.querySelector("[data-ty-said]");
+    if (!said) return;
+    said.className = "ty-status " + (bad ? "is-error" : "is-ok");
+    said.textContent = words;
+  }
+  // Open a card where it is, closing the one that was open.
+  function tySentToggle(card) {
+    var id = Number(card.getAttribute("data-ty-sent"));
+    tySentOpen = tySentOpen === id ? null : id;
+    Array.prototype.forEach.call(el("tySentTable").querySelectorAll("[data-ty-sent]"), function (c) {
+      var on = Number(c.getAttribute("data-ty-sent")) === tySentOpen;
+      c.classList.toggle("is-open", on);
+      c.querySelector(".ak-item__face").setAttribute("aria-expanded", on ? "true" : "false");
+      c.querySelector(".ak-item__more").hidden = !on;
+    });
+  }
+  function tyCopyLink(card, id) {
+    var r = tySentRow(id);
+    if (!r || !r.printUrl) return;
+    var copy = window.AdminKit && window.AdminKit.copyText ? window.AdminKit.copyText(r.printUrl) : Promise.resolve(false);
+    copy.then(function (ok) {
+      if (ok) tySentSay(card, "Link copied. Paste it wherever you need it.", false);
+      else tySentSay(card, "Could not copy the link. Open View letter and copy the address from there.", true);
+    });
+  }
+  // Delete a sent-letter row (Editor+; server enforces), once the question in the card is answered
+  // yes. A failure is said in the card and the list is left as it was.
+  function tyDeleteSent(card, id) {
+    var r = tySentRow(id);
+    var yes = card.querySelector("[data-ty-delete-yes]");
+    if (!r || (yes && yes.disabled)) return;
+    if (yes) yes.disabled = true;
+    authFetch("/api/admin/thank-you/sent/" + encodeURIComponent(id), { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("delete failed: " + res.status);
+        var at = tySentRows.indexOf(r);
+        var after = tySentRows[at + 1];
+        tySentRows.splice(at, 1);
+        tySentTotal = Math.max(tySentTotal - 1, tySentRows.length);
+        tySentOpen = null;
+        tySentGone = { before: after ? after.id : null, name: r.thankYouName };
+        tyRenderSent();
+        // They may no longer be thanked: the list of who to thank is read again.
+        loadThankYouEligible();
+      })
+      .catch(function () {
+        if (yes) yes.disabled = false;
+        card.querySelector("[data-ty-delete-ask]").hidden = true;
+        tySentSay(card, "Could not delete that letter. Please try again.", true);
       });
   }
 
@@ -13068,12 +13506,22 @@
     if (tyWired) return;
     tyWired = true;
     el("tySend").hidden = !canEdit("thank-you");
+    tyRecallOver();
+    if (window.AdminKit && window.AdminKit.wireParts) {
+      tyParts = window.AdminKit.wireParts(el("tyParts"), { onShow: tyPartShown });
+    } else {
+      el("tyParts").addEventListener("click", function (e) {
+        var b = e.target.closest && e.target.closest("[data-akpart]");
+        if (b) tyShowPart(b.getAttribute("data-akpart"), false);
+      });
+    }
     tyBindInput("tyName", tyUpdateTitle);
     tyBindInput("tyDear", tyUpdateDear);
     tyBindInput("tyDate", tyUpdateDate);
     tyBindInput("tyPersonal", tyUpdatePersonal);
     tyBindInput("tyAmount", tyRenderGift);
     tyBindInput("tyInKind", tyRenderGift);
+    tyBindInput("tyEmail", tyRenderSays);
     el("tyGiftAid").addEventListener("change", tyRenderGift);
     el("tySigner").addEventListener("change", tyUpdateSigner);
     el("tyGtMoney").addEventListener("click", function () {
@@ -13082,21 +13530,73 @@
     el("tyGtKind").addEventListener("click", function () {
       tySetMode(true);
     });
+    el("tyViewToggle").addEventListener("click", function () {
+      tyViewChosen = tyLetterView() === "read" ? "page" : "read";
+      tyFit();
+    });
     el("tyRefresh").addEventListener("click", loadThankYouEligible);
-    el("tyThreshold").addEventListener("change", loadThankYouEligible);
+    el("tyThreshold").addEventListener("change", function () {
+      tyKeepOver();
+      loadThankYouEligible();
+    });
     el("tyNew").addEventListener("click", tyNewLetter);
-    el("tyEligibleTable").addEventListener("click", function (e) {
+    el("tyForNew").addEventListener("click", tyNewLetter);
+    el("tyTiles").addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-ty-filter]");
+      if (!b) return;
+      var key = b.getAttribute("data-ty-filter");
+      tyFilter = tyFilterNow() === key ? "all" : key; // the chosen tile, pressed again, shows everyone
+      tyRenderWho(false);
+    });
+    el("tyShowAll").addEventListener("click", function () {
+      tyFilter = "all";
+      tyRenderWho(false);
+    });
+    function writeTo(e) {
       var b = e.target.closest && e.target.closest("[data-ty-donor]");
       if (!b) return;
       var r = tyEligibleById[b.getAttribute("data-ty-donor")];
       if (r) tyPrefill(r);
+    }
+    el("tyEligibleTable").addEventListener("click", writeTo);
+    el("tyNext").addEventListener("click", writeTo);
+    // The question was about the letter as it stood: change the letter and it is asked again.
+    el("tyForm").addEventListener("input", tyHideAsk);
+    el("tyForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      tyAskFirst();
+    });
+    el("tySend").addEventListener("click", tyAskFirst);
+    el("tyAskYes").addEventListener("click", tySendNow);
+    el("tyAskNo").addEventListener("click", tyHideAsk);
+    tyBindInput("tySentSearch", function () {
+      tySentGone = null;
+      tyRenderSent();
+    });
+    el("tySentMore").addEventListener("click", function () {
+      loadThankYouSent(true);
     });
     el("tySentTable").addEventListener("click", function (e) {
-      var b = e.target.closest && e.target.closest("[data-ty-delete]");
-      if (!b) return;
-      tyDeleteSent(b.getAttribute("data-ty-delete"), b.getAttribute("data-ty-name") || "this donor");
+      var t = e.target;
+      if (!t.closest) return;
+      var card = t.closest("[data-ty-sent]");
+      if (!card) return;
+      if (t.closest(".ak-item__face")) return tySentToggle(card);
+      var copy = t.closest("[data-ty-copy]");
+      if (copy) return tyCopyLink(card, copy.getAttribute("data-ty-copy"));
+      var ask = card.querySelector("[data-ty-delete-ask]");
+      if (t.closest("[data-ty-delete]")) {
+        tySentSay(card, "", false);
+        ask.hidden = false;
+        return;
+      }
+      if (t.closest("[data-ty-delete-no]")) {
+        ask.hidden = true;
+        return;
+      }
+      var yes = t.closest("[data-ty-delete-yes]");
+      if (yes) tyDeleteSent(card, yes.getAttribute("data-ty-delete-yes"));
     });
-    el("tyForm").addEventListener("submit", tySubmit);
     window.addEventListener("resize", tyFit);
   }
   function loadThankYou() {
@@ -13105,9 +13605,12 @@
     if (!el("tyDate").value) el("tyDate").value = tyTodayLong();
     tyUpdateDate();
     tyUpdateSigner();
+    tyUpdateTitle();
+    tyUpdateDear();
     tyRenderGift();
+    tyRenderFor();
     loadThankYouEligible();
-    loadThankYouSent();
+    loadThankYouSent(false);
     tyFit();
     setTimeout(tyFit, 200); // after webfonts settle
   }

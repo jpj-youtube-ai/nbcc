@@ -1,0 +1,110 @@
+/* NBCC admin: Content: Thank you, in the kit's look (assets/css/admin-kit.css).
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-thanks.md.
+ *
+ * Only what the kit does not already give this screen. Every rule is named through #view-thank-you:
+ * the .ty- classes are borrowed by Contact businesses, the Festive Ball and Get involved, so the
+ * shared rules in admin.css are never changed, only redrawn here for this screen. The screen's own
+ * classes start .tyr-. The kit's house rules hold here too (test/unit/admin-thank-you-screen.test.ts):
+ * no !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
+ * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+
+/* ---- who to thank ---- */
+#view-thank-you .ty-controls { margin: 0 0 6px; }
+#view-thank-you .ty-inline { flex-wrap: wrap; font-weight: 600; color: var(--ov-ink); }
+#view-thank-you .ty-count { color: var(--ov-soft); font-size: 0.9rem; }
+#view-thank-you .tyr-showing { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 14px 0 10px; }
+#view-thank-you .tyr-showing p { margin: 0; color: var(--ov-soft); font-size: 0.94rem; }
+#view-thank-you .tyr-showing p:empty { display: none; }
+#view-thank-you .tyr-showing .admin-link[hidden] { display: none; }
+
+/* A donor: the amount large on the left, as Donations, then who they are, then what to press. */
+#view-thank-you .tyr-donor { display: grid; grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) auto; align-items: center; gap: 10px 18px; }
+#view-thank-you .tyr-donor__amount { display: grid; gap: 2px; font-family: var(--ov-head); font-weight: 800; font-size: 1.6rem; line-height: 1; letter-spacing: -0.01em; color: var(--ov-ink); font-variant-numeric: lining-nums tabular-nums; }
+#view-thank-you .tyr-donor__amount small { font-family: inherit; font-weight: 400; font-size: 0.78rem; letter-spacing: 0; color: var(--ov-soft); }
+#view-thank-you .tyr-donor__who { display: grid; gap: 4px; min-width: 0; justify-items: start; }
+#view-thank-you .tyr-donor__name { font-family: var(--ov-head); font-weight: 700; font-size: 1.1rem; line-height: 1.2; color: var(--ov-ink); overflow-wrap: anywhere; text-align: left; }
+#view-thank-you button.tyr-donor__name { min-height: 44px; margin: -8px 0 -6px; padding: 0; border: 0; background: none; color: var(--ov-maroon); font: inherit; font-family: var(--ov-head); font-weight: 700; font-size: 1.1rem; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; cursor: pointer; }
+#view-thank-you button.tyr-donor__name:hover { color: var(--ov-crimson); }
+#view-thank-you .tyr-donor__email { font-size: 0.9rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-thank-you .tyr-donor__marks { display: flex; flex-wrap: wrap; gap: 6px; }
+#view-thank-you .tyr-donor__note { max-width: 62ch; font-size: 0.9rem; line-height: 1.45; color: var(--ov-text); }
+#view-thank-you .tyr-donor__act { justify-self: end; }
+
+/* ---- write the letter ---- */
+#view-thank-you #tyFor { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-weight: 600; }
+#view-thank-you #tyFor .admin-link[hidden] { display: none; }
+/* The form, then the letter, then Send. On a laptop the form and Send share the left, the letter the right. */
+#view-thank-you .ty-compose { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); grid-template-areas: "form letter" "send letter"; align-items: start; gap: 20px clamp(20px, 3vw, 32px); }
+#view-thank-you .ty-compose > form { grid-area: form; }
+#view-thank-you .ty-compose > .ty-preview { grid-area: letter; }
+#view-thank-you .ty-compose > .tyr-send { grid-area: send; }
+#view-thank-you .ty-panel { padding: clamp(16px, 2.4vw, 24px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+#view-thank-you .ty-field { margin: 0 0 16px; }
+#view-thank-you .ty-field label, #view-thank-you .tyr-label { display: block; margin: 0 0 6px; font-family: var(--ov-head); font-weight: 700; font-size: 0.95rem; line-height: 1.2; color: var(--ov-ink); }
+#view-thank-you .ty-field input, #view-thank-you .ty-field textarea, #view-thank-you .ty-field select { width: 100%; min-width: 0; }
+#view-thank-you .ty-muted { font-family: inherit; font-weight: 400; color: var(--ov-soft); }
+#view-thank-you .ty-hint { font-size: 0.84rem; color: var(--ov-soft); }
+#view-thank-you .tyr-check { margin: -4px 0 16px; }
+#view-thank-you .ty-row { gap: 0 14px; }
+#view-thank-you .ty-preview { position: sticky; top: 140px; }
+#view-thank-you .ty-preview-bar .admin-eyebrow { color: var(--ov-crimson); }
+#view-thank-you .ty-preview .ak-hint { margin: 0 0 10px; }
+#view-thank-you .tyr-view { margin: 0 0 12px; }
+#view-thank-you .tyr-send { display: grid; gap: 4px; }
+#view-thank-you .tyr-send .ak-notice { margin: 0 0 8px; }
+#view-thank-you .tyr-send #tyAsk { margin: 12px 0 0; }
+#view-thank-you .tyr-send #tyAsk p { margin: 0; font-weight: 600; }
+#view-thank-you .ty-actions { margin: 0; }
+#view-thank-you .tyr-next { display: grid; gap: 10px; justify-items: start; }
+#view-thank-you .tyr-next:empty { display: none; }
+#view-thank-you .tyr-next p { margin: 8px 0 0; font-size: 0.95rem; color: var(--ov-text); }
+
+/* The letter you can read: the same words at normal size, in one column, no shrinking. */
+#view-thank-you .ty-paper-wrap[data-view="read"] { height: auto; border: var(--ov-line); border-radius: 18px; box-shadow: var(--ov-pop); }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-paper { transform: none; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-page { width: auto; min-height: 0; padding: 8px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-sheet { min-height: 0; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-sheet-body { padding: 20px 18px 8px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-letter-head { flex-direction: column-reverse; align-items: flex-start; gap: 12px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-sender { font-size: 0.9rem; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-logo img { height: 96px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-tagline { font-size: 0.8rem; margin-top: 0; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-letter-meta { margin-top: 16px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-ldate { font-size: 1rem; white-space: normal; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-letter-title { font-size: 1.6rem; margin: 10px 0 6px; overflow-wrap: anywhere; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-salutation { font-size: 1.15rem; margin: 0 0 12px; overflow-wrap: anywhere; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-letter-body p { font-size: 1rem; line-height: 1.6; margin: 0 0 12px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-callout { font-size: 1rem; padding: 12px 14px; margin: 4px 0 14px; overflow-wrap: anywhere; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-callout .ty-ganote { font-size: 0.95rem; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-personal { font-size: 1.1rem; overflow-wrap: anywhere; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-signoff p { font-size: 1rem; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-signame { font-size: 1.7rem; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-sigrole { font-size: 0.95rem; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-pullquote { font-size: 1.1rem; margin: 18px auto 12px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-donate-eyebrow { font-size: 0.75rem; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-donate-go { font-size: 1.1rem; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-letter-foot { padding: 14px 12px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-foot-row { flex-wrap: wrap; gap: 8px 0; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-cell { font-size: 0.9rem; padding: 0 10px; }
+#view-thank-you .ty-paper-wrap[data-view="read"] .ty-foot-legal { font-size: 0.75rem; }
+
+/* ---- letters sent ---- */
+#view-thank-you .tyr-find { max-width: 420px; margin: 0 0 10px; }
+#view-thank-you .tyr-count { margin: 0 0 12px; color: var(--ov-soft); font-size: 0.92rem; }
+#view-thank-you .tyr-count:empty { display: none; }
+#view-thank-you #tySentTable .ak-list + .admin-empty { margin-top: 12px; }
+#view-thank-you .tyr-message { white-space: pre-line; font-style: italic; }
+#view-thank-you .ak-item__more .ak-says { margin: -6px 0 0; }
+#view-thank-you .ak-item__more [data-ty-delete-ask] p { margin: 0; font-weight: 600; }
+#view-thank-you .ak-item__more .ty-status:empty { display: none; }
+#view-thank-you .tyr-more { display: grid; justify-items: center; gap: 4px; margin: 18px 0 0; }
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  #view-thank-you .tyr-donor { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  #view-thank-you .tyr-donor__act { justify-self: start; }
+  #view-thank-you .ty-compose { grid-template-columns: minmax(0, 1fr); grid-template-areas: "form" "letter" "send"; }
+  #view-thank-you .ty-preview { position: static; }
+  #view-thank-you .ty-row { grid-template-columns: minmax(0, 1fr); }
+  #view-thank-you .ty-controls .ty-spacer { display: none; }
+}

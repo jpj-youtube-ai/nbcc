@@ -18,6 +18,17 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     When I PATCH the admin donor full name to "Ada Renamed" as "viewer.admin.bdd@example.com" with password "view-pw-123"
     Then the admin response status should be 403
 
+  Scenario: a Viewer can read a donor's giving and history, and without a token cannot
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    When I GET the admin donor's "giving" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+    And the admin response has a list named "gifts"
+    When I GET the admin donor's "history" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+    And the admin response has a list named "results"
+    When I GET the admin path "/api/admin/donors/1/giving" without a token
+    Then the admin response status should be 401
+
   Scenario: an Editor can update the donor
     Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
     When I PATCH the admin donor full name to "Ada Edited" as "editor.admin.bdd@example.com" with password "edit-pw-123"

@@ -95,6 +95,23 @@ When(
   },
 );
 
+// One donor's page (2026-11-14): their giving and their history, read beside the donor.
+When(
+  "I GET the admin donor's {string} as {string} with password {string}",
+  async function (part, email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/donors/${this.adminDonorId}/${part}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the admin response has a list named {string}", function (name) {
+  assert.ok(Array.isArray(this.adminBody[name]), `expected a list named ${name}`);
+});
+
 When(
   "I PATCH the admin donor full name to {string} as {string} with password {string}",
   async function (fullName, email, password) {

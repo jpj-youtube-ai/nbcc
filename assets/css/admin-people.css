@@ -76,6 +76,8 @@
   #view-search .pp-kind .ak-tile__n { grid-row: span 2; }
   #view-search .pp-kind .ak-tile__n:empty + .ak-tile__name, #view-search .pp-kind .ak-tile__n:empty ~ .ak-tile__says { grid-column: 1 / -1; }
   #view-search .pp-search .admin-btn { flex: 1 1 100%; }
+  /* The gifts table is a card per gift here (admin.css, .dn-list): the kit's roomy cell padding and rules made each one very tall. */
+  #view-search .pp-gifts-wrap .dn-table td { padding-top: 3px; padding-bottom: 3px; border-bottom: 0; }
   #view-donor .pp-cols { grid-template-columns: minmax(0, 1fr); }
   #view-donor .pp-gift { grid-template-columns: minmax(0, 1fr); }
 }

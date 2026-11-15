@@ -45,7 +45,10 @@
 #view-thank-you .ty-muted { font-family: inherit; font-weight: 400; color: var(--ov-soft); }
 #view-thank-you .ty-hint { font-size: 0.84rem; color: var(--ov-soft); }
 #view-thank-you .tyr-check { margin: -4px 0 16px; }
-#view-thank-you .ty-row { gap: 0 14px; }
+/* One column even on a laptop: the form is 400px wide, and two columns cut the signer's name short. */
+#view-thank-you .ty-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+/* A long email address breaks rather than pushing the page wider than a phone. */
+#view-thank-you #tyFor, #view-thank-you #tyAgain, #view-thank-you #tySays, #view-thank-you #tyAskText, #view-thank-you #tyStatus, #view-thank-you .tyr-next { overflow-wrap: anywhere; }
 #view-thank-you .ty-preview { position: sticky; top: 140px; }
 #view-thank-you .ty-preview-bar .admin-eyebrow { color: var(--ov-crimson); }
 #view-thank-you .ty-preview .ak-hint { margin: 0 0 10px; }
@@ -105,6 +108,5 @@
   #view-thank-you .tyr-donor__act { justify-self: start; }
   #view-thank-you .ty-compose { grid-template-columns: minmax(0, 1fr); grid-template-areas: "form" "letter" "send"; }
   #view-thank-you .ty-preview { position: static; }
-  #view-thank-you .ty-row { grid-template-columns: minmax(0, 1fr); }
   #view-thank-you .ty-controls .ty-spacer { display: none; }
 }

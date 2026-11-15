@@ -139,6 +139,7 @@ import { upsertLoginCode, getLoginCode, bumpLoginCodeAttempts, deleteLoginCode }
 import { twoFactorSchema } from "../admin/user-schema";
 import { authorizeSection } from "./admin-authz";
 import { getDonorPortalSnapshot, updateDonorPortal, getActiveDeclarationForDonor } from "../db/portal";
+import { getDonorGiving, getDonorMonthlyGift, listDonorAuditTrail } from "../db/donor-page";
 import { cancelSubscription } from "../clients/stripe";
 import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
 import { declarationFieldsSchema } from "../declarations/fields";
@@ -1648,6 +1649,47 @@ export async function getAdminDonor(req: Request, res: Response): Promise<Respon
   }
 }
 
+// GET /api/admin/donors/:id/giving — what this donor has given (the total, how many, the first and
+// the latest, then each gift) and the truth about their monthly gift: whether it is still running,
+// which the snapshot's plan alone cannot say once it has been cancelled. Read-only, and guarded
+// exactly as the donor read above is. A read of its own beside that one, so the donor read's answer
+// is unchanged and the page still opens when this one fails.
+export async function getAdminDonorGiving(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "donations", "view"))) return;
+  const id = donorId(req, res);
+  if (id == null) return;
+  try {
+    const snapshot = await getDonorPortalSnapshot(id);
+    if (!snapshot) return res.status(404).json({ error: "Donor not found" });
+    const giving = await getDonorGiving(id);
+    const monthly = snapshot.subscriptionId
+      ? await getDonorMonthlyGift(id, snapshot.subscriptionId, snapshot.subscriptionPlan)
+      : null;
+    return res.status(200).json({ ...giving, monthly });
+  } catch (err) {
+    console.error("admin donor giving read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/donors/:id/history — this donor's lines from the audit trail (who changed their
+// details, who cancelled their monthly gift or their Gift Aid), newest first. Read-only, guarded as
+// the donor read is: someone who may open the donor may see what was done to them. Only who, what
+// and when leave the server, never an audit row's own data (listDonorAuditTrail says why).
+export async function getAdminDonorHistory(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "donations", "view"))) return;
+  const id = donorId(req, res);
+  if (id == null) return;
+  try {
+    const snapshot = await getDonorPortalSnapshot(id);
+    if (!snapshot) return res.status(404).json({ error: "Donor not found" });
+    return res.status(200).json({ results: await listDonorAuditTrail(id) });
+  } catch (err) {
+    console.error("admin donor history read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 // The editable donor fields — same shape as the self-serve PATCH (src/routes/portal.ts).
 const adminPatchSchema = z
   .object({
@@ -1784,6 +1826,8 @@ export async function postAdminCancelGiftAid(req: Request, res: Response): Promi
 }
 
 adminRouter.get("/api/admin/donors/:id", getAdminDonor);
+adminRouter.get("/api/admin/donors/:id/giving", getAdminDonorGiving);
+adminRouter.get("/api/admin/donors/:id/history", getAdminDonorHistory);
 adminRouter.patch("/api/admin/donors/:id/declaration", patchAdminDeclaration);
 adminRouter.patch("/api/admin/donors/:id", patchAdminDonor);
 adminRouter.post("/api/admin/donors/:id/subscription/cancel", postAdminCancelSubscription);

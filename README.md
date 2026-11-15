@@ -10807,6 +10807,15 @@ changes here: the certificate is wired into the finishing email by a later task.
 
 No migration: everything comes from tables that already exist.
 
+## One donor's page and Search, in the kit's look (2026-11-14)
+
+Design: `docs/superpowers/specs/2026-11-14-admin-refresh-people.md`. Styles: `assets/css/admin-people.css`.
+
+- **Faults put right:** Search's gifts no longer all say Paid (`searchDonations` returns `payment_status` and `refunded_amount_pence`); saving a donor keeps the address and the Gift Aid form; each button's message stays beside it; Gift Aid shows On only while a declaration is in force, and the monthly gift says whether it is still running, so neither cancel button lingers after cancelling.
+- **Donor page:** name as title with marks; four figures; who they are with tap to email, Copy email and Copy address; each cancel button says what it does and that it cannot be undone, and asks in the page; Back to where you came from (Search keeps its results); every gift as a card; what has changed.
+- **Search:** one box asks the three searches together; People, Gifts and Gift Aid declarations under their own headings, a tile each with what it looks in, the count and a jump; the first 50 said; your last five searches for this tab only (sessionStorage, cleared at sign out). The donor search also finds a postcode or a business supporter's phone number.
+- **New reads**, guarded as `GET /api/admin/donors/:id` is (Donations, view): `GET /api/admin/donors/:id/giving` (totals, gifts, the monthly gift's state) and `GET /api/admin/donors/:id/history` (the donor's audit lines: who, what, when). Tests: `admin-donor-page*.test.ts`, `admin-search-screen.test.ts`, `admin-people-styles.test.ts`.
+
 ## Thank your supporters (TASK-507)
 
 An organiser can thank the people who gave on their fundraiser, without ever seeing their email

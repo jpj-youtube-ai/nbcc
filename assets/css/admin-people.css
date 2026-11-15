@@ -1,0 +1,83 @@
+/* NBCC admin: one donor's page and Search, in the kit's look (assets/css/admin-kit.css).
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-people.md.
+ *
+ * Only what the kit does not already give these screens. The kit's house rules hold here too: no
+ * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
+ * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. Pinned by
+ * test/unit/admin-people-styles.test.ts. */
+
+/* ---- Search ---- */
+#view-search .pp-search { display: flex; flex-wrap: wrap; gap: 10px; max-width: 720px; margin: 0 0 14px; }
+#view-search .pp-search input { flex: 1 1 220px; min-width: 0; }
+#view-search .pp-recent { display: grid; gap: 6px; margin: 0 0 18px; }
+#view-search .pp-recent[hidden] { display: none; }
+#view-search .pp-recent__label { margin: 0; font-size: 0.86rem; font-weight: 600; color: var(--ov-soft); }
+#view-search .pp-recent__list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+#view-search .pp-recent__q { max-width: 100%; overflow-wrap: anywhere; }
+#view-search .pp-recent__says { margin: 0; }
+/* The three kinds of search are tiles, though they keep the old kind buttons' class (admin-seg),
+   which the kit draws as a pill: the tile look is put back here. */
+#view-search .pp-kinds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#view-search .ak-tile.pp-kind { display: grid; align-content: start; gap: 2px; min-height: 92px; padding: 12px 14px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-text); font-size: inherit; font-weight: inherit; text-align: left; white-space: normal; transform: none; }
+#view-search .ak-tile.pp-kind:hover { background: var(--ov-hover); }
+#view-search .ak-tile.pp-kind:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+#view-search .pp-kind .ak-tile__n:empty { display: none; }
+#view-search .pp-results { display: grid; gap: 26px; min-width: 0; }
+#view-search .pp-found { min-width: 0; scroll-margin-top: 76px; }
+#view-search .pp-found .ak-h3 { margin-top: 0; }
+#view-search .pp-found__n { display: inline-block; margin-left: 6px; padding: 0 9px; border: var(--ov-thin); border-radius: 999px; font-family: inherit; font-size: 0.85rem; vertical-align: 3px; color: var(--ov-ink); }
+#view-search .pp-found__cut { margin: -6px 0 10px; }
+#view-search .pp-row__marks { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+#view-search .pp-gifts-wrap .dn-table td[data-label="Donor"] { font-weight: 600; }
+
+/* ---- one donor's page ---- */
+#view-donor .pp-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+#view-donor .pp-title h2 { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+#view-donor .pp-marks { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+#view-donor .pp-marks:empty { display: none; }
+#view-donor .admin-view-intro { margin-top: 8px; }
+#view-donor .pp-sums .pp-tile--day .ak-tile__n { font-size: 1.15rem; line-height: 1.2; }
+#view-donor .pp-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+#view-donor .pp-col { display: grid; gap: 18px; min-width: 0; }
+#view-donor .pp-card .ak-h3, #view-donor .pp-part .ak-h3 { margin: 0 0 10px; font-size: 1.15rem; }
+#view-donor .pp-part { min-width: 0; }
+#view-donor .ak-facts { max-width: none; }
+#view-donor .pp-link { color: var(--ov-maroon); font-weight: 600; text-underline-offset: 3px; overflow-wrap: anywhere; }
+#view-donor .pp-copy { margin-top: 14px; }
+#view-donor .pp-state { margin: 0 0 6px; }
+#view-donor .pp-lead { margin: 0 0 4px; font-size: 1.05rem; color: var(--ov-ink); }
+#view-donor .pp-more { margin: 4px 0 0; font-size: 0.92rem; line-height: 1.45; color: var(--ov-text); }
+#view-donor .pp-danger { margin-top: 16px; padding-top: 14px; border-top: 2px dashed var(--ov-rule); }
+#view-donor .pp-ask { display: grid; gap: 10px; margin-top: 4px; padding: 12px 14px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-blush); }
+#view-donor .pp-ask[hidden] { display: none; }
+#view-donor .pp-ask__q { margin: 0; font-weight: 600; color: var(--ov-ink); line-height: 1.45; }
+#view-donor .pp-fold { margin: 0; }
+#view-donor .pp-form { display: grid; gap: 12px; }
+#view-donor .pp-form .admin-field { display: grid; gap: 0; }
+#view-donor .pp-form .admin-field input { width: 100%; min-width: 0; }
+#view-donor .pp-gifts { gap: 10px; }
+#view-donor .pp-gift { display: grid; grid-template-columns: minmax(4.5rem, max-content) minmax(0, 1fr); gap: 4px 14px; align-items: start; padding: 12px 14px; box-shadow: 2px 3px 0 var(--ov-ink); }
+#view-donor .pp-gift__amount { font-family: var(--ov-head); font-weight: 800; font-size: 1.3rem; line-height: 1.1; color: var(--ov-ink); font-variant-numeric: lining-nums tabular-nums; }
+#view-donor .pp-gift__main { display: grid; gap: 4px; min-width: 0; }
+#view-donor .pp-gift__when { font-weight: 600; color: var(--ov-ink); }
+#view-donor .pp-gift__marks { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+#view-donor .pp-gift__note { font-size: 0.86rem; color: var(--ov-soft); }
+#view-donor #donorMoreGifts { margin-top: 12px; }
+#view-donor .pp-changes { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+#view-donor .pp-change { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--ov-rule); }
+#view-donor .pp-change:last-child { border-bottom: 0; }
+#view-donor .pp-change__what { font-weight: 600; color: var(--ov-ink); overflow-wrap: anywhere; }
+#view-donor .pp-change__meta { font-size: 0.86rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  #view-search .pp-kinds { grid-template-columns: minmax(0, 1fr); }
+  #view-search .ak-tile.pp-kind { grid-template-columns: 3.2rem minmax(0, 1fr); align-items: baseline; gap: 2px 10px; min-height: 0; padding: 10px 12px; }
+  #view-search .pp-kind .ak-tile__n { grid-row: span 2; }
+  #view-search .pp-kind .ak-tile__n:empty + .ak-tile__name, #view-search .pp-kind .ak-tile__n:empty ~ .ak-tile__says { grid-column: 1 / -1; }
+  #view-search .pp-search .admin-btn { flex: 1 1 100%; }
+  /* The gifts table is a card per gift here (admin.css, .dn-list): the kit's roomy cell padding and rules made each one very tall. */
+  #view-search .pp-gifts-wrap .dn-table td { padding-top: 3px; padding-bottom: 3px; border-bottom: 0; }
+  #view-donor .pp-cols { grid-template-columns: minmax(0, 1fr); }
+  #view-donor .pp-gift { grid-template-columns: minmax(0, 1fr); }
+}

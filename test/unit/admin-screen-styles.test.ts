@@ -71,7 +71,7 @@ describe("no screen loses its styles", () => {
     // Head Elf HQ's do, so that stylesheet is read too.
     // The Overview, Contact and phone menu (ov-, ct-, pm-) have theirs too, since 2026-11-12.
     // The kit (ak-) and each area's sheet on top of it, since 2026-11-14.
-    const areaSheets = ["kit", "giving", "supporters", "records", "content", "outreach", "settings", "newsletter"]
+    const areaSheets = ["kit", "giving", "supporters", "people", "records", "content", "outreach", "settings", "newsletter"]
       .map((name) => read(`assets/css/admin-${name}.css`))
       .join("");
     const sheets =

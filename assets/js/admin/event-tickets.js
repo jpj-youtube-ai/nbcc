@@ -52,6 +52,8 @@
     var view = doc.getElementById("view-fundraising");
     var openId = null;
     var events = [];
+    var onlyWaiting = false; // the "Waiting for you" tile is pressed: only the events with something to do
+    var tilesBox = doc.getElementById("etTiles");
 
     function el(tag, cls, text) {
       var n = doc.createElement(tag);
@@ -141,15 +143,57 @@
       return out.join(", ");
     }
 
+    // 2026-11-15: the counts as tiles, as on Sign ups. Tickets sold and ticket money across every
+    // event listed, and how many events have something waiting for you; that one is a button that
+    // lists only them (pressed again, all of them).
+    function hasWaiting(e) {
+      return !!(e.proposedTypes || e.proposedLimit || e.openRequests);
+    }
+    function tileEl(tag, name, n, says, extra) {
+      var t = el(tag, "ak-tile" + (extra || ""));
+      t.appendChild(el("span", "ak-tile__n", n));
+      t.appendChild(el("span", "ak-tile__name", name));
+      t.appendChild(el("span", "ak-tile__says", says));
+      return t;
+    }
+    function drawTiles() {
+      if (!tilesBox) return;
+      while (tilesBox.firstChild) tilesBox.removeChild(tilesBox.firstChild);
+      tilesBox.hidden = !events.length;
+      if (!events.length) return;
+      var sold = 0;
+      var pence = 0;
+      var waiting = 0;
+      events.forEach(function (e) {
+        sold += Number(e.sold) || 0;
+        pence += Number(e.ticketPence) || 0;
+        if (hasWaiting(e)) waiting += 1;
+      });
+      tilesBox.appendChild(tileEl("div", "Tickets sold", String(sold), "across every event below"));
+      tilesBox.appendChild(tileEl("div", "Ticket money", money(pence), "after refunds, apart from gifts"));
+      var says = onlyWaiting ? "showing only these: press again for every event" : "tickets, a limit or a refund to look at";
+      var needs = tileEl("button", "Waiting for you", String(waiting), says, (waiting ? "" : " is-none") + (onlyWaiting ? " is-active" : ""));
+      needs.type = "button";
+      needs.setAttribute("data-et-only-waiting", "");
+      needs.setAttribute("aria-pressed", onlyWaiting ? "true" : "false");
+      tilesBox.appendChild(needs);
+    }
+
     function drawList() {
+      drawTiles();
       while (listBox.firstChild) listBox.removeChild(listBox.firstChild);
+      var shownEvents = onlyWaiting ? events.filter(hasWaiting) : events;
+      if (events.length && !shownEvents.length) {
+        listBox.appendChild(el("p", "admin-empty", "Nothing is waiting for you. Press Waiting for you again to see every event."));
+        return;
+      }
       if (!events.length) {
         listBox.appendChild(el("p", "admin-loading", "No event is selling tickets through NBCC yet. An organiser chooses it on the sign up form, under How do people get in?"));
         return;
       }
       var ul = el("ul", "et-events");
       ul.setAttribute("role", "list");
-      events.forEach(function (e) {
+      shownEvents.forEach(function (e) {
         var li = el("li", "et-event" + (openId === e.id ? " is-open" : ""));
         li.setAttribute("data-et-event", String(e.id));
         var head = btn("et-event__head", null, "data-et-open", e.id);
@@ -807,6 +851,16 @@
       return load();
     }
 
+    if (tilesBox) {
+      tilesBox.addEventListener("click", function (e) {
+        var b = e.target && e.target.closest ? e.target.closest("[data-et-only-waiting]") : null;
+        if (!b) return;
+        onlyWaiting = !onlyWaiting;
+        drawList();
+        var again = tilesBox.querySelector("[data-et-only-waiting]");
+        if (again && again.focus) again.focus();
+      });
+    }
     if (listBox) {
       listBox.addEventListener("click", function (e) {
         var b = e.target && e.target.closest ? e.target.closest("[data-et-open]") : null;

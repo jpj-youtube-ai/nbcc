@@ -120,6 +120,71 @@
       return waiting ? waiting + " waiting for sign off" : plural(Number(s.count) || 0, "email", "emails");
     }
 
+    // 2026-11-15: what waits for an admin, said first. The tile at the top of Emails, and a dot on the
+    // Emails button (as an open sign up's parts carry one), so it shows from any section of the tab.
+    function paintWaiting(n) {
+      var count = Number(n) || 0;
+      var tiles = el("frEmailsTiles");
+      if (tiles) tiles.hidden = false;
+      var num = el("frEmailsWaitingN");
+      if (num) num.textContent = String(count);
+      var t = el("frEmailsWaitingTile");
+      if (t) t.classList.toggle("is-none", count === 0);
+      var btn = doc.querySelector('#giSections [data-gi-section="emails"]');
+      if (!btn) return;
+      Array.prototype.forEach.call(btn.querySelectorAll(".ak-part-dot, .gi-dot-words"), function (n2) {
+        n2.parentNode.removeChild(n2);
+      });
+      if (!count) return;
+      var dot = make("span", "ak-part-dot");
+      dot.setAttribute("aria-hidden", "true");
+      btn.appendChild(dot);
+      btn.appendChild(make("span", "sr-only gi-dot-words", ", " + count + " waiting for sign off"));
+    }
+
+    // The tile: All emails opened at the first email waiting for sign off.
+    function openFirstWaiting() {
+      var fold = el("frAllEmailsFold");
+      card.hidden = false;
+      if (fold) fold.open = true;
+      return loadList().then(function () {
+        if (listState !== "ok") return;
+        var found = null;
+        (data.groups || []).forEach(function (g) {
+          (g.emails || []).forEach(function (e) {
+            if (!found && e.state === "waiting") found = { g: g, e: e };
+          });
+        });
+        if (found) return open(found.g.id, { emailId: found.e.id });
+        var bar = fold && fold.querySelector("summary");
+        if (bar && bar.focus) bar.focus();
+      });
+    }
+
+    // Find an email by its name (or its subject, or who gets it): the rows that match, in their groups,
+    // opened; the rest put away until the box is cleared.
+    function applySearch() {
+      var box = el("frAllEmailsSearch");
+      var words = box ? String(box.value || "").trim().toLowerCase() : "";
+      var matches = 0;
+      Array.prototype.forEach.call(card.querySelectorAll("[data-emails-group]"), function (details) {
+        var inGroup = 0;
+        Array.prototype.forEach.call(details.querySelectorAll("[data-email]"), function (li) {
+          var r = rows[li.getAttribute("data-email")];
+          var e = r ? r.email : {};
+          var hay = [e.name, e.subject, e.who].join(" ").toLowerCase();
+          var hit = !words || hay.indexOf(words) !== -1;
+          li.hidden = !hit;
+          if (hit) inGroup += 1;
+        });
+        details.hidden = !!words && inGroup === 0;
+        if (words && inGroup) details.open = true;
+        matches += inGroup;
+      });
+      var none = el("frAllEmailsNone");
+      if (none) none.hidden = !words || matches > 0;
+    }
+
     function loadSummary() {
       if (!token()) return Promise.resolve(null);
       return call("GET", "/api/admin/fundraising/emails/summary")
@@ -131,6 +196,7 @@
           if (r.status !== 200) throw new Error("failed");
           card.hidden = false;
           el("frAllEmailsState").textContent = barWords(r.data);
+          paintWaiting(r.data.waiting);
           return r.data;
         })
         .catch(function () {
@@ -254,6 +320,7 @@
     // in place. Nothing is closed and no email is fetched again.
     function redraw() {
       el("frAllEmailsState").textContent = barWords(data);
+      paintWaiting(data.waiting);
       (data.groups || []).forEach(function (g) {
         var details = card.querySelector('[data-emails-group="' + g.id + '"]');
         if (details) drawGroupBar(g, details);
@@ -286,6 +353,7 @@
           listWait = null;
           drawList();
           redraw();
+          applySearch();
           return data;
         })
         .catch(function () {
@@ -670,6 +738,11 @@
         loadList();
       });
     }
+    var searchBox = el("frAllEmailsSearch");
+    if (searchBox) searchBox.addEventListener("input", applySearch);
+    var waitingTile = el("frEmailsWaitingTile");
+    if (waitingTile) waitingTile.addEventListener("click", openFirstWaiting);
+
     // A group's own toggle does not bubble, so it is caught on the way down.
     card.addEventListener("toggle", fitAll, true);
     if (win.addEventListener) win.addEventListener("resize", fitAll);
@@ -701,6 +774,8 @@
   } else if (typeof document !== "undefined") {
     var api = initAdminAllEmails(document, window);
     window.AdminAllEmails = api;
-    if (api && api.shown && !api.shown.hidden) api.loadSummary();
+    // The count (and the dot on the Emails button) whenever Get involved is on screen, whichever section.
+    var tab = document.getElementById("view-get-involved");
+    if (api && ((api.shown && !api.shown.hidden) || (tab && !tab.hidden))) api.loadSummary();
   }
 })();

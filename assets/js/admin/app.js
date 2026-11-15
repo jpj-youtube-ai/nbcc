@@ -997,6 +997,10 @@
       return GI_SECTIONS.indexOf(s) !== -1 && giMaySee(s);
     })[0];
     if (section) giShow(section, true);
+    // 2026-11-15: what waits for an admin in Emails, as a dot on its button, from any section.
+    if (canView("fundraising") && section !== "emails" && window.AdminAllEmails && window.AdminAllEmails.loadSummary) {
+      window.AdminAllEmails.loadSummary();
+    }
   }
   // fresh: the tab has just been opened, so the section is read again even if it was the one
   // showing when the tab was left, as the old tabs read themselves again each time they opened.
@@ -11569,6 +11573,13 @@
     el("frSwitchNote").hidden = mayFlip;
     btn.textContent = on ? "Switch off" : "Switch on";
     btn.setAttribute("aria-label", on ? "Switch fundraising off" : "Switch fundraising on");
+    // What pressing it does on the website, said under it (2026-11-15).
+    var says = el("frSwitchSays");
+    if (says) {
+      says.textContent = !mayFlip ? "" : on
+        ? "Switching it off closes the Fundraise for us form and takes every fundraiser off the website straight away. You are asked first."
+        : "Switching it on opens the Fundraise for us form and puts every approved public fundraiser on the website straight away. You are asked first.";
+    }
     btn.className = on ? "btn btn-ghost fr-switch-btn" : "btn btn-primary fr-switch-btn";
   }
 
@@ -18075,6 +18086,13 @@
     el("evSwitchNote").hidden = mayFlip;
     btn.textContent = on ? "Take the page off the website" : "Put the page on the website";
     btn.className = on ? "btn btn-ghost" : "btn btn-primary";
+    // What pressing it does on the website, said under it (2026-11-15).
+    var says = el("evSwitchSays");
+    if (says) {
+      says.textContent = !mayFlip ? "" : on
+        ? "Taking it off hides Get involved and What’s on from the website, and from every page’s menu, straight away. You are asked first."
+        : "Putting it on shows Get involved and What’s on to everyone, and every page’s menu offers Get involved, straight away. You are asked first.";
+    }
     evUpdateWhere();
   }
 

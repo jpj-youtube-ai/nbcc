@@ -151,18 +151,19 @@ describe("the Sponsor pledges card", () => {
 
   it("offers send and cancel only where they apply, and never to a viewer", async () => {
     await start();
+    // The actions row (2026-11-15: each email also has a Copy email button beside it, for everyone who sees it).
     const rows = [...document.querySelectorAll("[data-pledge]")];
-    expect([...rows[0].querySelectorAll("button")].map(words)).toEqual(["Send pay link", "Cancel pledge", "Hide message"]);
-    expect(rows[1].querySelectorAll("button").length).toBe(0);
+    expect([...rows[0].querySelectorAll(".fr-pledge-row__actions button")].map(words)).toEqual(["Send pay link", "Cancel pledge", "Hide message"]);
+    expect(rows[1].querySelectorAll(".fr-pledge-row__actions button").length).toBe(0);
     await start("viewer");
-    expect(document.querySelectorAll("[data-pledge] button").length).toBe(0);
+    expect(document.querySelectorAll("[data-pledge] .fr-pledge-row__actions button").length).toBe(0);
   });
 
   it("only offers the pay link once it is due", async () => {
     const data = overview();
     data.fundraisers[0].pledges[0] = pledge({ canSend: false });
     await start("editor", data);
-    expect([...document.querySelectorAll("[data-pledge] button")].map(words)).toEqual(["Cancel pledge", "Hide message"]);
+    expect([...document.querySelectorAll("[data-pledge] .fr-pledge-row__actions button")].map(words)).toEqual(["Cancel pledge", "Hide message"]);
   });
 
   it("flags a pledge paid twice, in the bar and on its row, until an editor marks it checked", async () => {
@@ -199,7 +200,7 @@ describe("the Sponsor pledges card", () => {
     const data = overview();
     data.fundraisers[0].pledges[0] = pledge({ payEmailSentAt: "2026-12-06T08:00:00.000Z", statusWords: "Not paid yet, pay link sent" });
     await start("editor", data);
-    expect(words(document.querySelector("[data-pledge] button"))).toBe("Resend pay link");
+    expect(words(document.querySelector("[data-pledge] .fr-pledge-row__actions button"))).toBe("Resend pay link");
   });
 
   it("sends the pay link, and says what the server said when it cannot", async () => {

@@ -259,8 +259,10 @@ describe("the five sections", () => {
     // Each card once, and the order they are read in.
     const order = (s: Section) => qa(`[data-gi-part="${s}"] > [id]`).map((n) => n.id);
     expect(order("tickets")).toEqual(["etAdmin", "frPledges"]);
-    expect(order("emails")).toEqual(["frInvite", "frTouch", "frAllEmails"]);
-    expect(order("settings").filter((id) => !/Status$/.test(id))).toEqual(["evSwitch", "frSwitch", "frCats", "frImpact", "frSummary"]);
+    // 2026-11-15: Emails opens with the tile counting what waits for sign off.
+    expect(order("emails")).toEqual(["frEmailsTiles", "frInvite", "frTouch", "frAllEmails"]);
+    // 2026-11-15: each website switch has a line under it saying what pressing it does (...Says).
+    expect(order("settings").filter((id) => !/(Status|Says)$/.test(id))).toEqual(["evSwitch", "frSwitch", "frCats", "frImpact", "frSummary"]);
     for (const id of Object.values(want).flat()) expect(qa(`[id="${id}"]`), id).toHaveLength(1);
   });
 
@@ -816,9 +818,11 @@ describe("every old way in still lands in the right place", () => {
 
 describe("a section only fetches when it is shown", () => {
   beforeEach(() => boot(true));
+  // The All emails count (/emails/summary, which reads only the sign offs) is read when the tab opens,
+  // since 2026-11-15, so the Emails button carries a dot from any section while something waits.
   const LATER = [
     "/api/admin/events", "/api/admin/ball-report", "/api/admin/event-tickets", "/api/admin/fundraising/pledges",
-    "/api/admin/fundraising/emails/summary", "/api/admin/fundraising/summary", "/api/admin/impact-examples",
+    "/api/admin/fundraising/summary", "/api/admin/impact-examples",
   ];
 
   it("asks for nothing of the tab before it is opened", async () => {
@@ -831,6 +835,7 @@ describe("a section only fetches when it is shown", () => {
     await openTab();
     expect(got("/api/admin/fundraisers")).toBe(1);
     for (const p of LATER) expect(got(p), p).toBe(0);
+    expect(got("/api/admin/fundraising/emails/summary")).toBe(1);
   });
 
   it("Our events loads the events and the Ball ticket report when it is first shown", async () => {
@@ -840,7 +845,7 @@ describe("a section only fetches when it is shown", () => {
     expect(got("/api/admin/ball-report")).toBe(1);
     expect(got("/api/admin/event-tickets")).toBe(0);
     expect(got("/api/admin/fundraising/pledges")).toBe(0);
-    expect(got("/api/admin/fundraising/emails/summary")).toBe(0);
+    expect(got("/api/admin/fundraising/emails/summary")).toBe(1);
   });
 
   it("Tickets and pledges loads its two cards when it is first shown", async () => {
@@ -848,7 +853,7 @@ describe("a section only fetches when it is shown", () => {
     await go("tickets");
     expect(got("/api/admin/event-tickets")).toBe(1);
     expect(got("/api/admin/fundraising/pledges")).toBe(1);
-    expect(got("/api/admin/fundraising/emails/summary")).toBe(0);
+    expect(got("/api/admin/fundraising/emails/summary")).toBe(1);
     expect(got("/api/admin/events")).toBe(0);
   });
 
@@ -856,7 +861,8 @@ describe("a section only fetches when it is shown", () => {
     await openTab();
     const before = { team: got("/api/admin/fundraising/team"), touch: got("/api/admin/fundraising/touch") };
     await go("emails");
-    expect(got("/api/admin/fundraising/emails/summary")).toBe(1);
+    // Once when the tab opened (for the dot), and again now Emails is shown, as every card reads afresh.
+    expect(got("/api/admin/fundraising/emails/summary")).toBe(2);
     expect(got("/api/admin/fundraising/team")).toBe(before.team + 1);
     expect(got("/api/admin/fundraising/touch")).toBe(before.touch + 1);
     // The sign ups are already here from Sign ups, so they are not asked for again.

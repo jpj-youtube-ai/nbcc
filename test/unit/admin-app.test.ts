@@ -558,7 +558,10 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     (document.querySelector('.admin-nav-link[data-view="fulfilments"]') as HTMLElement).click();
     await flush();
     await flush();
-    expect(document.querySelector("#fulfilmentsTable table")).not.toBeNull();
+    // A card per business that opens where it is, since the admin refresh of 2026-11-14: the table
+    // it used to be could not fit a phone (this line used to require "#fulfilmentsTable table").
+    expect(document.querySelector("#fulfilmentsTable table")).toBeNull();
+    expect(document.querySelectorAll("#fulfilmentsTable .ak-item")).toHaveLength(2);
 
     // The collapsed list answers the question the page is opened to ask: who still needs something?
     const listText = el("fulfilmentsTable").textContent || "";
@@ -609,16 +612,27 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     const markCalls = () =>
       fetchMock.mock.calls.filter((c) => /\/api\/admin\/fulfilments\/1\/mark$/.test(String(c[0])));
 
-    // Marking cannot be undone, so it asks first — and saying no writes nothing at all.
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    // Marking cannot be undone, so it asks first, and saying no writes nothing at all. The question
+    // is asked in the page, under the job, since the admin refresh (it was the browser's own box,
+    // which is never used now): Mark done only opens it, and its Yes is what writes.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     markBtn.click();
     await flush();
     expect(markCalls()).toHaveLength(0);
+    const ask = markBtn.closest(".fx-task")!.querySelector("[data-fx-ask]") as HTMLElement;
+    expect(ask.hidden).toBe(false);
+    expect(ask.textContent).toContain("Certificate posted");
+    expect(ask.textContent).toContain("Acme Ltd");
+    (ask.querySelector("[data-fx-ask-no]") as HTMLElement).click();
+    await flush();
+    expect(markCalls()).toHaveLength(0);
 
-    confirmSpy.mockReturnValue(true);
     markBtn.click();
+    (ask.querySelector("[data-fulfil-mark-yes]") as HTMLElement).click();
     await flush();
     await flush();
+    await flush();
+    expect(confirmSpy).not.toHaveBeenCalled();
 
     const markCall = markCalls()[0];
     expect(markCall).toBeTruthy();

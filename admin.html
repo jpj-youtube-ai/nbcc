@@ -608,22 +608,42 @@
             <!-- Business supporters (TASK-208): fulfilment records for monthly business donations, and the
                  Editor+ mark buttons that record each recognition step as done. Reads/writes the
                  charity DB's business_supporter_fulfilment table via /api/admin/fulfilments (TASK-207). -->
-            <section class="admin-view" id="view-fulfilments" aria-labelledby="fulfilments-heading" hidden>
+            <section class="admin-view ak" id="view-fulfilments" aria-labelledby="fulfilments-heading" hidden>
               <h2 id="fulfilments-heading">Business supporters</h2>
-              <p class="admin-view-intro">Businesses giving monthly earn a recognition band and pick how they would like to be thanked. This is where the team fulfils that: check what each supporter asked for, then mark each step done once it is sorted. Every mark is logged to the Audit trail.</p>
-              <!-- Catch up invites (TASK-214): email the thank-you invite to any business supporters who
-                   signed up before invites were automatic and so never got their link. Safe to click more
-                   than once: it only emails supporters who have not been invited yet, so a second run
-                   sends none. POSTs /api/admin/business-supporters/backfill-invites. -->
-              <div class="admin-claim-actions" id="fulfilmentBackfillActions">
-                <button class="admin-btn" type="button" id="backfillInvitesBtn">Send catch up invites</button>
-                <span class="admin-action-status" id="backfillInvitesStatus" role="status" aria-live="polite"></span>
-              </div>
+              <p class="admin-view-intro">Look after the businesses that give every month: who is due a thank you call, what each one asked for, and what is still to do for them. Whatever you mark here is kept against your name in the Audit trail.</p>
               <!-- TASK-491: how many businesses are due a thank you call. Hidden while the list is
                    loading or could not load, so it never says "No calls due" when it does not know. -->
               <p class="fx-call-count" id="fulfilmentCallCount" role="status" aria-live="polite" hidden></p>
-              <div class="admin-table-wrap" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <p class="admin-action-status" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
+              <!-- Tiles that count and filter, and the search: drawn by app.js once the list has come, and
+                   hidden until then (and when it could not load), so nothing is ever counted from no list. -->
+              <ul class="ak-tiles" id="fulfilmentTiles" aria-label="Which businesses to show" hidden></ul>
+              <div class="sup-tools" id="fulfilmentTools" hidden>
+                <label class="ak-field" for="fulfilmentSearch"><span>Find a business</span>
+                  <input type="search" id="fulfilmentSearch" autocomplete="off" /></label>
+              </div>
+              <!-- A card per business that opens where it is (app.js, fulfilmentsList). Not a table in a
+                   box any more: nothing here can scroll sideways. -->
+              <div class="sup-list" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <!-- What just happened is said beside the button that was pressed, inside the open card.
+                   This line says the same words to a screen reader from one place that is never redrawn. -->
+              <p class="sr-only" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
+              <!-- Catch up invites (TASK-214): email the thank you invite to any business that has never
+                   been sent one. Safe to press more than once: nobody who has had it is emailed again.
+                   POSTs /api/admin/business-supporters/backfill-invites. It says under the button how
+                   many it will email, and asks first. -->
+              <div class="ak-card sup-catchup" id="fulfilmentBackfillActions">
+                <h3 class="ak-h3">Invites that never went</h3>
+                <button class="admin-btn ak-btn--plain" type="button" id="backfillInvitesBtn">Send catch up invites</button>
+                <small class="ak-says" id="backfillInvitesSays">This emails the thank you invite to every business that has not been sent one: a private link to a short form asking how they would like to be thanked. Nobody who has had it is emailed again.</small>
+                <div class="ak-notice sup-ask" id="backfillInvitesConfirm" hidden>
+                  <p id="backfillInvitesQuestion"></p>
+                  <div class="ak-actions">
+                    <button class="admin-btn" type="button" id="backfillInvitesYes">Yes, send them</button>
+                    <button class="admin-btn ak-btn--plain" type="button" id="backfillInvitesNo">Not now</button>
+                  </div>
+                </div>
+                <p class="admin-action-status" id="backfillInvitesStatus" role="status" aria-live="polite"></p>
+              </div>
             </section>
 
             <!-- TASK-619: phone notifications, per person and per phone. The warning sits ABOVE the

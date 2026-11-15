@@ -2280,25 +2280,83 @@
     { key: "social_done", label: "Social done" },
     { key: "added_to_supporters", label: "Added to Supporters" },
   ];
+  //
+  // In the kit's look since 2026-11-14 (docs/superpowers/specs/2026-11-14-admin-refresh-supporters.md):
+  // tiles that count and filter, whoever needs something first, a card per business that opens where
+  // it is in three parts, and every question asked, and every answer said, in the page beside the
+  // button that was pressed. The list is held here, so opening a card, pressing a tile or typing in
+  // the search never asks the server again; only a save does, and it never blanks the list to do it.
+  var fulfilRows = null; // null until the list has come, and again when it could not: never count from no list
   var fulfilOpenId = null;
+  var fulfilFilter = "all"; // the tile that is pressed
+  var fulfilQuery = ""; // what is typed in Find a business
+  var fulfilPart = "todo"; // the part of the open card that is showing
+  // The open business's history as it last came, so a redraw from what is held does not ask again.
+  var fulfilHistory = { id: null, html: "" };
+  // What just happened, for a screen reader, from the one line that is never redrawn. The same
+  // words are shown beside the button that was pressed (callNotice, below).
   function fulfilmentStatus(msg) {
     var s = el("fulfilmentActionStatus");
     if (s) s.textContent = msg || "";
+  }
+  // "15 September 2026": a moment on the UK day it fell on, or a plain YYYY-MM-DD as that day. short
+  // leaves the year off when it is this year's ("Next call 15 December"). "" for no date.
+  function fxDate(value, short) {
+    if (!value) return "";
+    var day = /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? String(value) : "";
+    if (!day) {
+      var d = new Date(value);
+      if (isNaN(d.getTime())) return "";
+      day = qrUkDay(d);
+    }
+    var p = day.split("-");
+    var words = Number(p[2]) + " " + QR_MONTHS[Number(p[1]) - 1];
+    return short && p[0] === qrUkDay(new Date()).slice(0, 4) ? words : words + " " + p[0];
   }
   function fulfilmentBandPill(band) {
     // band is always set on a fulfilment record (NOT NULL, set at insert); the empty fallback is
     // purely defensive.
     return band ? '<span class="admin-pill">' + H.escapeHtml(cap(band)) + "</span>" : "";
   }
-  function fulfilmentBusinessCell(r) {
-    var primary = r.business_name || r.donor_name || "Donor " + r.donor_id;
-    var out = '<span class="admin-fulfil-biz">' + H.escapeHtml(primary) + "</span>";
+  function fulfilName(r) {
+    return r.business_name || r.donor_name || "Donor " + r.donor_id;
+  }
+  function fulfilById(id) {
+    var rows = fulfilRows || [];
+    for (var i = 0; i < rows.length; i++) if (rows[i].id === Number(id)) return rows[i];
+    return null;
+  }
+  // Their monthly gift has stopped (they have paid one before; a business yet to pay one has not stopped).
+  function fulfilStopped(r) {
+    return r.supporting === false && !!r.supporting_since;
+  }
+  // The closed card: the whole face is the button that opens it. It answers what the screen is opened
+  // to ask (who needs something?) without opening anything: a call due, where they are up to, when
+  // the next call is, whether they have stopped giving, and what they give a month.
+  function fulfilmentFace(r, open) {
+    var esc = H.escapeHtml;
+    var meta = "";
     if (r.business_name && r.donor_name && r.donor_name !== r.business_name) {
-      out += '<span class="admin-fulfil-sub">' + H.escapeHtml(r.donor_name) + "</span>";
+      meta += '<span class="admin-fulfil-sub">' + esc(r.donor_name) + "</span>";
     }
+    meta += fulfilmentBandPill(r.band);
+    if (r.monthly_pence) meta += "<span>" + esc(H.formatPence(r.monthly_pence)) + " a month</span>";
     // TASK-491: due a thank you call. The server works this out (callDue), so the page only says it.
-    if (r.callDue) out += '<span class="admin-pill is-call-due fx-call-pill">Time to call</span>';
-    return out + rowNewPill("fulfilments", r.created_at);
+    if (r.callDue) meta += '<span class="admin-pill is-call-due fx-call-pill">Time to call</span>';
+    if (fulfilStopped(r)) meta += '<span class="ak-mark ak-mark--quiet">Stopped giving</span>';
+    meta += rowNewPill("fulfilments", r.created_at);
+    var where = fulfilmentSummary(r);
+    if (r.supporting && !r.callDue && r.callDueOn) where += "<span>Next call " + esc(fxDate(r.callDueOn, true)) + "</span>";
+    return (
+      '<button type="button" class="ak-item__face" data-fulfil-toggle="' + r.id + '" aria-expanded="' + (open ? "true" : "false") + '">' +
+        '<span class="ak-item__main">' +
+          '<span class="ak-item__name admin-fulfil-biz">' + esc(fulfilName(r)) + "</span>" +
+          '<span class="ak-item__meta">' + meta + "</span>" +
+          '<span class="ak-item__meta sup-where">' + where + "</span>" +
+        "</span>" +
+        '<span class="ak-item__chev" aria-hidden="true"></span>' +
+      "</button>"
+    );
   }
 
   // What the system does BY ITSELF the moment a business submits the form, and what a person still
@@ -2315,7 +2373,7 @@
   // printed certificate in an envelope.
   function fulfilAutomatic(r) {
     if (!r.captured_at) return [];
-    var on = H.fmtDate(r.captured_at);
+    var on = fxDate(r.captured_at);
     var out = [];
     if (r.list_on_supporters) {
       out.push({
@@ -2333,7 +2391,7 @@
       out.push({
         label: what,
         detail: r.perks_sent_at
-          ? "Emailed to them on " + H.fmtDate(r.perks_sent_at) + "."
+          ? "Emailed to them on " + fxDate(r.perks_sent_at) + "."
           : "Goes out automatically on the next weekday morning.",
         pending: !r.perks_sent_at,
       });
@@ -2380,20 +2438,45 @@
   // What the business actually told us on the thank-you form. Every one of these was already being
   // fetched and none of it was shown — including the postal address for a certificate they asked us
   // to POST, which made that job impossible to finish from the page that asks you to tick it off.
+  // A Copy button beside something that gets pasted somewhere else: the address onto an envelope,
+  // the credit name, website and social accounts into the thank you post. What happened is said
+  // beside the button (fulfilCopyText).
+  function fulfilCopy(what, label, name) {
+    return (
+      '<span class="sup-copy">' +
+        '<button class="admin-btn ak-btn--plain admin-btn--small" type="button" data-fx-copy="' + what + '" aria-label="' + name + '">' + label + "</button>" +
+        '<span class="fx-call-status" data-fx-copied role="status"></span>' +
+      "</span>"
+    );
+  }
+  function fulfilCopyText(btn) {
+    var r = fulfilById(fulfilOpenId);
+    var what = btn.getAttribute("data-fx-copy");
+    var text = r ? { address: r.certificate_address, credit: r.credit_name, website: r.website, socials: r.socials }[what] : "";
+    if (!text) return;
+    var said = btn.parentNode.querySelector("[data-fx-copied]");
+    var kit = window.AdminKit;
+    (kit ? kit.copyText(text) : Promise.resolve(false)).then(function (ok) {
+      qrSay(said, ok ? "Copied." : "Could not copy. Select it and copy by hand.", !ok, ok);
+    });
+  }
+
   function fulfilmentSubmission(r) {
     if (!r.captured_at) {
       return '<p class="fx-empty">They have not filled in the form yet, so we do not know how they would like ' +
         "to be thanked. " +
         (r.invited_at
-          ? "Their invite was sent on " + H.fmtDate(r.invited_at) + "."
+          ? "Their invite was sent on " + fxDate(r.invited_at) + "."
           : "They have not been sent their invite yet.") +
         "</p>";
     }
     var certificate = r.want_certificate
-      ? (r.certificate_delivery === "post" ? "Yes — by post" : "Yes — to download")
+      ? (r.certificate_delivery === "post" ? "Yes, by post" : "Yes, to download")
       : fulfilYesNo(false);
     var rows =
-      fulfilRow("Credit them as", r.credit_name ? H.escapeHtml(r.credit_name) : '<span class="fx-none">Not given</span>') +
+      fulfilRow("Credit them as", r.credit_name
+        ? "<span>" + H.escapeHtml(r.credit_name) + "</span>" + fulfilCopy("credit", "Copy", "Copy the name to credit them as")
+        : '<span class="fx-none">Not given</span>') +
       fulfilRow("List on the supporters page", fulfilYesNo(r.list_on_supporters)) +
       fulfilRow("Social media post", fulfilYesNo(r.want_social)) +
       fulfilRow("Supporter badge", fulfilYesNo(r.want_badge)) +
@@ -2401,11 +2484,16 @@
       (r.want_certificate && r.certificate_delivery === "post"
         ? fulfilRow("Post the certificate to",
             r.certificate_address
-              ? '<span class="fx-address">' + H.escapeHtml(r.certificate_address) + "</span>"
-              : '<span class="fx-warn">No address given — ask them before posting</span>')
+              ? '<span class="fx-address">' + H.escapeHtml(r.certificate_address) + "</span>" +
+                fulfilCopy("address", "Copy address", "Copy address")
+              : '<span class="fx-warn">No address given. Ask them before posting.</span>')
         : "") +
-      fulfilRow("Website", r.website ? '<span class="fx-mono">' + H.escapeHtml(r.website) + "</span>" : "") +
-      fulfilRow("Social accounts", r.socials ? '<span class="fx-mono">' + H.escapeHtml(r.socials) + "</span>" : "");
+      fulfilRow("Website", r.website
+        ? '<span class="fx-mono">' + H.escapeHtml(r.website) + "</span>" + fulfilCopy("website", "Copy", "Copy their website")
+        : "") +
+      fulfilRow("Social accounts", r.socials
+        ? '<span class="fx-mono">' + H.escapeHtml(r.socials) + "</span>" + fulfilCopy("socials", "Copy", "Copy their social accounts")
+        : "");
     // "Happy to be featured" is NOT shown, and is not a question anybody was asked: the server sets
     // consent_featured = listOnSupporters || wantSocial (src/routes/business.ts). Showing a derived
     // value beside the two answers it is derived FROM reads as a third, separate consent - which is
@@ -2456,14 +2544,47 @@
             '" data-fulfil-mark="' + t.key + '" data-fulfil-label="' + H.escapeHtml(t.label) +
             '">Mark done</button>'
           : '<span class="fx-task-todo">Not done</span>';
+      // Marking cannot be undone, so it asks first: here in the page, under the job, naming the job
+      // and the business, where a browser's own question box said neither on a phone.
+      var ask = !done && canWrite
+        ? '<div class="ak-notice sup-ask" data-fx-ask hidden>' +
+            "<p>Mark “" + H.escapeHtml(t.label) + "” as done for " + H.escapeHtml(fulfilName(r)) + "?</p>" +
+            "<p>This is recorded against your name and cannot be undone.</p>" +
+            '<div class="ak-actions">' +
+              '<button class="admin-btn admin-btn--small" type="button" data-fulfil-mark-yes="' + t.key + '" data-fulfil-id="' + r.id + '">Yes, mark it done</button>' +
+              '<button class="admin-btn ak-btn--plain admin-btn--small" type="button" data-fx-ask-no>Not yet</button>' +
+            "</div>" +
+          "</div>"
+        : "";
       return (
         '<li class="fx-task' + (done ? " is-done" : "") + '">' +
         '<span class="fx-task-text"><span class="fx-task-label">' + H.escapeHtml(t.label) + "</span>" +
         '<span class="fx-task-help">' + H.escapeHtml(t.help) + "</span></span>" +
-        action + "</li>"
+        action + ask + "</li>"
       );
     }).join("");
     return '<ul class="fx-tasks">' + items + "</ul>";
+  }
+
+  // The question under a job: Mark done opens it, Not yet puts it away. Nothing is written by either.
+  function fulfilAskMark(btn, asking) {
+    var task = btn.closest(".fx-task");
+    if (!task) return;
+    var ask = task.querySelector("[data-fx-ask]");
+    var mark = task.querySelector("[data-fulfil-mark]");
+    if (!ask || !mark) return;
+    ask.hidden = !asking;
+    mark.hidden = asking;
+    var next = asking ? ask.querySelector("[data-fulfil-mark-yes]") : mark;
+    if (next && next.focus) next.focus();
+  }
+
+  // What just happened in one panel of the open card, said in that panel: a saved job, a sent invite.
+  // Shown once after the list is read again (callNotice), like the Call panel's own two lines.
+  function fulfilSaid(r, key) {
+    var msg = (callNotice[r.id] || {})[key] || "";
+    return '<p class="fx-call-status' + (msg ? " is-ok" : "") + '" data-fx-status="' + key + '" role="status" aria-live="polite">' +
+      H.escapeHtml(msg) + "</p>";
   }
 
   // The thank-you LETTER is a different thing from the invite, and it is written and sent on the
@@ -2474,7 +2595,7 @@
       var who = r.thank_you_sent_by === "automatic"
         ? "sent automatically"
         : "sent by " + H.escapeHtml(r.thank_you_sent_by || "a volunteer");
-      return '<p class="fx-letter"><span class="fx-state fx-state--done">Sent ' + H.fmtDate(r.thank_you_sent_at) +
+      return '<p class="fx-letter"><span class="fx-state fx-state--done">Sent ' + fxDate(r.thank_you_sent_at) +
         "</span> " + who + ".</p>";
     }
     // It sends ITSELF. The daily pass at 8am writes to any supporter who has filled in the form, or
@@ -2493,22 +2614,21 @@
   function fulfilmentInvite(r) {
     if (r.captured_at) {
       return '<p class="fx-letter"><span class="fx-state fx-state--done">Form submitted ' +
-        H.fmtDate(r.captured_at) + "</span> — they filled it in, so they plainly received their link.</p>";
+        fxDate(r.captured_at) + "</span>. They filled it in, so they plainly received their link.</p>";
     }
     if (r.invited_at) {
       return '<p class="fx-letter"><span class="fx-state fx-state--waiting">Invite sent ' +
-        H.fmtDate(r.invited_at) + "</span> — waiting for them to fill in the form.</p>";
+        fxDate(r.invited_at) + "</span>. Waiting for them to fill in the form.</p>";
     }
     var canWrite = canEdit("business-supporters");
     return (
       '<p class="fx-letter"><span class="fx-state fx-state--todo">Not sent yet</span></p>' +
-      '<p class="fx-help">This emails them a private link to a short form asking how they would like to be ' +
-      "thanked — listing, badge, social post, certificate." +
       (canWrite
-        ? ' <button class="admin-btn admin-btn--small" type="button" data-send-invite="' + r.id +
-          '">Send the invite</button>'
+        ? '<p class="sup-go"><button class="admin-btn admin-btn--small" type="button" data-send-invite="' + r.id +
+          '">Send the invite</button></p>'
         : "") +
-      "</p>"
+      '<p class="fx-help">This emails them a private link to a short form asking how they would like to be ' +
+      "thanked: a listing, a badge, a social post, a certificate.</p>"
     );
   }
 
@@ -2548,28 +2668,29 @@
           ? '<span class="fx-hist-note">' + H.escapeHtml(data.note) + "</span>"
           : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
-          '<span class="fx-hist-who">' + H.fmtDate(a.created_at) + " · " + H.escapeHtml(who) + "</span>" +
+          '<span class="fx-hist-who">' + fxDate(a.created_at) + " · " + H.escapeHtml(who) + "</span>" +
           note + "</li>";
       }).join("") +
       "</ul>"
     );
   }
 
+  // Read when a business is opened and after every save. What comes back is kept (fulfilHistory), so
+  // a tile, the search or another part can redraw the open card without asking again.
   function loadFulfilmentHistory(id) {
-    var box = document.querySelector('[data-fulfil-history="' + id + '"]');
-    if (!box) return;
+    var put = function (html) {
+      if (Number(id) !== fulfilOpenId) return; // an answer for a business that has since been closed
+      fulfilHistory = { id: Number(id), html: html };
+      var target = document.querySelector('[data-fulfil-history="' + id + '"]');
+      if (target) target.innerHTML = html;
+    };
     authFetch("/api/admin/fulfilments/" + encodeURIComponent(id) + "/history")
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (d) {
-        var target = document.querySelector('[data-fulfil-history="' + id + '"]');
-        if (!target) return;
-        target.innerHTML = d
-          ? fulfilmentHistoryList(d.results || [])
-          : '<p class="fx-empty">Could not load the history.</p>';
+        put(d ? fulfilmentHistoryList(d.results || []) : '<p class="fx-empty">Could not load the history.</p>');
       })
       .catch(function () {
-        var target = document.querySelector('[data-fulfil-history="' + id + '"]');
-        if (target) target.innerHTML = '<p class="fx-empty">Could not load the history.</p>';
+        put('<p class="fx-empty">Could not load the history.</p>');
       });
   }
 
@@ -2610,9 +2731,9 @@
     }
     if (r.callDue) {
       return '<span class="fx-state fx-state--todo">Time to call</span> ' +
-        (r.callDueOn ? "Due since " + H.fmtDate(r.callDueOn) + "." : "");
+        (r.callDueOn ? "Due since " + fxDate(r.callDueOn) + "." : "");
     }
-    return '<span class="fx-state fx-state--done">Next call due ' + H.fmtDate(r.callDueOn) + "</span>";
+    return '<span class="fx-state fx-state--done">Next call due ' + fxDate(r.callDueOn) + "</span>";
   }
 
   function fulfilmentCall(r) {
@@ -2623,7 +2744,7 @@
       ? '<a class="fx-tel" href="' + H.escapeHtml(telHref(r.phone)) + '">' + H.escapeHtml(r.phone) + "</a>"
       : '<span class="fx-none">No phone number yet</span>';
     var last = r.last_called_at
-      ? H.fmtDate(r.lastCalledOn || r.last_called_at) + (r.last_called_by ? " by " + H.escapeHtml(r.last_called_by) : "")
+      ? fxDate(r.lastCalledOn || r.last_called_at) + (r.last_called_by ? " by " + H.escapeHtml(r.last_called_by) : "")
       : '<span class="fx-none">Not called yet</span>';
     var rows =
       fulfilRow("Phone", phone) +
@@ -2640,8 +2761,17 @@
             '<textarea class="fx-call-input" id="fxNote' + r.id + '" name="note" rows="3" maxlength="500">' +
               H.escapeHtml(draft.note || "") + "</textarea>" +
             '<p class="fx-help">Up to 500 characters. Marking the call clears the reminder for 3 months.</p>' +
-            '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="submit">Mark as called</button></div>' +
-            '<p class="fx-call-status" data-call-status role="status" aria-live="polite">' +
+            '<div class="fx-call-row" data-call-go><button class="admin-btn admin-btn--small" type="submit">Mark as called</button></div>' +
+            // It asks first, here under the button, and nothing is recorded until yes (markCalled).
+            '<div class="ak-notice sup-ask" data-call-ask hidden>' +
+              "<p>Record a call to " + H.escapeHtml(fulfilName(r)) + " today?</p>" +
+              "<p>This is recorded against your name and clears the reminder for 3 months.</p>" +
+              '<div class="ak-actions">' +
+                '<button class="admin-btn admin-btn--small" type="button" data-call-yes>Yes, record the call</button>' +
+                '<button class="admin-btn ak-btn--plain admin-btn--small" type="button" data-call-no>Not yet</button>' +
+              "</div>" +
+            "</div>" +
+            '<p class="fx-call-status' + (notice.call ? " is-ok" : "") + '" data-call-status role="status" aria-live="polite">' +
               H.escapeHtml(notice.call || "") + "</p>" +
           "</form>" +
           '<form class="fx-call-form" data-phone-form="' + r.id + '" novalidate>' +
@@ -2652,7 +2782,7 @@
                 'autocomplete="off" value="' + H.escapeHtml(phoneValue) + '">' +
               '<button class="admin-btn admin-btn--small" type="submit">Save number</button>' +
             "</div>" +
-            '<p class="fx-call-status" data-phone-status role="status" aria-live="polite">' +
+            '<p class="fx-call-status' + (notice.phone ? " is-ok" : "") + '" data-phone-status role="status" aria-live="polite">' +
               H.escapeHtml(notice.phone || "") + "</p>" +
           "</form>" +
         "</div>";
@@ -2687,26 +2817,38 @@
     if (!s) return;
     s.textContent = msg || "";
     s.classList.toggle("is-error", !!isError);
+    s.classList.remove("is-ok");
   }
 
-  function markCalled(form) {
+  // The question under Mark as called: showing it (asking) hides the button it came from, and
+  // putting it away brings the button back. Neither records anything.
+  function callAsk(form, asking) {
+    var ask = form.querySelector("[data-call-ask]");
+    var go = form.querySelector("[data-call-go]");
+    if (!ask || !go) return;
+    ask.hidden = !asking;
+    go.hidden = asking;
+    var next = asking ? ask.querySelector("[data-call-yes]") : go.querySelector("button");
+    if (next && next.focus) next.focus();
+  }
+
+  // Mark as called asks first, in the page (a browser's own question box, before). confirmed is true
+  // only from the question's own Yes button; the form's button just opens the question.
+  function markCalled(form, confirmed) {
     var id = form.getAttribute("data-call-form");
     var box = form.querySelector('textarea[name="note"]');
     var note = box ? String(box.value || "").trim() : "";
     if (note.length > 500) {
+      callAsk(form, false);
       callFormStatus(form, "data-call-status", "A note can be up to 500 characters.", true);
       return;
     }
-    var biz = document.querySelector(".fx-summary.is-open .admin-fulfil-biz");
-    if (
-      !window.confirm(
-        "Record a call to " + (biz ? biz.textContent : "this business") + " today?\n\n" +
-          "This is recorded against your name and clears the reminder for 3 months."
-      )
-    ) {
+    if (!confirmed) {
+      callFormStatus(form, "data-call-status", "", false);
+      callAsk(form, true);
       return;
     }
-    var btn = form.querySelector('button[type="submit"]');
+    var btn = form.querySelector("[data-call-yes]");
     if (btn) btn.disabled = true;
     callFormStatus(form, "data-call-status", "Saving…", false);
     authFetch("/api/admin/fulfilments/" + encodeURIComponent(id) + "/calls", {
@@ -2718,11 +2860,13 @@
       .then(function (out) {
         if (!out) throw new Error("not recorded");
         callNotice[id] = { call: "Call recorded against your name." };
+        fulfilmentStatus("Call recorded against your name.");
         keepUnsaved(id, "note");
         loadFulfilments();
       })
       .catch(function () {
         if (btn) btn.disabled = false;
+        callAsk(form, false);
         callFormStatus(form, "data-call-status", "Could not record the call. Please try again.", true);
       });
   }
@@ -2756,89 +2900,251 @@
       });
   }
 
+  // The head of the open card: what they give, how to write to them, and the way to their giving
+  // (only for someone who may see Donations, where the donor's page lives).
+  function fulfilmentAbout(r) {
+    var esc = H.escapeHtml;
+    var bits = [];
+    if (r.monthly_pence) {
+      bits.push("<span>" + (fulfilStopped(r) ? "Was giving " : "Gives ") + esc(H.formatPence(r.monthly_pence)) + " a month</span>");
+    }
+    if (r.donor_email) {
+      bits.push('<a class="sup-email" href="mailto:' + esc(r.donor_email) + '">' + esc(r.donor_email) + "</a>");
+    }
+    if (canView("donations")) {
+      bits.push('<button class="admin-btn ak-btn--plain admin-btn--small" type="button" data-donor="' + r.donor_id + '">See their giving</button>');
+    }
+    return bits.length ? '<div class="sup-about">' + bits.join("") + "</div>" : "";
+  }
+
+  // The open card, one part at a time behind a bar of three, so a phone is not handed seven boxes
+  // one under another: what to do (the call, the jobs, the invite), what they asked for (their
+  // answers, what went by itself, the letter), and the history. The first part carries a dot when
+  // something in it is waiting.
+  var FULFIL_PARTS = [
+    { key: "todo", label: "What to do" },
+    { key: "asked", label: "What they asked for" },
+    { key: "history", label: "History" },
+  ];
   function fulfilmentDetail(r) {
+    var standing = fulfilStanding(r);
+    var waiting = !!r.callDue || standing === "todo" || standing === "invite";
+    var bar = FULFIL_PARTS.map(function (p) {
+      return (
+        '<button type="button" class="ak-part-btn" data-akpart="' + p.key + '" aria-pressed="' + (fulfilPart === p.key ? "true" : "false") + '">' +
+        p.label +
+        (p.key === "todo" && waiting ? '<span class="ak-part-dot" role="img" aria-label="Something here is waiting for you"></span>' : "") +
+        "</button>"
+      );
+    }).join("");
+    var part = function (key, label, inside) {
+      return '<div class="ak-part sup-part" data-akpart-body="' + key + '" role="region" aria-label="' + label + '"' +
+        (fulfilPart === key ? "" : " hidden") + ">" + inside + "</div>";
+    };
+    var history = fulfilHistory.id === r.id ? fulfilHistory.html : '<p class="admin-loading">Loading…</p>';
     return (
-      '<div class="fx-detail">' +
-        '<section class="fx-panel fx-panel--wide fx-call" data-call-panel="' + r.id + '">' +
-          "<h4>Thank you call</h4>" + fulfilmentCall(r) + "</section>" +
-        '<section class="fx-panel"><h4>Their invite</h4>' + fulfilmentInvite(r) + "</section>" +
-        '<section class="fx-panel"><h4>Thank-you letter</h4>' + fulfilmentLetter(r) + "</section>" +
-        '<section class="fx-panel"><h4>What they asked for</h4>' + fulfilmentSubmission(r) + "</section>" +
-        '<section class="fx-panel"><h4>Already done for you</h4>' + fulfilmentAutomatic(r) + "</section>" +
-        '<section class="fx-panel fx-panel--wide"><h4>What to do next</h4>' + fulfilmentTasks(r) + "</section>" +
-        '<section class="fx-panel fx-panel--wide"><h4>History</h4>' +
-          '<div class="fx-history" data-fulfil-history="' + r.id + '">' +
-          '<p class="admin-loading">Loading…</p></div></section>' +
+      '<div class="ak-item__more" data-fx-open="' + r.id + '">' +
+        fulfilmentAbout(r) +
+        '<div class="ak-parts sup-parts" role="group" aria-label="Which part to show">' + bar + "</div>" +
+        part("todo", "What to do",
+          '<section class="fx-panel fx-call" data-call-panel="' + r.id + '">' +
+            "<h4>Thank you call</h4>" + fulfilmentCall(r) + "</section>" +
+          '<section class="fx-panel" data-fx-jobs><h4>What to do next</h4>' + fulfilmentTasks(r) + fulfilSaid(r, "task") + "</section>" +
+          '<section class="fx-panel"><h4>Their invite</h4>' + fulfilmentInvite(r) + fulfilSaid(r, "invite") + "</section>") +
+        part("asked", "What they asked for",
+          '<section class="fx-panel"><h4>What they asked for</h4>' + fulfilmentSubmission(r) + "</section>" +
+          '<section class="fx-panel"><h4>Already done for you</h4>' + fulfilmentAutomatic(r) + "</section>" +
+          '<section class="fx-panel"><h4>Thank-you letter</h4>' + fulfilmentLetter(r) + "</section>") +
+        part("history", "History",
+          '<section class="fx-panel"><h4>History</h4>' +
+            '<div class="fx-history" data-fulfil-history="' + r.id + '">' + history + "</div></section>") +
       "</div>"
     );
   }
+  // One part of the open card showing, and the bar saying which. Pressing a part never moves the
+  // page: the bar sits inside the card, under the finger that pressed it.
+  function showFulfilmentPart(key) {
+    var open = document.querySelector("#fulfilmentsTable [data-fx-open]");
+    if (!open) return;
+    fulfilPart = key;
+    Array.prototype.forEach.call(open.querySelectorAll("[data-akpart]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-akpart") === key ? "true" : "false");
+    });
+    Array.prototype.forEach.call(open.querySelectorAll("[data-akpart-body]"), function (p) {
+      p.hidden = p.getAttribute("data-akpart-body") !== key;
+    });
+  }
 
-  function fulfilmentsTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No business supporters yet.</p>';
-    var body = rows
-      .map(function (r) {
-        var open = fulfilOpenId === r.id;
+  // Where a business is up to: "invite" (never emailed their invite), "waiting" (emailed, no form
+  // yet), "todo" (jobs only a person can do are left) or "done". The tiles count these.
+  function fulfilStanding(r) {
+    if (!r.captured_at) return r.invited_at ? "waiting" : "invite";
+    var left = fulfilTasksFor(r).filter(function (t) { return !r[t.key]; }).length;
+    return left ? "todo" : "done";
+  }
+  // Whoever needs something first: a call due, then jobs to do, then an invite to send. Then the
+  // businesses waiting on their own form, then the ones with nothing left.
+  function fulfilRank(r) {
+    if (r.callDue) return 0;
+    var s = fulfilStanding(r);
+    return s === "todo" ? 1 : s === "invite" ? 2 : s === "waiting" ? 3 : 4;
+  }
+  function fulfilInTile(r, key) {
+    if (key === "all") return true;
+    if (key === "call") return !!r.callDue;
+    return fulfilStanding(r) === key;
+  }
+  var FULFIL_TILES = [
+    { key: "call", name: "Time to call", says: "Due a thank you call", urgent: true },
+    { key: "todo", name: "Things to do", says: "Jobs only a person can do" },
+    { key: "waiting", name: "Waiting for their form", says: "Invited, and not answered yet" },
+    { key: "invite", name: "Invite not sent", says: "Never emailed their invite" },
+    { key: "done", name: "All done", says: "Nothing left to do for them" },
+    { key: "all", name: "Everyone", says: "Every business supporter" },
+  ];
+  // The tiles count every business, whatever is typed in the search, and the pressed one filters
+  // the list. Hidden with no list: "0 to call" from a list that never came would be a guess.
+  function drawFulfilmentTiles() {
+    var box = el("fulfilmentTiles");
+    if (!box) return;
+    if (!fulfilRows) {
+      box.hidden = true;
+      box.innerHTML = "";
+      return;
+    }
+    // Made once and then only updated, so the tile that was pressed keeps the keyboard's place.
+    if (!box.children.length) {
+      box.innerHTML = FULFIL_TILES.map(function (t) {
         return (
-          '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-fulfil-toggle="' + r.id +
-          '" tabindex="0" role="button" aria-expanded="' + (open ? "true" : "false") + '">' +
-            '<td><span class="fx-caret" aria-hidden="true"></span>' +
-            fulfilmentBusinessCell(r) + "</td>" +
-            "<td>" + fulfilmentBandPill(r.band) + "</td>" +
-            "<td>" + fulfilmentSummary(r) + "</td>" +
-          "</tr>" +
-          (open
-            ? '<tr class="fx-detail-row"><td colspan="3">' + fulfilmentDetail(r) + "</td></tr>"
-            : "")
+          '<li><button type="button" class="ak-tile" data-fx-filter="' + t.key + '">' +
+          '<span class="ak-tile__n"></span><span class="ak-tile__name">' + t.name + '</span><span class="ak-tile__says">' + t.says + "</span>" +
+          "</button></li>"
         );
+      }).join("");
+    }
+    FULFIL_TILES.forEach(function (t) {
+      var btn = box.querySelector('[data-fx-filter="' + t.key + '"]');
+      var n = fulfilRows.filter(function (r) { return fulfilInTile(r, t.key); }).length;
+      btn.querySelector(".ak-tile__n").textContent = String(n);
+      btn.classList.toggle("is-active", fulfilFilter === t.key);
+      btn.classList.toggle("is-none", n === 0);
+      btn.classList.toggle("ak-tile--urgent", !!t.urgent && n > 0);
+      btn.setAttribute("aria-pressed", fulfilFilter === t.key ? "true" : "false");
+    });
+    box.hidden = false;
+  }
+
+  function fulfilmentsList(rows) {
+    if (!rows.length) return '<p class="admin-empty">No business supporters yet.</p>';
+    var typed = fulfilQuery.trim();
+    var q = typed.toLowerCase();
+    var shown = rows
+      .map(function (r, i) { return { r: r, i: i, rank: fulfilRank(r) }; })
+      .filter(function (x) {
+        if (!fulfilInTile(x.r, fulfilFilter)) return false;
+        if (!q) return true;
+        return (String(x.r.business_name || "") + " " + String(x.r.donor_name || "")).toLowerCase().indexOf(q) !== -1;
       })
-      .join("");
-    return (
-      '<p class="fx-hint">Select a business to see what they asked for and what still needs doing.</p>' +
-      '<table class="admin-table fx-table"><thead><tr><th>Business</th><th>Band</th>' +
-      "<th>Where they are up to</th></tr></thead><tbody>" + body + "</tbody></table>"
-    );
+      // The server sends newest first; that order is kept inside each rank.
+      .sort(function (a, b) { return a.rank - b.rank || a.i - b.i; });
+    if (!shown.length) {
+      return '<p class="admin-empty">' +
+        (q ? "No business matches “" + H.escapeHtml(typed) + "”." : "Nobody here just now.") + "</p>";
+    }
+    var list = function (items) {
+      return (
+        '<ul class="ak-list">' +
+        items.map(function (x) {
+          var open = fulfilOpenId === x.r.id;
+          return '<li class="ak-item' + (open ? " is-open" : "") + '" data-fx-item="' + x.r.id + '">' +
+            fulfilmentFace(x.r, open) + (open ? fulfilmentDetail(x.r) : "") + "</li>";
+        }).join("") +
+        "</ul>"
+      );
+    };
+    var hint = '<p class="fx-hint">Select a business to see what they asked for and what still needs doing.</p>';
+    var needs = shown.filter(function (x) { return x.rank < 3; });
+    var rest = shown.filter(function (x) { return x.rank >= 3; });
+    if (needs.length && rest.length) {
+      return hint + '<h3 class="ak-group">Needs you</h3>' + list(needs) +
+        '<h3 class="ak-group">Nothing needed just now</h3>' + list(rest);
+    }
+    return hint + list(shown);
+  }
+
+  // Everything on the screen that is worked out from the list, drawn from the list as it is held.
+  function drawFulfilments() {
+    var wrap = el("fulfilmentsTable");
+    if (!wrap || !fulfilRows) return;
+    fulfilmentCallCount(fulfilRows);
+    drawFulfilmentTiles();
+    var tools = el("fulfilmentTools");
+    if (tools) tools.hidden = !fulfilRows.length;
+    drawBackfillSays();
+    wrap.innerHTML = fulfilmentsList(fulfilRows);
+    // A note put back after a save is sized to its words, so it never scrolls inside its box.
+    nlFitBoxes(Array.prototype.slice.call(wrap.querySelectorAll("textarea.fx-call-input")));
+  }
+  // The same, for a change that is not a save (a tile, the search): whatever is half typed in the
+  // open card's two boxes is kept through the redraw.
+  function redrawFulfilments() {
+    if (fulfilOpenId != null) keepUnsaved(fulfilOpenId, "");
+    drawFulfilments();
   }
 
   function toggleFulfilment(id) {
     var n = Number(id);
     fulfilOpenId = fulfilOpenId === n ? null : n;
+    fulfilPart = "todo";
+    fulfilHistory = { id: null, html: "" };
     callNotice = {};
     callDrafts = {};
     fulfilmentStatus("");
-    loadFulfilments();
+    // Drawn from the list already held: opening a card asks the server only for its history.
+    drawFulfilments();
+    if (fulfilOpenId != null) loadFulfilmentHistory(fulfilOpenId);
+    var face = document.querySelector('#fulfilmentsTable [data-fulfil-toggle="' + n + '"]');
+    if (face && face.focus) face.focus();
   }
 
   function loadFulfilments() {
     var wrap = el("fulfilmentsTable");
     if (!wrap) return;
-    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    // Only a first read says Loading. Reading again after a save leaves the list where it is until
+    // the new one has come, so the page never blinks or jumps under the person's hands.
+    if (!fulfilRows) wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/fulfilments")
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = fulfilmentsTable(d.results || []);
-        // A note put back after a save is sized to its words, so it never scrolls inside its box.
-        nlFitBoxes(Array.prototype.slice.call(wrap.querySelectorAll("textarea.fx-call-input")));
-        fulfilmentCallCount(d.results || []);
+        fulfilRows = d.results || [];
+        drawFulfilments();
         // A save's message has now been shown once, in the panel it belongs to.
         callNotice = {};
         callDrafts = {};
-        // The open row renders a placeholder for its history; fill it in.
+        // The open card's history has a new line after a save; read it again.
         if (fulfilOpenId != null) loadFulfilmentHistory(fulfilOpenId);
       })
       .catch(function () {
+        // Nothing of an earlier list stays up to be taken as what is there now, or to be counted.
+        fulfilRows = null;
         fulfilmentCallCount(null);
+        drawFulfilmentTiles();
+        var tools = el("fulfilmentTools");
+        if (tools) tools.hidden = true;
+        drawBackfillSays();
         wrap.innerHTML = '<p class="admin-empty">Business supporters are unavailable.</p>';
       });
   }
-  function markFulfilment(id, flag, label, business) {
-    if (
-      !window.confirm(
-        'Mark "' + (label || flag) + '" as done for ' + (business || "this supporter") + "?\n\n" +
-          "This is recorded against your name and cannot be undone."
-      )
-    ) {
-      return;
-    }
+
+  // Marks one job done. Asked first in the page (fulfilAskMark); btn is the question's Yes button,
+  // and how it went is said in the panel that button is in.
+  function markFulfilment(id, flag, btn) {
+    var panel = btn && btn.closest ? btn.closest("[data-fx-jobs]") : null;
+    var say = function (msg, isError) {
+      qrSay(panel ? panel.querySelector('[data-fx-status="task"]') : null, msg, isError, false);
+    };
+    if (btn) btn.disabled = true;
+    say("Saving…", false);
     fulfilmentStatus("");
     authFetch("/api/admin/fulfilments/" + id + "/mark", {
       method: "POST",
@@ -2849,14 +3155,14 @@
         return res.ok ? res.json() : null;
       })
       .then(function (out) {
-        if (out) {
-          fulfilmentStatus("Marked done, and recorded against your name.");
-          loadFulfilments();
-        } else {
-          fulfilmentStatus("Could not update that supporter. Please try again.");
-        }
+        if (!out) throw new Error("not marked");
+        callNotice[id] = { task: "Marked done, and recorded against your name." };
+        fulfilmentStatus("Marked done, and recorded against your name.");
+        loadFulfilments();
       })
       .catch(function () {
+        if (btn) btn.disabled = false;
+        say("Could not update that supporter. Please try again.", true);
         fulfilmentStatus("Could not update that supporter. Please try again.");
       });
   }
@@ -2975,61 +3281,125 @@
   if (monthlyFilter) monthlyFilter.addEventListener("change", renderMonthly);
 
   // ---- catch up invites (TASK-214): email the thank-you invite to supporters who never got it ----
-  // One click POSTs the backfill endpoint (server-side Editor+), then shows how many went out. Safe to
-  // click again: the server only emails supporters who have not been invited yet, so a repeat run
-  // reports "Sent 0". Refetches the list afterwards, mirroring the mark-done refetch pattern above.
-  function backfillStatus(msg) {
-    var s = el("backfillInvitesStatus");
-    if (s) s.textContent = msg || "";
+  // The button says under it what it does and how many businesses it will email (counted from the
+  // list on the screen), and asks first, in the page. Yes POSTs the backfill endpoint (the server
+  // checks the person may), then says how many went, beside the button. Safe to press again: the
+  // server only emails supporters who have not been invited yet. The list is read again afterwards.
+  function backfillStatus(msg, isError, isOk) {
+    qrSay(el("backfillInvitesStatus"), msg, isError, isOk);
+  }
+  // How many businesses have never been emailed their invite, or null when there is no list to count.
+  function fulfilUninvited() {
+    if (!fulfilRows) return null;
+    return fulfilRows.filter(function (r) { return !r.invited_at && !r.captured_at; }).length;
+  }
+  function drawBackfillSays() {
+    var says = el("backfillInvitesSays");
+    var btn = el("backfillInvitesBtn");
+    if (!says || !btn) return;
+    var n = fulfilUninvited();
+    var what = ": a private link to a short form asking how they would like to be thanked. Nobody who has had it is emailed again.";
+    btn.disabled = n === 0;
+    says.textContent =
+      n === null ? "This emails the thank you invite to every business that has not been sent one" + what
+      : n === 0 ? "Every business has had their invite, so there is nobody to email just now."
+      : "This emails the thank you invite to the " + n + (n === 1 ? " business that has" : " businesses that have") + " not been sent one" + what;
+    var ask = el("backfillInvitesConfirm");
+    if (ask) ask.hidden = true;
+  }
+  function backfillAsk(asking) {
+    var ask = el("backfillInvitesConfirm");
+    var btn = el("backfillInvitesBtn");
+    if (!ask || !btn) return;
+    if (asking) {
+      var n = fulfilUninvited();
+      el("backfillInvitesQuestion").textContent =
+        n === null ? "Email the invite to every business that has not been sent one?"
+        : "Email the invite to " + n + (n === 1 ? " business" : " businesses") + " now?";
+      backfillStatus("", false, false);
+    }
+    ask.hidden = !asking;
+    var next = asking ? el("backfillInvitesYes") : btn;
+    if (next && next.focus) next.focus();
   }
   function backfillInvites() {
     var btn = el("backfillInvitesBtn");
+    var ask = el("backfillInvitesConfirm");
+    if (ask) ask.hidden = true;
     if (btn) btn.disabled = true;
-    backfillStatus("Sending…");
+    backfillStatus("Sending…", false, false);
     authFetch("/api/admin/business-supporters/backfill-invites", { method: "POST" })
       .then(function (res) {
         return res.ok ? res.json() : null;
       })
       .then(function (out) {
         if (!out) {
-          backfillStatus("Could not send the invites. Please try again.");
-        } else if (!out.pending) {
-          backfillStatus("No supporters were waiting for an invite.");
-        } else {
-          backfillStatus("Sent " + (out.sent || 0) + ", failed " + (out.failed || 0) + ".");
+          if (btn) btn.disabled = false;
+          backfillStatus("Could not send the invites. Please try again.", true, false);
+          return;
         }
+        var sent = out.sent || 0;
+        var failed = out.failed || 0;
+        var went = "Sent " + sent + (sent === 1 ? " invite." : " invites.");
+        if (!out.pending) backfillStatus("No supporters were waiting for an invite.", false, false);
+        else if (failed) backfillStatus(went + " " + failed + " could not be sent: press the button again to try those.", true, false);
+        else backfillStatus(went, false, true);
+        // The list says who has been invited now, and the line under the button how many are left.
         loadFulfilments();
       })
       .catch(function () {
-        backfillStatus("Could not send the invites. Please try again.");
-      })
-      .then(function () {
         if (btn) btn.disabled = false;
+        backfillStatus("Could not send the invites. Please try again.", true, false);
       });
   }
-  bindClick("backfillInvitesBtn", backfillInvites);
+  bindClick("backfillInvitesBtn", function () { backfillAsk(true); });
+  bindClick("backfillInvitesNo", function () { backfillAsk(false); });
+  bindClick("backfillInvitesYes", backfillInvites);
 
   // ---- send ONE supporter their invite (TASK-431) ----
   // Same endpoint shape as the backfill, scoped to one record. The server re-checks that they are
   // actually un-invited, so a double-click reports "already invited" rather than emailing twice.
-  function sendSingleInvite(id) {
+  // How it went is said in the invite's own panel, under the button that was pressed (btn).
+  function sendSingleInvite(id, btn) {
     if (!id) return;
-    backfillStatus("Sending…");
+    var panel = btn && btn.closest ? btn.closest(".fx-panel") : null;
+    var say = function (msg, isError) {
+      qrSay(panel ? panel.querySelector('[data-fx-status="invite"]') : null, msg, isError, false);
+      if (isError) fulfilmentStatus(msg);
+    };
+    if (btn) btn.disabled = true;
+    say("Sending…", false);
     authFetch("/api/admin/business-supporters/" + encodeURIComponent(id) + "/send-invite", { method: "POST" })
       .then(function (res) {
         return res.ok ? res.json() : null;
       })
       .then(function (out) {
-        if (!out) backfillStatus("Could not send that invite. Please try again.");
-        else if (out.alreadyInvited) backfillStatus("That supporter had already been sent their invite.");
-        else if (out.sent) backfillStatus("Invite sent.");
-        else backfillStatus("The invite could not be delivered. Please try again.");
+        if (!out) throw new Error("not sent");
+        if (!out.alreadyInvited && !out.sent) {
+          if (btn) btn.disabled = false;
+          say("The invite could not be delivered. Please try again.", true);
+          return;
+        }
+        var went = out.alreadyInvited ? "That supporter had already been sent their invite." : "Invite sent.";
+        callNotice[id] = { invite: went };
+        fulfilmentStatus(went);
         loadFulfilments();
       })
       .catch(function () {
-        backfillStatus("Could not send that invite. Please try again.");
+        if (btn) btn.disabled = false;
+        say("Could not send that invite. Please try again.", true);
       });
   }
+
+  // Find a business: what is typed narrows the list as it is typed, from the list already held.
+  (function () {
+    var box = el("fulfilmentSearch");
+    if (!box) return;
+    box.addEventListener("input", function () {
+      fulfilQuery = String(box.value || "");
+      redrawFulfilments();
+    });
+  })();
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
   // The tiles (2026-11-14): one chosen at a time. A status tile filters the live stories already read;
@@ -12699,24 +13069,36 @@
       if (story) return openStory(story.getAttribute("data-story"));
       var contact = t.closest("[data-contact]");
       if (contact) return openContact(contact.getAttribute("data-contact"));
+      // Business supporters. Mark done only opens its question, under the job, naming the job and
+      // the business; the question's Yes is what writes, and Not yet puts the question away.
       var fulfil = t.closest("[data-fulfil-mark]");
-      if (fulfil) {
-        // Name the business in the confirm, so an accidental click on the wrong row is caught by
-        // reading the question rather than by noticing afterwards.
-        var openRow = document.querySelector(".fx-summary.is-open .admin-fulfil-biz");
-        return markFulfilment(
-          fulfil.getAttribute("data-fulfil-id"),
-          fulfil.getAttribute("data-fulfil-mark"),
-          fulfil.getAttribute("data-fulfil-label"),
-          openRow ? openRow.textContent : null
-        );
+      if (fulfil) return fulfilAskMark(fulfil, true);
+      var fulfilNo = t.closest("[data-fx-ask-no]");
+      if (fulfilNo) return fulfilAskMark(fulfilNo, false);
+      var fulfilYes = t.closest("[data-fulfil-mark-yes]");
+      if (fulfilYes) {
+        return markFulfilment(fulfilYes.getAttribute("data-fulfil-id"), fulfilYes.getAttribute("data-fulfil-mark-yes"), fulfilYes);
       }
+      // The question under Mark as called: Yes records the call, Not yet puts the question away.
+      var callYes = t.closest("[data-call-yes]");
+      if (callYes) return markCalled(callYes.closest("form"), true);
+      var callNo = t.closest("[data-call-no]");
+      if (callNo) return callAsk(callNo.closest("form"), false);
+      var fxCopy = t.closest("[data-fx-copy]");
+      if (fxCopy) return fulfilCopyText(fxCopy);
+      var fxTile = t.closest("[data-fx-filter]");
+      if (fxTile) {
+        fulfilFilter = fxTile.getAttribute("data-fx-filter");
+        return redrawFulfilments();
+      }
+      var fxPart = t.closest("#fulfilmentsTable [data-akpart]");
+      if (fxPart) return showFulfilmentPart(fxPart.getAttribute("data-akpart"));
       var invite = t.closest("[data-send-invite]");
-      if (invite) return sendSingleInvite(invite.getAttribute("data-send-invite"));
+      if (invite) return sendSingleInvite(invite.getAttribute("data-send-invite"), invite);
       var goto = t.closest("[data-goto-section]");
       if (goto) return selectView(goto.getAttribute("data-goto-section"));
-      // The row toggle is last: the controls above sit INSIDE the detail panel, so testing them
-      // first stops a button press also collapsing the row out from under itself.
+      // The card's face is last: it is a button of its own, and everything above sits in the open
+      // card under it, never inside it.
       var toggle = t.closest("[data-fulfil-toggle]");
       if (toggle) return toggleFulfilment(toggle.getAttribute("data-fulfil-toggle"));
     });
@@ -12740,21 +13122,8 @@
       var t = e.target;
       if (t && t.matches && t.matches("textarea.fx-call-input")) nlFitBox(t);
     });
-
-    // The supporter rows are role="button" tabindex="0", so they have to answer Enter and Space
-    // like a button does. Without this the whole page is unusable from the keyboard: the detail is
-    // the only way to reach the preferences and the buttons, and it could only be opened by mouse.
-    doc.addEventListener("keydown", function (e) {
-      if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
-      var t = e.target;
-      if (!t || !t.closest) return;
-      // A real control inside the row handles its own keys; only the row itself needs this.
-      if (t.closest("button, a, input, select, textarea")) return;
-      var toggle = t.closest("[data-fulfil-toggle]");
-      if (!toggle) return;
-      e.preventDefault(); // Space would otherwise scroll the page.
-      toggleFulfilment(toggle.getAttribute("data-fulfil-toggle"));
-    });
+    // A business's card is opened by a real button now (its whole face), so Enter and Space open it
+    // as they do any button: the key handler the old table rows needed is gone with the rows.
   }
 
   // ---- thank-you letters (REQ-069 · TASK-163) ----

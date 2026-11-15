@@ -25,6 +25,8 @@ const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
 const appSrc = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
 const helpers = require(resolve(ROOT, "assets/js/admin/helpers.js"));
 const GiftLog = require(resolve(ROOT, "assets/js/admin/gift-log.js"));
+const Kit = require(resolve(ROOT, "assets/js/admin/kit.js"));
+const Giving = require(resolve(ROOT, "assets/js/admin/giving.js"));
 const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 
 const adminToken = signAdminSession({ sub: 3, email: "admin@nbcc", role: "admin", now: new Date(), secret: "s" }).token;
@@ -85,6 +87,10 @@ beforeEach(() => {
   (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
   // admin.html loads the Donations gift log before app.js, which hands it the screen to draw.
   (window as unknown as { AdminGiftLog: unknown }).AdminGiftLog = GiftLog.createGiftLog(document, window);
+  // And the kit and the Giving screens (Claims, GASDS, Subscriptions), which app.js hands those screens to.
+  (window as unknown as { AdminKit: unknown }).AdminKit = Kit;
+  (window as unknown as { AdminGiving: unknown }).AdminGiving = Giving;
+  Element.prototype.scrollIntoView = function () {};
   window.confirm = () => true;
   window.prompt = () => "";
   window.alert = () => undefined;
@@ -135,7 +141,7 @@ const panels: Panel[] = [
     unavailable: "Donations are unavailable.", okText: "No donations yet." },
   { name: "GASDS deadline", view: "gasds", path: "/api/admin/queues/gasds-deadline", target: "gasdsTable",
     unavailable: "GASDS donations are unavailable.",
-    okText: "No GASDS donations are approaching the claim deadline." },
+    okText: "No small donations are waiting to be marked as claimed." },
   { name: "GASDS pool", view: "gasds", path: "/api/admin/queues/gasds-pool", target: "gasdsPool",
     unavailable: "The small donations pool is unavailable.",
     okBody: { year: 2026, gasdsPoolTotalPence: 123400, giftAidClaimedPence: 0, remainingHeadroomPence: 876600 },
@@ -148,7 +154,7 @@ const panels: Panel[] = [
   { name: "Adjustments", view: "claims", path: "/api/admin/claims/adjustment-due", target: "adjustmentTable",
     unavailable: "Adjustments are unavailable.", okText: "No adjustments due." },
   { name: "Flagged subscriptions", view: "subscriptions", path: "/api/admin/subscriptions/dunning",
-    target: "subsTable", unavailable: "Flagged subscriptions are unavailable.", okText: "No flagged subscriptions." },
+    target: "subsTable", unavailable: "Monthly gifts that need attention are unavailable.", okText: "No monthly gifts need attention." },
   { name: "Business supporters", view: "fulfilments", path: "/api/admin/fulfilments", target: "fulfilmentsTable",
     unavailable: "Business supporters are unavailable.", okText: "No business supporters yet." },
   { name: "Stories", view: "stories", path: "/api/admin/stories", target: "storiesTable",

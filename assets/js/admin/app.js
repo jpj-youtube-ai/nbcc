@@ -1889,247 +1889,28 @@
     donationsOffset += 25;
     loadDonations();
   });
-  bindClick("assignBtn", assignSelected);
-  bindClick("markGasdsBtn", markGasdsSelected);
-
-  // ---- GASDS deadline: small donations near the 2-year cliff → mark claimed (editor+) ----
-  function loadGasds() {
-    var canWrite = canEdit("gasds");
-    var actions = el("gasdsActions");
-    authFetch("/api/admin/queues/gasds-deadline")
-      .then(okJson)
-      .then(function (d) {
-        el("gasdsTable").innerHTML = gasdsTable(d.results || [], canWrite);
-        if (actions) actions.hidden = !(canWrite && (d.results || []).length);
-      })
-      .catch(function () {
-        // Not "nothing is near its deadline": nobody knows, and a missed deadline is money lost.
-        el("gasdsTable").innerHTML = unavailableHtml("GASDS donations are unavailable.");
-        if (actions) actions.hidden = true;
-      });
-    // This year's pool report (REQ-050): three separately-read figures, never conflated.
-    var poolEl = el("gasdsPool");
-    if (poolEl) {
-      authFetch("/api/admin/queues/gasds-pool")
-        .then(okJson)
-        .then(function (p) {
-          poolEl.innerHTML =
-            statCard(H.formatPence(p.gasdsPoolTotalPence), "Small donations pool (" + p.year + ")", false) +
-            statCard(H.formatPence(p.giftAidClaimedPence), "Gift Aid claimed this year", false) +
-            statCard(H.formatPence(p.remainingHeadroomPence), "Remaining GASDS headroom", false);
-        })
-        .catch(function () {
-          poolEl.innerHTML = unavailableHtml("The small donations pool is unavailable.");
-        });
+  // ---- Giving > Claims, GASDS and Subscriptions (2026-11-14) ----
+  // Drawn by assets/js/admin/giving.js (window.AdminGiving), in the kit's look. This hands it the
+  // signed fetch and the permission checks, made once, the first time one of the three is opened.
+  // A [data-donor] name and the [data-goto-section] link it draws are answered by the delegate below.
+  var giving = null;
+  function givingScreens() {
+    if (!giving && window.AdminGiving) {
+      giving = window.AdminGiving.create(doc, window, { authFetch: authFetch, canView: canView, canEdit: canEdit });
     }
+    return giving;
   }
-  function gasdsTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No GASDS donations are approaching the claim deadline.</p>';
-    var body = rows
-      .map(function (r) {
-        var box = canWrite ? '<td><input type="checkbox" class="gasds-check" value="' + r.id + '" aria-label="Select donation ' + r.id + '"></td>' : "";
-        return (
-          "<tr>" + box + "<td>" + r.id + "</td><td>" + H.escapeHtml(r.full_name) +
-          '</td><td class="admin-num">' + H.formatPence(r.amountPence) + "</td><td>" +
-          H.fmtDate(r.collectedAt) + "</td><td>" + H.fmtDate(r.gasdsDeadline) +
-          '</td><td>' + H.escapeHtml(r.flag) + "</td></tr>"
-        );
-      })
-      .join("");
-    var head = (canWrite ? "<th></th>" : "") + "<th>ID</th><th>Donor</th><th>Amount</th><th>Collected</th><th>Deadline</th><th>Status</th>";
-    return '<table class="admin-table"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table>";
-  }
-  function markGasdsSelected() {
-    var ids = Array.prototype.slice
-      .call(doc.querySelectorAll(".gasds-check:checked"))
-      .map(function (c) { return Number(c.value); });
-    if (!ids.length) { window.alert("Tick at least one donation first."); return; }
-    authFetch("/api/admin/queues/gasds-deadline/mark-claimed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ donationIds: ids }),
-    })
-      .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (out) {
-        if (out) loadGasds();
-        else window.alert("Could not mark those donations as claimed.");
-      })
-      .catch(function () { window.alert("Could not mark those donations as claimed."); });
-  }
-
-  // ---- claims: eligible → batch → export → submit (writes are editor+) ----
   function loadClaims() {
-    var canWrite = canEdit("claims");
-    var actions = el("eligibleActions");
-    if (actions) actions.hidden = !canWrite;
-    authFetch("/api/admin/claims/eligible")
-      .then(okJson)
-      .then(function (d) {
-        el("eligibleTable").innerHTML = eligibleTable(d.results || [], canWrite);
-      })
-      .catch(function () {
-        el("eligibleTable").innerHTML = unavailableHtml("Donations waiting to be claimed are unavailable.");
-      });
-    authFetch("/api/admin/claim-batches")
-      .then(okJson)
-      .then(function (d) {
-        var rows = d.results || [];
-        el("batchesTable").innerHTML = batchesTable(rows);
-        var sel = el("assignBatchSelect");
-        if (sel) {
-          var opts = '<option value="new">New batch</option>';
-          rows.forEach(function (b) {
-            if (b.status === "open") opts += '<option value="' + b.id + '">Batch ' + b.id + "</option>";
-          });
-          sel.innerHTML = opts;
-        }
-      })
-      .catch(function () {
-        el("batchesTable").innerHTML = unavailableHtml("Claim batches are unavailable.");
-      });
-    authFetch("/api/admin/claims/adjustment-due")
-      .then(okJson)
-      .then(function (d) {
-        el("adjustmentTable").innerHTML = adjustmentTable(d.results || []);
-      })
-      .catch(function () {
-        el("adjustmentTable").innerHTML = unavailableHtml("Adjustments are unavailable.");
-      });
+    var g = givingScreens();
+    if (g) g.openClaims();
   }
-  function eligibleTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No donations are waiting to be claimed.</p>';
-    var body = rows
-      .map(function (r) {
-        var box = canWrite ? '<td><input type="checkbox" class="elig-check" value="' + r.id + '" aria-label="Select donation ' + r.id + '"></td>' : "";
-        return (
-          "<tr>" + box + "<td>" + r.id + "</td><td>" + H.escapeHtml(r.donor_name) +
-          '</td><td class="admin-num">' + H.formatPence(r.amount_pence) + "</td><td>" +
-          H.escapeHtml(r.postcode || "") + "</td><td>" + H.fmtDate(r.created_at) + "</td></tr>"
-        );
-      })
-      .join("");
-    var head = (canWrite ? "<th></th>" : "") + "<th>ID</th><th>Donor</th><th>Amount</th><th>Postcode</th><th>Date</th>";
-    return '<table class="admin-table"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table>";
+  function loadGasds() {
+    var g = givingScreens();
+    if (g) g.openGasds();
   }
-  function assignSelected() {
-    var ids = Array.prototype.slice
-      .call(doc.querySelectorAll(".elig-check:checked"))
-      .map(function (c) { return Number(c.value); });
-    if (!ids.length) { window.alert("Tick at least one donation first."); return; }
-    var target = el("assignBatchSelect").value;
-    function post(batchId) {
-      authFetch("/api/admin/claim-batches/" + batchId + "/donations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ donationIds: ids }),
-      })
-        .then(function (res) { return res.ok ? res.json() : null; })
-        .then(function (out) {
-          if (out && out.failed && out.failed.length) {
-            window.alert("Added " + out.assigned.length + ", " + out.failed.length + " could not be added.");
-          }
-          loadClaims();
-        })
-        .catch(function () {});
-    }
-    if (target === "new") {
-      authFetch("/api/admin/claim-batches", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
-        .then(function (res) { return res.json(); })
-        .then(function (d) { post(d.batchId); })
-        .catch(function () {});
-    } else {
-      post(target);
-    }
-  }
-  function adjustmentTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No adjustments due.</p>';
-    var body = rows
-      .map(function (r) {
-        return (
-          "<tr><td>" + r.id + "</td><td>" + H.escapeHtml(r.donor_name) + '</td><td class="admin-num">' +
-          H.formatPence(r.amount_pence) + '</td><td class="admin-num">' + H.formatPence(r.adjustment_pence || 0) +
-          "</td><td>" + H.escapeHtml(r.adjustment_reason || "") + "</td></tr>"
-        );
-      })
-      .join("");
-    return '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Amount</th><th>Adjustment</th><th>Reason</th></tr></thead><tbody>' + body + "</tbody></table>";
-  }
-  function batchesTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No claim batches.</p>';
-    var canWrite = canEdit("claims");
-    var body = rows
-      .map(function (b) {
-        var actions = "";
-        if (canWrite) {
-          if (b.status === "open") actions += '<button class="admin-link" type="button" data-submit-batch="' + b.id + '">Submit</button> ';
-          actions += '<button class="admin-link" type="button" data-export-batch="' + b.id + '">Export CSV</button>';
-        }
-        return (
-          "<tr><td>" + b.id + '</td><td><span class="admin-pill">' + H.escapeHtml(b.status) + "</span></td><td>" +
-          b.donation_count + '</td><td class="admin-num">' + H.formatPence(b.total_pence) + "</td><td>" +
-          H.fmtDate(b.submitted_at) + '</td><td data-label="">' + actions + "</td></tr>"
-        );
-      })
-      .join("");
-    return '<table class="admin-table"><thead><tr><th>ID</th><th>Status</th><th>Donations</th><th>Total</th><th>Submitted</th><th></th></tr></thead><tbody>' + body + "</tbody></table>";
-  }
-  function submitBatch(id) {
-    if (!window.confirm("Submit claim batch " + id + " to HMRC?")) return;
-    authFetch("/api/admin/claim-batches/" + id + "/submit", { method: "POST" })
-      .then(function (res) {
-        if (res.ok) loadClaims();
-      })
-      .catch(function () {});
-  }
-  function exportBatch(id) {
-    authFetch("/api/admin/claim-batches/" + id + "/export")
-      .then(function (res) {
-        return res.text();
-      })
-      .then(function (csv) {
-        var blob = new Blob([csv], { type: "text/csv" });
-        var url = URL.createObjectURL(blob);
-        var a = doc.createElement("a");
-        a.href = url;
-        a.download = "claim-batch-" + id + ".csv";
-        doc.body.appendChild(a);
-        a.click();
-        doc.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      })
-      .catch(function () {});
-  }
-
-  // ---- subscriptions (dunning) ----
   function loadSubs() {
-    var wrap = el("subsTable");
-    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/subscriptions/dunning")
-      .then(okJson)
-      .then(function (d) {
-        var rows = d.results || [];
-        if (!rows.length) {
-          wrap.innerHTML = '<p class="admin-empty">No flagged subscriptions.</p>';
-          return;
-        }
-        var body = rows
-          .map(function (s) {
-            // TASK-245: a state pill that surfaces a Cancelled subscription (cancelled_at) as well as the
-            // dunning statuses; the Ended column shows whichever terminal date applies.
-            var st = H.subscriptionStateLabel(s);
-            var ended = s.cancelled_at || s.lapsed_at;
-            return (
-              "<tr><td>" + s.id + "</td><td>" + H.escapeHtml(s.donor_name) +
-              '</td><td><span class="admin-pill admin-pill--' + st.state + '">' + H.escapeHtml(st.label) +
-              "</span></td><td>" + s.failed_attempts + "</td><td>" + H.fmtDate(ended) + "</td></tr>"
-            );
-          })
-          .join("");
-        wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Status</th><th>Failed</th><th>Ended</th></tr></thead><tbody>' + body + "</tbody></table>";
-      })
-      .catch(function () {
-        wrap.innerHTML = unavailableHtml("Flagged subscriptions are unavailable.");
-      });
+    var g = givingScreens();
+    if (g) g.openSubs();
   }
 
   // ---- business supporters: fulfilment list + mark-done actions (TASK-208, over TASK-207's API) ----
@@ -9459,10 +9240,6 @@
       if (story) return openStory(story.getAttribute("data-story"));
       var contact = t.closest("[data-contact]");
       if (contact) return openContact(contact.getAttribute("data-contact"));
-      var sub = t.closest("[data-submit-batch]");
-      if (sub) return submitBatch(sub.getAttribute("data-submit-batch"));
-      var exp = t.closest("[data-export-batch]");
-      if (exp) return exportBatch(exp.getAttribute("data-export-batch"));
       var fulfil = t.closest("[data-fulfil-mark]");
       if (fulfil) {
         // Name the business in the confirm, so an accidental click on the wrong row is caught by

@@ -8936,6 +8936,40 @@ none — it looks complete.
 Every import appends a `donor.historical_import` audit row, so anyone auditing these donations later
 can see why they are dated before the system existed.
 
+## Admin > Thank you, in the kit's look (2026-11-14)
+
+The screen where the team writes a personal thank you letter to someone who gave a big gift, emails it,
+and looks back at every letter sent (`#view-thank-you`), in the kit's look (`ak`) and in three parts
+behind the kit's bar. Design: `docs/superpowers/specs/2026-11-14-admin-refresh-thanks.md`. The email,
+the letter's design and wording and the page a donor prints are unchanged.
+
+- **A letter is kept only when its email went.** `POST /api/admin/thank-you/send` used to record the
+  letter, mark the donor thanked, then try the email and swallow a failure, so the screen said "Sent"
+  for a letter that never left. Now `recordThankYouSent(input, send)` (`src/db/thank-you.ts`) runs the
+  email inside its transaction, after the row is written (the print link is signed from its id) and
+  before the audit entry and the commit: a failed email rolls everything back. The reply is 201 with
+  `emailed: true`, or 502 with `emailed: false`, `recorded: false` and "The email could not be sent.
+  Nothing has been recorded." The screen says so beside Send, keeps the letter as typed and does not
+  show the donor as thanked. (README's earlier "best-effort" wording for this route is superseded.)
+- **Who to thank**: tiles that filter (Ready to thank, Thanked, Cannot be emailed; it opens on Ready to
+  thank when anyone is waiting), and a card a donor with the amount large. The name opens their donor
+  page for someone who may open Donations; "Asked to stay anonymous"; for no email address or does not
+  want emails, what can be done instead; what they have given since their last letter
+  (`givenSinceThankedPence` and `giftsSinceThanked` on `GET /api/admin/thank-you/eligible`, null when
+  never thanked). "Single donation over" is remembered on the device (`localStorage` `nbcc_ty_over`, a
+  number only).
+- **Write the letter**: "This letter is for X" at the top; Send has "Emails this letter to x@y now and
+  keeps a record." under it and asks first in the page, with a warning when they were already thanked.
+  After a send the form is cleared (a second press sends nothing), the page says who was thanked and
+  offers who is next. On a phone the letter is the same words at normal size in one column, with "See
+  it as a page" for the A4 sheet; the sheet is fitted when the part is shown (`tyFit`).
+- **Letters sent**: cards that open in place (addressed to, email, who was copied, gift, who signed,
+  who sent it, the personal message, View letter, Copy the link, Delete asked in the card), a search box
+  and "Show more" past the first 50 (`limit` and `offset`, using `total`).
+- Styles: `assets/css/admin-thanks.css`, every rule named through `#view-thank-you` (the `.ty-`
+  classes are borrowed by other screens; the screen's own start `.tyr-`). Tests:
+  `test/unit/admin-thank-you-screen.test.ts`, `admin-thank-you-send.test.ts`, `thank-you-db.test.ts`.
+
 ## Thanking the three individuals (TASK-438)
 
 ```bash

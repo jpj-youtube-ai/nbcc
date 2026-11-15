@@ -392,7 +392,7 @@ describe("the screen, in the kit's look and in three parts", () => {
     const words = text(view());
     ["threshold", "prefill", "Compose", "branded", "Monetary", "uplift", "Opted out"].forEach((w) => expect(words, w).not.toContain(w));
     // "CC" the email word, not the letters inside "NBCC".
-    expect(/CC/.test(words)).toBe(false);
+    expect(words.split(/[^A-Za-z]+/)).not.toContain("CC");
   });
 });
 

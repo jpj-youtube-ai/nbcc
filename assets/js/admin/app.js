@@ -7863,7 +7863,7 @@
     if (failed) {
       items.push(
         nlAttnCard("results:" + failed.id,
-          nlCount(failed.failedCount, "address", "addresses") + " could not be sent “" + nlTitle(failed) + "”",
+          "“" + nlTitle(failed) + "” could not be sent to " + nlCount(failed.failedCount, "address", "addresses"),
           "Press to see how it did and who did not get it.")
       );
     }

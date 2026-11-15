@@ -194,7 +194,8 @@
   #view-newsletter .nl-act { padding: 18px; }
   #view-newsletter .nl-act-btns, #view-newsletter .nl-act-btns .admin-btn { width: 100%; }
   /* A card each: the fixed laptop widths would squeeze a card's cells. */
-  #view-newsletter .ak-cards th, #view-newsletter .ak-cards td { width: auto; }
+  /* Named strongly enough to outrank the laptop column widths above (each a :nth-child). */
+  #view-newsletter table.ak-cards th:nth-child(n), #view-newsletter table.ak-cards td:nth-child(n) { width: auto; }
   #view-newsletter .ak-cards td.nl-r { text-align: left; }
   #view-newsletter .ak-cards .nl-rate { justify-content: flex-start; }
   #view-newsletter .ak-cards .nl-row-acts, #view-newsletter .ak-cards .nl-archive-acts {

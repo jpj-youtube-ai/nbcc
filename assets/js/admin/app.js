@@ -847,6 +847,96 @@
     return out;
   }
 
+  // The admin refresh (2026-11-14). Each area is offered only to someone who can open the part of
+  // the admin it is about; an "off" stored for any other area is kept, never dropped on a save.
+  var PUSH_AREA_SECTION = {
+    donations: "donations", monthly: "donations", fundraising: "fundraising", contact: "contact", ball: "ball",
+    fulfilments: "business-supporters", stories: "stories", newsletter: "newsletter", elf: "elf",
+  };
+  var pushOffElsewhere = []; // stored "off" for areas this person is not offered
+  var pushEndpoint = null; // this browser's own subscription, when it has one
+  function pushAreaShown(area) {
+    var section = PUSH_AREA_SECTION[area];
+    return !section || canView(section);
+  }
+  // "22:00" -> "10pm", "22:30" -> "10:30pm".
+  function pushClock(hhmm) {
+    var p = String(hhmm || "").split(":");
+    var h = Number(p[0]);
+    var m = Number(p[1] || 0);
+    if (!isFinite(h)) return "";
+    var hour = h % 12 === 0 ? 12 : h % 12;
+    return hour + (m ? ":" + String(m).padStart(2, "0") : "") + (h < 12 ? "am" : "pm");
+  }
+  function pushSayQuiet(from, to) {
+    el("pushQuietSaid").textContent = from && to
+      ? "Quiet from " + pushClock(from) + " until " + pushClock(to) + "."
+      : "No quiet time: your phone buzzes whenever something arrives.";
+  }
+  function pushSayCalm() {
+    var bundle = el("pushBundle").checked;
+    var quiet = el("pushQuietFrom").value && el("pushQuietTo").value;
+    el("pushCalmNote").textContent = bundle || quiet
+      ? "At least one of these is on. Anything held back still shows as a New pill here."
+      : "Both of these are off, so you get a buzz every single time. Turn one on if a busy day is too noisy: anything held back still shows as a New pill here.";
+  }
+  // Everything as it stands on the screen, for the server. The quiet time goes only with both ends.
+  function pushPrefsBody(from, to) {
+    var off = pushOffElsewhere.slice();
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-push-area]"), function (box) {
+      if (!box.checked) off.push(box.getAttribute("data-push-area"));
+    });
+    return {
+      bundle: el("pushBundle").checked,
+      quietFrom: from ? from + ":00" : null,
+      quietTo: to ? to + ":00" : null,
+      areasOff: off,
+    };
+  }
+  function pushSavedQuiet() {
+    return { from: el("pushQuietSaid").getAttribute("data-from") || "", to: el("pushQuietSaid").getAttribute("data-to") || "" };
+  }
+  function pushPut(body) {
+    return authFetch("/api/admin/push/prefs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not save.");
+    });
+  }
+  // A tick saves as it is pressed, with the quiet time as it was last saved, and says so beside it.
+  function pushSaveTick(box, said, onWords, offWords) {
+    var q = pushSavedQuiet();
+    said.className = "admin-action-status rc-tick-said";
+    said.textContent = "Saving\u2026";
+    pushPut(pushPrefsBody(q.from, q.to)).then(function () {
+      said.className = "admin-action-status rc-tick-said is-ok";
+      said.textContent = box.checked ? onWords : offWords;
+      pushSayCalm();
+    }).catch(function (err) {
+      if (err && err.message === "unauthorized") return;
+      box.checked = !box.checked;
+      said.className = "admin-action-status rc-tick-said is-error";
+      said.textContent = "Could not save that. Please try again.";
+    });
+  }
+  function pushShowThisPhone() {
+    pushEndpoint = null;
+    var sw = window.navigator && window.navigator.serviceWorker;
+    if (!pushSupported() || !sw || !sw.getRegistration) return;
+    sw.getRegistration("/admin").then(function (reg) {
+      return reg && reg.pushManager ? reg.pushManager.getSubscription() : null;
+    }).then(function (sub) {
+      var on = !!(sub && sub.endpoint);
+      pushEndpoint = on ? sub : null;
+      el("pushPhoneOn").hidden = !on;
+      if (on) el("pushSetup").hidden = true;
+    }).catch(function () {
+      el("pushPhoneOn").hidden = true;
+    });
+  }
+
   function loadPushSettings() {
     var unsupported = el("pushUnsupported");
     var setup = el("pushSetup");
@@ -870,22 +960,36 @@
       el("pushEnable").disabled = false;
     }
 
+    el("pushPhoneOn").hidden = true;
+    pushShowThisPhone();
     authFetch("/api/admin/push/subscription").then(j).then(function (d) {
       var count = (d && d.phones) || 0;
       var box = el("pushPhoneCount");
       box.hidden = count === 0;
       box.textContent = count === 1 ? "One phone is set up." : count + " phones are set up.";
-    }).catch(function () {});
+    }).catch(function () {
+      // The count is a note beside the button; without it the screen still works.
+      el("pushPhoneCount").hidden = true;
+    });
 
     authFetch("/api/admin/push/prefs").then(j).then(function (prefs) {
       el("pushBundle").checked = !!prefs.bundle;
       el("pushQuietFrom").value = (prefs.quietFrom || "").slice(0, 5);
       el("pushQuietTo").value = (prefs.quietTo || "").slice(0, 5);
       var off = prefs.areasOff || [];
-      el("pushAreas").innerHTML = PUSH_AREAS.map(function (a) {
-        return '<label class="admin-check"><input type="checkbox" data-push-area="' + a[0] + '"' +
-          (off.indexOf(a[0]) === -1 ? " checked" : "") + " /> <span>" + H.escapeHtml(a[1]) + "</span></label>";
-      }).join("");
+      pushOffElsewhere = off.filter(function (a) { return !pushAreaShown(a); });
+      var from = (prefs.quietFrom || "").slice(0, 5);
+      var to = (prefs.quietTo || "").slice(0, 5);
+      el("pushQuietSaid").setAttribute("data-from", from && to ? from : "");
+      el("pushQuietSaid").setAttribute("data-to", from && to ? to : "");
+      pushSayQuiet(from, to);
+      pushSayCalm();
+      var shown = PUSH_AREAS.filter(function (a) { return pushAreaShown(a[0]); });
+      el("pushAreas").innerHTML = shown.length ? shown.map(function (a) {
+        return '<div class="rc-tick"><label class="admin-check"><input type="checkbox" data-push-area="' + a[0] + '"' +
+          (off.indexOf(a[0]) === -1 ? " checked" : "") + " /> <span>" + H.escapeHtml(a[1]) + "</span></label>" +
+          '<span class="admin-action-status rc-tick-said" data-push-said="' + a[0] + '" role="status" aria-live="polite"></span></div>';
+      }).join("") : '<p class="admin-empty">None of the parts of the admin you can open send notifications.</p>';
     }).catch(function () {
       el("pushAreas").innerHTML = '<p class="admin-empty">Could not load your settings.</p>';
     });
@@ -940,22 +1044,76 @@
     });
     var from = el("pushQuietFrom").value;
     var to = el("pushQuietTo").value;
+    // The server throws away a quiet time with one end, so the screen asks for both first.
+    if (!from !== !to) {
+      status.className = "admin-action-status is-error";
+      status.textContent = "Choose both times for a quiet time, or clear both for none.";
+      return;
+    }
+    var body = pushPrefsBody(from, to);
+    body.areasOff = off.concat(pushOffElsewhere);
     authFetch("/api/admin/push/prefs", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bundle: el("pushBundle").checked,
-        quietFrom: from ? from + ":00" : null,
-        quietTo: to ? to + ":00" : null,
-        areasOff: off,
-      }),
+      body: JSON.stringify(body),
     }).then(function (res) {
       if (!res.ok) throw new Error("Could not save.");
       status.className = "admin-action-status is-ok";
       status.textContent = "Saved.";
+      el("pushQuietSaid").setAttribute("data-from", from);
+      el("pushQuietSaid").setAttribute("data-to", to);
+      pushSayQuiet(from, to);
+      pushSayCalm();
     }).catch(function () {
       status.className = "admin-action-status is-error";
       status.textContent = "Could not save those settings.";
+    });
+  });
+
+  el("pushAreas").addEventListener("change", function (e) {
+    var box = e.target && e.target.closest ? e.target.closest("[data-push-area]") : null;
+    if (!box) return;
+    var area = box.getAttribute("data-push-area");
+    var name = "";
+    PUSH_AREAS.forEach(function (a) { if (a[0] === area) name = a[1]; });
+    var said = doc.querySelector('[data-push-said="' + area + '"]');
+    pushSaveTick(box, said, "Saved: " + name + " will buzz.", "Saved: " + name + " will not buzz.");
+  });
+  el("pushBundle").addEventListener("change", function () {
+    pushSaveTick(el("pushBundle"), el("pushBundleSaid"), "Saved.", "Saved.");
+  });
+  // Turn off for this phone: the server forgets this phone first (it needs the address the browser
+  // holds), then the browser drops its subscription. Only this phone: others stay on.
+  bindClick("pushDisable", function () {
+    var status = el("pushDisableStatus");
+    var sub = pushEndpoint;
+    if (!sub) return;
+    status.className = "admin-action-status";
+    status.textContent = "Turning off\u2026";
+    authFetch("/api/admin/push/subscription", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Could not turn this phone off.");
+      return sub.unsubscribe ? sub.unsubscribe() : true;
+    }).then(function () {
+      status.className = "admin-action-status is-ok";
+      status.textContent = "Turned off for this phone. Any other phones you have set up still get notifications.";
+      pushEndpoint = null;
+      el("pushSetup").hidden = !pushSupported();
+      authFetch("/api/admin/push/subscription").then(j).then(function (d) {
+        var count = (d && d.phones) || 0;
+        var box = el("pushPhoneCount");
+        box.hidden = count === 0;
+        box.textContent = count === 1 ? "One phone is set up." : count + " phones are set up.";
+      }).catch(function () {
+        el("pushPhoneCount").hidden = true;
+      });
+    }).catch(function (err) {
+      if (err && err.message === "unauthorized") return;
+      status.className = "admin-action-status is-error";
+      status.textContent = "Could not turn this phone off. Please try again.";
     });
   });
 
@@ -4199,7 +4357,7 @@
   // test/unit/admin-audit-words.test.ts checks every entity the server writes about has a part.
   var AUDIT_PARTS = [
     ["donations", "Donations"], ["get-involved", "Get involved"], ["ball", "Festive Ball"],
-    ["elf", "Elf Detective School"], ["business", "Businesses"], ["red-bag", "Fill a Red Bag"],
+    ["elf", "Elf Detective School"], ["business", "Businesses"], ["fill-red-bag", "Fill a Red Bag"],
     ["newsletter", "Newsletter"], ["team", "Team"], ["website", "Website"],
   ];
   var AUDIT_AREAS = [
@@ -4215,7 +4373,7 @@
     ["elf_detective", "elf"], ["elf_door", "elf"], ["elf_family", "elf"], ["elf_grand_prize_entry", "elf"],
     ["elf_head_elves", "elf"], ["elf_order", "elf"], ["elf_photo", "elf"], ["elf_practice", "elf"], ["elf_settings", "elf"],
     ["business_outreach", "business"], ["business_supporter_fulfilment", "business"], ["supporter_ticker", "business"],
-    ["red_bag_list", "red-bag"], ["red_bag_workshop", "red-bag"],
+    ["red_bag_list", "fill-red-bag"], ["red_bag_workshop", "fill-red-bag"],
     ["newsletter", "newsletter"], ["subscriber_list", "newsletter"], ["list_subscriber", "newsletter"],
     ["user", "team"],
     ["analytics_settings", "website"], ["qr_code", "website"],

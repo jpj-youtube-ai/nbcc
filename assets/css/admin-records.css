@@ -32,3 +32,13 @@
   #view-email-audit .email-audit-table th, #view-email-audit .email-audit-table td { width: auto; }
   #view-email-audit .ty-inline { flex: 1 1 100%; }
 }
+
+/* ---- Notifications ---- */
+#view-notifications .rc-phone-on { gap: 12px; }
+#view-notifications .rc-phone-on > div { display: grid; gap: 6px; justify-items: start; }
+#view-notifications .rc-tick { display: grid; align-content: start; min-width: 0; }
+#view-notifications .rc-tick-said { margin: 0 0 6px; font-size: 0.88rem; }
+#view-notifications .rc-tick-said:empty { display: none; }
+#view-notifications .rc-quiet-said { margin: 8px 0 14px; font-weight: 600; color: var(--ov-ink); }
+#view-notifications .admin-claim-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+#view-notifications .np-quiet input { min-width: 0; }

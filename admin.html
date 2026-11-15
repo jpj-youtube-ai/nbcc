@@ -2676,7 +2676,7 @@
                  analytics:view; the collecting switch needs analytics:edit. app.js fills every panel
                  from one GET /api/admin/analytics. Nothing here scrolls inside a box: a long list
                  shows its top 10 and "Show all" grows the page. -->
-            <section class="admin-view" id="view-analytics" aria-labelledby="analytics-heading" hidden>
+            <section class="admin-view ak" id="view-analytics" aria-labelledby="analytics-heading" hidden>
               <h2 id="analytics-heading">Analytics</h2>
               <p class="admin-view-intro">How many people visit the website, where they come from and what they look at. There are no cookies, and nothing here says who anyone is.</p>
 
@@ -2702,6 +2702,25 @@
               </div>
               <p class="an-period-note" id="anPeriodNote"></p>
 
+              <!-- The admin refresh (2026-11-14): what the numbers say, in words, from the same answer. -->
+              <p class="rc-summary" id="anSummary" aria-live="polite"></p>
+              <div class="ak-actions rc-an-download">
+                <button class="admin-btn ak-btn--plain" type="button" id="anDownload">Download the numbers</button>
+                <span class="ak-says">A spreadsheet of every number here for the days chosen, for the trustees.</span>
+                <span class="ak-status" id="anDownloadSaid" role="status" aria-live="polite"></span>
+              </div>
+
+              <!-- One part at a time on a phone (AdminKit.wireParts); on a laptop every part shows and the bar is not needed. -->
+              <div class="rc-an-parts" id="anParts">
+                <div class="ak-parts" role="group" aria-label="Which part to show">
+                  <button class="ak-part-btn" type="button" data-akpart="glance" aria-pressed="true">At a glance</button>
+                  <button class="ak-part-btn" type="button" data-akpart="from" aria-pressed="false">Where from</button>
+                  <button class="ak-part-btn" type="button" data-akpart="where" aria-pressed="false">Where</button>
+                  <button class="ak-part-btn" type="button" data-akpart="pages" aria-pressed="false">Pages</button>
+                  <button class="ak-part-btn" type="button" data-akpart="clicks" aria-pressed="false">Clicks</button>
+                  <button class="ak-part-btn" type="button" data-akpart="devices" aria-pressed="false">Devices</button>
+                </div>
+                <div class="ak-part" data-akpart-body="glance" role="region" aria-label="At a glance">
               <div class="admin-stats an-figures" id="anFigures" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
 
               <section class="an-card" aria-labelledby="anLineHead">
@@ -2709,7 +2728,13 @@
                 <div id="anLine"><p class="admin-loading">Loading&hellip;</p></div>
               </section>
 
+              <section class="an-card an-now-card" aria-labelledby="anNowHead">
+                <h3 class="an-card-head" id="anNowHead">Right now</h3>
+                <div id="anNow" aria-live="polite"></div>
+              </section>
+                </div>
               <div class="an-grid">
+                <div class="ak-part an-wide" data-akpart-body="from" role="region" aria-label="Where from">
                 <section class="an-card an-wide" aria-labelledby="anFromHead">
                   <h3 class="an-card-head" id="anFromHead">Where they came from</h3>
                   <p class="an-card-note">Each visit counts once, under the way it arrived.</p>
@@ -2722,15 +2747,18 @@
                     <div>
                       <h4 class="an-list-head">Newsletter issues</h4>
                       <div id="anNewsletters"></div>
+                      <button class="admin-link rc-go" type="button" data-an-go="newsletter" hidden>Open Newsletter</button>
                     </div>
                     <!-- TASK-492: scans of the codes made under QR codes, by page. -->
                     <div>
                       <h4 class="an-list-head">QR codes scanned</h4>
                       <div id="anQrCodes"></div>
+                      <button class="admin-link rc-go" type="button" data-an-go="qr" hidden>Open QR codes</button>
                     </div>
                   </div>
                 </section>
-
+                </div>
+                <div class="ak-part an-wide" data-akpart-body="where" role="region" aria-label="Where">
                 <section class="an-card an-wide" aria-labelledby="anWhereHead">
                   <h3 class="an-card-head" id="anWhereHead">Where they are</h3>
                   <div class="an-pair">
@@ -2745,31 +2773,31 @@
                   </div>
                   <p class="an-credit"><a href="https://db-ip.com" target="_blank" rel="noopener">IP geolocation by DB-IP</a>, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
                 </section>
-
+                </div>
+                <div class="ak-part an-wide" data-akpart-body="pages" role="region" aria-label="Pages">
                 <section class="an-card an-wide" aria-labelledby="anPagesHead">
                   <h3 class="an-card-head" id="anPagesHead">What they looked at</h3>
                   <p class="an-card-note">Time is only while the page was on screen. Scroll is how far down people read, on average.</p>
                   <div id="anPages"></div>
                 </section>
-
+                </div>
+                <div class="ak-part" data-akpart-body="clicks" role="region" aria-label="Clicks">
                 <section class="an-card" aria-labelledby="anClicksHead">
                   <h3 class="an-card-head" id="anClicksHead">What they clicked</h3>
                   <div id="anClickKinds"></div>
                   <h4 class="an-list-head">Each button and link</h4>
                   <div id="anClicks"></div>
                 </section>
-
+                </div>
+                <div class="ak-part" data-akpart-body="devices" role="region" aria-label="Devices">
                 <section class="an-card" aria-labelledby="anUsedHead">
                   <h3 class="an-card-head" id="anUsedHead">What they used</h3>
                   <div id="anDevices"></div>
                   <h4 class="an-list-head">Browsers</h4>
                   <div id="anBrowsers"></div>
                 </section>
-
-                <section class="an-card an-now-card" aria-labelledby="anNowHead">
-                  <h3 class="an-card-head" id="anNowHead">Right now</h3>
-                  <div id="anNow" aria-live="polite"></div>
-                </section>
+                </div>
+              </div>
               </div>
             </section>
 

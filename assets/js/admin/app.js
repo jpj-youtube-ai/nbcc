@@ -20279,7 +20279,9 @@
   var AN_TOP = 10;
   // The server sends at most this many of a long list (LIST_LIMIT in src/db/analytics-report.ts).
   var AN_LIST_CAP = 100;
+  var AN_DAYS_KEY = "nbccAdminAnDays";
   var anDays = 30;
+  var anParts = null;
   var anSettings = null;
   var anReport = null;
   var anFailed = false;
@@ -20361,9 +20363,24 @@
       });
     });
     el("anSwitchBtn").addEventListener("click", anFlipSwitch);
+    el("anDownload").addEventListener("click", anDownload);
+    if (window.AdminKit && window.AdminKit.wireParts) anParts = window.AdminKit.wireParts(el("anParts"));
+    // The days chosen last time in this visit (sessionStorage), else 30.
+    try {
+      var remembered = Number(sessionStorage.getItem(AN_DAYS_KEY));
+      if (remembered === 7 || remembered === 30 || remembered === 90) anDays = remembered;
+    } catch {
+      // Private mode: it opens on 30 days.
+    }
+    anSyncDays();
     el("view-analytics").addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
+      var go = t.closest("[data-an-go]");
+      if (go) {
+        selectView(go.getAttribute("data-an-go"));
+        return;
+      }
       if (t.closest("[data-anrefresh]")) {
         anLoadNow();
         return;
@@ -20459,14 +20476,22 @@
   }
 
   // ---- the numbers ----
-  function anSetDays(days) {
-    if (days === anDays && anReport) return;
-    anDays = days;
+  function anSyncDays() {
     Array.prototype.forEach.call(doc.querySelectorAll("[data-andays]"), function (b) {
-      var active = Number(b.getAttribute("data-andays")) === days;
+      var active = Number(b.getAttribute("data-andays")) === anDays;
       b.classList.toggle("is-active", active);
       b.setAttribute("aria-pressed", active ? "true" : "false");
     });
+  }
+  function anSetDays(days) {
+    if (days === anDays && anReport) return;
+    anDays = days;
+    try {
+      sessionStorage.setItem(AN_DAYS_KEY, String(days));
+    } catch {
+      // Private mode: remembered until the page is refreshed.
+    }
+    anSyncDays();
     anLoadReport();
   }
 
@@ -20500,6 +20525,8 @@
     view.classList.remove("is-loading");
     el("anLoading").textContent = "";
     anRenderPeriodNote();
+    anRenderSummary();
+    anRenderGo();
     anRenderFigures();
     anRenderLine();
     anRenderPanels();
@@ -20511,7 +20538,7 @@
     if (points) {
       var d = cur - prev;
       if (d === 0) return "Same as " + span;
-      return (d > 0 ? "Up " : "Down ") + Math.abs(d) + (Math.abs(d) === 1 ? " point" : " points") + " on " + span;
+      return (d > 0 ? "Up " : "Down ") + Math.abs(d) + (Math.abs(d) === 1 ? " point" : " points") + " on " + span + " (" + prev + "% then)";
     }
     if (!prev) return cur ? "None in " + span : "Same as " + span;
     var pct = Math.round(((cur - prev) / prev) * 100);
@@ -20528,17 +20555,126 @@
     var c = anReport.current.headline;
     var p = anReport.previous.headline;
     var cards = [
-      ["Visitors", anNum(c.visitors), anChange(c.visitors, p.visitors)],
-      ["Visits", anNum(c.visits), anChange(c.visits, p.visits)],
-      ["Page views", anNum(c.views), anChange(c.views, p.views)],
-      ["Visits that saw one page", c.bounceShare + "%", anChange(c.bounceShare, p.bounceShare, true)],
+      ["Visitors", anNum(c.visitors), anChange(c.visitors, p.visitors), "Different people, each counted once however often they came."],
+      ["Visits", anNum(c.visits), anChange(c.visits, p.visits), "Times someone came to the website: one person can visit many times."],
+      ["Page views", anNum(c.views), anChange(c.views, p.views), "Pages opened, counting every page in every visit."],
+      ["Visits that saw one page", c.bounceShare + "%", anChange(c.bounceShare, p.bounceShare, true), "Of all visits, the share that left after the first page."],
     ];
     box.innerHTML = cards
       .map(function (k) {
         return '<div class="admin-stat an-stat"><div class="n">' + H.escapeHtml(k[1]) + '</div><div class="l">' +
-          H.escapeHtml(k[0]) + '</div><p class="an-change">' + H.escapeHtml(k[2]) + "</p></div>";
+          H.escapeHtml(k[0]) + '</div><p class="rc-fig-says">' + H.escapeHtml(k[3]) + '</p><p class="an-change">' + H.escapeHtml(k[2]) + "</p></div>";
       })
       .join("");
+  }
+
+  // The admin refresh (2026-11-14): what the numbers say, in words, never more than they say. A
+  // comparison only when there is a period before to compare with; "about" wherever a figure is
+  // rounded; "most" only for a way of arriving that had over half the visits.
+  var AN_CAME_FROM = {
+    newsletter: "a newsletter", email: "an email", qr: "a QR code", search: "a search", social: "social media",
+    other_websites: "another website", direct: "typing the address, a bookmark or an app",
+  };
+  function anRenderSummary() {
+    var box = el("anSummary");
+    if (anFailed || !anReport || !anReport.current) {
+      box.textContent = "";
+      return;
+    }
+    var c = anReport.current;
+    var days = anReport.days || anDays;
+    var span = "the " + days + " days before";
+    var cur = Number(c.headline.visitors) || 0;
+    var prev = Number(anReport.previous && anReport.previous.headline && anReport.previous.headline.visitors) || 0;
+    if (!cur) {
+      box.textContent = "Nobody has been counted visiting in the last " + days + " days.";
+      return;
+    }
+    var said = anNum(cur) + (cur === 1 ? " person" : " people") + " visited in the last " + days + " days";
+    if (prev) {
+      if (cur === prev) said += ", the same as " + span;
+      else if (cur === prev * 2) said += ", twice as many as " + span;
+      else if (cur * 2 === prev) said += ", half as many as " + span;
+      else {
+        var pct = Math.round((Math.abs(cur - prev) / prev) * 100);
+        said += pct < 5 ? ", about the same as " + span : ", about " + pct + "% " + (cur > prev ? "more" : "fewer") + " than " + span;
+      }
+    }
+    said += ".";
+    var channels = c.channels || [];
+    var total = 0;
+    var top = null;
+    channels.forEach(function (r) {
+      total += Number(r.visits) || 0;
+      if (!top || r.visits > top.visits) top = r;
+    });
+    if (top && total) {
+      var share = Math.round((top.visits / total) * 100);
+      var where = AN_CAME_FROM[top.channel] || AN_CHANNELS[top.channel] || top.channel;
+      said += (top.visits * 2 > total ? " Most visits came from " : " The biggest share of visits came from ") + where + " (about " + share + "%).";
+    }
+    var pages = c.pages || [];
+    var best = null;
+    pages.forEach(function (r) {
+      if (!best || r.views > best.views) best = r;
+    });
+    if (best && best.views) {
+      var name = best.path === "/" && !best.title ? "The home page" : anPage(best.path, best.title);
+      said += " " + name + " was looked at most, with " + anNum(best.views) + (best.views === 1 ? " view." : " views.");
+    }
+    box.textContent = said;
+  }
+  function anRenderGo() {
+    var to = { qr: canView("site"), newsletter: canView("newsletter") };
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-an-go]"), function (b) {
+      b.hidden = !to[b.getAttribute("data-an-go")];
+    });
+  }
+  function anDownload() {
+    var said = el("anDownloadSaid");
+    if (anFailed || !anReport || !anReport.current) {
+      said.className = "ak-status is-error";
+      said.textContent = "There are no numbers to download yet. Choose the days again to try once more.";
+      return;
+    }
+    var c = anReport.current;
+    var p = anReport.previous || {};
+    var days = anReport.days || anDays;
+    var before = " in the " + days + " days before";
+    var rows = [["Part", "What", "Number", "Share"]];
+    var h = c.headline || {};
+    var ph = p.headline || {};
+    rows.push(["At a glance", "Visitors", Number(h.visitors) || 0, ""], ["At a glance", "Visitors" + before, Number(ph.visitors) || 0, ""]);
+    rows.push(["At a glance", "Visits", Number(h.visits) || 0, ""], ["At a glance", "Visits" + before, Number(ph.visits) || 0, ""]);
+    rows.push(["At a glance", "Page views", Number(h.views) || 0, ""], ["At a glance", "Page views" + before, Number(ph.views) || 0, ""]);
+    rows.push(["At a glance", "Visits that saw one page", "", (Number(h.bounceShare) || 0) + "%"], ["At a glance", "Visits that saw one page" + before, "", (Number(ph.bounceShare) || 0) + "%"]);
+    (c.daily || []).forEach(function (d) { rows.push(["Visitors each day", anDay(d.day), Number(d.visitors) || 0, ""]); });
+    function list(part, items, label, value, shared) {
+      var total = 0;
+      (items || []).forEach(function (r) { total += value(r); });
+      (items || []).forEach(function (r) {
+        var v = value(r);
+        rows.push([part, label(r), v, shared && total ? Math.round((v / total) * 100) + "%" : ""]);
+      });
+    }
+    function visits(r) { return Number(r.visits) || 0; }
+    function visitors(r) { return Number(r.visitors) || 0; }
+    function clicks(r) { return Number(r.clicks) || 0; }
+    list("Where from", c.channels, function (r) { return AN_CHANNELS[r.channel] || r.channel; }, visits, true);
+    list("Other websites", c.otherWebsites, function (r) { return r.source; }, visits);
+    list("Newsletter issues", c.newsletters, function (r) { return r.label; }, visits);
+    list("QR codes scanned", c.qrCodes, function (r) { return r.label; }, visits);
+    list("Towns and cities", c.cities, function (r) { return r.city + (r.region ? ", " + r.region : ""); }, visitors, true);
+    list("Countries", c.countries, function (r) { return r.name; }, visitors, true);
+    list("Pages", c.pages, function (r) { return anPage(r.path, r.title) + " (views)"; }, function (r) { return Number(r.views) || 0; });
+    list("What they clicked", c.clickKinds, function (r) { return AN_KINDS[r.kind] || r.kind; }, clicks);
+    list("Each button and link", c.clicks, function (r) { return (r.label || AN_KINDS[r.kind] || r.kind) + " (" + (AN_KIND_ONE[r.kind] || r.kind) + ")"; }, clicks);
+    list("Devices", c.devices, function (r) { return AN_DEVICES[r.device] || r.device; }, visitors, true);
+    list("Browsers", c.browsers, function (r) { return r.browser; }, visitors, true);
+    var Kit = window.AdminKit;
+    var ok = !!(Kit && Kit.downloadCsv && Kit.downloadCsv("nbcc-website-visits-last-" + days + "-days.csv", rows));
+    said.className = "ak-status " + (ok ? "is-ok" : "is-error");
+    said.textContent = ok ? "Downloaded the numbers for the last " + days + " days." : "This browser could not make the spreadsheet.";
   }
 
   // The line: inline SVG stretched to its box, so its lines keep their width (non-scaling-stroke) and

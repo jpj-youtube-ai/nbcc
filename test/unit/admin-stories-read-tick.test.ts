@@ -187,7 +187,8 @@ describe("the Read column on the Stories list", () => {
     await openStories();
     expect(document.querySelector("#storiesTable > .st-list > table.stories-table")).not.toBeNull();
     const labels = Array.from(rowOf(4).children).map((td) => td.getAttribute("data-label"));
-    expect(labels).toEqual(["Read", "ID", "Role", "Scope / consent", "Status", "Consent age", "Submitted", ""]);
+    // 2026-11-14: plain column names.
+    expect(labels).toEqual(["Read", "ID", "Sent by", "Agreed to", "Status", "When agreed", "Sent", ""]);
     // Every row, not only the first.
     expect(document.querySelectorAll("#storiesTable tbody td:not([data-label])")).toHaveLength(0);
   });
@@ -240,9 +241,11 @@ describe("ticking a story", () => {
   it("does not draw the list again, so nothing jumps", async () => {
     await openStories();
     const row = rowOf(4);
+    // 2026-11-14: the list reads the live and the archived stories when it opens; a tick reads neither again.
+    const reads = calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories").length;
     await press(tick(4));
     expect(rowOf(4)).toBe(row);
-    expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories")).toHaveLength(1);
+    expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories")).toHaveLength(reads);
   });
 
   // A sentence under the status made the row taller, so every row beneath it moved: on a quick

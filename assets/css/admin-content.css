@@ -1,6 +1,180 @@
 /* NBCC admin: Content: Stories and Partners, in the kit's look (assets/css/admin-kit.css).
- * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md.
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md and, for these three screens,
+ * docs/superpowers/specs/2026-11-14-admin-refresh-content.md.
  *
  * Only what the kit does not already give these screens. The kit's house rules hold here too: no
  * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
- * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+ * moving only transform and opacity; 44px for anything pressed. A phone is below 860px.
+ * Every rule is named through its screen (#view-stories, #view-story, #view-ticker) or starts with
+ * a part of its own: st- for Stories, pt- for Partners (test/unit/admin-content-styles.test.ts). */
+
+/* ================= Partners (#view-ticker) ================= */
+
+/* A name and its switch read as one line: the cards do not stretch across a wide screen. */
+#view-ticker .pt-add, #view-ticker .pt-preview, #view-ticker .pt-list { max-width: 60rem; }
+/* Three short tiles sit in one row, on a phone too. */
+#view-ticker .pt-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 640px; }
+
+/* ---- adding ---- */
+.pt-add { display: grid; gap: 10px; margin: 0 0 14px; }
+.pt-add[hidden] { display: none; }
+.pt-add > * { margin-top: 0; margin-bottom: 0; }
+/* The public stylesheet draws every form as a card of its own; these sit inside one already. */
+#view-ticker form { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.pt-add__title { margin: 0; }
+.pt-add__form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; max-width: 640px; }
+.pt-add__name { min-width: 0; }
+.pt-dupes { margin: 0; }
+.pt-dupes__title { margin: 0; font-weight: 700; }
+.pt-dupes__list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pt-dupes__list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.pt-dupes__name { font-weight: 600; overflow-wrap: anywhere; }
+.pt-dupes__rest { margin: 0; font-size: 0.86rem; color: var(--ov-soft); }
+#view-ticker .pt-many { margin: 4px 0 0; }
+#view-ticker .pt-many textarea { display: block; width: 100%; min-height: 7.5rem; resize: vertical; }
+.pt-many__go { display: grid; justify-items: start; margin: 12px 0 0; }
+
+/* ---- how it looks on the website ---- */
+#view-ticker .pt-preview { margin: 0 0 6px; }
+.pt-preview__title { min-width: 0; }
+.pt-count { margin-left: auto; font-family: var(--font-body); font-size: 0.84rem; font-weight: 400; line-height: 1.3; color: var(--ov-soft); text-align: right; }
+/* The strip under the website's menu, as words that wrap: maroon, cream names, a diamond between. */
+.pt-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; margin: 0; padding: 10px 14px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-maroon); color: var(--ov-on-dark); font-size: 0.86rem; font-weight: 600; line-height: 1.4; }
+.pt-strip__label { margin-right: 14px; padding: 1px 9px; border-radius: 999px; background: var(--ov-gold); color: var(--ov-ink); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.pt-strip__name { overflow-wrap: anywhere; }
+.pt-strip__name + .pt-strip__name::before { content: "\25C6"; margin: 0 10px; font-size: 0.55em; color: var(--ov-gold); vertical-align: middle; }
+.pt-strip__rest { margin: 8px 0 0; font-size: 0.88rem; color: var(--ov-soft); }
+.pt-preview__link { margin: 4px 0 0; }
+#view-ticker .pt-preview__link .admin-link { display: inline-flex; align-items: center; }
+
+/* ---- the list ---- */
+.pt-tools { display: grid; grid-template-columns: minmax(0, 22rem) auto; justify-content: start; align-items: end; gap: 12px 24px; margin: 0 0 12px; }
+.pt-tools__search { min-width: 0; }
+.pt-tools__order { display: grid; gap: 6px; }
+.pt-tools__label { font-family: var(--ov-head); font-size: 0.95rem; font-weight: 700; line-height: 1.2; color: var(--ov-ink); }
+.pt-listed { min-height: 1.5em; margin: 0 0 12px; font-size: 0.92rem; line-height: 1.5; color: var(--ov-soft); }
+.pt-more { margin: 16px 0 0; text-align: center; }
+
+.pt-list { margin: 0; }
+.pt-card { min-width: 0; padding: 12px 14px 12px 16px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+.pt-card.is-open { box-shadow: var(--ov-pop-lg); }
+/* Removed: what went is said where the card was, stepped back. */
+.pt-card.is-gone { border: 2.5px dashed var(--ov-rule); background: var(--ov-warm); box-shadow: none; }
+.pt-card__gone { margin: 0; color: var(--ov-soft); overflow-wrap: anywhere; }
+.pt-card__face { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 14px; }
+/* Someone who may only look sees the word, not a switch: it keeps its own width. */
+.pt-card__face > .ak-mark { justify-self: start; }
+.pt-card__main { display: grid; gap: 2px; min-width: 0; }
+.pt-card__name { font-family: var(--ov-head); font-size: 1.05rem; font-weight: 700; line-height: 1.2; color: var(--ov-ink); overflow-wrap: anywhere; }
+.pt-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 0.84rem; line-height: 1.4; color: var(--ov-soft); }
+.pt-card__meta:empty { display: none; }
+#view-ticker .pt-card__said { margin: 8px 0 0; }
+#view-ticker .pt-card__said:empty { margin: 0; }
+
+/* The one switch on a card: on is holly and reads Showing, off is quiet and reads Hidden. */
+.pt-switch { display: inline-flex; align-items: center; gap: 10px; min-width: 9.25rem; min-height: 48px; margin: 0; padding: 6px 14px 6px 8px; border: var(--ov-thin); border-radius: 999px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.95rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
+.pt-switch:hover { background: var(--ov-hover); }
+.pt-switch:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+.pt-switch__track { position: relative; flex: none; width: 46px; height: 28px; border: var(--ov-thin); border-radius: 999px; background: var(--ov-warm); }
+.pt-switch__knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--ov-soft); }
+.pt-switch__word { min-width: 4.4em; text-align: left; }
+.pt-switch[aria-checked="true"] { background: var(--ov-holly-soft); }
+.pt-switch[aria-checked="true"]:hover { background: var(--ov-holly-soft); }
+.pt-switch[aria-checked="true"] .pt-switch__track { background: var(--ov-holly); }
+.pt-switch[aria-checked="true"] .pt-switch__knob { background: var(--ov-on-dark); transform: translateX(18px); }
+.pt-switch[aria-busy="true"] { opacity: 0.6; cursor: progress; }
+
+/* "Rename or remove": opens the rest of the card where it is. */
+.pt-card__open { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: 2px 0 -6px; padding: 0 2px; border: 0; background: none; color: var(--ov-maroon); font: inherit; font-size: 0.9rem; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.pt-card__open:hover { color: var(--ov-crimson); }
+.pt-card__open::after { content: ""; width: 7px; height: 7px; border: solid currentColor; border-width: 0 2.5px 2.5px 0; transform: translateY(-2px) rotate(45deg); }
+.pt-card__open[aria-expanded="true"]::after { transform: translateY(2px) rotate(225deg); }
+.pt-card__more { display: grid; gap: 18px; margin: 10px -14px -12px -16px; padding: 16px 16px 18px; border-top: 2px dashed var(--ov-rule); border-radius: 0 0 15px 15px; background: var(--ov-warm); }
+.pt-card__more[hidden] { display: none; }
+.pt-act { display: grid; gap: 10px; min-width: 0; max-width: 34rem; }
+.pt-act__go { display: grid; justify-items: start; gap: 0; }
+.pt-ask { margin: 12px 0 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .pt-switch { transition: transform 0.12s var(--ov-ease); }
+  .pt-switch__knob { transition: transform 0.18s var(--ov-ease); }
+  .pt-card__open::after { transition: transform 0.2s var(--ov-ease); }
+}
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  #view-ticker .pt-tiles .ak-tile__says { font-size: 0.76rem; }
+  .pt-add__form { grid-template-columns: minmax(0, 1fr); }
+  .pt-tools { grid-template-columns: minmax(0, 1fr); }
+  .pt-count { flex: none; max-width: 45%; }
+}
+@media (max-width: 420px) {
+  /* The name gets the whole width, and the switch its own line under it, where a thumb reaches. */
+  .pt-card__face { grid-template-columns: minmax(0, 1fr); }
+  .pt-switch { justify-self: start; }
+}
+
+/* ================= Stories (#view-stories, #view-story) ================= */
+
+/* Six tiles in one grid: the two groups (statuses, and Archived) lay their tiles straight into it. */
+.st-tilegroup { display: contents; }
+#view-stories .st-tiles { grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
+
+/* The list keeps its table on a laptop and its cards below 760px (admin.css, TASK-561). The kit draws
+   the frame; these are only the new pieces in its cells. */
+.st-none { color: var(--ov-soft); font-size: 0.88rem; }
+.st-agreed { display: block; margin-top: 6px; font-size: 0.86rem; line-height: 1.4; color: var(--ov-text); }
+.st-old { margin-top: 4px; }
+#view-stories .st-open { min-height: 44px; min-width: 44px; font-weight: 600; }
+#view-stories .stories-table td .st-value { min-width: 0; }
+
+/* The erased stories. */
+#view-stories .st-erased { margin-top: 22px; }
+.st-erased__list { gap: 10px; }
+.st-erased__item { display: grid; gap: 2px; }
+.st-erased__what { margin: 0; font-family: var(--ov-head); font-weight: 700; color: var(--ov-ink); }
+.st-erased__meta { margin: 0; font-size: 0.86rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+.st-erased__why { margin: 4px 0 0; overflow-wrap: anywhere; }
+
+/* One story. */
+.st-where { margin: 0 0 10px; font-weight: 600; color: var(--ov-soft); }
+.st-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 6px; }
+.st-step { min-height: 44px; }
+.st-steps__at { font-size: 0.9rem; color: var(--ov-soft); }
+#view-story .admin-story-text { max-width: 68ch; margin: 0; padding: 18px 20px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); font-size: 1.02rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+#view-story .st-quote-big { font-style: italic; font-size: 1.1rem; }
+.st-copy { display: grid; gap: 10px; max-width: 68ch; margin: 18px 0 0; }
+.st-copy > * { margin: 0; }
+.st-copy__agreed { line-height: 1.5; }
+.st-agreed-card { max-width: 68ch; margin: 22px 0 14px; }
+.st-agreed-card .ak-h3 { margin: 0 0 8px; }
+.st-agreed-list { display: grid; gap: 6px; margin: 0; padding: 0 0 0 20px; line-height: 1.5; }
+.st-old-note { margin: 12px 0 0; }
+#view-story .st-about { max-width: 68ch; }
+.st-form { display: grid; gap: 14px; max-width: 68ch; margin: 22px 0 0; }
+.st-form > * { margin-top: 0; margin-bottom: 0; }
+#view-story .st-form textarea, #view-story .st-ask textarea { display: block; width: 100%; resize: vertical; }
+.st-form__go { display: grid; justify-items: start; }
+.st-away { display: grid; gap: 18px; max-width: 68ch; margin: 22px 0 0; }
+.st-away > * { margin-top: 0; margin-bottom: 0; }
+.st-away__one { display: grid; justify-items: start; }
+.st-ask { justify-self: stretch; margin: 12px 0 0; }
+/* The public stylesheet draws every form as a card of its own; this one is already the kit's panel. */
+#view-story form.st-form { padding: clamp(16px, 2.4vw, 26px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+/* The list's frame: the box TASK-561's cards measure is framed in the kit's look. Clip is not a
+   scrolling box: the corners clip and nothing scrolls sideways. */
+#view-stories .st-list { overflow: visible; overflow: clip; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+#view-stories .stories-table th:first-child { padding-left: 12px; padding-right: 2px; }
+/* The import fold (admin.css draws a small arrow before its words; the kit draws one after). */
+#view-stories .admin-import { max-width: none; }
+#view-stories .admin-import > summary::before { content: none; }
+#view-stories .admin-import-body { padding: 14px 16px 16px; }
+#view-story .ak-facts .admin-link { display: inline-flex; align-items: center; min-height: 44px; }
+#view-stories .st-tiles { margin-top: 4px; }
+/* Where the list is a card a story (admin.css, below 760px), the kit's table padding and rules
+   would space each line out like a table row: each line is a line again. */
+@container stlist (max-width: 759px) {
+  #view-stories .stories-table td { padding: 3px 14px; border-bottom: 0; }
+  #view-stories .stories-table tr { border-bottom: 2px dashed var(--ov-rule); }
+  #view-stories .stories-table tbody tr:last-child { border-bottom: 0; }
+}

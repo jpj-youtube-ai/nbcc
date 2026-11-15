@@ -673,9 +673,9 @@
             </section>
 
             <!-- Stories: My Story submissions from the separate stories database (Task C). -->
-            <section class="admin-view" id="view-stories" aria-labelledby="stories-heading" hidden>
+            <section class="admin-view ak" id="view-stories" aria-labelledby="stories-heading" hidden>
               <h2 id="stories-heading">Stories</h2>
-              <p class="admin-view-intro">Submissions from the public "My Story" form. Each carries its own consent: whether it may be used publicly or kept internal only, and whether the submitter's first name / town may be shared. Review a story, tag and note it, and withdraw it if consent is ever revoked.</p>
+              <p class="admin-view-intro">What people sent through the My Story form on the website. Tick each one when it has been read. Every story carries what its sender agreed to: check that before a story is used anywhere, and withdraw it if they ever take it back.</p>
               <!-- TASK-461: the old website's My Story submissions, from its CSV export. Editors and
                    admins only (app.js reveals it). Nothing is saved until "Add" is pressed. -->
               <details class="admin-guide admin-import" id="storiesImport" hidden>
@@ -690,41 +690,48 @@
                   <p class="admin-action-status" id="storiesImportStatus" role="status" aria-live="polite"></p>
                 </div>
               </details>
-              <div class="admin-search-bar">
-                <div class="admin-segmented" role="group" aria-label="Filter by status" id="storiesStatusFilter">
-                  <button class="admin-seg is-active" type="button" data-status="">All</button>
-                  <button class="admin-seg" type="button" data-status="new">New</button>
-                  <button class="admin-seg" type="button" data-status="reviewed">Reviewed</button>
-                  <button class="admin-seg" type="button" data-status="used">Used</button>
-                  <button class="admin-seg" type="button" data-status="withdrawn">Withdrawn</button>
+              <!-- Tiles with counts (2026-11-14). The live stories are read once and filtered here; Archived
+                   is its own read (TASK-311: archiving is separate from where a story is in the reading). -->
+              <div class="ak-tiles st-tiles">
+                <div class="st-tilegroup" role="group" aria-label="Which stories to list" id="storiesStatusFilter">
+                  <button class="ak-tile is-active" type="button" data-status="" aria-pressed="true"><span class="ak-tile__n"></span><span class="ak-tile__name">All</span><span class="ak-tile__says">Every story not archived</span></button>
+                  <button class="ak-tile" type="button" data-status="new" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">To read</span><span class="ak-tile__says">New, not read yet</span></button>
+                  <button class="ak-tile" type="button" data-status="reviewed" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Read</span><span class="ak-tile__says">Marked as read</span></button>
+                  <button class="ak-tile" type="button" data-status="used" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Used</span><span class="ak-tile__says">Used somewhere already</span></button>
+                  <button class="ak-tile" type="button" data-status="withdrawn" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Withdrawn</span><span class="ak-tile__says">Must not be used</span></button>
                 </div>
-                <!-- TASK-311: archived stories are out of the way but never gone. Separate from the
-                     status filters above because archiving is orthogonal to where a story is in the
-                     review workflow. -->
-                <div class="admin-segmented" role="group" aria-label="Archived or live" id="storiesViewFilter">
-                  <button class="admin-seg is-active" type="button" data-view="live">Live</button>
-                  <button class="admin-seg" type="button" data-view="archived">Archived</button>
+                <div class="st-tilegroup" role="group" aria-label="Archived stories" id="storiesViewFilter">
+                  <button class="ak-tile" type="button" data-view="archived" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Archived</span><span class="ak-tile__says">Put away, kept safe</span></button>
                 </div>
               </div>
-              <div class="admin-table-wrap" id="storiesTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div id="storiesTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
 
               <!-- TASK-309: only worth opening when the list looks wrong. "No stories yet" is the
                    EMPTY state, not an error, which means the table was reached and had no rows -
                    what a freshly-created database looks like. This says which database is being
                    read and whether a larger one is sitting unused beside it. -->
-              <details class="admin-details" id="storiesDiagnostics">
+              <details class="ak-fold st-erased" id="storiesErased" hidden>
+                <summary>Erased stories</summary>
+                <div class="ak-fold__body">
+                  <p class="ak-hint">A story erased for good leaves only this note behind: its number, when, who erased it and why. Nothing of the story or the person is kept.</p>
+                  <div id="storiesErasedList" aria-live="polite"></div>
+                </div>
+              </details>
+              <details class="ak-fold" id="storiesDiagnostics" hidden>
                 <summary>Where is this data stored?</summary>
+                <div class="ak-fold__body">
                 <p class="admin-muted">Open this if stories look missing. It shows which database the
                   site is reading, and every database on the server with its size — an unused one
                   that is much larger is very likely the original.</p>
-                <button type="button" id="storiesDiagnosticsRun">Check storage</button>
+                <button class="admin-btn ak-btn--plain" type="button" id="storiesDiagnosticsRun">Check storage</button>
                 <div id="storiesDiagnosticsOut" aria-live="polite"></div>
+                </div>
               </details>
             </section>
 
             <!-- Story detail (reached from a stories row); Editor+ status/tags/notes actions. -->
-            <section class="admin-view" id="view-story" aria-labelledby="story-heading" hidden>
-              <button class="admin-back" id="storyBack" type="button">&larr; Back</button>
+            <section class="admin-view ak" id="view-story" aria-labelledby="story-heading" hidden>
+              <button class="admin-back" id="storyBack" type="button">&larr; Back to stories</button>
               <h2 id="story-heading">Story</h2>
               <div id="storyDetail" aria-live="polite"></div>
               <p class="admin-action-status" id="storyActionStatus" role="status" aria-live="polite"></p>
@@ -1501,18 +1508,69 @@
 
             <!-- Partners: the admin-curated list shown scrolling under the site nav (labelled
                  "Partners") and listed on the Supporters page. -->
-            <section class="admin-view" id="view-ticker" aria-labelledby="ticker-heading" hidden>
+            <!-- In the kit's look (2026-11-14, docs/superpowers/specs/2026-11-14-admin-refresh-content.md):
+                 tiles that filter, a card a partner with one switch, and every press answered in the
+                 card that was pressed. About 390 names, so app.js filters in the browser and draws a
+                 hundred at a time. -->
+            <section class="admin-view ak" id="view-ticker" aria-labelledby="ticker-heading" hidden>
               <h2 id="ticker-heading">Partners</h2>
-              <p class="admin-view-intro">Add the businesses and people who are ongoing partners. Active ones scroll across the top of every page (just under the navigation, labelled “Partners”) and appear in the Partners list on the Supporters page. Changes appear on the site immediately.</p>
-              <form id="tickerForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Partner name
-                  <input id="tickerName" type="text" maxlength="120" placeholder="e.g. Ayrshire Bakery" style="width:220px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="tickerAdd">Add partner</button>
-                <span class="ty-count" id="tickerCount" aria-live="polite"></span>
-              </form>
-              <p class="ty-status" id="tickerStatus" role="status" aria-live="polite"></p>
-              <div class="admin-table-wrap" id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="admin-view-intro">Choose which partners' names show on the website. A name that is showing scrolls across the top of every page, just under the menu (labelled “Partners”), and is listed on the Supporters page. A change shows on the website straight away.</p>
+              <div class="ak-tiles pt-tiles" id="tickerTiles" role="group" aria-label="Which partners to list">
+                <button type="button" class="ak-tile" data-ticker-filter="showing" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Showing</span><span class="ak-tile__says">On the website now</span></button>
+                <button type="button" class="ak-tile" data-ticker-filter="hidden" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Hidden</span><span class="ak-tile__says">Not on the website</span></button>
+                <button type="button" class="ak-tile is-active" data-ticker-filter="all" aria-pressed="true"><span class="ak-tile__n"></span><span class="ak-tile__name">All</span><span class="ak-tile__says">Every partner</span></button>
+              </div>
+              <!-- Adding: editors only (app.js hides the panel from someone who may only look). -->
+              <div class="ak-panel pt-add" id="tickerAddPanel">
+                <h3 class="ak-h3 pt-add__title">Add a partner</h3>
+                <form id="tickerForm" class="pt-add__form" autocomplete="off">
+                  <div class="ak-field pt-add__name">
+                    <label for="tickerName">Partner name</label>
+                    <input id="tickerName" type="text" maxlength="120" placeholder="e.g. Ayrshire Bakery" />
+                  </div>
+                  <button class="admin-btn" type="submit" id="tickerAdd">Add partner</button>
+                </form>
+                <p class="ak-says">Adds the name to the list and shows it on the website straight away.</p>
+                <div id="tickerDupes" aria-live="polite"></div>
+                <p class="ty-status" id="tickerStatus" role="status" aria-live="polite"></p>
+                <details class="ak-fold pt-many" id="tickerManyFold">
+                  <summary>Add several at once</summary>
+                  <div class="ak-fold__body">
+                    <div class="ak-field">
+                      <label for="tickerMany">The names, one on each line</label>
+                      <textarea id="tickerMany" rows="5"></textarea>
+                    </div>
+                    <p class="pt-many__go"><button class="admin-btn ak-btn--plain" type="button" id="tickerManyAdd">Add these names</button>
+                      <span class="ak-says">Adds each name and shows it on the website straight away. A name already on the list is left out.</span></p>
+                    <p class="ty-status" id="tickerManyStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+              </div>
+              <details class="ak-fold pt-preview" id="tickerPreviewFold">
+                <summary><span class="pt-preview__title">How it looks on the website</span> <span class="pt-count" id="tickerCount" aria-live="polite"></span></summary>
+                <div class="ak-fold__body">
+                  <p class="ak-hint">The names that are showing, in the order they scroll across the top of every page. On the Supporters page the same names are listed A to Z.</p>
+                  <div id="tickerPreview" aria-live="polite"></div>
+                  <p class="pt-preview__link"><a class="admin-link" href="/supporters#partners" target="_blank" rel="noopener">See the Supporters page</a></p>
+                </div>
+              </details>
+              <h3 class="ak-h3" id="ticker-list-heading">The list</h3>
+              <div class="pt-tools">
+                <div class="ak-field pt-tools__search">
+                  <label for="tickerSearch">Find a partner</label>
+                  <input id="tickerSearch" type="search" placeholder="Part of the name" autocomplete="off" />
+                </div>
+                <div class="pt-tools__order">
+                  <span class="pt-tools__label" id="tickerSortLabel">Order</span>
+                  <div class="admin-segmented" role="group" aria-labelledby="tickerSortLabel" id="tickerSort">
+                    <button class="admin-seg is-active" type="button" data-ticker-sort="site" aria-pressed="true">Website order</button>
+                    <button class="admin-seg" type="button" data-ticker-sort="newest" aria-pressed="false">Newest first</button>
+                  </div>
+                </div>
+              </div>
+              <p class="pt-listed" id="tickerListed" role="status" aria-live="polite"></p>
+              <div id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="pt-more"><button class="admin-btn ak-btn--plain" type="button" id="tickerMore" hidden>Show more</button></p>
             </section>
 
             <!-- Get involved: the old Events (TASK-453) and Fundraising (TASK-495) tabs as one tab with five

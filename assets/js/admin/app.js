@@ -2872,27 +2872,28 @@
   }
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
-  Array.prototype.forEach.call(doc.querySelectorAll("#storiesViewFilter .admin-seg"), function (b) {
+  // The tiles (2026-11-14): one chosen at a time. A status tile filters the live stories already read;
+  // Archived is its own read (TASK-311: archiving is separate from where a story is in the reading).
+  var stLive = []; // the live stories, as the list read them
+  var stArchived = null; // the archived ones, or null when they could not be read
+  var stListedIds = []; // the stories listed now, in order: next and previous story go through these
+  Array.prototype.forEach.call(doc.querySelectorAll("#view-stories .st-tiles [data-status], #view-stories .st-tiles [data-view]"), function (b) {
     b.addEventListener("click", function () {
-      storiesArchiveView = b.getAttribute("data-view") || "live";
-      Array.prototype.forEach.call(doc.querySelectorAll("#storiesViewFilter .admin-seg"), function (x) {
-        x.classList.toggle("is-active", x === b);
-      });
-      loadStories();
+      if (b.hasAttribute("data-view")) {
+        storiesArchiveView = "archived";
+        storiesStatusFilter = "";
+      } else {
+        storiesArchiveView = "live";
+        storiesStatusFilter = b.getAttribute("data-status") || "";
+      }
+      stDrawTiles();
+      stDrawList();
     });
   });
   if (el("storiesDiagnosticsRun")) {
     el("storiesDiagnosticsRun").addEventListener("click", runStoriesDiagnostics);
   }
-  Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (b) {
-    b.addEventListener("click", function () {
-      storiesStatusFilter = b.getAttribute("data-status") || "";
-      Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (x) {
-        x.classList.toggle("is-active", x === b);
-      });
-      loadStories();
-    });
-  });
+  if (el("storiesErased")) el("storiesErased").addEventListener("toggle", loadErasures);
   // TASK-560: one listener on the list's box, which stays while the table inside it is drawn again
   // on every load. A tick saves at once and the row stays where it is, so the next story does not
   // move under the pointer and the tick can come straight back off.
@@ -2985,6 +2986,9 @@
     if (out.status) {
       box.checked = storyIsRead(out.status);
       pill.textContent = H.storyLabel("status", out.status);
+      // The tiles count it where it is now; the list stays as it is, so nothing moves under the pointer.
+      stLive.forEach(function (r) { if (String(r.id) === String(id)) r.status = out.status; });
+      stDrawTiles();
     }
     var why = out.lock || (out.status ? storyTickLocked(out.status) : "");
     if (why && !box.disabled) {
@@ -3006,7 +3010,7 @@
     var badges = '<span class="admin-pill ' + scopeClass + '">' + H.escapeHtml(H.storyLabel("useScope", r.use_scope)) + "</span>";
     if (r.consent_share_first_name) badges += ' <span class="admin-pill">First name</span>';
     if (r.consent_share_town) badges += ' <span class="admin-pill">Town</span>';
-    if (r.third_party_consent) badges += ' <span class="admin-pill">3rd-party OK</span>';
+    if (r.third_party_consent) badges += ' <span class="admin-pill">Permission from the person</span>';
     return badges;
   }
   // TASK-560: "read" is the status that already says so. New is unread. Reviewed is read and can be
@@ -3033,8 +3037,21 @@
       ' aria-label="Story ' + r.id + ' read" /></label>'
     );
   }
+  // What a story's card says about what its sender agreed to: the pills, then the same in a sentence.
+  function storyAgreedHtml(r) {
+    return scopeConsentBadges(r) + '<span class="st-agreed">' + H.escapeHtml(H.storyConsentLine(r)) + "</span>";
+  }
+  // When they agreed, and "Check before using" once that was over a year ago.
+  function storyAgeHtml(r) {
+    return (
+      H.escapeHtml(H.consentAge(r.consent_captured_at)) +
+      (H.consentIsOld(r.consent_captured_at) ? ' <span class="ak-mark ak-mark--wait st-old">Check before using</span>' : "")
+    );
+  }
   function storiesTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No stories yet.</p>';
+    if (!rows.length) {
+      return '<p class="admin-empty">' + (stLive.length || storiesArchiveView === "archived" ? "No stories here." : "No stories yet.") + "</p>";
+    }
     // Beside each status, hidden until it is needed, the pill that takes its place when a save
     // fails: "Not saved" to the eye, the whole of it to a screen reader, the sentence on hover.
     // Under it, room for the three answers that need a sentence (somebody else changed the story,
@@ -3045,49 +3062,120 @@
     // a donation is. So every cell carries its column's name, and the wrapper is what the
     // stylesheet measures. The cards put the ID at the top and fit the tick by position, so
     // admin-fits-a-phone.test.ts checks these columns and their order. A card's line is a row, a
-    // label then a value: the two cells that hold more than one thing keep it in one box
-    // (.st-value), so pills wrap together and the sentence sits under the status, not beside it.
+    // label then a value: the cells that hold more than one thing keep it in one box (.st-value).
+    // 2026-11-14: what they agreed to is on the card as a sentence, and the column names are plain
+    // words. The list stays thin on purpose (listStories): the quote is on the opened story only.
     var body = rows
       .map(function (r) {
         return (
-          '<tr><td data-label="Read">' + storyReadTick(r) + '</td><td data-label="ID">' + r.id + '</td><td data-label="Role">' +
-          H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
-          '</td><td data-label="Scope / consent"><div class="st-value">' + scopeConsentBadges(r) + "</div></td>" +
+          '<tr><td data-label="Read">' + storyReadTick(r) + '</td><td data-label="ID">' + r.id + "</td>" +
+          '<td data-label="Sent by">' + H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
+          '</td><td data-label="Agreed to"><div class="st-value">' + storyAgreedHtml(r) + "</div></td>" +
           '<td data-label="Status"><div class="st-value"><span class="admin-pill" data-story-status>' +
           H.escapeHtml(H.storyLabel("status", r.status)) + "</span>" +
           '<span class="admin-pill admin-read-unsaved" data-story-unsaved hidden title="' + STORY_NOT_SAVED + '">' +
           '<span class="sr-only">Story ' + r.id + ": </span>Not saved" +
           '<span class="sr-only">. Please try again.</span></span>' +
-          '<span class="admin-read-note" data-story-note></span></div></td><td data-label="Consent age">' +
-          H.escapeHtml(H.consentAge(r.consent_captured_at)) + '</td><td data-label="Submitted">' + H.fmtDate(r.created_at) +
-          '</td><td data-label=""><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
+          '<span class="admin-read-note" data-story-note></span></div></td><td data-label="When agreed"><div class="st-value">' +
+          storyAgeHtml(r) + '</div></td><td data-label="Sent">' + H.escapeHtml(H.longDate(r.created_at)) +
+          '</td><td data-label=""><button class="admin-link st-open" type="button" data-story="' + r.id + '">Open</button></td></tr>'
         );
       })
       .join("");
     return (
-      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Role</th><th>Scope / consent</th>' +
-      "<th>Status</th><th>Consent age</th><th>Submitted</th><th></th></tr></thead><tbody>" +
+      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Sent by</th><th>Agreed to</th>' +
+      "<th>Status</th><th>When agreed</th><th>Sent</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table></div>"
     );
+  }
+  function stDrawTiles() {
+    var counts = { "": stLive.length };
+    stLive.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
+    Array.prototype.forEach.call(doc.querySelectorAll("#view-stories .st-tiles .ak-tile"), function (b) {
+      var isArchive = b.hasAttribute("data-view");
+      var n = isArchive ? (stArchived ? stArchived.length : null) : counts[b.getAttribute("data-status")] || 0;
+      var on = isArchive ? storiesArchiveView === "archived" : storiesArchiveView !== "archived" && (b.getAttribute("data-status") || "") === storiesStatusFilter;
+      b.querySelector(".ak-tile__n").textContent = n === null ? "" : String(n);
+      b.classList.toggle("is-active", on);
+      b.classList.toggle("is-none", n === 0);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    var toRead = doc.querySelector('#view-stories .st-tiles [data-status="new"]');
+    if (toRead) toRead.classList.toggle("ak-tile--urgent", (counts["new"] || 0) > 0);
+  }
+  function stDrawList() {
+    var wrap = el("storiesTable");
+    if (storiesArchiveView === "archived" && !stArchived) {
+      wrap.innerHTML = unavailableHtml("The archived stories are unavailable.");
+      stListedIds = [];
+      return;
+    }
+    var rows = storiesArchiveView === "archived"
+      ? stArchived
+      : stLive.filter(function (r) { return !storiesStatusFilter || r.status === storiesStatusFilter; });
+    stListedIds = rows.map(function (r) { return String(r.id); });
+    wrap.innerHTML = storiesTable(rows);
   }
   function loadStories() {
     var imp = el("storiesImport");
     if (imp) imp.hidden = !canEdit("stories");
+    var diag = el("storiesDiagnostics");
+    if (diag) diag.hidden = !canEdit("stories"); // the storage check needs edit, so only an editor sees it
+    // The erasure reasons are free text an editor typed, so only someone who may edit Stories sees them.
+    var erased = el("storiesErased");
+    if (erased) erased.hidden = !canEdit("stories");
     var wrap = el("storiesTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    // TASK-311: two independent filters - where a story is in the workflow, and whether it is
-    // archived. Both travel to the API; the server decides what each view means.
-    var query = [];
-    if (storiesStatusFilter) query.push("status=" + encodeURIComponent(storiesStatusFilter));
-    if (storiesArchiveView) query.push("view=" + encodeURIComponent(storiesArchiveView));
-    var path = "/api/admin/stories" + (query.length ? "?" + query.join("&") : "");
-    authFetch(path)
+    // Every live story at once, so the tiles can count them; the archived ones beside them.
+    var archivedRead = authFetch("/api/admin/stories?view=archived")
+      .then(okJson)
+      .then(function (d) { return d.results || []; })
+      .catch(function () { return null; });
+    authFetch("/api/admin/stories?view=live")
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = storiesTable(d.results || []);
+        stLive = d.results || [];
+        return archivedRead.then(function (a) {
+          stArchived = a;
+          stDrawTiles();
+          stDrawList();
+        });
       })
       .catch(function () {
+        stLive = [];
+        stListedIds = [];
+        stDrawTiles();
         wrap.innerHTML = unavailableHtml("Stories are unavailable.");
+      });
+  }
+  // The erased stories (TASK-311's record, which had no screen): read each time the fold is opened.
+  function loadErasures() {
+    var fold = el("storiesErased");
+    var out = el("storiesErasedList");
+    if (!fold || !fold.open || !out || !canEdit("stories")) return;
+    out.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/erasures")
+      .then(okJson)
+      .then(function (d) {
+        var rows = d.results || [];
+        if (!rows.length) {
+          out.innerHTML = '<p class="admin-empty">No story has been erased.</p>';
+          return;
+        }
+        out.innerHTML =
+          '<ul class="ak-list st-erased__list">' +
+          rows.map(function (r) {
+            var what = (r.recordKind === "contact_enquiry" ? "Contact form message " : "Story ") + r.recordId;
+            return (
+              '<li class="ak-card ak-card--flat st-erased__item"><p class="st-erased__what">' + H.escapeHtml(what) + "</p>" +
+              '<p class="st-erased__meta">Erased on ' + H.escapeHtml(H.longDate(r.erasedAt)) + " by " + H.escapeHtml(r.erasedBy || "someone") + "</p>" +
+              '<p class="st-erased__why">' + H.escapeHtml(r.reason || "") + "</p></li>"
+            );
+          }).join("") +
+          "</ul>";
+      })
+      .catch(function () {
+        out.innerHTML = unavailableHtml("Could not load the erased stories. Please try again.");
       });
   }
   // TASK-309: read the storage diagnostic and lay it out plainly. Deliberately shows SIZES: an
@@ -3324,35 +3412,87 @@
         wrap.innerHTML = unavailableHtml("Could not load this story. Please try again.");
       });
   }
+  // One story, in the kit's look (2026-11-14): the words first, then what the sender agreed to in
+  // sentences, then everything else about them folded away. Copy the story and Copy the quote sit
+  // with the consent sentence beside them, so nobody copies a story without seeing it.
+  function storyAgreedSentences(s) {
+    var out = [];
+    out.push(
+      s.use_scope === "public"
+        ? "They are happy for it to be shared in public: on our website, social media, newsletters, in the press and with funders. It may be shortened or lightly edited, keeping their meaning."
+        : "Keep it private to NBCC. Only the team may see it, to learn from and to help win funding. It must never be published.",
+    );
+    out.push(s.consent_share_first_name ? "Their first name may be used." : "Do not use their name.");
+    out.push(s.consent_share_town ? "Their town may be used." : "Do not use their town.");
+    out.push(
+      s.third_party_consent
+        ? "They said they have permission from the person the story is about, or that person's parent or guardian."
+        : "They did not say they have permission from anyone else the story is about.",
+    );
+    out.push(s.contact_for_more ? "We may contact them to hear more." : "Do not contact them about it.");
+    out.push("They agreed on " + H.longDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ").");
+    return out;
+  }
+  // Email and phone are links to tap only when they said we may contact them.
+  function storyContactHtml(value, kind, mayContact) {
+    if (!value) return "Not given";
+    if (!mayContact) return H.escapeHtml(value) + ' <span class="st-none">(they did not ask to be contacted)</span>';
+    var href = kind === "tel" ? "tel:" + String(value).replace(/[^\d+]/g, "") : "mailto:" + String(value).trim();
+    return '<a class="admin-link" href="' + H.escapeHtml(href) + '">' + H.escapeHtml(value) + "</a>";
+  }
+  function storyStepsHtml(id) {
+    var at = stListedIds.indexOf(String(id));
+    if (at < 0) return "";
+    return (
+      '<p class="st-steps"><button class="admin-btn ak-btn--plain st-step" type="button" id="storyPrev"' + (at === 0 ? " disabled" : "") +
+      ">Previous story</button>" +
+      '<span class="st-steps__at">' + (at + 1) + " of " + stListedIds.length + "</span>" +
+      '<button class="admin-btn ak-btn--plain st-step" type="button" id="storyNext"' + (at === stListedIds.length - 1 ? " disabled" : "") +
+      ">Next story</button></p>"
+    );
+  }
+  var currentStory = null; // the story drawn now, for the consent line beside Copy
   function renderStory(s) {
+    currentStory = s;
     var canWrite = canEdit("stories");
-    var info =
-      '<dl class="admin-dl">' +
-      dl("Role", H.storyLabel("submitterRole", s.submitter_role)) +
-      dl("Use scope", H.storyLabel("useScope", s.use_scope)) +
-      dl("Share first name", s.consent_share_first_name ? "Yes" : "No") +
-      dl("Share town", s.consent_share_town ? "Yes" : "No") +
-      dl("Third-party consent", s.third_party_consent ? "Yes" : "No") +
-      dl("Contact for more", s.contact_for_more ? "Yes" : "No") +
-      // Named, so Mark as read can change this line without drawing the story again.
-      '<dt>Status</dt><dd id="storyStatusNow">' + H.escapeHtml(H.storyLabel("status", s.status)) + "</dd>" +
-      dl("Consent captured", H.fmtDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ")") +
-      dl("Submitted", H.fmtDate(s.created_at)) +
+    var consent = H.escapeHtml(H.storyConsentLine(s));
+    var old = H.consentIsOld(s.consent_captured_at);
+    var about =
+      '<dl class="ak-facts">' +
+      dl("Who sent it", H.storyLabel("submitterRole", s.submitter_role)) +
       dl("First name", s.submitter_first_name || "Not given") +
-      dl("Email", s.submitter_email || "Not given") +
-      dl("Phone", s.submitter_phone || "Not given") +
+      "<dt>Email</dt><dd>" + storyContactHtml(s.submitter_email, "mailto", s.contact_for_more) + "</dd>" +
+      "<dt>Phone</dt><dd>" + storyContactHtml(s.submitter_phone, "tel", s.contact_for_more) + "</dd>" +
       dl("Town", s.submitter_town || "Not given") +
-      dl("Age band", H.storyLabel("ageBand", s.age_band)) +
+      dl("Age", H.storyLabel("ageBand", s.age_band)) +
       dl("Gender", s.gender || "Not given") +
-      dl("Recipient type", H.storyLabel("recipientType", s.recipient_type)) +
-      dl("Heard about us via", s.heard_about || "Not given") +
-      dl("Confirmed 16+", s.confirmed_over_16 ? "Yes" : "No") +
-      "</dl>" +
-      '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
-      (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
+      dl("Who the story is about", H.storyLabel("recipientType", s.recipient_type)) +
+      dl("Heard about us through", s.heard_about || "Not given") +
+      dl("Said they are 16 or over", s.confirmed_over_16 ? "Yes" : "No") +
+      dl("Sent", H.longDate(s.created_at)) +
+      "</dl>";
+    var info =
+      '<p class="st-where">Story ' + H.escapeHtml(String(s.id)) + ' · <span id="storyStatusNow">' + H.escapeHtml(H.storyLabel("status", s.status)) + "</span>" +
+      (s.archived_at ? " · Archived" : "") + "</p>" +
+      storyStepsHtml(s.id) +
+      '<h3 class="ak-h3">Their story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
+      (s.short_quote ? '<h3 class="ak-h3">The line they chose to be quoted</h3><p class="admin-story-text st-quote-big">' + H.escapeHtml(s.short_quote) + "</p>" : "") +
+      '<div class="ak-card st-copy" id="storyCopy"><p class="st-copy__agreed"><strong>What they agreed to:</strong> ' + consent +
+      (old ? ' <span class="ak-mark ak-mark--wait st-old">Check before using</span>' : "") + "</p>" +
+      '<div class="ak-actions"><button class="admin-btn ak-btn--plain" type="button" id="storyCopyText">Copy the story</button>' +
+      (s.short_quote ? '<button class="admin-btn ak-btn--plain" type="button" id="storyCopyQuote">Copy the quote</button>' : "") + "</div>" +
+      '<p class="ty-status" id="storyCopyStatus" role="status" aria-live="polite"></p></div>';
     // TASK-560: where reading ends, under the story's words. Its own box, so pressing its button
     // draws this box again and nothing else: see showStoryReadBar.
     var readBar = canWrite ? '<div id="storyReadBar"></div>' : "";
+    var agreed =
+      '<section class="ak-card st-agreed-card" id="storyAgreed" aria-labelledby="storyAgreedHead"><h3 class="ak-h3" id="storyAgreedHead">What they agreed to</h3>' +
+      '<ul class="st-agreed-list">' +
+      storyAgreedSentences(s).map(function (t) { return "<li>" + H.escapeHtml(t) + "</li>"; }).join("") +
+      "</ul>" +
+      (old ? '<p class="ak-notice st-old-note">Check before using: they agreed over a year ago. Ask them again before this story is used anywhere new.</p>' : "") +
+      "</section>" +
+      '<details class="ak-fold st-about" id="storyAbout"><summary>About the sender</summary><div class="ak-fold__body">' + about + "</div></details>";
     var actions = "";
     if (canWrite) {
       var statusOptions = ["new", "reviewed", "used", "withdrawn"]
@@ -3361,39 +3501,67 @@
         })
         .join("");
       actions =
-        '<form class="admin-edit" id="storyEditForm"><h3 class="admin-subhead">Manage story</h3>' +
-        '<div class="admin-field"><label for="edit-storyStatus">Status</label>' +
+        '<form class="ak-panel st-form" id="storyEditForm"><h3 class="ak-h3">Notes, tags and status</h3>' +
+        '<div class="ak-fields"><div class="ak-field"><label for="edit-storyStatus">Status</label>' +
         '<select id="edit-storyStatus" name="status">' + statusOptions + "</select></div>" +
-        editField("storyTags", "Tags (comma-separated)", "text", (s.admin_tags || []).join(", ")) +
-        '<div class="admin-field"><label for="edit-storyNotes">Notes</label>' +
+        '<div class="ak-field"><label for="edit-storyTags">Tags (comma-separated)</label>' +
+        '<input id="edit-storyTags" name="storyTags" type="text" value="' + H.escapeHtml((s.admin_tags || []).join(", ")) + '" /></div></div>' +
+        '<div class="ak-field"><label for="edit-storyNotes">Notes</label>' +
         '<textarea id="edit-storyNotes" name="adminNotes" rows="4">' + H.escapeHtml(s.admin_notes || "") + "</textarea></div>" +
-        '<button class="btn btn-primary" type="submit">Save changes</button> ' +
-        '<button class="btn btn-ghost" type="button" id="withdrawStoryBtn">Withdraw</button>' +
+        '<p class="st-form__go"><button class="admin-btn" type="submit">Save changes</button>' +
+        '<span class="ak-says">Saves the status, tags and notes. Only the team sees tags and notes.</span></p>' +
+        '<p class="ty-status" id="storyFormStatus" role="status" aria-live="polite"></p>' +
         "</form>" +
-        // TASK-311: archiving is now the everyday way to clear a story off the working list, and it
-        // is reversible. Three stories were permanently deleted from production and nothing could say
-        // what had gone - so the irreversible action no longer sits where the routine one belongs.
-        //
-        // Erasure is still here, because a charity must be able to honour a GDPR erasure request. It
-        // appears ONLY once a story is archived, and asks for a reason that is recorded.
+        // TASK-311: archiving is the everyday way to clear a story off the working list, and it can be
+        // undone. Erasure stays, because a charity must be able to honour an erasure request, but only
+        // once a story is archived, and it asks for a reason that is recorded.
+        '<section class="ak-panel st-away" aria-labelledby="storyAwayHead"><h3 class="ak-h3" id="storyAwayHead">Putting a story away</h3>' +
+        '<div class="st-away__one"><button class="admin-btn ak-btn--plain" type="button" id="withdrawStoryBtn">Withdraw</button>' +
+        '<span class="ak-says">Marks it as not to be used, for when someone takes back their consent. It stays here, and can be changed back with Status above.</span>' +
+        '<div class="ak-notice st-ask" id="storyWithdrawAsk" hidden><p>Withdraw this story? It will no longer be treated as usable.</p>' +
+        '<div class="ak-actions"><button class="admin-btn" type="button" id="storyWithdrawYes">Yes, withdraw it</button>' +
+        '<button class="admin-btn ak-btn--plain" type="button" id="storyWithdrawNo">No, leave it</button></div></div></div>' +
         (s.archived_at
-          ? '<div class="admin-danger-zone">' +
-            '<h3 class="admin-subhead">Archived</h3>' +
-            '<p class="admin-danger-copy">This story is archived and hidden from the main list. Restore it to bring it back, or erase it permanently — erasing cannot be undone, and asks you to say why so there is a record of what was removed.</p>' +
-            '<button class="btn" type="button" id="restoreStoryBtn">Restore</button> ' +
-            '<button class="btn btn-danger" type="button" id="eraseStoryBtn">Erase permanently</button>' +
-            "</div>"
-          : '<div class="admin-danger-zone">' +
-            '<h3 class="admin-subhead">Archive</h3>' +
-            '<p class="admin-danger-copy">Archiving hides this story from the main list and keeps it safe — you can bring it back at any time. It is different from Withdraw, which only stops the story being used.</p>' +
-            '<button class="btn" type="button" id="archiveStoryBtn">Archive</button>' +
-            "</div>");
+          ? '<div class="st-away__one"><button class="admin-btn ak-btn--plain" type="button" id="restoreStoryBtn">Restore</button>' +
+            '<span class="ak-says">Brings it back to the list. Archived stories are kept safe until then.</span></div>' +
+            '<div class="st-away__one"><button class="admin-btn ak-btn--danger" type="button" id="eraseStoryBtn">Erase permanently</button>' +
+            '<span class="ak-says">Deletes the story and the sender\'s details for good. This cannot be undone. You will be asked why, and only the reason is kept.</span>' +
+            '<div class="ak-notice ak-notice--bad st-ask" id="storyEraseAsk" hidden><p>Erase this story permanently? This cannot be undone.</p>' +
+            '<div class="ak-field"><label for="storyEraseReason">Why is it being erased?</label><textarea id="storyEraseReason" rows="3"></textarea></div>' +
+            '<div class="ak-actions"><button class="admin-btn ak-btn--danger" type="button" id="storyEraseYes">Erase it for good</button>' +
+            '<button class="admin-btn ak-btn--plain" type="button" id="storyEraseNo">No, keep it</button></div></div></div>'
+          : '<div class="st-away__one"><button class="admin-btn ak-btn--plain" type="button" id="archiveStoryBtn">Archive</button>' +
+            '<span class="ak-says">Hides it from the list and keeps it safe. You can bring it back at any time, from the Archived tile.</span></div>') +
+        '<p class="ty-status" id="storyPutAwayStatus" role="status" aria-live="polite"></p>' +
+        "</section>";
     }
-    el("storyDetail").innerHTML = info + readBar + actions;
+    el("storyDetail").innerHTML = info + readBar + agreed + actions;
+    bindClick("storyPrev", function () { storyStep(s.id, -1); });
+    bindClick("storyNext", function () { storyStep(s.id, 1); });
+    bindClick("storyCopyText", function () { storyCopy(s.story_text || ""); });
+    bindClick("storyCopyQuote", function () { storyCopy(s.short_quote || ""); });
     if (canWrite) {
       showStoryReadBar(s, "");
       wireStoryActions(s);
     }
+  }
+  function storyStep(id, by) {
+    var at = stListedIds.indexOf(String(id));
+    var next = stListedIds[at + by];
+    if (at >= 0 && next !== undefined) openStory(next);
+  }
+  function storyCopy(text) {
+    var line = H.storyConsentLine(currentStory || {});
+    window.AdminKit.copyText(text).then(function (ok) {
+      storySay("storyCopyStatus", ok ? "Copied. Remember what they agreed to: " + line : "Could not copy. Select the words and copy them yourself.", ok ? "is-ok" : "is-error");
+    });
+  }
+  function storySay(id, msg, kind) {
+    var s = el(id);
+    if (!s) return;
+    s.classList.remove("is-ok", "is-error");
+    if (kind) s.classList.add(kind);
+    s.textContent = msg || "";
   }
   // TASK-560: Mark as read while the story is New, and the way back while it is Reviewed. Used and
   // Withdrawn say more than read, so they get no button. The admin's small button and its text
@@ -3452,7 +3620,9 @@
       if (!elsewhere) (el("storyUnreadBtn") || el("storyReadBtn") || el("storyReadNote")).focus({ preventScroll: true });
     });
   }
-  function patchStory(body, okMsg, errMsg) {
+  // A change from the story's own form or its "Putting a story away" panel. What happened is said
+  // beside the button that was pressed (where): the story is drawn again first, then the words.
+  function patchStory(body, okMsg, errMsg, where) {
     return authFetch("/api/admin/stories/" + currentStoryId, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -3464,11 +3634,11 @@
       .then(function (updated) {
         if (updated) {
           renderStory(updated);
-          storyStatus(okMsg);
-        } else storyStatus(errMsg);
+          storySay(where, okMsg, "is-ok");
+        } else storySay(where, errMsg, "is-error");
       })
       .catch(function () {
-        storyStatus(errMsg);
+        storySay(where, errMsg, "is-error");
       });
   }
   function wireStoryActions(s) {
@@ -3482,61 +3652,69 @@
           adminTags: tagsRaw ? tagsRaw.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [],
           adminNotes: el("edit-storyNotes").value || "",
         };
-        patchStory(body, "Saved.", "Could not save the changes.");
+        patchStory(body, "Saved.", "Could not save the changes.", "storyFormStatus");
       });
     }
-    bindClick("withdrawStoryBtn", function () {
-      if (!window.confirm("Withdraw this story? It will no longer be treated as usable.")) return;
-      patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.");
+    // Withdraw and Erase ask first, in the page, under their own button.
+    function ask(id, open, focusId) {
+      var box = el(id);
+      if (!box) return;
+      box.hidden = !open;
+      var f = el(focusId);
+      if (f) f.focus({ preventScroll: true });
+    }
+    bindClick("withdrawStoryBtn", function () { storySay("storyPutAwayStatus", ""); ask("storyWithdrawAsk", true, "storyWithdrawNo"); });
+    bindClick("storyWithdrawNo", function () { ask("storyWithdrawAsk", false, "withdrawStoryBtn"); });
+    bindClick("storyWithdrawYes", function () {
+      patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.", "storyPutAwayStatus");
     });
     bindClick("archiveStoryBtn", archiveStory);
     bindClick("restoreStoryBtn", restoreStory);
-    bindClick("eraseStoryBtn", eraseStory);
+    bindClick("eraseStoryBtn", function () { storySay("storyPutAwayStatus", ""); ask("storyEraseAsk", true, "storyEraseReason"); });
+    bindClick("storyEraseNo", function () { ask("storyEraseAsk", false, "eraseStoryBtn"); });
+    bindClick("storyEraseYes", eraseStory);
   }
-  // TASK-311: a stronger, explicit prompt than Withdraw's, naming the action as permanent erasure
-  // rather than a generic "are you sure", since this cannot be
-  // undone (DELETE /api/admin/stories/:id, not a status flag). On success, returns to the
-  // Stories list and refreshes it, since the detail view has nothing left to show.
-  // TASK-311: the everyday action. Reversible, so it asks nothing and explains where the story went.
+  // TASK-311: the everyday action. It can be undone, so it asks nothing, and goes back to the list.
   function archiveStory() {
     authFetch("/api/admin/stories/" + currentStoryId + "/archive", { method: "POST" })
       .then(function (res) {
         if (res.ok) selectView("stories");
-        else storyStatus("Could not archive the story.");
+        else storySay("storyPutAwayStatus", "Could not archive the story.", "is-error");
       })
-      .catch(function () { storyStatus("Could not archive the story."); });
+      .catch(function () { storySay("storyPutAwayStatus", "Could not archive the story.", "is-error"); });
   }
 
   function restoreStory() {
     authFetch("/api/admin/stories/" + currentStoryId + "/restore", { method: "POST" })
       .then(function (res) {
         if (res.ok) selectView("stories");
-        else storyStatus("Could not restore the story.");
+        else storySay("storyPutAwayStatus", "Could not restore the story.", "is-error");
       })
-      .catch(function () { storyStatus("Could not restore the story."); });
+      .catch(function () { storySay("storyPutAwayStatus", "Could not restore the story.", "is-error"); });
   }
 
-  // TASK-311: permanent erasure. Kept because a charity must be able to honour a GDPR erasure
-  // request - but it asks for a reason, and the server refuses unless the story is archived first.
-  // The reason is recorded so that what was erased stays knowable after the story itself is gone.
+  // TASK-311: permanent erasure. Kept because a charity must be able to honour an erasure request,
+  // but the reason is asked for on the page and recorded, and the server refuses unless the story is
+  // archived first. What was erased stays knowable after the story itself is gone ("Erased stories").
   function eraseStory() {
-    var reason = window.prompt(
-      "Erase this story permanently?\n\nThis cannot be undone. Say why — it is recorded so there is a" +
-        " record of what was removed, even though the story itself will be gone.\n\nReason:",
-    );
-    if (reason === null) return;
-    if (!reason.trim()) { storyStatus("A reason is needed to erase a story."); return; }
+    var reason = ((el("storyEraseReason") || {}).value || "").trim();
+    if (!reason) {
+      storySay("storyPutAwayStatus", "A reason is needed to erase a story.", "is-error");
+      if (el("storyEraseReason")) el("storyEraseReason").focus({ preventScroll: true });
+      return;
+    }
+    storySay("storyPutAwayStatus", "Erasing…");
     authFetch("/api/admin/stories/" + currentStoryId, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: reason.trim() }),
+      body: JSON.stringify({ reason: reason }),
     })
       .then(function (res) {
         if (res.ok) selectView("stories");
-        else res.json().then(function (b) { storyStatus(b.error || "Could not erase the story."); })
-          .catch(function () { storyStatus("Could not erase the story."); });
+        else res.json().then(function (b) { storySay("storyPutAwayStatus", b.error || "Could not erase the story.", "is-error"); })
+          .catch(function () { storySay("storyPutAwayStatus", "Could not erase the story.", "is-error"); });
       })
-      .catch(function () { storyStatus("Could not erase the story."); });
+      .catch(function () { storySay("storyPutAwayStatus", "Could not erase the story.", "is-error"); });
   }
   bindClick("storyBack", function () {
     selectView("stories");
@@ -12380,53 +12558,542 @@
       });
   }
 
-  // ---- supporters ticker (REQ-003 · TASK-178) ----
-  // Admin-curated list shown scrolling under the site nav. List (Viewer+) + add/toggle/delete
-  // (Editor+, server-enforced). Wired once (tickerWired); the table's actions are delegated.
+  // ---- Partners (the supporters ticker: REQ-003, TASK-178; in the kit's look, 2026-11-14) ----
+  // The names that scroll under the site's menu and are listed on the Supporters page. Anyone who can
+  // see the screen can read the list; adding, showing, hiding, renaming, putting first and removing
+  // need ticker:edit (the server checks too).
+  //
+  // About 390 names, so the list is read once, filtered and searched in the browser, and drawn a
+  // hundred cards at a time. A press answers in the card that was pressed, and the card stays where
+  // it is: what is listed is only worked out again when a tile, the order or the search changes, so
+  // a partner switched on under "Hidden" does not vanish from under the thumb.
   var tickerWired = false;
-  function tickerStatus(msg, cls) {
-    var s = el("tickerStatus");
-    if (!s) return;
-    s.className = "ty-status" + (cls ? " " + cls : "");
-    s.textContent = msg || "";
+  var TK_STEP = 100; // how many cards are drawn at a time
+  var TK_STRIP = 30; // how many names the strip shows before "Show all"
+  var tkRows = []; // every partner, in the website's order
+  var tkById = {};
+  var tkLoaded = false;
+  var tkFilter = "all"; // the tile that is pressed: showing, hidden or all
+  var tkSort = "site"; // site (the website's order) or newest
+  var tkQuery = "";
+  var tkListed = []; // the ids listed now, in the order they are listed
+  var tkLimit = TK_STEP; // how many of those are drawn
+  var tkOpenId = null; // the card whose Rename, Put first and Remove are open
+  var tkStripAll = false;
+  var tkBusy = {}; // partner id -> true while a change to it is on its way
+  function tkSay(node, msg, kind) {
+    if (!node) return;
+    node.classList.remove("is-ok", "is-error");
+    if (kind) node.classList.add(kind);
+    node.textContent = msg || "";
   }
-  function tickerTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No partners yet. Add one above.</p>';
-    var body = rows
-      .map(function (r) {
-        var state = r.active
-          ? '<span class="ty-pill ty-pill-ready">Showing</span>'
-          : '<span class="ty-pill ty-pill-blocked">Hidden</span>';
-        var actions = canWrite
-          ? '<button class="admin-link" type="button" data-ticker-edit="' + r.id + '" data-ticker-name="' + H.escapeHtml(r.name) + '">Edit</button>' +
-            ' · <button class="admin-link" type="button" data-ticker-toggle="' + r.id + '" data-active="' + (r.active ? "1" : "0") + '">' +
-            (r.active ? "Hide" : "Show") + "</button>" +
-            ' · <button class="admin-link ty-del" type="button" data-ticker-delete="' + r.id + '" data-ticker-name="' + H.escapeHtml(r.name) + '">Delete</button>'
-          : "";
-        return "<tr><td>" + H.escapeHtml(r.name) + "</td><td>" + state + "</td><td>" + actions + "</td></tr>";
-      })
-      .join("");
+  function tickerStatus(msg, cls) {
+    tkSay(el("tickerStatus"), msg, cls);
+  }
+  function tkIndex() {
+    tkById = {};
+    tkRows.forEach(function (r) { tkById[r.id] = r; });
+  }
+  // The website's order (src/db/ticker.ts): the number a name was put at, then A to Z.
+  function tkSortRows() {
+    tkRows.sort(function (a, b) {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      var an = String(a.name).toLowerCase();
+      var bn = String(b.name).toLowerCase();
+      return an < bn ? -1 : an > bn ? 1 : a.id - b.id;
+    });
+  }
+  function tkMatches(r, q) {
+    if (!q) return true;
+    return String(r.name).toLowerCase().indexOf(q) !== -1 || H.partnerKey(r.name).indexOf(H.partnerKey(q)) !== -1;
+  }
+  // The partner already on the list under this name, if there is one.
+  function tkTwin(name) {
+    var key = H.partnerKey(name);
+    if (!key) return null;
+    for (var i = 0; i < tkRows.length; i++) if (H.partnerKey(tkRows[i].name) === key) return tkRows[i];
+    return null;
+  }
+  // What is listed, from the tile, the search and the order. Only here: a change to one partner
+  // leaves the list as it stands.
+  function tkPick() {
+    var q = tkQuery.toLowerCase();
+    var rows = tkRows.filter(function (r) {
+      if (tkFilter === "showing" && !r.active) return false;
+      if (tkFilter === "hidden" && r.active) return false;
+      return tkMatches(r, q);
+    });
+    if (tkSort === "newest") {
+      rows.sort(function (a, b) {
+        var at = String(a.createdAt || "");
+        var bt = String(b.createdAt || "");
+        return at < bt ? 1 : at > bt ? -1 : b.id - a.id;
+      });
+    }
+    tkListed = rows.map(function (r) { return r.id; });
+    tkLimit = TK_STEP;
+    tkOpenId = null;
+  }
+  function tkPartners(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+  function tkDrawTiles() {
+    var showing = tkRows.filter(function (r) { return r.active; }).length;
+    var counts = { showing: showing, hidden: tkRows.length - showing, all: tkRows.length };
+    Array.prototype.forEach.call(doc.querySelectorAll("#tickerTiles [data-ticker-filter]"), function (b) {
+      var key = b.getAttribute("data-ticker-filter");
+      var on = key === tkFilter;
+      b.querySelector(".ak-tile__n").textContent = tkLoaded ? String(counts[key]) : "";
+      b.classList.toggle("is-active", on);
+      b.classList.toggle("is-none", tkLoaded && counts[key] === 0);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    el("tickerCount").textContent = tkLoaded ? tkRows.length + " total · " + showing + " showing" : "";
+  }
+  // The strip under the site's menu, as words: the names that are showing, in the website's order.
+  function tkDrawPreview() {
+    var box = el("tickerPreview");
+    if (!box) return;
+    if (!tkLoaded) { box.innerHTML = ""; return; }
+    var showing = tkRows.filter(function (r) { return r.active; });
+    if (!showing.length) {
+      box.innerHTML = '<p class="admin-empty">No partner is showing on the website yet.' +
+        (canEdit("ticker") ? " Switch one on in the list below." : "") + "</p>";
+      return;
+    }
+    var some = tkStripAll ? showing : showing.slice(0, TK_STRIP);
+    box.innerHTML =
+      '<p class="pt-strip"><span class="pt-strip__label">Partners</span>' +
+      some.map(function (r) { return '<span class="pt-strip__name">' + H.escapeHtml(r.name) + "</span>"; }).join("") +
+      "</p>" +
+      (showing.length > some.length
+        ? '<p class="pt-strip__rest">and ' + (showing.length - some.length) + ' more. <button class="admin-link" type="button" id="tickerStripAll">Show all ' +
+          showing.length + " names</button></p>"
+        : "");
+  }
+  function tkDrawListed() {
+    var line = el("tickerListed");
+    if (!line) return;
+    line.textContent = "";
+    if (!tkLoaded || !tkRows.length) return;
+    var total = tkListed.length;
+    var q = tkQuery;
+    var text;
+    if (!total && q) {
+      var who = tkFilter === "showing" ? "No partner showing on the website" : tkFilter === "hidden" ? "No hidden partner" : "No partner";
+      text = who + ' matches "' + q + '".';
+      var everywhere = tkFilter === "all" ? 0 : tkRows.filter(function (r) { return tkMatches(r, q.toLowerCase()); }).length;
+      if (everywhere) {
+        line.textContent = text + " " + everywhere + " on the whole list " + (everywhere === 1 ? "does" : "do") + ". ";
+        var all = doc.createElement("button");
+        all.type = "button";
+        all.className = "admin-link";
+        all.id = "tickerSearchAll";
+        all.textContent = "Look at the whole list";
+        line.appendChild(all);
+        return;
+      }
+      if (tkFilter === "all") text += " Try part of the name.";
+    } else if (!total) {
+      text = tkFilter === "showing" ? "No partner is showing on the website yet." : "No partner is hidden.";
+    } else if (q) {
+      text = tkPartners(total, "partner matches", "partners match") + ' "' + q + '"' +
+        (tkFilter === "showing" ? " among those showing on the website" : tkFilter === "hidden" ? " among those hidden" : "") + ".";
+    } else {
+      text = tkPartners(total, "partner", "partners") +
+        (tkFilter === "showing" ? " showing on the website." : tkFilter === "hidden" ? " hidden." : " on the list.");
+    }
+    if (total > tkLimit) text += " The first " + tkLimit + " are listed.";
+    line.textContent = text;
+  }
+  function tkStateHtml(r, canWrite) {
+    var word = r.active ? "Showing" : "Hidden";
+    if (!canWrite) return '<span class="ak-mark ' + (r.active ? "ak-mark--ok" : "ak-mark--quiet") + '">' + word + "</span>";
+    // A switch, named by the partner and by the word on it, so "Showing" is what is seen and said.
     return (
-      '<table class="admin-table"><thead><tr><th>Partner</th><th>Status</th><th></th></tr></thead><tbody>' +
-      body +
-      "</tbody></table>"
+      '<button type="button" class="pt-switch" role="switch" aria-checked="' + (r.active ? "true" : "false") + '" data-ticker-toggle="' + r.id +
+      '" aria-labelledby="tkName' + r.id + " tkWord" + r.id + '">' +
+      '<span class="pt-switch__track" aria-hidden="true"><span class="pt-switch__knob"></span></span>' +
+      '<span class="pt-switch__word" id="tkWord' + r.id + '">' + word + "</span></button>"
     );
+  }
+  function tkMetaHtml(r) {
+    return (
+      (r.sortOrder < 0 ? '<span class="ak-mark ak-mark--wait">First</span> ' : "") +
+      (r.createdAt ? "Added " + H.escapeHtml(H.longDate(r.createdAt)) : "")
+    );
+  }
+  function tkCardHtml(r, canWrite) {
+    return (
+      '<li class="pt-card" data-ticker-card="' + r.id + '">' +
+      '<div class="pt-card__face"><div class="pt-card__main">' +
+      '<span class="pt-card__name" id="tkName' + r.id + '">' + H.escapeHtml(r.name) + "</span>" +
+      '<span class="pt-card__meta">' + tkMetaHtml(r) + "</span></div>" +
+      tkStateHtml(r, canWrite) + "</div>" +
+      '<p class="ty-status pt-card__said" data-ticker-said role="status"></p>' +
+      (canWrite
+        ? '<button type="button" class="pt-card__open" data-ticker-more="' + r.id + '" aria-expanded="false">Rename or remove</button>' +
+          '<div class="pt-card__more" data-ticker-more-body hidden></div>'
+        : "") +
+      "</li>"
+    );
+  }
+  // The rest of a card, drawn when it is opened: with 390 partners it is not worth drawing 390 times.
+  function tkMoreHtml(r) {
+    var inputId = "tickerRename" + r.id;
+    return (
+      '<form class="pt-act" data-ticker-rename="' + r.id + '" autocomplete="off">' +
+      '<div class="ak-field"><label for="' + inputId + '">Name</label>' +
+      '<input id="' + inputId + '" type="text" maxlength="120" value="' + H.escapeHtml(r.name) + '" /></div>' +
+      '<div class="pt-act__go"><button class="admin-btn ak-btn--plain" type="submit">Save the name</button>' +
+      '<span class="ak-says">Changes how the name reads on the website, straight away.</span></div></form>' +
+      '<div class="pt-act pt-act__go">' +
+      (r.sortOrder < 0
+        ? '<button class="admin-btn ak-btn--plain" type="button" data-ticker-first="' + r.id + '" data-ticker-to="0">Back to its usual place</button>' +
+          '<span class="ak-says">Puts this name back among the others, in A to Z order.</span>'
+        : '<button class="admin-btn ak-btn--plain" type="button" data-ticker-first="' + r.id + '">Put first</button>' +
+          '<span class="ak-says">Moves this name to the front of the names that scroll across the website. The others stay in A to Z order.</span>') +
+      "</div>" +
+      '<div class="pt-act pt-act__go">' +
+      '<button class="admin-btn ak-btn--danger" type="button" data-ticker-remove="' + r.id + '">Remove from the list</button>' +
+      '<span class="ak-says">Takes the name off the list and off the website for good. To keep it for later, hide it instead.</span>' +
+      '<div class="ak-notice ak-notice--bad pt-ask" data-ticker-remove-ask hidden>' +
+      "<p>Remove “" + H.escapeHtml(r.name) + "” from the partners list? This cannot be undone.</p>" +
+      '<div class="ak-actions"><button class="admin-btn ak-btn--danger" type="button" data-ticker-remove-yes="' + r.id + '">Yes, remove it</button>' +
+      '<button class="admin-btn ak-btn--plain" type="button" data-ticker-remove-no>No, keep it</button></div></div>' +
+      "</div>"
+    );
+  }
+  function tkCardsHtml(ids) {
+    var canWrite = canEdit("ticker");
+    return ids
+      .map(function (id) { return tkById[id] ? tkCardHtml(tkById[id], canWrite) : ""; })
+      .join("");
+  }
+  function tkDrawMoreButton() {
+    var more = el("tickerMore");
+    var left = tkListed.length - tkLimit;
+    more.hidden = left <= 0;
+    if (left > 0) more.textContent = "Show " + Math.min(TK_STEP, left) + " more";
+  }
+  function tkDrawList() {
+    var wrap = el("tickerTable");
+    if (!tkRows.length) {
+      wrap.innerHTML = '<p class="admin-empty">No partners yet.' + (canEdit("ticker") ? " Add one above." : "") + "</p>";
+      el("tickerMore").hidden = true;
+      return;
+    }
+    var cards = tkCardsHtml(tkListed.slice(0, tkLimit));
+    wrap.innerHTML = cards ? '<ul class="ak-list pt-list">' + cards + "</ul>" : "";
+    tkDrawMoreButton();
+  }
+  // The next hundred go on the end: the cards already there, and one that is open, are left alone.
+  function tkShowMore() {
+    var list = doc.querySelector("#tickerTable .pt-list");
+    if (!list) return;
+    var from = tkLimit;
+    tkLimit += TK_STEP;
+    list.insertAdjacentHTML("beforeend", tkCardsHtml(tkListed.slice(from, tkLimit)));
+    tkDrawMoreButton();
+    tkDrawListed();
+    // The button may have gone: the keyboard goes on to the first card it brought.
+    var first = tkListed[from] !== undefined ? tkCard(tkListed[from]) : null;
+    var next = first ? first.querySelector("button") : null;
+    if (next && el("tickerMore").hidden) next.focus({ preventScroll: true });
+  }
+  function tkDrawAll() {
+    tkDrawTiles();
+    tkDrawPreview();
+    tkDrawListed();
+    tkDrawList();
+    tkDrawDupes();
+  }
+  function tkCard(id) {
+    return doc.querySelector('#tickerTable [data-ticker-card="' + id + '"]');
+  }
+  function tkCardSay(id, msg, kind) {
+    var card = tkCard(id);
+    if (card) tkSay(card.querySelector("[data-ticker-said]"), msg, kind);
+  }
+  // One change to one partner. True when the server did it, false when it did not, and null when the
+  // session has ended: the sign in screen is already up and there is nothing to say.
+  function tkWrite(method, id, body) {
+    var opts = { method: method };
+    if (body) {
+      opts.headers = { "Content-Type": "application/json" };
+      opts.body = JSON.stringify(body);
+    }
+    return authFetch("/api/admin/ticker" + (id === null ? "" : "/" + encodeURIComponent(id)), opts).then(
+      function (res) { return !!res.ok; },
+      function (err) { return err && err.message === "unauthorized" ? null : false; },
+    );
+  }
+  // Shows or hides one partner, and brings everything that counts it up to date: the tiles, the
+  // strip, its own switch if its card is drawn, and "Already on the list".
+  function tkSetActive(id, active) {
+    return tkWrite("PATCH", id, { active: active }).then(function (ok) {
+      var r = tkById[id];
+      if (!ok || !r) return ok;
+      r.active = active;
+      var card = tkCard(id);
+      var sw = card && card.querySelector("[data-ticker-toggle]");
+      if (sw) {
+        sw.setAttribute("aria-checked", active ? "true" : "false");
+        sw.querySelector(".pt-switch__word").textContent = active ? "Showing" : "Hidden";
+      }
+      tkDrawTiles();
+      tkDrawPreview();
+      tkDrawDupes();
+      return ok;
+    });
+  }
+  function tkToggle(sw) {
+    var id = sw.getAttribute("data-ticker-toggle");
+    if (tkBusy[id]) return; // a second press while the first is on its way is not sent
+    var makeActive = sw.getAttribute("aria-checked") !== "true";
+    tkBusy[id] = true;
+    sw.setAttribute("aria-busy", "true");
+    tkCardSay(id, "");
+    tkSetActive(id, makeActive).then(function (ok) {
+      delete tkBusy[id];
+      sw.removeAttribute("aria-busy");
+      if (ok === null) return;
+      if (ok) tkCardSay(id, makeActive ? "Showing on the website now." : "Hidden from the website now.", "is-ok");
+      else tkCardSay(id, "Could not " + (makeActive ? "show" : "hide") + " that partner. Please try again.", "is-error");
+    });
+  }
+  function tkOpenMore(btn) {
+    var id = btn.getAttribute("data-ticker-more");
+    var card = tkCard(id);
+    var body = card && card.querySelector("[data-ticker-more-body]");
+    var r = tkById[id];
+    if (!body || !r) return;
+    var open = btn.getAttribute("aria-expanded") !== "true";
+    // One card open at a time, so there is one Remove on the screen.
+    if (open && tkOpenId !== null && String(tkOpenId) !== String(id)) {
+      var was = tkCard(tkOpenId);
+      if (was) {
+        was.classList.remove("is-open");
+        was.querySelector("[data-ticker-more]").setAttribute("aria-expanded", "false");
+        var wasBody = was.querySelector("[data-ticker-more-body]");
+        wasBody.hidden = true;
+        wasBody.innerHTML = "";
+      }
+    }
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    card.classList.toggle("is-open", open);
+    body.hidden = !open;
+    body.innerHTML = open ? tkMoreHtml(r) : "";
+    tkOpenId = open ? id : null;
+  }
+  function tkRename(form) {
+    var id = form.getAttribute("data-ticker-rename");
+    var r = tkById[id];
+    var input = form.querySelector("input");
+    var next = (input.value || "").trim();
+    if (!r || tkBusy[id]) return;
+    if (!next) { tkCardSay(id, "Type a name first.", "is-error"); return; }
+    if (next === r.name) { tkCardSay(id, "That is the name it already has.", ""); return; }
+    var twin = tkTwin(next);
+    if (twin && String(twin.id) !== String(id)) { tkCardSay(id, "“" + twin.name + "” is already on the list.", "is-error"); return; }
+    tkBusy[id] = true;
+    tkCardSay(id, "Saving…");
+    tkWrite("PATCH", id, { name: next }).then(function (ok) {
+      delete tkBusy[id];
+      if (ok === null) return;
+      if (!ok) { tkCardSay(id, "Could not rename that partner. Please try again.", "is-error"); return; }
+      r.name = next;
+      tkSortRows();
+      var card = tkCard(id);
+      if (card) {
+        card.querySelector(".pt-card__name").textContent = next;
+        input.value = next;
+        var ask = card.querySelector("[data-ticker-remove-ask] p");
+        if (ask) ask.textContent = "Remove “" + next + "” from the partners list? This cannot be undone.";
+      }
+      tkDrawPreview();
+      tkCardSay(id, "Saved.", "is-ok");
+    });
+  }
+  // Put first, and the way back. The server's sortOrder: lower comes first, and every name starts at
+  // 0, so one below the lowest is the front and 0 is back among the rest.
+  function tkPutFirst(btn) {
+    var id = btn.getAttribute("data-ticker-first");
+    var r = tkById[id];
+    if (!r || tkBusy[id]) return;
+    var back = btn.getAttribute("data-ticker-to") === "0";
+    var lowest = tkRows.reduce(function (low, x) { return Math.min(low, x.sortOrder); }, 0);
+    var to = back ? 0 : lowest - 1;
+    tkBusy[id] = true;
+    btn.setAttribute("aria-busy", "true");
+    tkCardSay(id, "");
+    tkWrite("PATCH", id, { sortOrder: to }).then(function (ok) {
+      delete tkBusy[id];
+      btn.removeAttribute("aria-busy");
+      if (ok === null) return;
+      if (!ok) { tkCardSay(id, "Could not move that partner. Please try again.", "is-error"); return; }
+      r.sortOrder = to;
+      tkSortRows();
+      tkDrawPreview();
+      var card = tkCard(id);
+      if (card) {
+        card.querySelector(".pt-card__meta").innerHTML = tkMetaHtml(r);
+        var body = card.querySelector("[data-ticker-more-body]");
+        var held = doc.activeElement === btn;
+        if (body && !body.hidden) body.innerHTML = tkMoreHtml(r);
+        // The button that was pressed has been drawn again as its opposite: the keyboard stays on it.
+        var again = card.querySelector("[data-ticker-first]");
+        if (held && again) again.focus({ preventScroll: true });
+      }
+      tkCardSay(id, back ? "Back in its usual place." : r.active ? "First on the website now." : "It will be first on the website once it is showing.", "is-ok");
+    });
+  }
+  function tkRemove(id) {
+    var r = tkById[id];
+    if (!r || tkBusy[id]) return;
+    tkBusy[id] = true;
+    tkCardSay(id, "Removing…");
+    tkWrite("DELETE", id, null).then(function (ok) {
+      delete tkBusy[id];
+      if (ok === null) return;
+      if (!ok) { tkCardSay(id, "Could not remove that partner. Please try again.", "is-error"); return; }
+      tkRows = tkRows.filter(function (x) { return String(x.id) !== String(id); });
+      tkIndex();
+      if (String(tkOpenId) === String(id)) tkOpenId = null;
+      // Where the card was, so nothing below it jumps and the keyboard has somewhere to be.
+      var card = tkCard(id);
+      if (card) {
+        card.classList.remove("is-open");
+        card.classList.add("is-gone");
+        card.innerHTML = '<p class="pt-card__gone" role="status">“' + H.escapeHtml(r.name) + "” was removed from the list.</p>";
+        card.setAttribute("tabindex", "-1");
+        card.focus({ preventScroll: true });
+      }
+      tkDrawTiles();
+      tkDrawPreview();
+      tkDrawDupes();
+    });
+  }
+  // "Already on the list", as a new name is typed: up to six partners whose name holds what has been
+  // typed so far, each with where it stands, and Show it for one that is hidden.
+  function tkDrawDupes() {
+    var box = el("tickerDupes");
+    var input = el("tickerName");
+    if (!box || !input) return;
+    var q = (input.value || "").trim().toLowerCase();
+    var found = tkLoaded && q.length >= 3 ? tkRows.filter(function (r) { return tkMatches(r, q); }) : [];
+    if (!found.length) { box.innerHTML = ""; return; }
+    var canWrite = canEdit("ticker");
+    box.innerHTML =
+      '<div class="ak-notice pt-dupes"><p class="pt-dupes__title">Already on the list</p><ul class="pt-dupes__list">' +
+      found.slice(0, 6).map(function (r) {
+        return (
+          '<li><span class="pt-dupes__name">' + H.escapeHtml(r.name) + "</span> " +
+          '<span class="ak-mark ' + (r.active ? "ak-mark--ok" : "ak-mark--quiet") + '">' + (r.active ? "Showing" : "Hidden") + "</span>" +
+          (!r.active && canWrite ? ' <button class="admin-btn admin-btn--small ak-btn--plain" type="button" data-ticker-show="' + r.id + '">Show it</button>' : "") +
+          "</li>"
+        );
+      }).join("") +
+      "</ul>" +
+      (found.length > 6 ? '<p class="pt-dupes__rest">and ' + (found.length - 6) + " more. Find them in the list below.</p>" : "") +
+      "</div>";
+  }
+  function tkAddOne(e) {
+    e.preventDefault();
+    var input = el("tickerName");
+    var name = (input.value || "").trim();
+    if (!name) { tickerStatus("Type the partner's name first.", "is-error"); return; }
+    var twin = tkTwin(name);
+    if (twin) {
+      tickerStatus("“" + twin.name + "” is already on the list. " +
+        (twin.active ? "It is showing on the website." : "It is hidden: press Show it to put it on the website."), "is-error");
+      tkDrawDupes();
+      return;
+    }
+    // One add at a time: a second press while the first is on its way, or while the list reloads
+    // after it, is not sent (the list would not yet know the name, so it would be added twice).
+    var btn = el("tickerAdd");
+    if (btn.disabled) return;
+    btn.disabled = true;
+    tickerStatus("Adding…");
+    tkWrite("POST", null, { name: name }).then(function (ok) {
+      if (ok === null) { btn.disabled = false; return; }
+      if (!ok) { btn.disabled = false; tickerStatus("Could not add that partner. Please try again.", "is-error"); return; }
+      input.value = "";
+      tickerStatus("Added. “" + name + "” is showing on the website now.", "is-ok");
+      loadTicker().then(function () { btn.disabled = false; });
+    });
+  }
+  // Several at once, one name a line, one request a name (there is nothing on the server for a batch).
+  // A name already on the list, or twice in the box, is left out; one the server would not take stays
+  // in the box to try again.
+  function tkAddMany() {
+    var box = el("tickerMany");
+    var say = el("tickerManyStatus");
+    var go = el("tickerManyAdd");
+    var seen = {};
+    var fresh = [];
+    var known = [];
+    (box.value || "").split(/\r?\n/).forEach(function (line) {
+      var name = line.trim();
+      var key = H.partnerKey(name);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      if (tkTwin(name)) known.push(name);
+      else fresh.push(name);
+    });
+    var total = fresh.length + known.length;
+    if (!total) { tkSay(say, "Type the names first, one on each line.", "is-error"); return; }
+    if (total > 200) { tkSay(say, "That is more than 200 names. Please add them a batch at a time.", "is-error"); return; }
+    var added = [];
+    var failed = [];
+    go.disabled = true;
+    function next(i) {
+      if (i >= fresh.length) return Promise.resolve(true);
+      tkSay(say, "Adding " + (i + 1) + " of " + fresh.length + "…");
+      return tkWrite("POST", null, { name: fresh[i] }).then(function (ok) {
+        if (ok === null) return null;
+        (ok ? added : failed).push(fresh[i]);
+        return next(i + 1);
+      });
+    }
+    next(0).then(function (done) {
+      go.disabled = false;
+      if (done === null) return;
+      tkSay(
+        say,
+        "Added " + added.length + " of " + total + "." +
+          (known.length ? " Already on the list, so left out: " + known.join(", ") + "." : "") +
+          (failed.length ? " Could not add: " + failed.join(", ") + ". Please try those again." : ""),
+        failed.length ? "is-error" : "is-ok",
+      );
+      box.value = failed.join("\n");
+      if (added.length) loadTicker();
+    });
   }
   function loadTicker() {
     tickerWire();
-    var canWrite = canEdit("ticker");
     el("tickerTable").innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/ticker")
+    return authFetch("/api/admin/ticker")
       .then(okJson)
       .then(function (d) {
-        var rows = d.results || [];
-        el("tickerTable").innerHTML = tickerTable(rows, canWrite);
-        var showing = rows.filter(function (r) { return r.active; }).length;
-        el("tickerCount").textContent = rows.length + " total · " + showing + " showing";
+        tkRows = d.results || [];
+        tkLoaded = true;
+        tkIndex();
+        tkPick();
+        tkDrawAll();
       })
       .catch(function () {
-        el("tickerTable").innerHTML = '<p class="admin-empty">Could not load supporters.</p>';
-        el("tickerCount").textContent = "";
+        tkRows = [];
+        tkLoaded = false;
+        tkIndex();
+        tkListed = [];
+        tkDrawTiles();
+        tkDrawPreview();
+        tkDrawListed();
+        tkDrawDupes();
+        el("tickerMore").hidden = true;
+        el("tickerTable").innerHTML = unavailableHtml("Could not load the partners. Please try again.");
       });
   }
   function tickerWire() {
@@ -12434,74 +13101,98 @@
     tickerWired = true;
     var canWrite = canEdit("ticker");
     el("tickerAdd").hidden = !canWrite;
-    el("tickerForm").addEventListener("submit", function (e) {
-      e.preventDefault();
-      var name = (el("tickerName").value || "").trim();
-      if (!name) return;
-      tickerStatus("Adding…");
-      authFetch("/api/admin/ticker", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name }),
-      })
-        .then(function (res) {
-          if (!res.ok) throw new Error("add failed");
-          el("tickerName").value = "";
-          tickerStatus("Added.", "is-ok");
-          loadTicker();
-        })
-        .catch(function () {
-          tickerStatus("Could not add that supporter.", "is-error");
-        });
+    el("tickerAddPanel").hidden = !canWrite;
+    el("tickerForm").addEventListener("submit", tkAddOne);
+    el("tickerName").addEventListener("input", tkDrawDupes);
+    bindClick("tickerManyAdd", tkAddMany);
+    bindClick("tickerMore", tkShowMore);
+    function listAgain() {
+      tkPick();
+      tkDrawTiles();
+      tkDrawListed();
+      tkDrawList();
+    }
+    el("tickerTiles").addEventListener("click", function (e) {
+      var tile = e.target && e.target.closest ? e.target.closest("[data-ticker-filter]") : null;
+      if (!tile) return;
+      tkFilter = tile.getAttribute("data-ticker-filter");
+      listAgain();
     });
-    el("tickerTable").addEventListener("click", function (e) {
+    el("tickerSort").addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-ticker-sort]") : null;
+      if (!b) return;
+      tkSort = b.getAttribute("data-ticker-sort");
+      Array.prototype.forEach.call(el("tickerSort").querySelectorAll("[data-ticker-sort]"), function (x) {
+        x.classList.toggle("is-active", x === b);
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
+      });
+      listAgain();
+    });
+    el("tickerSearch").addEventListener("input", function () {
+      tkQuery = (el("tickerSearch").value || "").trim();
+      listAgain();
+    });
+    // "Look at the whole list", offered when the search found nothing under this tile.
+    el("tickerListed").addEventListener("click", function (e) {
+      if (!e.target || e.target.id !== "tickerSearchAll") return;
+      tkFilter = "all";
+      listAgain();
+      el("tickerSearch").focus({ preventScroll: true });
+    });
+    el("tickerPreview").addEventListener("click", function (e) {
+      if (!e.target || e.target.id !== "tickerStripAll") return;
+      tkStripAll = true;
+      tkDrawPreview();
+    });
+    // Show it, beside a hidden partner under "Already on the list".
+    el("tickerDupes").addEventListener("click", function (e) {
+      var show = e.target && e.target.closest ? e.target.closest("[data-ticker-show]") : null;
+      if (!show) return;
+      var id = show.getAttribute("data-ticker-show");
+      var r = tkById[id];
+      if (!r || tkBusy[id]) return;
+      tkBusy[id] = true;
+      tickerStatus("");
+      tkSetActive(id, true).then(function (ok) {
+        delete tkBusy[id];
+        if (ok === null) return;
+        if (ok) tickerStatus("“" + r.name + "” is showing on the website now.", "is-ok");
+        else tickerStatus("Could not show that partner. Please try again.", "is-error");
+      });
+    });
+    var table = el("tickerTable");
+    table.addEventListener("submit", function (e) {
+      var form = e.target && e.target.closest ? e.target.closest("[data-ticker-rename]") : null;
+      if (!form) return;
+      e.preventDefault();
+      tkRename(form);
+    });
+    table.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
-      // Rename (TASK-262): PATCH accepts a name (supporterUpdateSchema), so this fixes a typo in
-      // place instead of delete-and-re-add, which would lose the row's sort_order and audit trail.
-      // prompt() pre-fills the current name and matches the confirm() used by Delete below.
-      var edit = t.closest("[data-ticker-edit]");
-      if (edit) {
-        var current = edit.getAttribute("data-ticker-name") || "";
-        var next = window.prompt("Partner name", current);
-        if (next === null) return; // cancelled
-        next = next.trim();
-        if (!next || next === current) return; // empty or unchanged — nothing to do
-        tickerStatus("Saving…");
-        authFetch("/api/admin/ticker/" + edit.getAttribute("data-ticker-edit"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: next }),
-        })
-          .then(function (res) {
-            if (!res.ok) throw new Error("rename failed");
-            tickerStatus("Saved.", "is-ok");
-            loadTicker();
-          })
-          .catch(function () {
-            tickerStatus("Could not rename that partner.", "is-error");
-          });
+      var sw = t.closest("[data-ticker-toggle]");
+      if (sw) return tkToggle(sw);
+      var more = t.closest("[data-ticker-more]");
+      if (more) return tkOpenMore(more);
+      var first = t.closest("[data-ticker-first]");
+      if (first) return tkPutFirst(first);
+      var remove = t.closest("[data-ticker-remove]");
+      if (remove) {
+        // Asked in the page, under the button that was pressed, not in a browser box.
+        var ask = remove.parentNode.querySelector("[data-ticker-remove-ask]");
+        ask.hidden = false;
+        ask.querySelector("[data-ticker-remove-no]").focus({ preventScroll: true });
         return;
       }
-      var toggle = t.closest("[data-ticker-toggle]");
-      if (toggle) {
-        var makeActive = toggle.getAttribute("data-active") === "0";
-        authFetch("/api/admin/ticker/" + toggle.getAttribute("data-ticker-toggle"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ active: makeActive }),
-        })
-          .then(function (res) { if (res.ok) loadTicker(); })
-          .catch(function () {});
+      var no = t.closest("[data-ticker-remove-no]");
+      if (no) {
+        var asked = no.closest("[data-ticker-remove-ask]");
+        asked.hidden = true;
+        asked.parentNode.querySelector("[data-ticker-remove]").focus({ preventScroll: true });
         return;
       }
-      var del = t.closest("[data-ticker-delete]");
-      if (del) {
-        if (!window.confirm('Remove "' + (del.getAttribute("data-ticker-name") || "this partner") + '" from the partners list?')) return;
-        authFetch("/api/admin/ticker/" + del.getAttribute("data-ticker-delete"), { method: "DELETE" })
-          .then(function (res) { if (res.ok) loadTicker(); })
-          .catch(function () {});
-      }
+      var yes = t.closest("[data-ticker-remove-yes]");
+      if (yes) return tkRemove(yes.getAttribute("data-ticker-remove-yes"));
     });
   }
 

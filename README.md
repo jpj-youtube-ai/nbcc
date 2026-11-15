@@ -8195,6 +8195,33 @@ screen, the Overview's recent donations and donation search results, so all thre
 - **Tests:** `admin-fits-a-phone.test.ts` pins the CSS. `admin-app.test.ts` checks every cell's label
   on all three lists.
 
+## Stories and Partners in the kit's look (admin refresh, 14 Nov 2026)
+
+Admin > Stories, one story, and Admin > Partners are drawn from the admin kit (`class="ak"`,
+`assets/css/admin-kit.css`), with what only they need in `assets/css/admin-content.css` (every rule
+named through `#view-stories`, `#view-story`, `#view-ticker` or the prefixes `st-` and `pt-`). Design:
+`docs/superpowers/specs/2026-11-14-admin-refresh-content.md`. No server change.
+
+- **Stories.** Six tiles with counts (All, To read, Read, Used, Withdrawn, Archived): the live stories
+  are read once and filtered in the browser; Archived is its own read. Each story shows what they agreed to
+  as one sentence (`AdminHelpers.storyConsentLine`), and "Check before using" when consent is over a year
+  old (`consentIsOld`). The list stays thin on purpose: the quote is on the opened story only. "Erased
+  stories" reads `GET /api/admin/erasures` (kind, number, when, who, why); it and the storage check are
+  shown only to someone who may edit Stories (the reasons are free text an editor typed).
+- **One story.** The words first; "Copy the story" and "Copy the quote" (`AdminKit.copyText`) with the
+  consent sentence beside them; "What they agreed to" in sentences; "About the sender" folded; email and
+  phone are links only when they said they may be contacted. Withdraw and Erase permanently ask in the
+  page (the erase reason is typed there, no browser box); each of Withdraw, Archive, Restore and Erase
+  says under it what it does; every message is said beside its button. Previous and next story go
+  through the list as it was filtered. Still its own screen, `#view-story`.
+- **Partners.** Tiles Showing, Hidden, All and a search, filtered in the browser; the first 100 cards
+  with "Show more". Each card has one Show or Hide switch, and "Rename or remove" opens Rename, Put first
+  (`sortOrder` one below the lowest) and Remove (asked in the page). Every press answers in its own card:
+  Hide, Show and Delete used to fail silently. "Already on the list" appears as a name is typed (with
+  "Show it" for a hidden one) and a name already there is not added twice (`AdminHelpers.partnerKey`).
+  "Add several at once" takes one name a line. "How it looks on the website" shows the showing names in
+  the website's order with a link to the Supporters page. "Newest first" sorts by `createdAt`.
+
 ## The Stories list on a phone (TASK-561)
 
 At 390px the Stories table could not be read. Its seven columns were about 51px each before the Read

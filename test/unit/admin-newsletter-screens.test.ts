@@ -137,8 +137,6 @@ const q = (sel: string) => document.querySelector(sel) as HTMLElement | null;
 const qa = (sel: string) => Array.from(document.querySelectorAll(sel)) as HTMLElement[];
 const text = (node: Element | null) => ((node && node.textContent) || "").replace(/\s+/g, " ").trim();
 const panel = () => qa("#view-newsletter .nl-panel").filter((p) => !p.hidden).map((p) => p.id);
-const byText = (within: string, words: string) =>
-  qa(within + " button, " + within + " a").find((b) => text(b).includes(words)) as HTMLElement | undefined;
 const got = (method: string, path: string) => calls.filter((c) => c.method === method && c.path === path);
 const type = (id: string, value: string) => {
   (el(id) as HTMLInputElement).value = value;

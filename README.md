@@ -8547,6 +8547,45 @@ The fault was in the tests, not the newsletter.
 
 No code the admin runs changed.
 
+## Contact businesses and one business, in the kit's look (admin refresh, 2026-11-14)
+
+Content > Contact businesses (`#view-outreach`) and the page for one business (`#view-business`) are
+built from the admin kit (class `ak`), with their own rules in `assets/css/admin-outreach.css`.
+Design: `docs/superpowers/specs/2026-11-14-admin-refresh-outreach.md`.
+
+- **Contact businesses** opens with progress in one line ("34 of 120 emailed, 6 replied, 2 signed
+  up"), then five parts: To do (a dot while anything is waiting), Add a business, Write and send,
+  Everyone, How it is going. A Ready to send row, and the moment after adding a business with an
+  address, offer **Write to them**, which opens Write and send with that business chosen. Everyone has
+  count tiles that filter the list (On the list, Waiting to be emailed, Emailed and no answer,
+  Interested, Signed up, Said no, Mine), a card per business on a phone with the email and a Copy
+  button and the latest note, thirty at a time with Show more. The email preview shows its subject
+  line and is as tall as the email. The paste fold asks the kind of business and where the details
+  came from itself.
+- **The whole list.** `GET /api/admin/outreach` takes `limit` (200 by default, 500 at most) and
+  `offset`, and answers with `total`, `counts` over every business (`src/outreach/list-counts.ts`) and
+  each row's `latestNote`. The screen fetches page after page until it has the lot.
+- **Phone numbers follow the stricter rule.** A number shows on the list, and in the to do list's
+  "Call ..." (`src/outreach/todo.ts`), only once someone has recorded checking it against the
+  Telephone Preference Service register, as the business page always required.
+- **One business** opens with **What to do next**, in the to do list's own words (`GET
+  /api/admin/outreach/:id` now returns `todo`, by the same `whatIsNeeded` rule, and the `supporter`
+  the business became), with **Write their first email** where they have an address and have not been
+  emailed. Then four parts: At a glance, Notes, Their details, If they ask what we hold. Their tags,
+  the supporter they became with See their giving (for someone who may open Donations), Copy for the
+  email and for a checked number, Previous and Next through the list you came from, and the one
+  follow-up signed by whoever is chosen on this page.
+- **Faults fixed.** Opening a business empties the supporter picker, the ask again date and the note
+  box, and an answer for a business no longer open is thrown away: the last business's supporter
+  could be linked to the next one. "Saved." and "Sent." stay on the screen. What we hold no longer
+  scrolls inside a box.
+- **Changing a business's details** (server only so far): `PATCH /api/admin/outreach/:id`, edit
+  guarded, audited as `outreach.details_changed` (which details, not their values). Name, contact,
+  email, phone, who knows them, who looks after them, tags. A new name or email that matches a
+  business that said no is refused unless the volunteer says it is a different business; a business
+  that said no keeps its name and email; a changed phone number clears its register check. The form on
+  the business page is still to come.
+
 ## Saving an editor's access took Contact businesses away (TASK-459)
 
 Editors have been able to use **Contact businesses** since it shipped: TASK-354 put `outreach` in the

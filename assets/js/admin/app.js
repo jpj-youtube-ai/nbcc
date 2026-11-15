@@ -13216,6 +13216,10 @@
 
   // The phone number follows the business page's rule (businessPhoneCell): shown only once somebody
   // has recorded that it was checked against the Telephone Preference Service register.
+  // One wrapper per cell, so a cell of several lines stays one item in the phone card layout.
+  function outCell(html) {
+    return '<span class="out-cell">' + html + "</span>";
+  }
   function outPhoneCell(r) {
     if (!r.contactPhone) return "";
     if (!r.ctpsCheckedAt) return '<span class="out-tps-hidden">Number hidden until checked</span>';
@@ -13479,8 +13483,8 @@
               : "";
             // The name is the way in. Everything about this firm is one click away.
             return '<tr><td class="ak-cards__lead"><button class="admin-linkish" type="button" data-out-open="' + r.id +
-              '">' + H.escapeHtml(r.businessName) + "</button></td><td>" + stands + "</td><td>" +
-              (contact || "&mdash;") + "</td><td>" + (r.owner ? H.escapeHtml(r.owner) : "Nobody yet") + "</td><td>" + note +
+              '">' + H.escapeHtml(r.businessName) + "</button></td><td>" + outCell(stands) + "</td><td>" +
+              outCell(contact || "&mdash;") + "</td><td>" + (r.owner ? H.escapeHtml(r.owner) : "Nobody yet") + "</td><td>" + (note ? outCell(note) : "") +
               "</td><td>" + outLongDate(r.createdAt) + "</td></tr>";
           })
           .join("") +
@@ -14077,7 +14081,7 @@
         H.escapeHtml(r.contactPhone) + "</a>" +
         '<span class="out-tps-ok">Checked against the register' +
         (r.ctpsCheckedBy ? " by " + H.escapeHtml(r.ctpsCheckedBy) : "") +
-        ", " + H.fmtDate(r.ctpsCheckedAt) + "</span>";
+        ", " + outLongDate(r.ctpsCheckedAt) + "</span>";
     }
     return (
       '<span class="out-tps-hidden">Number hidden until checked</span>' +

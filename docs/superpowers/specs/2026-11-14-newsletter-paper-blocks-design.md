@@ -41,11 +41,10 @@ reader's machine), no SVG, no `position`, `transform`, `clip-path`, gradients or
 | Part | File |
 |---|---|
 | The new renderers, their own colours and helpers | `src/newsletter/paper-blocks.ts` |
-| The live numbers: reading them, and freezing them for a send | `src/newsletter/live-total.ts` |
 | The link rule | `src/newsletter/link-safety.ts` |
 | Registered in (three additive lines) | `src/newsletter/blocks.ts`: `BLOCK_TYPES`, `RENDERERS`, `NO_SIZE_STEP` |
-| The checks before sending | `src/newsletter/preflight.ts` |
-| The composer's side: labels, icons, fields, starting words, starter templates | `assets/js/admin/newsletter-paper.js` |
+| The checks before sending | `src/newsletter/preflight.ts`, `src/newsletter/paper-preflight.ts` |
+| The composer's side: labels, icons, fields, starting words | `assets/js/admin/app.js` (`NL_PAPER_DEFS`) |
 | The composer's styles for it | `assets/css/admin-newsletter-blocks.css` |
 | The art, and how it is made | `assets/img/email/`, `scripts/build-email-art.mjs` |
 
@@ -80,7 +79,7 @@ Notes on the calls made:
 - **What goes in a bag** only draws a painting whose key is one of the Red Bag paintings we hold.
 - **Festive divider** has no words, so nothing in the plain text.
 
-### Stage 2: the two live blocks
+### Stage 2: the two live blocks (designed, NOT built in this change)
 
 **`countdown`, Sleeps to go.** Fields: date, label (60), unit (sleeps or days), afterText (80). Styles:
 big number on a tan card / crimson band / one sentence / holly band with a gold number. Counted in UK
@@ -115,7 +114,7 @@ one sentence.
   a throw). The preview's answer also carries `live`, which the composer uses to say, in the block's
   form, "Right now: 312 bags filled. It is read again when the newsletter is sent."
 
-### Stage 3: starting points
+### Stage 3: starting points (designed, NOT built in this change)
 
 Four built-in starters in code beside "Start from example" (which, with `NL_TEMPLATE`, is untouched):
 Christmas appeal, Fill a Red Bag, Santa Sleigh, Elf Detective School. A small chooser, "Start from a

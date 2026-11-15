@@ -8372,6 +8372,61 @@ These are the three gaps TASK-465's review found.
 name field after "Add an event", focus on "Add an event" after deleting, and the dated names.
 Design: `docs/superpowers/specs/2026-09-30-events-screen-focus-design.md`.
 
+## Newsletter: the paper look blocks (14 November 2026)
+
+Jaimie asked for newer building blocks in the newsletter composer, in the look of the newer pages
+(Fill a Red Bag's lined paper, the home page's gift tags), without taking anything away or breaking
+anything. Design: `docs/superpowers/specs/2026-11-14-newsletter-paper-blocks-design.md`.
+
+**What a writer sees.** The composer's palette is now two labelled groups: **The classic blocks** (the
+fourteen there were, in the same order) and **The paper look (new)**:
+
+| Block | Styles |
+|---|---|
+| Picture header | Picture, then words / Maroon band / Night (holly band) / Art beside |
+| Photo row | Two photos / Three photos / Two prints / Three prints (taped, handwritten captions) |
+| Handwritten note | Lined paper / Taped / Large handwriting / Kraft card |
+| Event card | Picture on top / Picture left / Ticket / Two cards |
+| Partner logos | Row of four / Two rows / One partner / White band (names printed under the logos) |
+| Gift tags | Three / Two / Stacked / One large (paper, crimson, holly green or tan) |
+| What goes in a bag | With paintings / Words only / With a button / Two columns |
+| Festive divider | Ribbon and bow / Snow / Torn paper / Stars |
+| Story, paper look | Print above / Print beside / Paper card / No photo |
+
+Each block arrives already filled with sendable NBCC words and one of the email pictures. New kinds of
+field: a list to pick from (a tag's colour, a bag item's painting), a tick box (partner names) and a
+date picker (event card).
+
+**Nothing old changes.** `test/unit/newsletter-golden.test.ts` was added before anything else: every
+original block type at every style, filled, empty and at each size step, whole newsletters, the welcome
+email, the frame and the classic button, each pinned as a SHA-256 of the code as it was. The new blocks
+are new block TYPES (the style cap stays at four), registered in three additive lines of
+`src/newsletter/blocks.ts`; their renderers and their own "sticker" button are in
+`src/newsletter/paper-blocks.ts`.
+
+**Email rules they follow.** Tables and inline styles only; no SVG, web fonts, `position` or
+`transform`; columns are shares of the width; words are always live text (so they survive pictures
+being switched off and reach the plain-text part); a link is written only if it is `https`, `mailto` or
+`tel` (`src/newsletter/link-safety.ts`, shared with the checks below); each block is under about 4 KB.
+
+**The pictures.** `assets/img/email/` (PNG and JPG only), made from art already in the repo by
+`node scripts/build-email-art.mjs`, and listed in `assets/img/CREDITS.md`. Never reuse a file name for
+different art: mail clients keep a picture for a year. `test/unit/newsletter-email-art.test.ts` checks
+every picture a block names is there and light.
+
+**Checks before sending** (`src/newsletter/paper-preflight.ts`): pictures with no description and
+buttons with no working link count with the classic ones; a picture header with no headline, a photo
+row with one photo, an empty note, an event already past, partner names switched off and a bag list
+that says "will buy" are warnings; a partner logo with no name blocks. Two new warnings for EVERY
+newsletter: the email passing 80 KB ("Gmail may cut this email short") and words left in
+[square brackets].
+
+**Not built yet:** the two live blocks (Sleeps to go, Live total) and the four starter templates, both
+in the design.
+
+Tests: `newsletter-golden`, `newsletter-paper-blocks`, `newsletter-paper-preflight`,
+`newsletter-email-art`, `newsletter-paper-composer`.
+
 ## A newsletter test that failed on a busy machine (TASK-470)
 
 The newsletter preview waits until you pause typing for 300ms before redrawing, and

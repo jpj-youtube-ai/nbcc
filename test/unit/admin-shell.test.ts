@@ -138,7 +138,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
   it("has the Stories view with a status filter, and the story detail view", () => {
     expect(doc.getElementById("view-stories")).not.toBeNull();
     expect(doc.getElementById("storiesTable")).not.toBeNull();
-    const filterButtons = [...doc.querySelectorAll("#storiesStatusFilter .admin-seg")].map((b) =>
+    // 2026-11-14: the filters are tiles with counts now: the same five, in the same order.
+    const filterButtons = [...doc.querySelectorAll("#storiesStatusFilter [data-status]")].map((b) =>
       b.getAttribute("data-status"),
     );
     expect(filterButtons).toEqual(["", "new", "reviewed", "used", "withdrawn"]);

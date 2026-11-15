@@ -99,6 +99,26 @@
     return (map && map[value]) || String(value);
   }
 
+  // Stories (2026-11-14): what a story's sender agreed to, as one sentence, for a card and beside
+  // the Copy buttons. A private story is never to be published, whatever else was ticked.
+  function storyConsentLine(s) {
+    if (!s || s.use_scope !== "public") return "Private to NBCC: never to be published.";
+    var name = !!s.consent_share_first_name;
+    var town = !!s.consent_share_town;
+    if (name && town) return "May be used in public, with their first name and their town.";
+    if (name) return "May be used in public, with their first name, not their town.";
+    if (town) return "May be used in public, with their town, not their name.";
+    return "May be used in public, without their name or their town.";
+  }
+  // Consent given over a year ago: worth checking with the sender before the story is used.
+  function consentIsOld(value, now) {
+    if (!value) return false;
+    var then = new Date(value);
+    if (isNaN(then.getTime())) return false;
+    var ref = now instanceof Date ? now : now ? new Date(now) : new Date();
+    return (ref.getTime() - then.getTime()) / 86400000 > 365;
+  }
+
   // Stories and Partners (2026-11-14): a date as people say it, "3 November 2026", on the day it
   // was in the UK. Empty for nothing or for something that is not a date.
   function longDate(value) {
@@ -196,6 +216,8 @@
     consentAge: consentAge,
     storyLabel: storyLabel,
     longDate: longDate,
+    storyConsentLine: storyConsentLine,
+    consentIsOld: consentIsOld,
     partnerKey: partnerKey,
     paymentLabel: paymentLabel,
     subscriptionStateLabel: subscriptionStateLabel,

@@ -2900,27 +2900,28 @@
   }
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
-  Array.prototype.forEach.call(doc.querySelectorAll("#storiesViewFilter .admin-seg"), function (b) {
+  // The tiles (2026-11-14): one chosen at a time. A status tile filters the live stories already read;
+  // Archived is its own read (TASK-311: archiving is separate from where a story is in the reading).
+  var stLive = []; // the live stories, as the list read them
+  var stArchived = null; // the archived ones, or null when they could not be read
+  var stListedIds = []; // the stories listed now, in order: next and previous story go through these
+  Array.prototype.forEach.call(doc.querySelectorAll("#view-stories .st-tiles [data-status], #view-stories .st-tiles [data-view]"), function (b) {
     b.addEventListener("click", function () {
-      storiesArchiveView = b.getAttribute("data-view") || "live";
-      Array.prototype.forEach.call(doc.querySelectorAll("#storiesViewFilter .admin-seg"), function (x) {
-        x.classList.toggle("is-active", x === b);
-      });
-      loadStories();
+      if (b.hasAttribute("data-view")) {
+        storiesArchiveView = "archived";
+        storiesStatusFilter = "";
+      } else {
+        storiesArchiveView = "live";
+        storiesStatusFilter = b.getAttribute("data-status") || "";
+      }
+      stDrawTiles();
+      stDrawList();
     });
   });
   if (el("storiesDiagnosticsRun")) {
     el("storiesDiagnosticsRun").addEventListener("click", runStoriesDiagnostics);
   }
-  Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (b) {
-    b.addEventListener("click", function () {
-      storiesStatusFilter = b.getAttribute("data-status") || "";
-      Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (x) {
-        x.classList.toggle("is-active", x === b);
-      });
-      loadStories();
-    });
-  });
+  if (el("storiesErased")) el("storiesErased").addEventListener("toggle", loadErasures);
   // TASK-560: one listener on the list's box, which stays while the table inside it is drawn again
   // on every load. A tick saves at once and the row stays where it is, so the next story does not
   // move under the pointer and the tick can come straight back off.
@@ -3013,6 +3014,9 @@
     if (out.status) {
       box.checked = storyIsRead(out.status);
       pill.textContent = H.storyLabel("status", out.status);
+      // The tiles count it where it is now; the list stays as it is, so nothing moves under the pointer.
+      stLive.forEach(function (r) { if (String(r.id) === String(id)) r.status = out.status; });
+      stDrawTiles();
     }
     var why = out.lock || (out.status ? storyTickLocked(out.status) : "");
     if (why && !box.disabled) {
@@ -3061,8 +3065,21 @@
       ' aria-label="Story ' + r.id + ' read" /></label>'
     );
   }
+  // What a story's card says about what its sender agreed to: the pills, then the same in a sentence.
+  function storyAgreedHtml(r) {
+    return scopeConsentBadges(r) + '<span class="st-agreed">' + H.escapeHtml(H.storyConsentLine(r)) + "</span>";
+  }
+  // When they agreed, and "Check before using" once that was over a year ago.
+  function storyAgeHtml(r) {
+    return (
+      H.escapeHtml(H.consentAge(r.consent_captured_at)) +
+      (H.consentIsOld(r.consent_captured_at) ? ' <span class="ak-mark ak-mark--wait st-old">Check before using</span>' : "")
+    );
+  }
   function storiesTable(rows) {
-    if (!rows.length) return '<p class="admin-empty">No stories yet.</p>';
+    if (!rows.length) {
+      return '<p class="admin-empty">' + (stLive.length || storiesArchiveView === "archived" ? "No stories here." : "No stories yet.") + "</p>";
+    }
     // Beside each status, hidden until it is needed, the pill that takes its place when a save
     // fails: "Not saved" to the eye, the whole of it to a screen reader, the sentence on hover.
     // Under it, room for the three answers that need a sentence (somebody else changed the story,
@@ -3073,49 +3090,119 @@
     // a donation is. So every cell carries its column's name, and the wrapper is what the
     // stylesheet measures. The cards put the ID at the top and fit the tick by position, so
     // admin-fits-a-phone.test.ts checks these columns and their order. A card's line is a row, a
-    // label then a value: the two cells that hold more than one thing keep it in one box
-    // (.st-value), so pills wrap together and the sentence sits under the status, not beside it.
+    // label then a value: the cells that hold more than one thing keep it in one box (.st-value).
+    // 2026-11-14: the line they chose to be quoted, and what they agreed to as a sentence, are on
+    // the card, and the column names are plain words.
     var body = rows
       .map(function (r) {
         return (
-          '<tr><td data-label="Read">' + storyReadTick(r) + '</td><td data-label="ID">' + r.id + '</td><td data-label="Role">' +
-          H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
-          '</td><td data-label="Scope / consent"><div class="st-value">' + scopeConsentBadges(r) + "</div></td>" +
+          '<tr><td data-label="Read">' + storyReadTick(r) + '</td><td data-label="ID">' + r.id + "</td>" +
+          '<td data-label="Their words">' +
+          (r.short_quote ? '<q class="st-quote">' + H.escapeHtml(r.short_quote) + "</q>" : '<span class="st-none">No quote chosen</span>') +
+          '</td><td data-label="Sent by">' + H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
+          '</td><td data-label="Agreed to"><div class="st-value">' + storyAgreedHtml(r) + "</div></td>" +
           '<td data-label="Status"><div class="st-value"><span class="admin-pill" data-story-status>' +
           H.escapeHtml(H.storyLabel("status", r.status)) + "</span>" +
           '<span class="admin-pill admin-read-unsaved" data-story-unsaved hidden title="' + STORY_NOT_SAVED + '">' +
           '<span class="sr-only">Story ' + r.id + ": </span>Not saved" +
           '<span class="sr-only">. Please try again.</span></span>' +
-          '<span class="admin-read-note" data-story-note></span></div></td><td data-label="Consent age">' +
-          H.escapeHtml(H.consentAge(r.consent_captured_at)) + '</td><td data-label="Submitted">' + H.fmtDate(r.created_at) +
-          '</td><td data-label=""><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
+          '<span class="admin-read-note" data-story-note></span></div></td><td data-label="When agreed"><div class="st-value">' +
+          storyAgeHtml(r) + '</div></td><td data-label="Sent">' + H.escapeHtml(H.longDate(r.created_at)) +
+          '</td><td data-label=""><button class="admin-link st-open" type="button" data-story="' + r.id + '">Open</button></td></tr>'
         );
       })
       .join("");
     return (
-      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Role</th><th>Scope / consent</th>' +
-      "<th>Status</th><th>Consent age</th><th>Submitted</th><th></th></tr></thead><tbody>" +
+      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Their words</th><th>Sent by</th><th>Agreed to</th>' +
+      "<th>Status</th><th>When agreed</th><th>Sent</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table></div>"
     );
+  }
+  function stDrawTiles() {
+    var counts = { "": stLive.length };
+    stLive.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
+    Array.prototype.forEach.call(doc.querySelectorAll("#view-stories .st-tiles .ak-tile"), function (b) {
+      var isArchive = b.hasAttribute("data-view");
+      var n = isArchive ? (stArchived ? stArchived.length : null) : counts[b.getAttribute("data-status")] || 0;
+      var on = isArchive ? storiesArchiveView === "archived" : storiesArchiveView !== "archived" && (b.getAttribute("data-status") || "") === storiesStatusFilter;
+      b.querySelector(".ak-tile__n").textContent = n === null ? "" : String(n);
+      b.classList.toggle("is-active", on);
+      b.classList.toggle("is-none", n === 0);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    var toRead = doc.querySelector('#view-stories .st-tiles [data-status="new"]');
+    if (toRead) toRead.classList.toggle("ak-tile--urgent", (counts["new"] || 0) > 0);
+  }
+  function stDrawList() {
+    var wrap = el("storiesTable");
+    if (storiesArchiveView === "archived" && !stArchived) {
+      wrap.innerHTML = unavailableHtml("The archived stories are unavailable.");
+      stListedIds = [];
+      return;
+    }
+    var rows = storiesArchiveView === "archived"
+      ? stArchived
+      : stLive.filter(function (r) { return !storiesStatusFilter || r.status === storiesStatusFilter; });
+    stListedIds = rows.map(function (r) { return String(r.id); });
+    wrap.innerHTML = storiesTable(rows);
   }
   function loadStories() {
     var imp = el("storiesImport");
     if (imp) imp.hidden = !canEdit("stories");
+    var diag = el("storiesDiagnostics");
+    if (diag) diag.hidden = !canEdit("stories"); // the storage check needs edit, so only an editor sees it
     var wrap = el("storiesTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    // TASK-311: two independent filters - where a story is in the workflow, and whether it is
-    // archived. Both travel to the API; the server decides what each view means.
-    var query = [];
-    if (storiesStatusFilter) query.push("status=" + encodeURIComponent(storiesStatusFilter));
-    if (storiesArchiveView) query.push("view=" + encodeURIComponent(storiesArchiveView));
-    var path = "/api/admin/stories" + (query.length ? "?" + query.join("&") : "");
-    authFetch(path)
+    // Every live story at once, so the tiles can count them; the archived ones beside them.
+    var archivedRead = authFetch("/api/admin/stories?view=archived")
+      .then(okJson)
+      .then(function (d) { return d.results || []; })
+      .catch(function () { return null; });
+    authFetch("/api/admin/stories?view=live")
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = storiesTable(d.results || []);
+        stLive = d.results || [];
+        return archivedRead.then(function (a) {
+          stArchived = a;
+          stDrawTiles();
+          stDrawList();
+        });
       })
       .catch(function () {
+        stLive = [];
+        stListedIds = [];
+        stDrawTiles();
         wrap.innerHTML = unavailableHtml("Stories are unavailable.");
+      });
+  }
+  // The erased stories (TASK-311's record, which had no screen): read each time the fold is opened.
+  function loadErasures() {
+    var fold = el("storiesErased");
+    var out = el("storiesErasedList");
+    if (!fold || !fold.open || !out) return;
+    out.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/erasures")
+      .then(okJson)
+      .then(function (d) {
+        var rows = d.results || [];
+        if (!rows.length) {
+          out.innerHTML = '<p class="admin-empty">No story has been erased.</p>';
+          return;
+        }
+        out.innerHTML =
+          '<ul class="ak-list st-erased__list">' +
+          rows.map(function (r) {
+            var what = (r.recordKind === "contact_enquiry" ? "Contact form message " : "Story ") + r.recordId;
+            return (
+              '<li class="ak-card ak-card--flat st-erased__item"><p class="st-erased__what">' + H.escapeHtml(what) + "</p>" +
+              '<p class="st-erased__meta">Erased on ' + H.escapeHtml(H.longDate(r.erasedAt)) + " by " + H.escapeHtml(r.erasedBy || "someone") + "</p>" +
+              '<p class="st-erased__why">' + H.escapeHtml(r.reason || "") + "</p></li>"
+            );
+          }).join("") +
+          "</ul>";
+      })
+      .catch(function () {
+        out.innerHTML = unavailableHtml("Could not load the erased stories. Please try again.");
       });
   }
   // TASK-309: read the storage diagnostic and lay it out plainly. Deliberately shows SIZES: an
@@ -3352,35 +3439,87 @@
         wrap.innerHTML = unavailableHtml("Could not load this story. Please try again.");
       });
   }
+  // One story, in the kit's look (2026-11-14): the words first, then what the sender agreed to in
+  // sentences, then everything else about them folded away. Copy the story and Copy the quote sit
+  // with the consent sentence beside them, so nobody copies a story without seeing it.
+  function storyAgreedSentences(s) {
+    var out = [];
+    out.push(
+      s.use_scope === "public"
+        ? "They are happy for it to be shared in public: on our website, social media, newsletters, in the press and with funders. It may be shortened or lightly edited, keeping their meaning."
+        : "Keep it private to NBCC. Only the team may see it, to learn from and to help win funding. It must never be published.",
+    );
+    out.push(s.consent_share_first_name ? "Their first name may be used." : "Do not use their name.");
+    out.push(s.consent_share_town ? "Their town may be used." : "Do not use their town.");
+    out.push(
+      s.third_party_consent
+        ? "They said they have permission from the person the story is about, or that person's parent or guardian."
+        : "They did not say they have permission from anyone else the story is about.",
+    );
+    out.push(s.contact_for_more ? "We may contact them to hear more." : "Do not contact them about it.");
+    out.push("They agreed on " + H.longDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ").");
+    return out;
+  }
+  // Email and phone are links to tap only when they said we may contact them.
+  function storyContactHtml(value, kind, mayContact) {
+    if (!value) return "Not given";
+    if (!mayContact) return H.escapeHtml(value) + ' <span class="st-none">(they did not ask to be contacted)</span>';
+    var href = kind === "tel" ? "tel:" + String(value).replace(/[^\d+]/g, "") : "mailto:" + String(value).trim();
+    return '<a class="admin-link" href="' + H.escapeHtml(href) + '">' + H.escapeHtml(value) + "</a>";
+  }
+  function storyStepsHtml(id) {
+    var at = stListedIds.indexOf(String(id));
+    if (at < 0) return "";
+    return (
+      '<p class="st-steps"><button class="admin-btn ak-btn--plain st-step" type="button" id="storyPrev"' + (at === 0 ? " disabled" : "") +
+      ">Previous story</button>" +
+      '<span class="st-steps__at">' + (at + 1) + " of " + stListedIds.length + "</span>" +
+      '<button class="admin-btn ak-btn--plain st-step" type="button" id="storyNext"' + (at === stListedIds.length - 1 ? " disabled" : "") +
+      ">Next story</button></p>"
+    );
+  }
+  var currentStory = null; // the story drawn now, for the consent line beside Copy
   function renderStory(s) {
+    currentStory = s;
     var canWrite = canEdit("stories");
-    var info =
-      '<dl class="admin-dl">' +
-      dl("Role", H.storyLabel("submitterRole", s.submitter_role)) +
-      dl("Use scope", H.storyLabel("useScope", s.use_scope)) +
-      dl("Share first name", s.consent_share_first_name ? "Yes" : "No") +
-      dl("Share town", s.consent_share_town ? "Yes" : "No") +
-      dl("Third-party consent", s.third_party_consent ? "Yes" : "No") +
-      dl("Contact for more", s.contact_for_more ? "Yes" : "No") +
-      // Named, so Mark as read can change this line without drawing the story again.
-      '<dt>Status</dt><dd id="storyStatusNow">' + H.escapeHtml(H.storyLabel("status", s.status)) + "</dd>" +
-      dl("Consent captured", H.fmtDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ")") +
-      dl("Submitted", H.fmtDate(s.created_at)) +
+    var consent = H.escapeHtml(H.storyConsentLine(s));
+    var old = H.consentIsOld(s.consent_captured_at);
+    var about =
+      '<dl class="ak-facts">' +
+      dl("Who sent it", H.storyLabel("submitterRole", s.submitter_role)) +
       dl("First name", s.submitter_first_name || "Not given") +
-      dl("Email", s.submitter_email || "Not given") +
-      dl("Phone", s.submitter_phone || "Not given") +
+      "<dt>Email</dt><dd>" + storyContactHtml(s.submitter_email, "mailto", s.contact_for_more) + "</dd>" +
+      "<dt>Phone</dt><dd>" + storyContactHtml(s.submitter_phone, "tel", s.contact_for_more) + "</dd>" +
       dl("Town", s.submitter_town || "Not given") +
-      dl("Age band", H.storyLabel("ageBand", s.age_band)) +
+      dl("Age", H.storyLabel("ageBand", s.age_band)) +
       dl("Gender", s.gender || "Not given") +
-      dl("Recipient type", H.storyLabel("recipientType", s.recipient_type)) +
-      dl("Heard about us via", s.heard_about || "Not given") +
-      dl("Confirmed 16+", s.confirmed_over_16 ? "Yes" : "No") +
-      "</dl>" +
-      '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
-      (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
+      dl("Who the story is about", H.storyLabel("recipientType", s.recipient_type)) +
+      dl("Heard about us through", s.heard_about || "Not given") +
+      dl("Said they are 16 or over", s.confirmed_over_16 ? "Yes" : "No") +
+      dl("Sent", H.longDate(s.created_at)) +
+      "</dl>";
+    var info =
+      '<p class="st-where">Story ' + H.escapeHtml(String(s.id)) + ' · <span id="storyStatusNow">' + H.escapeHtml(H.storyLabel("status", s.status)) + "</span>" +
+      (s.archived_at ? " · Archived" : "") + "</p>" +
+      storyStepsHtml(s.id) +
+      '<h3 class="ak-h3">Their story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
+      (s.short_quote ? '<h3 class="ak-h3">The line they chose to be quoted</h3><p class="admin-story-text st-quote-big">' + H.escapeHtml(s.short_quote) + "</p>" : "") +
+      '<div class="ak-card st-copy" id="storyCopy"><p class="st-copy__agreed"><strong>What they agreed to:</strong> ' + consent +
+      (old ? ' <span class="ak-mark ak-mark--wait st-old">Check before using</span>' : "") + "</p>" +
+      '<div class="ak-actions"><button class="admin-btn ak-btn--plain" type="button" id="storyCopyText">Copy the story</button>' +
+      (s.short_quote ? '<button class="admin-btn ak-btn--plain" type="button" id="storyCopyQuote">Copy the quote</button>' : "") + "</div>" +
+      '<p class="ty-status" id="storyCopyStatus" role="status" aria-live="polite"></p></div>';
     // TASK-560: where reading ends, under the story's words. Its own box, so pressing its button
     // draws this box again and nothing else: see showStoryReadBar.
     var readBar = canWrite ? '<div id="storyReadBar"></div>' : "";
+    var agreed =
+      '<section class="ak-card st-agreed-card" id="storyAgreed" aria-labelledby="storyAgreedHead"><h3 class="ak-h3" id="storyAgreedHead">What they agreed to</h3>' +
+      '<ul class="st-agreed-list">' +
+      storyAgreedSentences(s).map(function (t) { return "<li>" + H.escapeHtml(t) + "</li>"; }).join("") +
+      "</ul>" +
+      (old ? '<p class="ak-notice st-old-note">Check before using: they agreed over a year ago. Ask them again before this story is used anywhere new.</p>' : "") +
+      "</section>" +
+      '<details class="ak-fold st-about" id="storyAbout"><summary>About the sender</summary><div class="ak-fold__body">' + about + "</div></details>";
     var actions = "";
     if (canWrite) {
       var statusOptions = ["new", "reviewed", "used", "withdrawn"]
@@ -3389,39 +3528,67 @@
         })
         .join("");
       actions =
-        '<form class="admin-edit" id="storyEditForm"><h3 class="admin-subhead">Manage story</h3>' +
-        '<div class="admin-field"><label for="edit-storyStatus">Status</label>' +
+        '<form class="ak-panel st-form" id="storyEditForm"><h3 class="ak-h3">Notes, tags and status</h3>' +
+        '<div class="ak-fields"><div class="ak-field"><label for="edit-storyStatus">Status</label>' +
         '<select id="edit-storyStatus" name="status">' + statusOptions + "</select></div>" +
-        editField("storyTags", "Tags (comma-separated)", "text", (s.admin_tags || []).join(", ")) +
-        '<div class="admin-field"><label for="edit-storyNotes">Notes</label>' +
+        '<div class="ak-field"><label for="edit-storyTags">Tags (comma-separated)</label>' +
+        '<input id="edit-storyTags" name="storyTags" type="text" value="' + H.escapeHtml((s.admin_tags || []).join(", ")) + '" /></div></div>' +
+        '<div class="ak-field"><label for="edit-storyNotes">Notes</label>' +
         '<textarea id="edit-storyNotes" name="adminNotes" rows="4">' + H.escapeHtml(s.admin_notes || "") + "</textarea></div>" +
-        '<button class="btn btn-primary" type="submit">Save changes</button> ' +
-        '<button class="btn btn-ghost" type="button" id="withdrawStoryBtn">Withdraw</button>' +
+        '<p class="st-form__go"><button class="admin-btn" type="submit">Save changes</button>' +
+        '<span class="ak-says">Saves the status, tags and notes. Only the team sees tags and notes.</span></p>' +
+        '<p class="ty-status" id="storyFormStatus" role="status" aria-live="polite"></p>' +
         "</form>" +
-        // TASK-311: archiving is now the everyday way to clear a story off the working list, and it
-        // is reversible. Three stories were permanently deleted from production and nothing could say
-        // what had gone - so the irreversible action no longer sits where the routine one belongs.
-        //
-        // Erasure is still here, because a charity must be able to honour a GDPR erasure request. It
-        // appears ONLY once a story is archived, and asks for a reason that is recorded.
+        // TASK-311: archiving is the everyday way to clear a story off the working list, and it can be
+        // undone. Erasure stays, because a charity must be able to honour an erasure request, but only
+        // once a story is archived, and it asks for a reason that is recorded.
+        '<section class="ak-panel st-away" aria-labelledby="storyAwayHead"><h3 class="ak-h3" id="storyAwayHead">Putting a story away</h3>' +
+        '<div class="st-away__one"><button class="admin-btn ak-btn--plain" type="button" id="withdrawStoryBtn">Withdraw</button>' +
+        '<span class="ak-says">Marks it as not to be used, for when someone takes back their consent. It stays here, and can be changed back with Status above.</span>' +
+        '<div class="ak-notice st-ask" id="storyWithdrawAsk" hidden><p>Withdraw this story? It will no longer be treated as usable.</p>' +
+        '<div class="ak-actions"><button class="admin-btn" type="button" id="storyWithdrawYes">Yes, withdraw it</button>' +
+        '<button class="admin-btn ak-btn--plain" type="button" id="storyWithdrawNo">No, leave it</button></div></div></div>' +
         (s.archived_at
-          ? '<div class="admin-danger-zone">' +
-            '<h3 class="admin-subhead">Archived</h3>' +
-            '<p class="admin-danger-copy">This story is archived and hidden from the main list. Restore it to bring it back, or erase it permanently — erasing cannot be undone, and asks you to say why so there is a record of what was removed.</p>' +
-            '<button class="btn" type="button" id="restoreStoryBtn">Restore</button> ' +
-            '<button class="btn btn-danger" type="button" id="eraseStoryBtn">Erase permanently</button>' +
-            "</div>"
-          : '<div class="admin-danger-zone">' +
-            '<h3 class="admin-subhead">Archive</h3>' +
-            '<p class="admin-danger-copy">Archiving hides this story from the main list and keeps it safe — you can bring it back at any time. It is different from Withdraw, which only stops the story being used.</p>' +
-            '<button class="btn" type="button" id="archiveStoryBtn">Archive</button>' +
-            "</div>");
+          ? '<div class="st-away__one"><button class="admin-btn ak-btn--plain" type="button" id="restoreStoryBtn">Restore</button>' +
+            '<span class="ak-says">Brings it back to the list. Archived stories are kept safe until then.</span></div>' +
+            '<div class="st-away__one"><button class="admin-btn ak-btn--danger" type="button" id="eraseStoryBtn">Erase permanently</button>' +
+            '<span class="ak-says">Deletes the story and the sender\'s details for good. This cannot be undone. You will be asked why, and only the reason is kept.</span>' +
+            '<div class="ak-notice ak-notice--bad st-ask" id="storyEraseAsk" hidden><p>Erase this story permanently? This cannot be undone.</p>' +
+            '<div class="ak-field"><label for="storyEraseReason">Why is it being erased?</label><textarea id="storyEraseReason" rows="3"></textarea></div>' +
+            '<div class="ak-actions"><button class="admin-btn ak-btn--danger" type="button" id="storyEraseYes">Erase it for good</button>' +
+            '<button class="admin-btn ak-btn--plain" type="button" id="storyEraseNo">No, keep it</button></div></div></div>'
+          : '<div class="st-away__one"><button class="admin-btn ak-btn--plain" type="button" id="archiveStoryBtn">Archive</button>' +
+            '<span class="ak-says">Hides it from the list and keeps it safe. You can bring it back at any time, from the Archived tile.</span></div>') +
+        '<p class="ty-status" id="storyPutAwayStatus" role="status" aria-live="polite"></p>' +
+        "</section>";
     }
-    el("storyDetail").innerHTML = info + readBar + actions;
+    el("storyDetail").innerHTML = info + readBar + agreed + actions;
+    bindClick("storyPrev", function () { storyStep(s.id, -1); });
+    bindClick("storyNext", function () { storyStep(s.id, 1); });
+    bindClick("storyCopyText", function () { storyCopy(s.story_text || ""); });
+    bindClick("storyCopyQuote", function () { storyCopy(s.short_quote || ""); });
     if (canWrite) {
       showStoryReadBar(s, "");
       wireStoryActions(s);
     }
+  }
+  function storyStep(id, by) {
+    var at = stListedIds.indexOf(String(id));
+    var next = stListedIds[at + by];
+    if (at >= 0 && next !== undefined) openStory(next);
+  }
+  function storyCopy(text) {
+    var line = H.storyConsentLine(currentStory || {});
+    window.AdminKit.copyText(text).then(function (ok) {
+      storySay("storyCopyStatus", ok ? "Copied. Remember what they agreed to: " + line : "Could not copy. Select the words and copy them yourself.", ok ? "is-ok" : "is-error");
+    });
+  }
+  function storySay(id, msg, kind) {
+    var s = el(id);
+    if (!s) return;
+    s.classList.remove("is-ok", "is-error");
+    if (kind) s.classList.add(kind);
+    s.textContent = msg || "";
   }
   // TASK-560: Mark as read while the story is New, and the way back while it is Reviewed. Used and
   // Withdrawn say more than read, so they get no button. The admin's small button and its text
@@ -3480,7 +3647,9 @@
       if (!elsewhere) (el("storyUnreadBtn") || el("storyReadBtn") || el("storyReadNote")).focus({ preventScroll: true });
     });
   }
-  function patchStory(body, okMsg, errMsg) {
+  // A change from the story's own form or its "Putting a story away" panel. What happened is said
+  // beside the button that was pressed (where): the story is drawn again first, then the words.
+  function patchStory(body, okMsg, errMsg, where) {
     return authFetch("/api/admin/stories/" + currentStoryId, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -3492,11 +3661,11 @@
       .then(function (updated) {
         if (updated) {
           renderStory(updated);
-          storyStatus(okMsg);
-        } else storyStatus(errMsg);
+          storySay(where, okMsg, "is-ok");
+        } else storySay(where, errMsg, "is-error");
       })
       .catch(function () {
-        storyStatus(errMsg);
+        storySay(where, errMsg, "is-error");
       });
   }
   function wireStoryActions(s) {
@@ -3510,61 +3679,69 @@
           adminTags: tagsRaw ? tagsRaw.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [],
           adminNotes: el("edit-storyNotes").value || "",
         };
-        patchStory(body, "Saved.", "Could not save the changes.");
+        patchStory(body, "Saved.", "Could not save the changes.", "storyFormStatus");
       });
     }
-    bindClick("withdrawStoryBtn", function () {
-      if (!window.confirm("Withdraw this story? It will no longer be treated as usable.")) return;
-      patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.");
+    // Withdraw and Erase ask first, in the page, under their own button.
+    function ask(id, open, focusId) {
+      var box = el(id);
+      if (!box) return;
+      box.hidden = !open;
+      var f = el(focusId);
+      if (f) f.focus({ preventScroll: true });
+    }
+    bindClick("withdrawStoryBtn", function () { storySay("storyPutAwayStatus", ""); ask("storyWithdrawAsk", true, "storyWithdrawNo"); });
+    bindClick("storyWithdrawNo", function () { ask("storyWithdrawAsk", false, "withdrawStoryBtn"); });
+    bindClick("storyWithdrawYes", function () {
+      patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.", "storyPutAwayStatus");
     });
     bindClick("archiveStoryBtn", archiveStory);
     bindClick("restoreStoryBtn", restoreStory);
-    bindClick("eraseStoryBtn", eraseStory);
+    bindClick("eraseStoryBtn", function () { storySay("storyPutAwayStatus", ""); ask("storyEraseAsk", true, "storyEraseReason"); });
+    bindClick("storyEraseNo", function () { ask("storyEraseAsk", false, "eraseStoryBtn"); });
+    bindClick("storyEraseYes", eraseStory);
   }
-  // TASK-311: a stronger, explicit prompt than Withdraw's, naming the action as permanent erasure
-  // rather than a generic "are you sure", since this cannot be
-  // undone (DELETE /api/admin/stories/:id, not a status flag). On success, returns to the
-  // Stories list and refreshes it, since the detail view has nothing left to show.
-  // TASK-311: the everyday action. Reversible, so it asks nothing and explains where the story went.
+  // TASK-311: the everyday action. It can be undone, so it asks nothing, and goes back to the list.
   function archiveStory() {
     authFetch("/api/admin/stories/" + currentStoryId + "/archive", { method: "POST" })
       .then(function (res) {
         if (res.ok) selectView("stories");
-        else storyStatus("Could not archive the story.");
+        else storySay("storyPutAwayStatus", "Could not archive the story.", "is-error");
       })
-      .catch(function () { storyStatus("Could not archive the story."); });
+      .catch(function () { storySay("storyPutAwayStatus", "Could not archive the story.", "is-error"); });
   }
 
   function restoreStory() {
     authFetch("/api/admin/stories/" + currentStoryId + "/restore", { method: "POST" })
       .then(function (res) {
         if (res.ok) selectView("stories");
-        else storyStatus("Could not restore the story.");
+        else storySay("storyPutAwayStatus", "Could not restore the story.", "is-error");
       })
-      .catch(function () { storyStatus("Could not restore the story."); });
+      .catch(function () { storySay("storyPutAwayStatus", "Could not restore the story.", "is-error"); });
   }
 
-  // TASK-311: permanent erasure. Kept because a charity must be able to honour a GDPR erasure
-  // request - but it asks for a reason, and the server refuses unless the story is archived first.
-  // The reason is recorded so that what was erased stays knowable after the story itself is gone.
+  // TASK-311: permanent erasure. Kept because a charity must be able to honour an erasure request,
+  // but the reason is asked for on the page and recorded, and the server refuses unless the story is
+  // archived first. What was erased stays knowable after the story itself is gone ("Erased stories").
   function eraseStory() {
-    var reason = window.prompt(
-      "Erase this story permanently?\n\nThis cannot be undone. Say why — it is recorded so there is a" +
-        " record of what was removed, even though the story itself will be gone.\n\nReason:",
-    );
-    if (reason === null) return;
-    if (!reason.trim()) { storyStatus("A reason is needed to erase a story."); return; }
+    var reason = ((el("storyEraseReason") || {}).value || "").trim();
+    if (!reason) {
+      storySay("storyPutAwayStatus", "A reason is needed to erase a story.", "is-error");
+      if (el("storyEraseReason")) el("storyEraseReason").focus({ preventScroll: true });
+      return;
+    }
+    storySay("storyPutAwayStatus", "Erasing…");
     authFetch("/api/admin/stories/" + currentStoryId, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: reason.trim() }),
+      body: JSON.stringify({ reason: reason }),
     })
       .then(function (res) {
         if (res.ok) selectView("stories");
-        else res.json().then(function (b) { storyStatus(b.error || "Could not erase the story."); })
-          .catch(function () { storyStatus("Could not erase the story."); });
+        else res.json().then(function (b) { storySay("storyPutAwayStatus", b.error || "Could not erase the story.", "is-error"); })
+          .catch(function () { storySay("storyPutAwayStatus", "Could not erase the story.", "is-error"); });
       })
-      .catch(function () { storyStatus("Could not erase the story."); });
+      .catch(function () { storySay("storyPutAwayStatus", "Could not erase the story.", "is-error"); });
   }
   bindClick("storyBack", function () {
     selectView("stories");

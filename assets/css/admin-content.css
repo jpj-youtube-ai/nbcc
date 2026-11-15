@@ -113,3 +113,69 @@
   .pt-card__face { grid-template-columns: minmax(0, 1fr); }
   .pt-switch { justify-self: start; }
 }
+
+/* ================= Stories (#view-stories, #view-story) ================= */
+
+/* Six tiles in one grid: the two groups (statuses, and Archived) lay their tiles straight into it. */
+.st-tilegroup { display: contents; }
+#view-stories .st-tiles { grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
+
+/* The list keeps its table on a laptop and its cards below 760px (admin.css, TASK-561). The kit draws
+   the frame; these are only the new pieces in its cells. */
+.st-quote { font-style: italic; color: var(--ov-ink); overflow-wrap: anywhere; quotes: "\201C" "\201D"; }
+.st-none { color: var(--ov-soft); font-size: 0.88rem; }
+.st-agreed { display: block; margin-top: 6px; font-size: 0.86rem; line-height: 1.4; color: var(--ov-text); }
+.st-old { margin-top: 4px; }
+#view-stories .st-open { min-height: 44px; min-width: 44px; font-weight: 600; }
+#view-stories .stories-table td .st-value { min-width: 0; }
+
+/* The erased stories. */
+#view-stories .st-erased { margin-top: 22px; }
+.st-erased__list { gap: 10px; }
+.st-erased__item { display: grid; gap: 2px; }
+.st-erased__what { margin: 0; font-family: var(--ov-head); font-weight: 700; color: var(--ov-ink); }
+.st-erased__meta { margin: 0; font-size: 0.86rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+.st-erased__why { margin: 4px 0 0; overflow-wrap: anywhere; }
+
+/* One story. */
+.st-where { margin: 0 0 10px; font-weight: 600; color: var(--ov-soft); }
+.st-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 6px; }
+.st-step { min-height: 44px; }
+.st-steps__at { font-size: 0.9rem; color: var(--ov-soft); }
+#view-story .admin-story-text { max-width: 68ch; margin: 0; padding: 18px 20px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); font-size: 1.02rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+#view-story .st-quote-big { font-style: italic; font-size: 1.1rem; }
+.st-copy { display: grid; gap: 10px; max-width: 68ch; margin: 18px 0 0; }
+.st-copy > * { margin: 0; }
+.st-copy__agreed { line-height: 1.5; }
+.st-agreed-card { max-width: 68ch; margin: 22px 0 14px; }
+.st-agreed-card .ak-h3 { margin: 0 0 8px; }
+.st-agreed-list { display: grid; gap: 6px; margin: 0; padding: 0 0 0 20px; line-height: 1.5; }
+.st-old-note { margin: 12px 0 0; }
+#view-story .st-about { max-width: 68ch; }
+.st-form { display: grid; gap: 14px; max-width: 68ch; margin: 22px 0 0; }
+.st-form > * { margin-top: 0; margin-bottom: 0; }
+#view-story .st-form textarea, #view-story .st-ask textarea { display: block; width: 100%; resize: vertical; }
+.st-form__go { display: grid; justify-items: start; }
+.st-away { display: grid; gap: 18px; max-width: 68ch; margin: 22px 0 0; }
+.st-away > * { margin-top: 0; margin-bottom: 0; }
+.st-away__one { display: grid; justify-items: start; }
+.st-ask { justify-self: stretch; margin: 12px 0 0; }
+/* The public stylesheet draws every form as a card of its own; this one is already the kit's panel. */
+#view-story form.st-form { padding: clamp(16px, 2.4vw, 26px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+/* The list's frame: the box TASK-561's cards measure is framed in the kit's look. Clip is not a
+   scrolling box: the corners clip and nothing scrolls sideways. */
+#view-stories .st-list { overflow: visible; overflow: clip; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+#view-stories .stories-table th:first-child { padding-left: 12px; padding-right: 2px; }
+/* The import fold (admin.css draws a small arrow before its words; the kit draws one after). */
+#view-stories .admin-import { max-width: none; }
+#view-stories .admin-import > summary::before { content: none; }
+#view-stories .admin-import-body { padding: 14px 16px 16px; }
+#view-story .ak-facts .admin-link { display: inline-flex; align-items: center; min-height: 44px; }
+#view-stories .st-tiles { margin-top: 4px; }
+/* Where the list is a card a story (admin.css, below 760px), the kit's table padding and rules
+   would space each line out like a table row: each line is a line again. */
+@container stlist (max-width: 759px) {
+  #view-stories .stories-table td { padding: 3px 14px; border-bottom: 0; }
+  #view-stories .stories-table tr { border-bottom: 2px dashed var(--ov-rule); }
+  #view-stories .stories-table tbody tr:last-child { border-bottom: 0; }
+}

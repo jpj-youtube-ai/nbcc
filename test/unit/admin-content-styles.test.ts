@@ -69,7 +69,7 @@ describe("the Stories and Partners stylesheet keeps the house rules", () => {
   });
 
   it("gives everything that is pressed a finger's height", () => {
-    [".pt-switch {", ".pt-card__open {", ".st-card__open {", ".st-step {"].forEach((start) =>
+    [".pt-switch {", ".pt-card__open {", "#view-stories .st-open {", ".st-step {"].forEach((start) =>
       expect(rule(start)).toMatch(/min-height:\s*4[4-9]px/),
     );
   });

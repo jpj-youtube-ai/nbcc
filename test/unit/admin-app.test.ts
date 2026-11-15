@@ -456,13 +456,15 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     const withdrawBtn = el("withdrawStoryBtn") as HTMLButtonElement;
     expect(withdrawBtn).not.toBeNull();
 
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    // 2026-11-14: Withdraw asks in the page, and says what happened beside its own button.
     withdrawBtn.click();
     await flush();
+    expect(el("storyWithdrawAsk").hidden).toBe(false);
+    el("storyWithdrawYes").click();
     await flush();
-    expect(confirmSpy).toHaveBeenCalled();
+    await flush();
     expect(el("storyDetail").textContent).toContain("Withdrawn");
-    expect(el("storyActionStatus").textContent).toContain("withdrawn");
+    expect(el("storyPutAwayStatus").textContent).toContain("withdrawn");
   });
 
   it("hides the story manage form for a Viewer", async () => {

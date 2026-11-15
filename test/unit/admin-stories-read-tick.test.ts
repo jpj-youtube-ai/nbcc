@@ -187,7 +187,8 @@ describe("the Read column on the Stories list", () => {
     await openStories();
     expect(document.querySelector("#storiesTable > .st-list > table.stories-table")).not.toBeNull();
     const labels = Array.from(rowOf(4).children).map((td) => td.getAttribute("data-label"));
-    expect(labels).toEqual(["Read", "ID", "Role", "Scope / consent", "Status", "Consent age", "Submitted", ""]);
+    // 2026-11-14: plain column names, and the line they chose to be quoted as a column of its own.
+    expect(labels).toEqual(["Read", "ID", "Their words", "Sent by", "Agreed to", "Status", "When agreed", "Sent", ""]);
     // Every row, not only the first.
     expect(document.querySelectorAll("#storiesTable tbody td:not([data-label])")).toHaveLength(0);
   });
@@ -197,11 +198,11 @@ describe("the Read column on the Stories list", () => {
   it("keeps a cell's pills, and the status with its sentence, in one box each", async () => {
     stories[0] = { ...story(4, "new"), use_scope: "public", consent_share_first_name: true, consent_share_town: true };
     await openStories();
-    const scope = rowOf(4).children[3];
+    const scope = rowOf(4).children[4];
     expect(scope.children).toHaveLength(1);
     expect(scope.children[0].className).toBe("st-value");
     expect(scope.children[0].querySelectorAll(".admin-pill")).toHaveLength(3);
-    const status = rowOf(4).children[4];
+    const status = rowOf(4).children[5];
     expect(status.children).toHaveLength(1);
     expect(status.children[0].className).toBe("st-value");
     expect(Array.from(status.children[0].children)).toEqual([statusPill(4), unsavedOf(4), rowOf(4).querySelector("[data-story-note]")]);
@@ -240,9 +241,11 @@ describe("ticking a story", () => {
   it("does not draw the list again, so nothing jumps", async () => {
     await openStories();
     const row = rowOf(4);
+    // 2026-11-14: the list reads the live and the archived stories when it opens; a tick reads neither again.
+    const reads = calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories").length;
     await press(tick(4));
     expect(rowOf(4)).toBe(row);
-    expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories")).toHaveLength(1);
+    expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories")).toHaveLength(reads);
   });
 
   // A sentence under the status made the row taller, so every row beneath it moved: on a quick

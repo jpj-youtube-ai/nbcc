@@ -46,3 +46,25 @@ describe("partnerKey: whether two partner names are the same name", () => {
     expect(H.partnerKey(null)).toBe("");
   });
 });
+
+describe("storyConsentLine: what a story's sender agreed to, as one sentence", () => {
+  const s = (o: Record<string, unknown>) => ({ use_scope: "public", consent_share_first_name: false, consent_share_town: false, ...o });
+  it("says public use and which details may go with it", () => {
+    expect(H.storyConsentLine(s({ consent_share_first_name: true }))).toBe("May be used in public, with their first name, not their town.");
+    expect(H.storyConsentLine(s({ consent_share_first_name: true, consent_share_town: true }))).toBe("May be used in public, with their first name and their town.");
+    expect(H.storyConsentLine(s({ consent_share_town: true }))).toBe("May be used in public, with their town, not their name.");
+    expect(H.storyConsentLine(s({}))).toBe("May be used in public, without their name or their town.");
+  });
+  it("says a private story is never to be published, whatever else was ticked", () => {
+    expect(H.storyConsentLine(s({ use_scope: "internal_only", consent_share_first_name: true }))).toBe("Private to NBCC: never to be published.");
+  });
+});
+
+describe("consentIsOld: consent given over a year ago", () => {
+  const now = new Date("2026-11-15T12:00:00Z");
+  it("is true past 365 days and false up to then", () => {
+    expect(H.consentIsOld("2025-11-14T12:00:00Z", now)).toBe(true);
+    expect(H.consentIsOld("2025-11-16T12:00:00Z", now)).toBe(false);
+    expect(H.consentIsOld(null, now)).toBe(false);
+  });
+});

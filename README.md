@@ -9117,6 +9117,35 @@ Tests: `test/unit/admin-get-involved-tab.test.ts` (the sections, the pills and f
 permission combination, each old way in, what each section fetches and when, the wording, and the
 Ball ticket report in its new place) and `features/admin-get-involved.feature`.
 
+## The records in the kit's look: Audit, Email audit, Analytics, Notifications (2026-11-14)
+
+The admin refresh (`docs/superpowers/specs/2026-11-14-admin-refresh-records.md`). All four screens carry
+the class `ak` and build from the kit; what only they need is in `assets/css/admin-records.css`, every rule
+named through its view (`test/unit/admin-records-sheet.test.ts`).
+
+- **Governance > Audit** says each line in plain English ("Fern Example changed Sam Example's role to
+  Editor") from `AUDIT_WORDS` in `app.js`, under day headings with the time in UK time. A code with no words
+  shows as a tidy version of itself; `test/unit/admin-audit-words.test.ts` reads every action code in
+  `src/` and fails until it has words, and every entity until it belongs to a part of the admin
+  (`AUDIT_AREAS`). Tiles for each part (with counts), a word, who did it, From and To, and Staff only (hides
+  what Stripe, visitors and automatic jobs wrote); Show older; a line opens to what it recorded, with Open
+  this donor or Open this sign up; Download what is shown.
+  `GET /api/admin/audit` takes new optional `entities`, `actor`, `staff=1`, `from`, `to`, `q` and
+  `summary=1` (adds `counts` by entity and `people`), each a bound parameter, same guard, no migration.
+  Each row also has `actor_name`, and `about_name` / `about_email` for a line about one of the team.
+- **Governance > Email audit** is a card per email on a phone (it used to scroll sideways), each with its
+  day and time and when the mailbox answered. Status tiles (All, Problems, Delivered, Sent;
+  `status=problems` on `GET /api/admin/email-log`), search as you type, the type list grouped and A to Z,
+  press an address to see everything sent to it, Download what is shown. The red band is unchanged.
+- **Admin > Analytics** opens with a summary in words from the same answer, has a line under each figure,
+  a bar of six parts on a phone (every part shows on a laptop), Download the numbers, remembers the days
+  chosen for the visit (`sessionStorage` `nbccAdminAnDays`), and links QR codes scanned and Newsletter
+  issues through.
+- **Monitor > Notifications** says whether this phone is on and offers Turn off for this phone (the
+  browser's own subscription and `DELETE /api/admin/push/subscription`); each tick saves as it is pressed;
+  only the areas you can open are offered (an "off" stored for any other is kept); the quiet time needs
+  both ends and is said back ("Quiet from 10pm until 7am").
+
 ## Admin > Analytics (TASK-482)
 
 Part 4 of site analytics: the page that shows the numbers TASK-479 counts. Admin > Analytics, in the

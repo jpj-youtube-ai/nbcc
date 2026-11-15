@@ -67,3 +67,5 @@
 #view-notifications .rc-quiet-said { margin: 8px 0 14px; font-weight: 600; color: var(--ov-ink); }
 #view-notifications .admin-claim-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 #view-notifications .np-quiet input { min-width: 0; }
+/* The kit draws a field's label in the heading face; a tick box's words are ordinary words. */
+#view-notifications .admin-field label.admin-check { display: flex; align-items: center; margin: 0; font-family: inherit; font-weight: 400; font-size: 0.95rem; }

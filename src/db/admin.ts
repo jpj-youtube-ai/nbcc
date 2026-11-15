@@ -613,8 +613,29 @@ const SEARCH_LIMIT = 50;
 // an id. Trims the input; a blank query is the route's concern (400 before we get here).
 function searchArgs(q: string): [string, number | null] {
   const trimmed = q.trim();
-  const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+  // Only a number that fits an id column: a longer run of digits (a phone number typed with no
+  // spaces) cast to an integer makes the database refuse the whole query.
+  const asNumber = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+  const numeric = asNumber !== null && asNumber <= 2147483647 ? asNumber : null;
   return [`%${trimmed}%`, numeric];
+}
+
+// The query as a postcode with its spaces taken out ("ka1 1aa" and "KA11AA" are one postcode), or
+// null when it could not be one: a postcode, or the start of one, always has a letter and a digit.
+function postcodePattern(q: string): string | null {
+  const compact = q.replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9]{2,8}$/.test(compact)) return null;
+  if (!/[A-Za-z]/.test(compact) || !/\d/.test(compact)) return null;
+  return `%${compact}%`;
+}
+
+// The query as the digits of a phone number, or null when it is not one. The leading 0, or the 44 of
+// +44 and 0044, is left off, so a number typed one way finds the same number stored the other way.
+function phonePattern(q: string): string | null {
+  const trimmed = q.trim();
+  if (!/^[\d\s()+-]+$/.test(trimmed)) return null;
+  const digits = trimmed.replace(/\D/g, "").replace(/^(0044|44|0)/, "");
+  return digits.length >= 6 ? `%${digits}%` : null;
 }
 
 export interface DonorSearchRow {
@@ -626,17 +647,24 @@ export interface DonorSearchRow {
   anonymous: boolean;
 }
 
-// Find donors by name, business name, email, or id.
+// Find donors by name, business name, email or id; by postcode (the one on a Gift Aid declaration of
+// theirs, or a business's billing postcode); or by a business supporter's phone number (donors have
+// no phone number of their own; a business supporter's is on its fulfilment record, TASK-491).
 export async function searchDonors(q: string): Promise<DonorSearchRow[]> {
   const [pattern, numeric] = searchArgs(q);
   const res = await pool.query<DonorSearchRow>(
-    `SELECT id, donor_type, full_name, business_name, email, anonymous
-       FROM donors
-      WHERE full_name ILIKE $1 OR business_name ILIKE $1 OR email ILIKE $1
-         OR ($2::int IS NOT NULL AND id = $2::int)
-      ORDER BY id DESC
+    `SELECT dn.id, dn.donor_type, dn.full_name, dn.business_name, dn.email, dn.anonymous
+       FROM donors dn
+      WHERE dn.full_name ILIKE $1 OR dn.business_name ILIKE $1 OR dn.email ILIKE $1
+         OR ($2::int IS NOT NULL AND dn.id = $2::int)
+         OR ($3::text IS NOT NULL AND (
+               REPLACE(dn.billing_postcode, ' ', '') ILIKE $3
+               OR EXISTS (SELECT 1 FROM declarations dec WHERE dec.donor_id = dn.id AND REPLACE(dec.postcode, ' ', '') ILIKE $3)))
+         OR ($4::text IS NOT NULL AND EXISTS (
+               SELECT 1 FROM business_supporter_fulfilment f WHERE f.donor_id = dn.id AND regexp_replace(f.phone, '[^0-9]', '', 'g') LIKE $4))
+      ORDER BY dn.id DESC
       LIMIT ${SEARCH_LIMIT}`,
-    [pattern, numeric],
+    [pattern, numeric, postcodePattern(q), phonePattern(q)],
   );
   return res.rows;
 }
@@ -678,6 +706,10 @@ export interface DonationSearchRow {
   currency: string;
   gift_aid: boolean;
   claim_status: string;
+  /** pending | paid | failed, and what has been refunded: the Payment pill is worked out from these
+   *  two (helpers.paymentLabel), as on the Donations list. Without them every gift read as Paid. */
+  payment_status: string;
+  refunded_amount_pence: number;
   payment_channel: string;
   created_at: Date;
   /** Where the gift was started: 'red_bag' for Fill a Red Bag, null for every other gift. */
@@ -693,6 +725,7 @@ export async function searchDonations(q: string): Promise<DonationSearchRow[]> {
   const res = await pool.query<DonationSearchRow>(
     `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
+            d.payment_status, d.refunded_amount_pence,
             d.payment_channel, d.created_at, d.source, d.invoice_id
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id

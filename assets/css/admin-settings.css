@@ -117,6 +117,8 @@
   #view-team-permissions .admin-perm-row .admin-segmented { flex-wrap: wrap; }
   #view-team .set-person__rolefield { max-width: none; }
   #view-site .set-search, #view-qr .set-search { max-width: none; }
+  /* The code above its words, so the words and buttons have the card's width. */
+  #view-qr .qr-body { flex-basis: 100%; }
   /* The spare addresses are cards here (.sa-table, admin.css): one rule round each card, not one per line. */
   #view-site .sa-table tr td { border-bottom: 0; }
   #view-team .set-person__actions .btn, #view-site .set-page__actions .btn, #view-qr .set-qr-share .btn, #view-qr .set-qr-change .btn { flex: 1 1 auto; }

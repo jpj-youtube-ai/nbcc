@@ -7082,6 +7082,40 @@ its screen (`comingUp` in `src/admin/overview-coming-up.ts`). Each source carrie
 The card is hidden when nothing this person may see is coming up, and a source that fails is named
 in "Could not check" like the rest.
 
+## Admin refresh: Site pages, QR codes, Team, Manage access and My account (2026-11-14)
+
+The five screens of the Admin area in the kit's look (the class `ak`, `assets/css/admin-kit.css`), with
+what only they need in `assets/css/admin-settings.css` (new classes start `set-`; the `qr-` and `sa-`
+rules stay in `admin.css`). Design: `docs/superpowers/specs/2026-11-14-admin-refresh-settings.md`. No
+route, permission, invite, password or sign-in rule changed; everything is drawn from answers the screens
+were already sent.
+
+- **Team**: a card a person (name, "(you)", email, role, status, "Last signed in 3 days ago" or "Invited
+  12 November, not signed in yet", and what they can open in words), tiles that filter, and "What each
+  role can do" worked out from `rolePresetPermissions`. A change of role, Disable, Reset password and
+  Remove each ask first, in the card. A change of role for someone with access of their own says that it
+  does not change what they can open (the server keeps their saved access, `effectivePermissions`), with
+  Manage access beside it, instead of "Role updated.".
+- **Manage access**: rows grouped under the menu's headings, each saying what it covers and the screens
+  that ride on it; None, View and Edit explained; what saving will change said beside a Save at the top
+  and the foot; rows that differ from the role marked, with "Put back to the Editor's usual access";
+  "Copy access from" another person. A failed save is red (`is-error`), and Back asks before throwing
+  away changes that are not saved.
+- **My account**: the email sentence is right ("ask an Admin to remove you and invite your new address"),
+  what you can open, the password rule shown first, "Show what I typed", a tick when the two match, the
+  server's own words on a 429, cards to Notifications and Sign out, and a refresh comes back to it.
+- **Site pages**: one card a page (who can reach it, address, what it is, its spare addresses, its search
+  engine switch, "Copy the address", "Make a QR code"), tiles that filter and a search box. Remove asks
+  first and says what stops working; "Added by Jo on 3 November".
+- **QR codes**: tiles (named codes, scans this week, scans in all), an order (Newest, Most scanned, A to
+  Z), "A quick code for every page" folded with a search inside, a line under the downloads saying which
+  is for what, "Copy the link", and "Share" where the browser can hand over the picture. A failed
+  download is said in the card, never a browser alert.
+
+Tests: `test/unit/admin-settings-team.test.ts`, `admin-settings-account.test.ts`,
+`admin-settings-qr-site.test.ts`, `admin-settings-styles.test.ts`, through the shared jsdom harness
+`test/unit/helpers/admin-settings-harness.ts`.
+
 ## QR codes for every page (TASK-492)
 
 **Admin → QR codes** makes a QR code for any page of nbcc.scot, for posters, leaflets, table cards,

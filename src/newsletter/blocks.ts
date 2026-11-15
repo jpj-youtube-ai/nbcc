@@ -28,6 +28,8 @@ import {
 // TASK-292: who a salutation addresses when we have no name - never nobody.
 import { greetingName } from "./name-fallback";
 import { SCRIPT } from "../thank-you/letter";
+// The paper look blocks: new block types with their own renderers and helpers (./paper-blocks.ts).
+import { PAPER_RENDERERS, PAPER_NO_SIZE_STEP } from "./paper-blocks";
 
 export const BLOCK_TYPES = [
   "masthead",
@@ -45,6 +47,18 @@ export const BLOCK_TYPES = [
   "divider",
   "signoff",
   "rawHtml",
+  // The paper look blocks (14 November 2026). New TYPES, added after the originals: every existing
+  // type, variant and renderer is untouched (test/unit/newsletter-golden.test.ts). Their renderers
+  // live in ./paper-blocks.ts.
+  "hero",
+  "photoRow",
+  "note",
+  "eventCard",
+  "logoStrip",
+  "giftTags",
+  "bagList",
+  "trim",
+  "paperStory",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -94,7 +108,7 @@ const SIZE_LADDER = [10, 12, 13, 14, 15, 16, 18, 20, 22, 24, 26, 28];
 //   masthead — the brand signature. It should look identical every issue, and its four variants
 //              already span 16→26px, so a step adds drift without adding capability.
 //   divider/image — no text to size.
-const NO_SIZE_STEP: readonly BlockType[] = ["rawHtml", "masthead", "divider", "image"];
+const NO_SIZE_STEP: readonly BlockType[] = ["rawHtml", "masthead", "divider", "image", ...PAPER_NO_SIZE_STEP];
 
 // Shift every font-size in one block's OWN rendered html N notches along the ladder. Safe to do on
 // the output because this is html we generated from our own templates, never user input (rawHtml is
@@ -880,6 +894,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   donationCta,
   button,
   divider,
+  ...PAPER_RENDERERS,
 };
 
 export function renderBlock(block: Block, ctx: RenderCtx): string {

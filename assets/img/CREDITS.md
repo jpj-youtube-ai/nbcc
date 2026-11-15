@@ -62,3 +62,24 @@ packing photo, and any future delivery-day shots) ships **only** with recorded,
 informed consent; beneficiary imagery (children, young people and vulnerable
 adults) additionally needs guardian/safeguarding consent. Drop a consented photo
 into `assets/img/source/<name>.jpg` and re-run `npm run images` to swap it in.
+
+## Email art for the newsletter's paper look blocks (14 November 2026)
+
+`assets/img/email/`, made by `scripts/build-email-art.mjs` (run it again to rebuild). An email cannot
+show WebP in Outlook or SVG in Gmail, so each is a PNG or JPG, already flattened onto the colour it sits
+on, at twice the size it is shown. Every one is DERIVED from art already listed above or in the repo,
+or is a flat shape drawn in code; nothing was painted by hand. No people are shown.
+
+| File | Made from | Consent |
+|---|---|---|
+| `hero-workshop.jpg` | `red-bag/workshop/s08.webp` (the Workshop painting), cropped and resized to 1272px | NBCC owns; no people shown |
+| `hero-sleigh.jpg` | `santa-sleigh-1340.webp`, stood on the email's cream | NBCC owns; no people shown |
+| `print-workshop-1.jpg`, `print-workshop-2.jpg`, `print-workshop-3.jpg` | `red-bag/workshop/s03`, `s08` and `s12.webp`, square crops | NBCC owns; no people shown |
+| `item-<key>.png` (23 files) | the Red Bag list's paintings, `red-bag/<key>.webp`, at 88px on the paper card's colour | NBCC owns |
+| `logo-kilmarnock-santa-sleigh.png` | `kilmarnock-santa-sleigh-logo.webp`, as a PNG | the Kilmarnock Santa Sleigh team's logo, as already used on /sleigh |
+| `trim-bow.png` | `red-bag/bow.webp` | NBCC owns |
+| `trim-stars.png` | `red-bag/snowflake.webp`, `star.webp` and `twinkle.webp` side by side | NBCC owns |
+| `trim-snow.png` | flat shapes in code: holly night, dots of snow, and the site's own drift shape (`src/red-bag/scene.ts`) | n/a |
+| `trim-torn.png` | a flat torn strip drawn in code | n/a |
+| `tape-top.png`, `tape-on-card.png`, `tape-on-white.png`, `tape-on-kraft.png` | one strip of tape drawn in code (the site's tan), cut in two along a card's edge | n/a |
+| `tag-top-card.png`, `tag-top-crimson.png`, `tag-top-holly.png`, `tag-top-tan.png` | the top of a gift tag drawn in code from the home page's tags (`home-top.css`): cut corners, hole, gold string | n/a |

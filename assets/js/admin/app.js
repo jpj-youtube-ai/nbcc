@@ -5567,7 +5567,8 @@
   // masthead is the brand signature (its variants already span 16→26px); divider/image carry no text.
   var NL_SIZE_MIN = -2;
   var NL_SIZE_MAX = 2;
-  var NL_NO_SIZE = ["rawHtml", "masthead", "divider", "image"];
+  // "trim" is the paper look's festive divider: pictures only, no words (PAPER_NO_SIZE_STEP).
+  var NL_NO_SIZE = ["rawHtml", "masthead", "divider", "image", "trim"];
   function nlCanSize(block) {
     return NL_NO_SIZE.indexOf(block.type) === -1;
   }
@@ -5781,6 +5782,211 @@
     },
   };
 
+  // ---- the paper look blocks (14 November 2026) ------------------------------------------------
+  // New block types in the look of the newer pages (Fill a Red Bag's lined paper, the home page's
+  // gift tags, taped prints). Their renderers are src/newsletter/paper-blocks.ts; nothing above
+  // changes. Each arrives filled with real, sendable words and, where it needs one, one of the email
+  // pictures, so a new block never shows a broken picture. `group: "paper"` puts it in the palette's
+  // second group. Field kinds beyond the classic ones: "choice" (a list), "check" (a tick box) and
+  // "date" (a date picker).
+  var NL_ART = "https://nbcc.scot/assets/img/email/";
+  var NL_TAG_COLOURS = [["card", "Paper"], ["crimson", "Crimson"], ["holly", "Holly green"], ["tan", "Tan"]];
+  var NL_BAG_PICS = [
+    ["", "No painting"], ["pyjamas", "Pyjamas"], ["soft-toy", "Soft toy"], ["toy", "Toy"], ["book", "Book"],
+    ["colouring-book", "Colouring book"], ["notebook", "Notebook"], ["pencil", "Pencil"], ["blanket", "Blanket"],
+    ["socks", "Socks"], ["hat-gloves", "Hat and gloves"], ["headphones", "Headphones"], ["insulated-cup", "Insulated cup"],
+    ["toiletry-set", "Toiletry set"], ["present", "A present"], ["crisis-15", "Cuddly toy"], ["crisis-30", "Bedding"],
+    ["crisis-60", "Kitchen basics"], ["school-25", "School shoes"], ["school-35", "Winter coat"], ["school-40", "School uniform"],
+    ["hand-20", "Toiletries and warm clothes"], ["hand-75", "A first step"], ["hand-150", "A bed or cooker"],
+  ];
+  var NLP = {
+    pic: function (k, label) { return { k: k || "imageUrl", label: label || "Picture", kind: "image" }; },
+    alt: { k: "alt", label: "Picture description", hint: "Said by screen readers, and shown when pictures are switched off." },
+    link: function (label) { return [{ k: "label", label: label || "Button words" }, { k: "href", label: "Button link", kind: "url", hint: "A full address, starting https://" }]; },
+  };
+  var NL_PAPER_DEFS = {
+    hero: {
+      label: "Picture header", icon: "hero", group: "paper",
+      data: {
+        imageUrl: NL_ART + "hero-workshop.jpg", alt: "The elves' Workshop, its shelves filling with red bags",
+        eyebrow: "Christmas 2026", headline: "A Red Bag Full of Joy for every child who needs one",
+        subline: "Here is what your kindness is making possible this Christmas.",
+      },
+      variants: [
+        { name: "Picture, then words", hint: "A big picture across the email, the headline under it on cream." },
+        { name: "Maroon band", hint: "The picture, then the headline on a maroon band." },
+        { name: "Night", hint: "The headline on a holly green band with a gold line above, then the picture." },
+        { name: "Art beside", hint: "A smaller picture beside the headline. Best with a logo or a painting." },
+      ].map(function (v) {
+        v.fields = [NLP.pic(), NLP.alt, { k: "eyebrow", label: "Small line above" }, { k: "headline", label: "Headline" }, { k: "subline", label: "Line under the headline" }];
+        return v;
+      }),
+    },
+    photoRow: {
+      label: "Photo row", icon: "photoRow", group: "paper",
+      data: { items: [
+        { url: NL_ART + "print-workshop-1.jpg", alt: "The Workshop with its first red bags on the shelves", caption: "The first bags" },
+        { url: NL_ART + "print-workshop-2.jpg", alt: "The Workshop, its shelves half full", caption: "Half way there" },
+        { url: NL_ART + "print-workshop-3.jpg", alt: "The Workshop overflowing with red bags", caption: "Full to the rafters" },
+      ] },
+      variants: [
+        { name: "Two photos", hint: "Two photos side by side. Photos of the same shape look best." },
+        { name: "Three photos", hint: "Three photos side by side." },
+        { name: "Two prints", hint: "Two photos as taped prints with a handwritten caption." },
+        { name: "Three prints", hint: "Three taped prints in a row." },
+      ].map(function (v, i) {
+        v.items = { note: i % 2 ? "The first three photos are shown." : "The first two photos are shown.",
+          fields: [NLP.pic("url", "Photo"), NLP.alt, { k: "caption", label: "Caption" }] };
+        return v;
+      }),
+    },
+    note: {
+      label: "Handwritten note", icon: "note", group: "paper",
+      data: {
+        text: "Thank you for thinking of us this Christmas. Your kindness reaches further than you will ever know.",
+        from: "Everyone at NBCC", role: "",
+      },
+      variants: [
+        { name: "Lined paper", hint: "On a sheet of lined paper with a red margin line." },
+        { name: "Taped", hint: "The same paper, taped to the page." },
+        { name: "Large handwriting", hint: "Big handwriting with no paper behind it." },
+        { name: "Kraft card", hint: "On a taped tan card." },
+      ].map(function (v) {
+        v.fields = [{ k: "text", label: "The note", kind: "textarea", hint: "If it is someone's own words, check they are happy for us to share them." },
+          { k: "from", label: "Who it is from" }, { k: "role", label: "Line under their name" }];
+        return v;
+      }),
+    },
+    eventCard: {
+      label: "Event card", icon: "eventCard", group: "paper",
+      data: {
+        imageUrl: NL_ART + "hero-sleigh.jpg", alt: "Santa and an elf waving from the NBCC sleigh",
+        date: "", day: "", month: "", name: "The Kilmarnock Santa Sleigh", when: "December evenings",
+        location: "Around Kilmarnock", body: "Listen out for the bells, then come to the door and give Santa a wave.",
+        label: "See every night", href: "https://nbcc.scot/sleigh",
+        items: [
+          { imageUrl: NL_ART + "hero-sleigh.jpg", alt: "Santa and an elf waving from the NBCC sleigh", date: "", day: "", month: "DEC",
+            name: "The Kilmarnock Santa Sleigh", when: "December evenings", location: "Around Kilmarnock", label: "See every night", href: "https://nbcc.scot/sleigh" },
+          { imageUrl: NL_ART + "print-workshop-2.jpg", alt: "The Workshop, its shelves half full of red bags", date: "", day: "", month: "",
+            name: "Fill a Red Bag", when: "Open now", location: "Online", label: "Fill a bag", href: "https://nbcc.scot/fill" },
+        ],
+      },
+      variants: (function () {
+        var one = [NLP.pic(), NLP.alt,
+          { k: "date", label: "Date", kind: "date", hint: "The badge shows its day and month. Leave it blank for a run of nights, and type them below." },
+          { k: "day", label: "Day on the badge", hint: "Only if not using the date, for example 1 to 24" },
+          { k: "month", label: "Month on the badge", hint: "Only if not using the date, for example DEC" },
+          { k: "name", label: "Name of the event" }, { k: "when", label: "When" }, { k: "location", label: "Where" },
+          { k: "body", label: "A few words about it", kind: "textarea" }].concat(NLP.link());
+        var noPic = one.filter(function (f) { return f.k !== "imageUrl" && f.k !== "alt"; });
+        var item = one.filter(function (f) { return f.k !== "body"; });
+        return [
+          { name: "Picture on top", hint: "The picture across the card, the date badge beside the words.", fields: one },
+          { name: "Picture left", hint: "A smaller picture on the left, the words on the right.", fields: one },
+          { name: "Ticket", hint: "A ticket with the date on a crimson stub. No picture.", fields: noPic },
+          { name: "Two cards", hint: "Two events side by side.", items: { note: "The first two events are shown.", fields: item } },
+        ];
+      })(),
+    },
+    logoStrip: {
+      label: "Partner logos", icon: "logoStrip", group: "paper",
+      data: {
+        heading: "With thanks to", showNames: true,
+        items: [
+          { url: NL_ART + "logo-kilmarnock-santa-sleigh.png", name: "Kilmarnock Santa Sleigh", href: "https://nbcc.scot/sleigh" },
+          { url: "https://nbcc.scot/assets/img/the-designer-rooms.png", name: "The Designer Rooms", href: "" },
+        ],
+      },
+      variants: (function () {
+        var head = [{ k: "heading", label: "Heading" },
+          { k: "showNames", label: "Print the partners' names under the logos", kind: "check", hint: "Readers with pictures switched off see the names instead." }];
+        var items = function (note) {
+          return { note: note, head: head, fields: [NLP.pic("url", "Logo"), { k: "name", label: "Partner's name" }, { k: "href", label: "Their website", kind: "url", hint: "Optional. A full address, starting https://" }] };
+        };
+        return [
+          { name: "Row of four", hint: "Up to four logos in a row.", items: items("The first four logos are shown.") },
+          { name: "Two rows", hint: "Up to six logos in two rows of three.", items: items("The first six logos are shown.") },
+          { name: "One partner", hint: "One logo, with the heading and name beside it.", items: items("Only the first partner is shown in this style.") },
+          { name: "White band", hint: "Up to four logos on a white band, for logos with a white background.", items: items("The first four logos are shown.") },
+        ];
+      })(),
+    },
+    giftTags: {
+      label: "Gift tags", icon: "giftTags", group: "paper",
+      data: { items: [
+        { title: "Fill a bag yourself", body: "Choose what goes in, from warm pyjamas to a soft toy.", label: "Fill a Red Bag", href: "https://nbcc.scot/fill", colour: "card" },
+        { title: "Fill bags as a team", body: "Ask us for a Workshop link for your workplace, club or class.", label: "Ask us", href: "mailto:info@nbcc.scot", colour: "crimson" },
+        { title: "Give an evening", body: "Help us pack Red Bags in December.", label: "Get involved", href: "https://nbcc.scot/get-involved", colour: "holly" },
+      ] },
+      variants: (function () {
+        var fields = [{ k: "title", label: "Title" }, { k: "body", label: "A line under it" }].concat(NLP.link(),
+          [{ k: "colour", label: "Colour", kind: "choice", options: NL_TAG_COLOURS }]);
+        return [
+          { name: "Three", hint: "Three hanging tags in a row, like the home page.", items: { note: "The first three tags are shown.", fields: fields } },
+          { name: "Two", hint: "Two larger tags side by side.", items: { note: "The first two tags are shown.", fields: fields } },
+          { name: "Stacked", hint: "The tags one under another.", items: { note: "The first three tags are shown.", fields: fields } },
+          { name: "One large", hint: "One big tag, for a single ask.", items: { note: "Only the first tag is shown in this style.", fields: fields } },
+        ];
+      })(),
+    },
+    bagList: {
+      label: "What goes in a bag", icon: "bagList", group: "paper",
+      data: {
+        title: "What could go in a bag",
+        items: [
+          { name: "Warm pyjamas", price: "£5", pic: "pyjamas" }, { name: "A soft toy", price: "£4", pic: "soft-toy" },
+          { name: "A book to keep", price: "£3", pic: "book" }, { name: "Hat and gloves", price: "£4", pic: "hat-gloves" },
+          { name: "A cosy blanket", price: "£8", pic: "blanket" }, { name: "Socks", price: "£1", pic: "socks" },
+        ],
+        footnote: "These show what gifts could do. Every gift goes where it's needed most.",
+        label: "Fill a Red Bag", href: "https://nbcc.scot/fill",
+      },
+      variants: (function () {
+        var head = [{ k: "title", label: "Title", hint: "Say what a gift could do, never what it will buy." }];
+        var foot = [{ k: "footnote", label: "Small print underneath" }];
+        var withPic = [{ k: "name", label: "Thing" }, { k: "price", label: "Price" }, { k: "pic", label: "Painting", kind: "choice", options: NL_BAG_PICS }];
+        var words = [{ k: "name", label: "Thing" }, { k: "price", label: "Price" }];
+        var note = "Up to eight things are shown.";
+        return [
+          { name: "With paintings", hint: "Lined paper, each thing with its painting.", items: { note: note, head: head, foot: foot, fields: withPic } },
+          { name: "Words only", hint: "Lined paper, handwritten, no paintings.", items: { note: note, head: head, foot: foot, fields: words } },
+          { name: "With a button", hint: "With the paintings, and a button underneath.", items: { note: note, head: head, foot: foot.concat(NLP.link()), fields: withPic } },
+          { name: "Two columns", hint: "The things in two columns, for a longer list.", items: { note: note, head: head, foot: foot, fields: withPic } },
+        ];
+      })(),
+    },
+    trim: {
+      label: "Festive divider", icon: "trim", group: "paper",
+      data: {},
+      variants: [
+        { name: "Ribbon and bow", hint: "A gold ribbon with a bow in the middle.", fields: [] },
+        { name: "Snow", hint: "A band of snowy night across the email.", fields: [] },
+        { name: "Torn paper", hint: "A torn strip of tan paper.", fields: [] },
+        { name: "Stars", hint: "A star between a snowflake and a twinkle.", fields: [] },
+      ],
+    },
+    paperStory: {
+      label: "Story, paper look", icon: "paperStory", group: "paper",
+      data: {
+        imageUrl: NL_ART + "print-workshop-2.jpg", alt: "The Workshop, its shelves half full of red bags",
+        kicker: "From the Workshop", title: "How a Red Bag is filled",
+        body: "Every Red Bag Full of Joy is packed by hand by our volunteers, for one child, young person or adult who needs it.\n\nEvery gift, big or small, helps fill one more.",
+        label: "Read more", href: "https://nbcc.scot/about-us",
+      },
+      variants: (function () {
+        var words = [{ k: "kicker", label: "Handwritten line above" }, { k: "title", label: "Title" }, { k: "body", label: "The story", kind: "textarea" }].concat(NLP.link());
+        var withPic = [NLP.pic("imageUrl", "Photo"), NLP.alt].concat(words);
+        return [
+          { name: "Print above", hint: "The photo as a taped print, the story under it.", fields: withPic },
+          { name: "Print beside", hint: "A taped print on the left, the story on the right.", fields: withPic },
+          { name: "Paper card", hint: "The photo and the story together on a taped paper card.", fields: withPic },
+          { name: "No photo", hint: "The story on lined paper with a handwritten line above.", fields: words },
+        ];
+      })(),
+    },
+  };
+  Object.keys(NL_PAPER_DEFS).forEach(function (type) { nlBlockDefs[type] = NL_PAPER_DEFS[type]; });
+
   // Inline line icons (16px, currentColor) for the palette + block headers and controls. SVG, not
   // emoji, so they inherit theme colour and stay crisp — the admin chrome standard.
   var NL_ICONS = {
@@ -5800,6 +6006,16 @@
     // A signed hand over a ruled line (TASK-251). Same stroke-only line-art as its neighbours —
     // without an entry here nlIcon falls back to "" and the palette button sits there iconless.
     signoff: '<path d="M3 16c2.5 0 3.5-7 5.5-7s1.5 7 3.5 7 3-9 5-9 1.5 5 4 5"/><line x1="3" y1="20" x2="21" y2="20"/>',
+    // The paper look blocks (14 November 2026), on the same grid and stroke.
+    hero: '<rect x="3" y="3" width="18" height="11" rx="1.5"/><path d="M3 11l5-4 4 3 3-2 6 4"/><line x1="6" y1="18" x2="18" y2="18"/><line x1="8" y1="21" x2="16" y2="21"/>',
+    photoRow: '<rect x="2.5" y="7" width="8" height="10" rx="1"/><rect x="13.5" y="7" width="8" height="10" rx="1"/><line x1="5" y1="5" x2="8" y2="5"/><line x1="16" y1="5" x2="19" y2="5"/>',
+    note: '<path d="M5 3h14v18H5z"/><line x1="8" y1="3" x2="8" y2="21"/><path d="M10.5 9c1.5-1 2.5 1 4 0s2-1 3 0"/><path d="M10.5 14c1.5-1 2.5 1 4 0"/>',
+    eventCard: '<rect x="3" y="5" width="18" height="15" rx="2"/><rect x="6" y="9" width="4" height="5" rx="1"/><line x1="12.5" y1="10" x2="18" y2="10"/><line x1="12.5" y1="13.5" x2="16" y2="13.5"/><line x1="8" y1="3" x2="8" y2="6"/><line x1="16" y1="3" x2="16" y2="6"/>',
+    logoStrip: '<rect x="2.5" y="8" width="5" height="5" rx="1"/><circle cx="12" cy="10.5" r="2.6"/><path d="M16.5 13l2.5-5 2.5 5z"/><line x1="4" y1="18" x2="20" y2="18"/>',
+    giftTags: '<path d="M7 9l5-5 5 5v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1z"/><circle cx="12" cy="9" r="1.5"/><line x1="12" y1="2" x2="12" y2="7.5"/>',
+    bagList: '<path d="M6 8h12l-1 13H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="16.5" x2="13" y2="16.5"/>',
+    trim: '<line x1="2" y1="12" x2="8.5" y2="12"/><line x1="15.5" y1="12" x2="22" y2="12"/><path d="M12 12c-2-3-5-3-5 0s3 3 5 0z"/><path d="M12 12c2-3 5-3 5 0s-3 3-5 0z"/><path d="M11 13l-1.5 4M13 13l1.5 4"/>',
+    paperStory: '<path d="M4 4h16v16H4z"/><rect x="7" y="7" width="10" height="6" rx="0.5"/><line x1="10" y1="5.5" x2="14" y2="5.5"/><line x1="7" y1="16" x2="17" y2="16"/><line x1="7" y1="18.5" x2="13" y2="18.5"/>',
     up: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/>',
     down: '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/>',
     dup: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
@@ -5858,16 +6074,34 @@
       host.appendChild(note);
       return;
     }
-    Object.keys(nlBlockDefs).forEach(function (type) {
-      var def = nlBlockDefs[type];
-      var b = doc.createElement("button");
-      b.type = "button";
-      b.className = "nl-add";
-      b.innerHTML = '<span class="nl-add-ic">' + nlIcon(def.icon) + "</span>" +
-        '<span class="nl-add-label">' + def.label + "</span>";
-      b.setAttribute("aria-label", "Add " + def.label + " block");
-      b.addEventListener("click", function () { nlAddBlock(type); });
-      host.appendChild(b);
+    // Two labelled groups (14 November 2026), so the paper look's nine buttons do not join the classic
+    // fourteen in one heap. The classic group keeps its buttons in their old order.
+    [
+      { key: "classic", head: "The classic blocks" },
+      { key: "paper", head: "The paper look (new)" },
+    ].forEach(function (g) {
+      var group = doc.createElement("div");
+      group.className = "nl-palette-group";
+      group.setAttribute("role", "group");
+      var head = doc.createElement("p");
+      head.className = "nl-palette-head";
+      head.id = "nlPaletteHead-" + g.key;
+      head.textContent = g.head;
+      group.setAttribute("aria-labelledby", head.id);
+      group.appendChild(head);
+      Object.keys(nlBlockDefs).forEach(function (type) {
+        var def = nlBlockDefs[type];
+        if ((def.group || "classic") !== g.key) return;
+        var b = doc.createElement("button");
+        b.type = "button";
+        b.className = "nl-add";
+        b.innerHTML = '<span class="nl-add-ic">' + nlIcon(def.icon) + "</span>" +
+          '<span class="nl-add-label">' + def.label + "</span>";
+        b.setAttribute("aria-label", "Add " + def.label + " block");
+        b.addEventListener("click", function () { nlAddBlock(type); });
+        group.appendChild(b);
+      });
+      host.appendChild(group);
     });
   }
 
@@ -5928,7 +6162,7 @@
   function nlBlockSummary(block) {
     var data = block && block.data;
     if (!data) return "";
-    var preferred = ["heading", "title", "label", "text", "lead", "name", "caption", "href", "src"];
+    var preferred = ["heading", "title", "headline", "label", "text", "lead", "name", "caption", "href", "src"];
     for (var i = 0; i < preferred.length; i++) {
       var v = data[preferred[i]];
       if (typeof v === "string" && v.trim()) return nlTrim(v);
@@ -6476,6 +6710,7 @@
       // upload button - even though the renderer draws a per-item image.
       fields.forEach(function (f) {
         if (f.kind === "image") nlImageField(fs, { data: item }, f.k, f.label);
+        else if (f.kind === "choice" || f.kind === "check" || f.kind === "date") nlPaperField(fs, item, f);
         else nlText(fs, item, f.k, f.label, { multiline: f.kind === "textarea", type: f.kind === "url" ? "url" : undefined, hint: f.hint });
       });
       if (!readOnly) {
@@ -6557,7 +6792,11 @@
       host.appendChild(h);
     }
     if (vdef.items) {
+      // A paper look block can have fields of its own around its list (a heading above, a button
+      // below); the classic list blocks have none, so for them this is exactly the old call.
+      (vdef.items.head || []).forEach(function (f) { nlBlockField(host, block, f); });
       nlRenderItems(host, block, vdef.items);
+      (vdef.items.foot || []).forEach(function (f) { nlBlockField(host, block, f); });
       return;
     }
     var fields = vdef.fields || [];
@@ -6568,15 +6807,72 @@
       host.appendChild(none);
       return;
     }
-    fields.forEach(function (f) {
-      if (f.kind === "image") nlImageField(host, block, f.k, f.label);
-      else if (f.kind === "signer") nlSignerField(host, block, f.k, f.label, f.hint);
-      else nlText(host, block.data, f.k, f.label, {
-        multiline: f.kind === "textarea",
-        type: f.kind === "url" ? "url" : undefined,
-        hint: f.hint,
-      });
+    fields.forEach(function (f) { nlBlockField(host, block, f); });
+  }
+
+  // One field of a block's own data, by its kind.
+  function nlBlockField(host, block, f) {
+    if (f.kind === "image") nlImageField(host, block, f.k, f.label);
+    else if (f.kind === "signer") nlSignerField(host, block, f.k, f.label, f.hint);
+    else if (f.kind === "choice" || f.kind === "check" || f.kind === "date") nlPaperField(host, block.data, f);
+    else nlText(host, block.data, f.k, f.label, {
+      multiline: f.kind === "textarea",
+      type: f.kind === "url" ? "url" : undefined,
+      hint: f.hint,
     });
+  }
+
+  // The paper look blocks' three extra kinds of field (14 November 2026), bound to obj[f.k] (a block's
+  // data or one item of its list): "choice", a list to pick from (f.options: [[value, words], ...]);
+  // "check", a tick box that is on unless set false; "date", a date picker. Each is labelled, with an
+  // optional line under it saying what it does, and is disabled in read mode like every other field.
+  function nlPaperField(host, obj, f) {
+    if (f.kind === "date") {
+      nlText(host, obj, f.k, f.label, { type: "date", hint: f.hint });
+      return;
+    }
+    var wrap = doc.createElement("label");
+    var input;
+    if (f.kind === "check") {
+      wrap.className = "nl-field nl-check";
+      input = doc.createElement("input");
+      input.type = "checkbox";
+      input.setAttribute("data-nl-check", f.k);
+      input.checked = obj[f.k] !== false;
+      var words = doc.createElement("span");
+      words.className = "nl-field-label";
+      words.textContent = f.label;
+      wrap.appendChild(input);
+      wrap.appendChild(words);
+      if (nlReadOnly()) input.disabled = true;
+      else input.addEventListener("change", function () { obj[f.k] = input.checked; nlSchedulePreview(); });
+    } else {
+      wrap.className = "nl-field";
+      var lab = doc.createElement("span");
+      lab.className = "nl-field-label";
+      lab.textContent = f.label;
+      wrap.appendChild(lab);
+      input = doc.createElement("select");
+      input.setAttribute("data-nl-choice", f.k);
+      (f.options || []).forEach(function (o) {
+        var opt = doc.createElement("option");
+        opt.value = o[0];
+        opt.textContent = o[1];
+        input.appendChild(opt);
+      });
+      input.value = obj[f.k] != null ? String(obj[f.k]) : "";
+      if (input.selectedIndex < 0) input.selectedIndex = 0;
+      wrap.appendChild(input);
+      if (nlReadOnly()) input.disabled = true;
+      else input.addEventListener("change", function () { obj[f.k] = input.value; nlSchedulePreview(); });
+    }
+    if (f.hint) {
+      var h = doc.createElement("span");
+      h.className = "nl-field-hint";
+      h.textContent = f.hint;
+      wrap.appendChild(h);
+    }
+    host.appendChild(wrap);
   }
 
   // Debounced live preview: renders the current nlDoc server-side and streams it into the iframe.

@@ -1,4 +1,8 @@
-import type { NewsletterDoc } from "./blocks";
+import { renderNewsletter, type NewsletterDoc } from "./blocks";
+// The rule for "a link we would send" lives in one place, shared with the paper look blocks.
+import { looksSendable } from "./link-safety";
+// The paper look blocks' own checks (14 November 2026) live beside their renderers' rules.
+import { paperBlockChecks, bracketNotes, BIG_EMAIL_BYTES } from "./paper-preflight";
 
 // TASK-277 (letter P): the checks that run before a newsletter goes out.
 //
@@ -27,18 +31,13 @@ export interface PreflightContext {
   // Whether a test copy of THIS draft has been sent to a person yet.
   testSent: boolean;
   subject: string;
+  // Today's date in the UK, YYYY-MM-DD. Optional: without it no check that needs a clock runs.
+  today?: string;
 }
 
 function str(data: Record<string, unknown>, key: string): string {
   const value = data[key];
   return typeof value === "string" ? value : "";
-}
-
-// A link we would be happy to put in front of a donor.
-function looksSendable(href: string): boolean {
-  const url = href.trim();
-  if (!url) return false;
-  return /^(https?:\/\/|mailto:|tel:)/i.test(url);
 }
 
 export function preflightNewsletter(doc: NewsletterDoc, ctx: PreflightContext): PreflightFinding[] {
@@ -65,6 +64,7 @@ export function preflightNewsletter(doc: NewsletterDoc, ctx: PreflightContext): 
 
   let imagesWithoutAlt = 0;
   let deadLinks = 0;
+  const paperFindings: PreflightFinding[] = [];
 
   for (const block of blocks) {
     const data = (block.data ?? {}) as Record<string, unknown>;
@@ -81,6 +81,13 @@ export function preflightNewsletter(doc: NewsletterDoc, ctx: PreflightContext): 
     // Alt text is what a screen reader announces and what shows when images are blocked — which is the
     // DEFAULT in many inboxes, so an image with no alt is simply missing for those readers.
     if (block.type === "image" && !str(data, "alt").trim()) imagesWithoutAlt++;
+
+    // The paper look blocks: their pictures and buttons count with the classic ones above, and they
+    // have a few checks of their own. A classic block is not looked at here.
+    const paper = paperBlockChecks(block.type, block.variant, data, ctx.today);
+    imagesWithoutAlt += paper.imagesWithoutAlt;
+    deadLinks += paper.deadLinks;
+    paperFindings.push(...paper.findings);
   }
 
   if (deadLinks > 0) {
@@ -107,6 +114,34 @@ export function preflightNewsletter(doc: NewsletterDoc, ctx: PreflightContext): 
         imagesWithoutAlt === 1
           ? "An image has no description. Many inboxes block images by default, so that reader sees nothing there."
           : `${imagesWithoutAlt} images have no description. Many inboxes block images by default, so those readers see nothing there.`,
+    });
+  }
+
+  // Each warning once, however many blocks raised it.
+  for (const f of paperFindings) {
+    if (!findings.some((g) => g.message === f.message)) findings.push(f);
+  }
+
+  // For every newsletter, warnings only. Gmail cuts an email short near 102 KB, counted after link
+  // tracking has lengthened every link, so 80 KB of our own HTML is the point to say so.
+  let size = 0;
+  try {
+    size = Buffer.byteLength(renderNewsletter(doc, { firstName: "Jane", unsubscribeUrl: "https://nbcc.scot/unsubscribe/x" }), "utf8");
+  } catch {
+    size = 0; // a document too broken to render is caught elsewhere; this check only measures
+  }
+  if (size > BIG_EMAIL_BYTES) {
+    findings.push({ level: "warn", message: "Gmail may cut this email short: it is over 80 KB. Try taking out a block or two." });
+  }
+
+  // The starter templates mark what to fill in or check [like this]. One left in would reach readers.
+  const notes = bracketNotes(ctx.subject, blocks.map((b) => b.data));
+  if (notes.length === 1) {
+    findings.push({ level: "warn", message: `This still has a note to yourself in square brackets: ${notes[0]}.` });
+  } else if (notes.length > 1) {
+    findings.push({
+      level: "warn",
+      message: `This still has notes to yourself in square brackets: ${notes[0]}, and ${notes.length - 1} more.`,
     });
   }
 

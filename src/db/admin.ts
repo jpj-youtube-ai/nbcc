@@ -176,6 +176,7 @@ export async function createClaimBatch(
 
 export interface EligibleClaimRow {
   id: number;
+  donor_id: number; // so the Claims screen can open the donor (admin refresh, 2026-11-14)
   donor_name: string;
   amount_pence: number;
   postcode: string | null;
@@ -188,12 +189,42 @@ export interface EligibleClaimRow {
 // without one; ordered by id for a stable list.
 export async function listEligibleForClaim(): Promise<EligibleClaimRow[]> {
   const res = await pool.query<EligibleClaimRow>(
-    `SELECT d.id, dn.full_name AS donor_name, d.amount_pence, dec.postcode, d.created_at
+    `SELECT d.id, d.donor_id, dn.full_name AS donor_name, d.amount_pence, dec.postcode, d.created_at
        FROM donations d
        JOIN declarations dec ON dec.id = d.declaration_id
        JOIN donors dn ON dn.id = d.donor_id
       WHERE d.claim_status = 'eligible'
       ORDER BY d.id ASC`,
+  );
+  return res.rows;
+}
+
+export interface ClaimBatchDonationRow {
+  id: number;
+  donor_id: number;
+  donor_name: string;
+  amount_pence: number;
+  refunded_amount_pence: number;
+  postcode: string | null;
+  created_at: Date;
+  claim_status: string;
+}
+
+// The donations in one claim batch, for the Claims screen to show in place when a batch is opened
+// (admin refresh, 2026-11-14). Read-only (pool.query, no transaction), in the order the batch's
+// download lists them. Every donation assigned to the batch is here, including any the download
+// leaves out (a declaration from outside the UK, a gift refunded in full), so the screen shows what
+// the batch holds. LEFT JOIN to declarations: a row is never dropped for want of a postcode.
+export async function listClaimBatchDonations(batchId: number): Promise<ClaimBatchDonationRow[]> {
+  const res = await pool.query<ClaimBatchDonationRow>(
+    `SELECT d.id, d.donor_id, dn.full_name AS donor_name, d.amount_pence, d.refunded_amount_pence,
+            dec.postcode, d.created_at, d.claim_status
+       FROM donations d
+       JOIN donors dn ON dn.id = d.donor_id
+       LEFT JOIN declarations dec ON dec.id = d.declaration_id
+      WHERE d.claim_batch_id = $1
+      ORDER BY d.id ASC`,
+    [batchId],
   );
   return res.rows;
 }
@@ -356,7 +387,9 @@ export interface GasdsDeadlineRow {
   amountPence: number;
   collectedAt: string; // ISO date the small donation was collected
   gasdsDeadline: string; // ISO date the GASDS 2-year claim window closes
-  flag: "expired" | "expiring";
+  // "later" is only ever given when every unclaimed small donation is asked for (opts.all): its
+  // deadline is beyond the six-month horizon.
+  flag: "expired" | "expiring" | "later";
 }
 
 // List GASDS-eligible small donations whose 2-year claim window has closed ("expired") or closes
@@ -365,7 +398,13 @@ export interface GasdsDeadlineRow {
 // classification is deterministic under test. Already-claimed gifts are excluded
 // (gasds_claimed_at IS NULL), so the queue only surfaces small gifts still needing a GASDS claim
 // before the cliff (TASK-138 — mark-claimed via markGasdsClaimed).
-export async function listGasdsDeadlineDonations(now: Date = new Date()): Promise<GasdsDeadlineRow[]> {
+// opts.all (admin refresh, 2026-11-14): also list the ones whose deadline is beyond the horizon,
+// flagged "later", so a claim made well before the deadline can be ticked off when it is made. The
+// default is unchanged, so the Overview's count of small donations near their deadline is too.
+export async function listGasdsDeadlineDonations(
+  now: Date = new Date(),
+  opts: { all?: boolean } = {},
+): Promise<GasdsDeadlineRow[]> {
   const res = await pool.query<{
     id: number;
     donor_id: number;
@@ -387,7 +426,9 @@ export async function listGasdsDeadlineDonations(now: Date = new Date()): Promis
         ? "expired"
         : deadline.getTime() <= now.getTime() + GASDS_DEADLINE_WINDOW_MS
           ? "expiring"
-          : null;
+          : opts.all
+            ? "later"
+            : null;
     if (!flag) continue; // deadline beyond the horizon — not yet a queue item
     rows.push({
       id: r.id,
@@ -478,6 +519,97 @@ export async function markGasdsClaimed(
       data: { donationIds: r.claimedIds },
     }),
   );
+}
+
+// Undo a GASDS "claimed" mark (admin refresh, 2026-11-14): clears gasds_claimed_at on each id that
+// carries one and appends ONE `gasds.unclaimed` audit row, in one transaction (writeWithAudit), the
+// mirror of markGasdsClaimed. Ids that are not GASDS-eligible or carry no mark are skipped by the
+// WHERE, so a stale or repeated request is a safe no-op. Returns the ids actually cleared; they
+// come back onto the deadline queue.
+export async function unmarkGasdsClaimed(
+  donationIds: number[],
+  actor: string,
+): Promise<{ unclaimedIds: number[] }> {
+  return writeWithAudit(
+    async (client) => {
+      const res = await client.query<{ id: number }>(
+        `UPDATE donations SET gasds_claimed_at = NULL
+          WHERE id = ANY($1::int[]) AND gasds_eligible = true AND gasds_claimed_at IS NOT NULL
+        RETURNING id`,
+        [donationIds],
+      );
+      return { unclaimedIds: res.rows.map((r) => r.id) };
+    },
+    (r) => ({
+      actor,
+      action: "gasds.unclaimed",
+      entity: "donation",
+      entityId: r.unclaimedIds[0] ?? 0,
+      data: { donationIds: r.unclaimedIds },
+    }),
+  );
+}
+
+// How many of the latest marks the GASDS screen lists.
+const GASDS_CLAIMED_LATELY_LIMIT = 20;
+// A mark stamps gasds_claimed_at and writes its audit row in one transaction, so the two times are
+// the same instant; this much slack only allows for the clock being read twice.
+const GASDS_SAME_MARK_MS = 5000;
+
+export interface GasdsClaimedMark {
+  auditId: number;
+  actor: string;
+  at: string; // ISO time of the mark
+  donationIds: number[];
+  count: number;
+  totalPence: number;
+  // The donations still marked BY THIS MARK: one undone since, or undone and marked again later,
+  // is not this mark's to undo.
+  stillClaimedIds: number[];
+}
+
+// What was marked claimed lately, by whom and when (admin refresh, 2026-11-14): the newest
+// `gasds.claimed` audit rows, each with its donations' total and the ones an Undo would clear.
+// Read-only: two pool.query reads, no transaction.
+export async function listGasdsClaimedLately(): Promise<GasdsClaimedMark[]> {
+  const marks = await pool.query<{ id: number; actor: string; created_at: Date; data: unknown }>(
+    `SELECT id, actor, created_at, data
+       FROM audit_log
+      WHERE action = 'gasds.claimed'
+      ORDER BY id DESC
+      LIMIT ${GASDS_CLAIMED_LATELY_LIMIT}`,
+  );
+  if (!marks.rows.length) return [];
+  const idsOf = (data: unknown): number[] => {
+    const list = (data as { donationIds?: unknown } | null)?.donationIds;
+    return Array.isArray(list) ? list.filter((n): n is number => Number.isInteger(n)) : [];
+  };
+  const allIds = [...new Set(marks.rows.flatMap((m) => idsOf(m.data)))];
+  const donations = allIds.length
+    ? (
+        await pool.query<{ id: number; amount_pence: number; gasds_claimed_at: Date | null }>(
+          `SELECT id, amount_pence, gasds_claimed_at FROM donations WHERE id = ANY($1::int[])`,
+          [allIds],
+        )
+      ).rows
+    : [];
+  const byId = new Map(donations.map((d) => [d.id, d]));
+  return marks.rows.map((m) => {
+    const ids = idsOf(m.data);
+    const markedAt = new Date(m.created_at).getTime();
+    return {
+      auditId: m.id,
+      actor: m.actor,
+      at: new Date(m.created_at).toISOString(),
+      donationIds: ids,
+      count: ids.length,
+      totalPence: ids.reduce((sum, id) => sum + (byId.get(id)?.amount_pence ?? 0), 0),
+      stillClaimedIds: ids.filter((id) => {
+        const claimedAt = byId.get(id)?.gasds_claimed_at;
+        return claimedAt != null && Math.abs(new Date(claimedAt).getTime() - markedAt) <= GASDS_SAME_MARK_MS;
+      }),
+    };
+  });
 }
 
 export interface AwaitingDeclarationRow {
@@ -1188,6 +1320,12 @@ export interface DunningRow {
   lapsed_at: Date | null;
   cancelled_at: Date | null;
   updated_at: Date;
+  // Admin refresh, 2026-11-14: what they give and since when (the latest and the first PAID charge of
+  // this subscription; null when none is recorded), and a number to ring where one is held (only a
+  // business supporter has one: business_supporter_fulfilment.phone, one row per donor).
+  monthly_pence: number | null;
+  first_paid_at: Date | null;
+  phone: string | null;
 }
 
 // List subscription dunning rows (at-risk / lapsed monthly gifts, REQ-057/065), most-recently
@@ -1206,9 +1344,16 @@ export async function listDunning(status?: string): Promise<DunningRow[]> {
   const res = await pool.query<DunningRow>(
     `SELECT sd.id, sd.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             sd.stripe_subscription_id, sd.status, sd.failed_attempts, sd.lapsed_at, sd.cancelled_at,
-            sd.updated_at
+            sd.updated_at, gift.monthly_pence, gift.first_paid_at, bs.phone
        FROM subscription_dunning sd
        JOIN donors dn ON dn.id = sd.donor_id
+       LEFT JOIN LATERAL (
+              SELECT (array_agg(g.amount_pence ORDER BY g.created_at DESC, g.id DESC))[1] AS monthly_pence,
+                     min(g.created_at) AS first_paid_at
+                FROM donations g
+               WHERE g.stripe_subscription_id = sd.stripe_subscription_id AND g.payment_status = 'paid'
+            ) gift ON true
+       LEFT JOIN business_supporter_fulfilment bs ON bs.donor_id = sd.donor_id
        ${whereSql}
       ORDER BY sd.updated_at DESC, sd.id DESC`,
     params,

@@ -7197,8 +7197,9 @@ Tests: `admin-overview-screen`, `admin-contact-screen`, `admin-phone-menu` and `
 (`test/unit/`), with `admin-overview`, `admin-overview-numbers`, `admin-app`, `admin-red-bag`,
 `admin-get-involved-tab` and `admin-screen-styles` updated for the new markup and stylesheet.
 
-CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 4 GB of heap
-(`NODE_OPTIONS=--max-old-space-size=4096`). With these screen tests added, three workers ran out at
+CI's unit test step (`.github/workflows/pr.yml`) now gives each test worker 8 GB of heap
+(`NODE_OPTIONS=--max-old-space-size=8192`; 4 GB until 15 Nov 2026, when the admin refresh's screen tests ran one
+worker out at 898 of 899 files). With these screen tests added, three workers ran out at
 Node's default of about 2 GB and the run failed with 872 of 875 files passed.
 
 ## Admin: the kit, one look for every screen (2026-11-14)
@@ -7491,6 +7492,40 @@ is a purchase, never a gift, so it is kept apart from donations entirely.
   `gift-sources.test.ts`, `gift-sources-db.test.ts`, `admin-donation-sources-route.test.ts`,
   `admin-gift-log.test.ts` and `admin-app.test.ts`. Behaviour: `features/uniform-payments.feature`
   (counted under Uniform and never as a donation, once when sent twice, and a refund coming off).
+
+## Admin > Giving: Claims, GASDS and Subscriptions, in the kit's look (2026-11-14)
+
+The three screens take the kit (`class="ak"`) and are drawn by `assets/js/admin/giving.js`
+(`window.AdminGiving`, loaded after `kit.js`, before `app.js`); `app.js` hands it its signed fetch and
+permission checks and calls it when a screen is chosen. Styles: `assets/css/admin-giving.css`. Design:
+`docs/superpowers/specs/2026-11-14-admin-refresh-giving.md`. Every message is said beside its button;
+nothing uses a pop-up.
+
+- **Claims.** Seven tiles (Ready to claim with what was given and about what comes back at 25p in the
+  pound, Being put together, Sent to HMRC, To repay, and the three declaration lists the Overview
+  points here for), the step by step guide as a fold, then four parts one at a time (Ready to claim,
+  Claims, To repay, Declarations). Tick all, a running line and a warning past 1,000 in one batch.
+  "Submit" is now **Mark as sent to HMRC** (it only records; says so and asks first); "Export CSV" is
+  **Download for HMRC**, which checks the answer and hands over no file when the server refuses. A
+  batch opens in place to show its donations (read only). A donor's name opens their page for anyone
+  who may open Donations.
+- **GASDS.** Every small donation not yet marked as claimed (`?all=1`), a card per tax year with its
+  total, its deadline, Copy the total, and Mark all (asks first); one by one inside the card. Tiles
+  that filter: Not yet claimed, Deadline within six months, Too late to claim. Download this list.
+  Marked as claimed lately, with Undo. The three yearly figures are unchanged, with a plain line each.
+  A fold on how the scheme works, from `src/gasds/caps.ts` and `deadline.ts` only.
+- **Subscriptions.** A card per person: plain words for what happened, what they give and since
+  when, email with Copy and Email them, a phone number where held, and Open their page. Four tiles
+  that show or hide each group, opening on Card failing and Stopped. A link to Monthly givers.
+- **Server.** `GET /api/admin/claim-batches/:id/donations` (Claims view), `donor_id` on
+  `GET /api/admin/claims/eligible`, `?all=1` on `GET /api/admin/queues/gasds-deadline` (flag `later`;
+  without it the answer is unchanged), `GET /api/admin/queues/gasds-claimed` (GASDS view) and
+  `POST /api/admin/queues/gasds-deadline/unmark-claimed` (GASDS edit, audited `gasds.unclaimed`), and
+  `monthly_pence`, `first_paid_at` and `phone` on `GET /api/admin/subscriptions/dunning`. No migration.
+- **Tests.** `admin-giving-api`, `admin-giving-claims`, `admin-giving-gasds`, `admin-giving-subs`,
+  `admin-giving-styles` (`test/unit/`, helper `test/unit/helpers/giving-screen.ts`);
+  `admin-could-not-load` updated for the new empty and failed wording; new scenarios in
+  `features/admin-api.feature`.
 
 ## Monthly or one off, on the donations list (TASK-446)
 

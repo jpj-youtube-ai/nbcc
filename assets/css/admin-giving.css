@@ -1,6 +1,88 @@
 /* NBCC admin: Giving: Claims, GASDS and Subscriptions, in the kit's look (assets/css/admin-kit.css).
- * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md.
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-giving.md.
  *
- * Only what the kit does not already give these screens. The kit's house rules hold here too: no
- * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
- * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+ * Only what the kit does not already give these screens. The kit's house rules hold here too
+ * (pinned in test/unit/admin-giving-styles.test.ts): every selector names one of the three views or
+ * starts .gv-; no !important; nothing scrolls inside a box or sideways; motion only for someone happy
+ * with it, moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+
+/* Words for a screen reader only: the dot on a part's button says "something is waiting" to the eye. */
+.gv-sr:not([hidden]) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---- the bar over a list: Tick all, the running line, which batch, Add ---- */
+.gv-pickbar { display: grid; gap: 14px; margin: 0 0 16px; }
+.gv-pickbar[hidden] { display: none; }
+.gv-pickbar .ak-notice { margin: 0; }
+.gv-pickbar .admin-action-status { margin: 0; }
+.gv-pickbar__tally { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.gv-pickbar__add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+.gv-pickbar__add .ak-field { flex: 1 1 200px; max-width: 320px; }
+.gv-tally { margin: 0; font-weight: 600; color: var(--ov-ink); font-variant-numeric: tabular-nums; }
+.gv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0 0 16px; }
+.gv-bar[hidden] { display: none; }
+.gv-bar .admin-action-status { margin: 0; }
+.gv-across { margin: -10px 0 18px; }
+.gv-across[hidden] { display: none; }
+
+/* ---- donations as rows: the same on every size, two lines on a phone ---- */
+.gv-rows { display: grid; margin: 0; padding: 0; list-style: none; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); overflow: clip; }
+.gv-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) 6rem; align-items: center; gap: 4px 14px; min-width: 0; padding: 6px 16px; border-bottom: 1px solid var(--ov-rule); }
+.gv-rows--tick .gv-row { grid-template-columns: 44px minmax(0, 1.3fr) minmax(0, 2fr) 6rem; padding-left: 6px; }
+.gv-row:last-child { border-bottom: 0; }
+.gv-row--head { padding-top: 10px; padding-bottom: 10px; border-bottom: 2px solid var(--ov-ink); background: var(--ov-warm); font-family: var(--ov-head); font-size: 0.9rem; font-weight: 700; color: var(--ov-ink); }
+.gv-row__tick { display: flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; cursor: pointer; }
+.gv-row__who { min-width: 0; overflow-wrap: anywhere; }
+.gv-row__meta { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px 14px; min-width: 0; font-size: 0.88rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+.gv-row--head .gv-row__meta { font-size: 0.9rem; color: var(--ov-ink); }
+#view-claims .gv-row__tick input, #view-gasds .gv-row__tick input { width: 22px; height: 22px; margin: 0; accent-color: var(--ov-maroon); cursor: pointer; }
+.gv-row__amount { justify-self: end; font-weight: 600; color: var(--ov-ink); font-variant-numeric: tabular-nums; }
+.gv-name { font-weight: 600; color: var(--ov-ink); text-align: left; }
+.gv-name.admin-link { padding: 0; }
+
+/* ---- a claim batch, a tax year of small donations, a mark, a monthly gift: cards ---- */
+.gv-batch, .gv-year, .gv-sub, .gv-mark { display: grid; gap: 10px; }
+.gv-batch__head, .gv-year__head, .gv-sub__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.gv-batch__name, .gv-year__name, .gv-sub__name { margin: 0; font-family: var(--ov-head); font-weight: 800; font-size: 1.15rem; line-height: 1.2; color: var(--ov-maroon); overflow-wrap: anywhere; }
+.gv-batch__sum, .gv-year__sum, .gv-sub__what { margin: 0; font-weight: 600; color: var(--ov-ink); }
+.gv-sub__meta, .gv-sub__email { margin: 0; font-size: 0.9rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+.gv-sub__email { color: var(--ov-text); }
+.gv-batch .admin-action-status:empty, .gv-year .admin-action-status:empty, .gv-sub .admin-action-status:empty, .gv-mark .admin-action-status:empty { display: none; }
+.gv-batch .admin-action-status, .gv-year .admin-action-status, .gv-sub .admin-action-status, .gv-mark .admin-action-status { margin: 0; }
+.gv-batch .ak-says, .gv-year .ak-says { margin: 0; }
+.gv-batch__inside, .gv-year__inside { display: grid; gap: 12px; }
+.gv-batch__inside[hidden], .gv-year__inside[hidden] { display: none; }
+/* Too late to claim: drawn quietly, so the years that can still be claimed are what you see. */
+.gv-year--late { border-style: dashed; border-color: var(--ov-rule); box-shadow: none; background: var(--ov-warm); }
+.gv-year--late .gv-year__name { color: var(--ov-soft); }
+.gv-year--done { box-shadow: none; }
+.gv-tile--quiet:not(.is-active) { border-style: dashed; box-shadow: none; }
+.gv-tile--quiet:not(.is-active) .ak-tile__n { color: var(--ov-soft); }
+.gv-mark { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.gv-mark .admin-action-status { grid-column: 1 / -1; }
+.gv-mark__main { display: grid; gap: 2px; min-width: 0; }
+.gv-mark__what { margin: 0; font-weight: 600; color: var(--ov-ink); }
+.gv-mark__who { margin: 0; font-size: 0.88rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+
+/* ---- the fold on how the small donations scheme works ---- */
+.gv-how ul { margin: 0; padding-left: 20px; }
+.gv-how li { margin: 8px 0; line-height: 1.5; font-size: 0.93rem; }
+.gv-how__note { margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--ov-rule); font-size: 0.88rem; color: var(--ov-soft); }
+.gv-how a { color: var(--ov-maroon); font-weight: 600; }
+
+/* admin.css draws a little arrow in front of the guide's heading; the kit draws its own chevron after it. */
+#view-claims .admin-guide > summary::before { content: none; }
+#view-gasds .ak-fold { margin-top: 26px; }
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  .gv-row--head { display: none; }
+  .gv-row { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 14px; }
+  .gv-row__meta { display: flex; flex-wrap: wrap; grid-column: 1 / -1; grid-row: 2; }
+  .gv-row__meta > span:empty { display: none; }
+  .gv-rows--tick .gv-row { grid-template-columns: 44px minmax(0, 1fr) auto; padding-left: 4px; }
+  .gv-rows--tick .gv-row__meta { grid-column: 2 / -1; }
+  .gv-pickbar__add .ak-field { max-width: none; }
+  .gv-pickbar__add .admin-btn { flex: 1 1 100%; }
+  .gv-mark { grid-template-columns: minmax(0, 1fr); }
+  .gv-mark .admin-btn { justify-self: start; }
+}

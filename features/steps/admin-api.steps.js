@@ -179,6 +179,83 @@ Then("the GASDS gift is marked claimed", async function () {
   assert.ok(row.rows[0].gasds_claimed_at != null, "expected gasds_claimed_at to be set");
 });
 
+// --- What was marked claimed lately, and its undo (admin refresh, 2026-11-14) ---
+// The newest mark is the one this scenario just made: scenarios run one at a time.
+Then("the latest GASDS mark can still undo the gift", function () {
+  const latest = (this.adminBody.results || [])[0];
+  assert.ok(latest, "expected at least one mark");
+  assert.ok(latest.donationIds.includes(this.gasdsDonationId), "expected the latest mark to hold the gift");
+  assert.ok(latest.stillClaimedIds.includes(this.gasdsDonationId), "expected the gift to be undoable from its mark");
+  assert.ok(String(latest.actor).includes("editor.admin.bdd@example.com"), `expected the editor as actor, got ${latest.actor}`);
+});
+
+Then("the latest GASDS mark has nothing left to undo", function () {
+  const latest = (this.adminBody.results || [])[0];
+  assert.ok(latest, "expected at least one mark");
+  assert.ok(latest.donationIds.includes(this.gasdsDonationId), "expected the latest mark to hold the gift");
+  assert.deepEqual(latest.stillClaimedIds, []);
+});
+
+When("the admin undoes the GASDS mark as {string} with password {string}", async function (email, password) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/queues/gasds-deadline/unmark-claimed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ donationIds: [this.gasdsDonationId] }),
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+Then("the GASDS gift is no longer marked claimed", async function () {
+  const row = await pool.query("SELECT gasds_claimed_at FROM donations WHERE id = $1", [this.gasdsDonationId]);
+  assert.equal(row.rows[0].gasds_claimed_at, null);
+  const audit = await pool.query(
+    "SELECT actor FROM audit_log WHERE action = 'gasds.unclaimed' AND entity_id = $1 ORDER BY id DESC LIMIT 1",
+    [this.gasdsDonationId],
+  );
+  assert.equal(audit.rows.length, 1, "expected a gasds.unclaimed audit row for the gift");
+});
+
+Then("the admin results do not include the GASDS gift", function () {
+  const ids = (this.adminBody.results || []).map((r) => r.id);
+  assert.ok(!ids.includes(this.gasdsDonationId), "expected the far off gift to be left out");
+});
+
+Then("the admin results include the GASDS gift flagged {string}", function (flag) {
+  const row = (this.adminBody.results || []).find((r) => r.id === this.gasdsDonationId);
+  assert.ok(row, "expected the gift to be listed");
+  assert.equal(row.flag, flag);
+});
+
+// --- The donations inside a claim batch (admin refresh, 2026-11-14) ---
+When("I GET the donations in the claim batch as {string} with password {string}", async function (email, password) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/claim-batches/${this.claimBatchId}/donations`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+When("I GET the donations in the claim batch without a token", async function () {
+  const res = await fetch(`${BASE_URL}/api/admin/claim-batches/${this.claimBatchId}/donations`);
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+Then("the claim batch lists the eligible donation", function () {
+  const rows = this.adminBody.results || [];
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, this.eligibleDonationId);
+  assert.equal(rows[0].donor_name, "Ada Claims");
+  assert.equal(rows[0].amount_pence, 5000);
+});
+
+Then("the claim batch lists no donations", function () {
+  assert.deepEqual(this.adminBody.results, []);
+});
+
 Given("an open claim batch", async function () {
   const batch = await pool.query(
     "INSERT INTO claim_batches (status) VALUES ('open') RETURNING id",

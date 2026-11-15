@@ -137,20 +137,8 @@ const EMPTY = {
   previous: { from: "a", to: "b", until: "2026-09-23T08:00:00.000Z", headline: empty().headline, daily: empty().daily },
   rightNow: { collecting: true, people: 0 },
 };
-// The same report with set visitors each day, to read the line's axis.
-function withDaily(visitors: number[]) {
-  const daily = visitors.map((v, i) => ({ day: `2026-09-${String(24 + i).padStart(2, "0")}`, visitors: v }));
-  return { ...REPORT, current: { ...REPORT.current, daily }, previous: { ...REPORT.previous, daily: daily.map((d) => ({ ...d, visitors: 0 })) } };
-}
-function deferred() {
-  let release!: () => void;
-  const wait = new Promise<void>((r) => (release = r));
-  return { wait, release };
-}
-const OFF = { collecting: false, updatedAt: null, updatedBy: null };
 const ON = { collecting: true, updatedAt: "2026-09-28T09:00:00.000Z", updatedBy: "admin:admin@nbcc" };
 
-const PANELS = ["anChannels", "anWebsites", "anQrCodes", "anNewsletters", "anCities", "anCountries", "anPages", "anClickKinds", "anClicks", "anDevices", "anBrowsers"];
 
 beforeEach(() => {
   perms = effectivePermissions({ role: "admin", permissions: null });

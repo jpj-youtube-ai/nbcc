@@ -11451,6 +11451,8 @@
         el("frSwitchWho").textContent = "";
         el("frSwitchBtn").hidden = true;
         el("frSwitchNote").hidden = true;
+        // No button, so no line saying what it does.
+        if (el("frSwitchSays")) el("frSwitchSays").textContent = "";
       });
   }
 

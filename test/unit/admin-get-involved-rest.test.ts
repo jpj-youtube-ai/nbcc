@@ -52,7 +52,7 @@ const PLEDGES = {
   emails: { on: true, approvalsUnavailable: false, kinds: [] },
 };
 
-function respond(url: string, init?: { method?: string; body?: string }) {
+function respond(url: string) {
   const j = (body: unknown, status = 200) => ({
     status, ok: status >= 200 && status < 300, json: () => Promise.resolve(body), text: () => Promise.resolve(""),
     headers: { get: () => "application/json" },
@@ -92,8 +92,7 @@ beforeEach(() => {
   document.body.innerHTML = bodyHtml;
   (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
   window.confirm = () => true;
-  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown, init?: unknown) =>
-    Promise.resolve(respond(String(url), init as { method?: string; body?: string }));
+  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown) => Promise.resolve(respond(String(url)));
   // eslint-disable-next-line no-eval
   (0, eval)(kitSrc);
   const kit = (window as unknown as { AdminKit: { downloadCsv: (n: string, rows: unknown[][]) => boolean; toCsv: (rows: unknown[][]) => string } }).AdminKit;
@@ -258,7 +257,22 @@ describe("the three parts' styles", () => {
   it("names every new rule through one of the three parts, so Sign ups and Our events are untouched", () => {
     const heads = [...mine.matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim()).filter((h) => h && !h.startsWith("@") && !/^(from|to)$/.test(h));
     expect(heads.length).toBeGreaterThan(10);
-    for (const h of heads) for (const s of h.split(",")) expect(s.trim().startsWith("#view-get-involved .gi-rest"), s).toBe(true);
+    // Split on the commas between selectors, never the ones inside :where( ... ) or :not( ... ).
+    const split = (head: string) => {
+      const out: string[] = [];
+      let depth = 0;
+      let one = "";
+      for (const ch of head) {
+        if (ch === "(") depth++;
+        if (ch === ")") depth--;
+        if (ch === "," && depth === 0) {
+          out.push(one);
+          one = "";
+        } else one += ch;
+      }
+      return out.concat(one);
+    };
+    for (const h of heads) for (const s of split(h)) expect(s.trim().startsWith("#view-get-involved .gi-rest"), s).toBe(true);
   });
 
   it("never scrolls inside a box and never uses !important", () => {

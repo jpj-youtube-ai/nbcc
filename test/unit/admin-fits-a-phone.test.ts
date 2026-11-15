@@ -452,7 +452,7 @@ describe("the stories table becomes labelled cards wherever it is narrow", () =>
   // The heading is the second cell and the tick the first, by position.
   it("depends on the columns app.js draws, in the order it draws them", () => {
     const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8").replace(/\r\n/g, "\n");
-    expect(app).toContain("<thead><tr><th>Read</th><th>ID</th><th>Their words</th><th>Sent by</th><th>Agreed to</th>' +\n");
+    expect(app).toContain("<thead><tr><th>Read</th><th>ID</th><th>Sent by</th><th>Agreed to</th>' +\n");
   });
 
   // Only the cards may say how the rows and cells lay out. One rule outside them is known and

@@ -187,8 +187,8 @@ describe("the Read column on the Stories list", () => {
     await openStories();
     expect(document.querySelector("#storiesTable > .st-list > table.stories-table")).not.toBeNull();
     const labels = Array.from(rowOf(4).children).map((td) => td.getAttribute("data-label"));
-    // 2026-11-14: plain column names, and the line they chose to be quoted as a column of its own.
-    expect(labels).toEqual(["Read", "ID", "Their words", "Sent by", "Agreed to", "Status", "When agreed", "Sent", ""]);
+    // 2026-11-14: plain column names.
+    expect(labels).toEqual(["Read", "ID", "Sent by", "Agreed to", "Status", "When agreed", "Sent", ""]);
     // Every row, not only the first.
     expect(document.querySelectorAll("#storiesTable tbody td:not([data-label])")).toHaveLength(0);
   });
@@ -198,11 +198,11 @@ describe("the Read column on the Stories list", () => {
   it("keeps a cell's pills, and the status with its sentence, in one box each", async () => {
     stories[0] = { ...story(4, "new"), use_scope: "public", consent_share_first_name: true, consent_share_town: true };
     await openStories();
-    const scope = rowOf(4).children[4];
+    const scope = rowOf(4).children[3];
     expect(scope.children).toHaveLength(1);
     expect(scope.children[0].className).toBe("st-value");
     expect(scope.children[0].querySelectorAll(".admin-pill")).toHaveLength(3);
-    const status = rowOf(4).children[5];
+    const status = rowOf(4).children[4];
     expect(status.children).toHaveLength(1);
     expect(status.children[0].className).toBe("st-value");
     expect(Array.from(status.children[0].children)).toEqual([statusPill(4), unsavedOf(4), rowOf(4).querySelector("[data-story-note]")]);

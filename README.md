@@ -8168,11 +8168,11 @@ named through `#view-stories`, `#view-story`, `#view-ticker` or the prefixes `st
 `docs/superpowers/specs/2026-11-14-admin-refresh-content.md`. No server change.
 
 - **Stories.** Six tiles with counts (All, To read, Read, Used, Withdrawn, Archived): the live stories
-  are read once and filtered in the browser; Archived is its own read. Each story shows the line they
-  chose to be quoted, what they agreed to as one sentence (`AdminHelpers.storyConsentLine`), and "Check
-  before using" when consent is over a year old (`consentIsOld`). "Erased stories" reads
-  `GET /api/admin/erasures` (kind, number, when, who, why). The storage check is shown only to editors,
-  who are the only ones it answers.
+  are read once and filtered in the browser; Archived is its own read. Each story shows what they agreed to
+  as one sentence (`AdminHelpers.storyConsentLine`), and "Check before using" when consent is over a year
+  old (`consentIsOld`). The list stays thin on purpose: the quote is on the opened story only. "Erased
+  stories" reads `GET /api/admin/erasures` (kind, number, when, who, why); it and the storage check are
+  shown only to someone who may edit Stories (the reasons are free text an editor typed).
 - **One story.** The words first; "Copy the story" and "Copy the quote" (`AdminKit.copyText`) with the
   consent sentence beside them; "What they agreed to" in sentences; "About the sender" folded; email and
   phone are links only when they said they may be contacted. Withdraw and Erase permanently ask in the

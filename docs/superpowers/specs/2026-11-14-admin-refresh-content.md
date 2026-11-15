@@ -24,9 +24,10 @@ two rows of filters with no counts, and on a phone eight labelled lines a story.
   fetched once and filtered in the browser) and Archived (the second fetch, `?view=archived`). They
   replace the status pills and the Live or Archived pair. "To read" is crimson while anything waits.
 - The table stays on a laptop, framed in the kit's look, and stays a card a story below 760px (TASK-561,
-  pinned by tests). Its columns are plain words now: Read, ID, Their words (the line they chose to be
-  quoted, which the list always fetched and never drew), Sent by, Agreed to (the pills, then **what they
-  agreed to as one sentence**), Status, When agreed (with "Check before using" past a year), Sent, Open.
+  pinned by tests). Its columns are plain words now: Read, ID, Sent by, Agreed to (the pills, then **what they
+  agreed to as one sentence**), Status, When agreed (with "Check before using" past a year), Sent, Open. The quote is
+  not on the list (review, 14 Nov: the list is thin on purpose, and only Jaimie can decide to widen it);
+  it is on the opened story. "Erased stories" shows only to someone who may edit Stories.
 - The status pills still say New and Reviewed (many tests and the "It is now ..." sentences use them);
   the tiles say "To read" and "Read" with "New, not read yet" and "Marked as read" under them.
 - Folds at the foot: "Add stories from the old website" (editors, unchanged), "Erased stories" (new:

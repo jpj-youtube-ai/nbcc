@@ -3091,15 +3091,13 @@
     // stylesheet measures. The cards put the ID at the top and fit the tick by position, so
     // admin-fits-a-phone.test.ts checks these columns and their order. A card's line is a row, a
     // label then a value: the cells that hold more than one thing keep it in one box (.st-value).
-    // 2026-11-14: the line they chose to be quoted, and what they agreed to as a sentence, are on
-    // the card, and the column names are plain words.
+    // 2026-11-14: what they agreed to is on the card as a sentence, and the column names are plain
+    // words. The list stays thin on purpose (listStories): the quote is on the opened story only.
     var body = rows
       .map(function (r) {
         return (
           '<tr><td data-label="Read">' + storyReadTick(r) + '</td><td data-label="ID">' + r.id + "</td>" +
-          '<td data-label="Their words">' +
-          (r.short_quote ? '<q class="st-quote">' + H.escapeHtml(r.short_quote) + "</q>" : '<span class="st-none">No quote chosen</span>') +
-          '</td><td data-label="Sent by">' + H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
+          '<td data-label="Sent by">' + H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
           '</td><td data-label="Agreed to"><div class="st-value">' + storyAgreedHtml(r) + "</div></td>" +
           '<td data-label="Status"><div class="st-value"><span class="admin-pill" data-story-status>' +
           H.escapeHtml(H.storyLabel("status", r.status)) + "</span>" +
@@ -3113,7 +3111,7 @@
       })
       .join("");
     return (
-      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Their words</th><th>Sent by</th><th>Agreed to</th>' +
+      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Sent by</th><th>Agreed to</th>' +
       "<th>Status</th><th>When agreed</th><th>Sent</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table></div>"
     );
@@ -3151,6 +3149,9 @@
     if (imp) imp.hidden = !canEdit("stories");
     var diag = el("storiesDiagnostics");
     if (diag) diag.hidden = !canEdit("stories"); // the storage check needs edit, so only an editor sees it
+    // The erasure reasons are free text an editor typed, so only someone who may edit Stories sees them.
+    var erased = el("storiesErased");
+    if (erased) erased.hidden = !canEdit("stories");
     var wrap = el("storiesTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     // Every live story at once, so the tiles can count them; the archived ones beside them.
@@ -3179,7 +3180,7 @@
   function loadErasures() {
     var fold = el("storiesErased");
     var out = el("storiesErasedList");
-    if (!fold || !fold.open || !out) return;
+    if (!fold || !fold.open || !out || !canEdit("stories")) return;
     out.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/erasures")
       .then(okJson)
@@ -11562,13 +11563,18 @@
       tkDrawDupes();
       return;
     }
+    // One add at a time: a second press while the first is on its way, or while the list reloads
+    // after it, is not sent (the list would not yet know the name, so it would be added twice).
+    var btn = el("tickerAdd");
+    if (btn.disabled) return;
+    btn.disabled = true;
     tickerStatus("Adding…");
     tkWrite("POST", null, { name: name }).then(function (ok) {
-      if (ok === null) return;
-      if (!ok) { tickerStatus("Could not add that partner. Please try again.", "is-error"); return; }
+      if (ok === null) { btn.disabled = false; return; }
+      if (!ok) { btn.disabled = false; tickerStatus("Could not add that partner. Please try again.", "is-error"); return; }
       input.value = "";
       tickerStatus("Added. “" + name + "” is showing on the website now.", "is-ok");
-      loadTicker();
+      loadTicker().then(function () { btn.disabled = false; });
     });
   }
   // Several at once, one name a line, one request a name (there is nothing on the server for a batch).

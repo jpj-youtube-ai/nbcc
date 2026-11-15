@@ -176,9 +176,11 @@ describe("the Stories list", () => {
     expect(count('[data-status="reviewed"]')).toBe("2");
   });
 
-  it("shows the line they chose to be quoted on the story", async () => {
+  // The list is kept thin on purpose (listStories): the quote is on the opened story, not the list.
+  it("does not show the line they chose to be quoted on the list", async () => {
     await openStories();
-    expect(rowOf(6).textContent).toContain("It was that somebody had thought about us.");
+    expect(rowOf(6).textContent).not.toContain("It was that somebody had thought about us.");
+    expect(document.querySelector("#storiesTable .st-quote")).toBeNull();
   });
 
   it("says what each sender agreed to, as one sentence", async () => {
@@ -225,6 +227,19 @@ describe("the Stories list", () => {
     fold.dispatchEvent(new Event("toggle"));
     await settle();
     expect(el("storiesErasedList").textContent).toContain("No story has been erased.");
+  });
+
+  // The reasons are free text an editor typed, so only someone who may edit Stories sees them.
+  it("shows the erased stories only to someone who may edit Stories", async () => {
+    await openStories();
+    expect(el("storiesErased").hidden).toBe(false);
+    perms = effectivePermissions({ role: "viewer", permissions: null });
+    document.body.innerHTML = bodyHtml;
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+    await openStories();
+    expect(el("storiesErased").hidden).toBe(true);
+    expect(calls.filter((c) => c.path === "/api/admin/erasures")).toHaveLength(0);
   });
 
   it("shows the storage check only to someone who may run it", async () => {

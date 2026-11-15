@@ -382,6 +382,17 @@ describe("adding a partner", () => {
     expect(el("tickerStatus").closest("#tickerAddPanel")).not.toBeNull();
   });
 
+  it("sends one add for a double press, and lets the button be pressed again once it is done", async () => {
+    await openPartners();
+    (el("tickerName") as HTMLInputElement).value = "Juniper Example Print";
+    el("tickerForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    el("tickerForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    expect((el("tickerAdd") as HTMLButtonElement).disabled).toBe(true);
+    await settle();
+    expect(writes().filter((w) => w.method === "POST")).toHaveLength(1);
+    expect((el("tickerAdd") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("says a partner could not be added, in the word the screen uses", async () => {
     writeAnswer = 500;
     await openPartners();

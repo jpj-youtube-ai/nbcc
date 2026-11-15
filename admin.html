@@ -630,11 +630,22 @@
                  button deliberately: iOS asks for permission once and only once, and somebody who
                  taps Don't Allow has to delete the icon and add it again to be asked afresh. A
                  caption underneath would be read after the damage. -->
-            <section class="admin-view" id="view-notifications" aria-labelledby="notifications-heading" hidden>
+            <section class="admin-view ak" id="view-notifications" aria-labelledby="notifications-heading" hidden>
               <h2 id="notifications-heading">Notifications on this phone</h2>
               <p class="admin-view-intro">Get a notification when something new arrives &mdash; a donation, a Get involved sign up, a message, a ticket. It is the same &ldquo;new&rdquo; the New pills use, so your phone and this screen always agree, and you only ever hear about the parts of the admin you can open.</p>
 
               <p class="admin-action-status is-error" id="pushUnsupported" role="status" hidden></p>
+
+              <!-- The admin refresh (2026-11-14): whether THIS phone is on, read from the browser's own
+                   subscription, and the way to turn it off (DELETE /api/admin/push/subscription). -->
+              <div class="ak-notice ak-notice--ok rc-phone-on" id="pushPhoneOn" hidden>
+                <p><strong>This phone is on.</strong> You will get a notification when something new arrives.</p>
+                <div>
+                  <button class="admin-btn ak-btn--danger" type="button" id="pushDisable">Turn off for this phone</button>
+                  <span class="ak-says">Stops notifications to this phone only. Any other phones you have set up keep getting them, and you can turn this one on again here.</span>
+                  <span class="admin-action-status" id="pushDisableStatus" role="status" aria-live="polite"></span>
+                </div>
+              </div>
 
               <div id="pushSetup">
                 <h3 class="admin-subhead">Turning it on</h3>
@@ -652,13 +663,14 @@
               </div>
 
               <h3 class="admin-subhead">What buzzes</h3>
-              <p class="admin-note">Everything is on. Switch off anything you would rather catch up with on screen.</p>
+              <p class="admin-note">Everything is on. Switch off anything you would rather catch up with on screen. Each tick is saved as you press it.</p>
               <div class="np-areas" id="pushAreas"><p class="admin-loading">Loading&hellip;</p></div>
 
               <h3 class="admin-subhead">If it gets too much</h3>
-              <p class="admin-note">Both of these are off, so you get a buzz every single time. Turn one on if a busy day is too noisy &mdash; anything held back still shows as a New pill here.</p>
+              <p class="admin-note" id="pushCalmNote">Both of these are off, so you get a buzz every single time. Turn one on if a busy day is too noisy: anything held back still shows as a New pill here.</p>
               <div class="admin-field">
                 <label class="admin-check"><input id="pushBundle" name="pushBundle" type="checkbox" /> <span>Group them: one notification a minute instead of one each</span></label>
+                <span class="admin-action-status rc-tick-said" id="pushBundleSaid" role="status" aria-live="polite"></span>
               </div>
               <div class="admin-field np-quiet">
                 <label for="pushQuietFrom">Stay quiet from</label>
@@ -666,6 +678,7 @@
                 <label for="pushQuietTo">until</label>
                 <input id="pushQuietTo" name="pushQuietTo" type="time" />
               </div>
+              <p class="rc-quiet-said" id="pushQuietSaid" role="status" aria-live="polite"></p>
               <div class="admin-claim-actions">
                 <button class="admin-btn" type="button" id="pushPrefsSave">Save these settings</button>
                 <span class="admin-action-status" id="pushPrefsStatus" role="status" aria-live="polite"></span>
@@ -2791,9 +2804,50 @@
             </section>
 
 
-            <section class="admin-view" id="view-audit" aria-labelledby="audit-heading" hidden>
+            <!-- Audit, in the kit's look (the admin refresh, 2026-11-14;
+                 docs/superpowers/specs/2026-11-14-admin-refresh-records.md): who did what, and when,
+                 in plain English. app.js draws the tiles (one a part of the admin, with its count),
+                 the lines as cards under day headings, and what a line recorded when it is opened.
+                 Needs audit:view. Nothing here changes anything: the trail is append-only. -->
+            <section class="admin-view ak" id="view-audit" aria-labelledby="audit-heading" hidden>
               <h2 id="audit-heading">Audit trail</h2>
-              <div class="admin-table-wrap" id="auditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="admin-view-intro">Who did what, and when. Every change made in the admin, by a card payment or by an automatic job is kept here, newest first, and none of it can be changed or removed.</p>
+
+              <div class="ak-tiles rc-areas" id="auditAreas" role="group" aria-label="Show one part of the admin"></div>
+
+              <form class="ak-panel rc-filters" id="auditFilters" autocomplete="off">
+                <div class="ak-fields">
+                  <label class="ak-field"><span>Find a word</span>
+                    <input id="auditSearch" type="search" placeholder="A name, an email or a booking reference" />
+                  </label>
+                  <label class="ak-field"><span>Done by</span>
+                    <select id="auditPerson"><option value="">Anyone</option></select>
+                  </label>
+                  <label class="ak-field"><span>From</span>
+                    <input id="auditFrom" type="date" />
+                  </label>
+                  <label class="ak-field"><span>To</span>
+                    <input id="auditTo" type="date" />
+                  </label>
+                </div>
+                <div class="ak-actions rc-filter-foot">
+                  <label class="admin-check"><input id="auditStaffOnly" type="checkbox" /> <span>Staff only</span></label>
+                  <button class="admin-btn ak-btn--plain" type="button" id="auditClear">Clear</button>
+                </div>
+                <p class="ak-says">Staff only hides what Stripe (card payments), people using the website and automatic jobs wrote, so you see only what the team did. The list updates as you choose.</p>
+              </form>
+
+              <div id="auditTable" class="rc-list" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+
+              <div class="rc-foot" id="auditFoot" hidden>
+                <p class="rc-count" id="auditCount"></p>
+                <div class="ak-actions">
+                  <button class="admin-btn" type="button" id="auditOlder">Show older</button>
+                  <button class="admin-btn ak-btn--plain" type="button" id="auditDownload">Download what is shown</button>
+                </div>
+                <p class="ak-says">The download is a spreadsheet of the lines on this screen, in the same words.</p>
+                <p class="ak-status" id="auditFootSaid" role="status" aria-live="polite"></p>
+              </div>
             </section>
 
             <!-- Email audit (email-audit feature): every email the system attempted to send, with
@@ -2801,12 +2855,18 @@
                  email-audit section, which only admins carry by default (donor-identifying send
                  data); app.js hides the nav entry and the server enforces on the route. History
                  starts at the feature's deploy — nothing was recorded per-send before it. -->
-            <section class="admin-view" id="view-email-audit" aria-labelledby="email-audit-heading" hidden>
+            <section class="admin-view ak" id="view-email-audit" aria-labelledby="email-audit-heading" hidden>
               <h2 id="email-audit-heading">Email audit</h2>
               <p class="admin-view-intro">Every email the system has tried to send, newest first, with what happened to it: sent, failed, and what the mailbox side reported back (delivered, bounced, marked as spam). Anything that went wrong in the last 14 days sits in the red band at the top, until someone removes its address there. Removing an address deletes nothing: every email stays in the list below. Records are kept for six years after the tax year they were sent in, then removed automatically.</p>
+              <div class="ak-tiles rc-status-tiles" id="emailAuditTiles" role="group" aria-label="Show emails by what happened to them">
+                <button class="ak-tile is-active" type="button" data-email-tile="" aria-pressed="true"><span class="ak-tile__name">All</span><span class="ak-tile__says">Every email</span></button>
+                <button class="ak-tile" type="button" data-email-tile="problems" aria-pressed="false"><span class="ak-tile__name">Problems</span><span class="ak-tile__says">Failed, bounced or marked as spam</span></button>
+                <button class="ak-tile" type="button" data-email-tile="delivered" aria-pressed="false"><span class="ak-tile__name">Delivered</span><span class="ak-tile__says">The mailbox said it arrived</span></button>
+                <button class="ak-tile" type="button" data-email-tile="sent" aria-pressed="false"><span class="ak-tile__name">Sent</span><span class="ak-tile__says">Sent, with no answer from the mailbox yet</span></button>
+              </div>
               <form id="emailAuditFilters" class="ty-controls" autocomplete="off">
                 <label class="ty-inline">Search
-                  <input id="emailAuditSearch" type="search" placeholder="Name, email or subject" style="width:220px" />
+                  <input id="emailAuditSearch" type="search" placeholder="Name, email or subject" />
                 </label>
                 <label class="ty-inline">Type
                   <select id="emailAuditType"><option value="">All types</option></select>
@@ -2814,6 +2874,7 @@
                 <label class="ty-inline">Status
                   <select id="emailAuditStatus">
                     <option value="">All statuses</option>
+                    <option value="problems">Any problem</option>
                     <option value="failed">Failed to send</option>
                     <option value="bounced">Bounced</option>
                     <option value="complained">Marked as spam</option>
@@ -2834,6 +2895,11 @@
                 <span id="emailAuditPageInfo"></span>
                 <button class="btn btn-ghost" type="button" id="emailAuditNext">Older &rarr;</button>
               </div>
+              <div class="rc-foot" id="emailAuditFoot">
+                <button class="admin-btn ak-btn--plain" type="button" id="emailAuditDownload">Download what is shown</button>
+                <p class="ak-says">A spreadsheet of the emails on this screen. The list updates as you type or choose.</p>
+                <p class="ak-status" id="emailAuditDownloadSaid" role="status" aria-live="polite"></p>
+              </div>
             </section>
 
             <!-- Team: who can sign in to this dashboard - invite, change role, disable/enable, or
@@ -2846,7 +2912,7 @@
                  analytics:view; the collecting switch needs analytics:edit. app.js fills every panel
                  from one GET /api/admin/analytics. Nothing here scrolls inside a box: a long list
                  shows its top 10 and "Show all" grows the page. -->
-            <section class="admin-view" id="view-analytics" aria-labelledby="analytics-heading" hidden>
+            <section class="admin-view ak" id="view-analytics" aria-labelledby="analytics-heading" hidden>
               <h2 id="analytics-heading">Analytics</h2>
               <p class="admin-view-intro">How many people visit the website, where they come from and what they look at. There are no cookies, and nothing here says who anyone is.</p>
 
@@ -2872,6 +2938,25 @@
               </div>
               <p class="an-period-note" id="anPeriodNote"></p>
 
+              <!-- The admin refresh (2026-11-14): what the numbers say, in words, from the same answer. -->
+              <p class="rc-summary" id="anSummary" aria-live="polite"></p>
+              <div class="ak-actions rc-an-download">
+                <button class="admin-btn ak-btn--plain" type="button" id="anDownload">Download the numbers</button>
+                <span class="ak-says">A spreadsheet of every number here for the days chosen, for the trustees.</span>
+                <span class="ak-status" id="anDownloadSaid" role="status" aria-live="polite"></span>
+              </div>
+
+              <!-- One part at a time on a phone (AdminKit.wireParts); on a laptop every part shows and the bar is not needed. -->
+              <div class="rc-an-parts" id="anParts">
+                <div class="ak-parts" role="group" aria-label="Which part to show">
+                  <button class="ak-part-btn" type="button" data-akpart="glance" aria-pressed="true">At a glance</button>
+                  <button class="ak-part-btn" type="button" data-akpart="from" aria-pressed="false">Where from</button>
+                  <button class="ak-part-btn" type="button" data-akpart="where" aria-pressed="false">Where</button>
+                  <button class="ak-part-btn" type="button" data-akpart="pages" aria-pressed="false">Pages</button>
+                  <button class="ak-part-btn" type="button" data-akpart="clicks" aria-pressed="false">Clicks</button>
+                  <button class="ak-part-btn" type="button" data-akpart="devices" aria-pressed="false">Devices</button>
+                </div>
+                <div class="ak-part" data-akpart-body="glance" role="region" aria-label="At a glance">
               <div class="admin-stats an-figures" id="anFigures" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
 
               <section class="an-card" aria-labelledby="anLineHead">
@@ -2879,7 +2964,13 @@
                 <div id="anLine"><p class="admin-loading">Loading&hellip;</p></div>
               </section>
 
+              <section class="an-card an-now-card" aria-labelledby="anNowHead">
+                <h3 class="an-card-head" id="anNowHead">Right now</h3>
+                <div id="anNow" aria-live="polite"></div>
+              </section>
+                </div>
               <div class="an-grid">
+                <div class="ak-part an-wide" data-akpart-body="from" role="region" aria-label="Where from">
                 <section class="an-card an-wide" aria-labelledby="anFromHead">
                   <h3 class="an-card-head" id="anFromHead">Where they came from</h3>
                   <p class="an-card-note">Each visit counts once, under the way it arrived.</p>
@@ -2892,15 +2983,18 @@
                     <div>
                       <h4 class="an-list-head">Newsletter issues</h4>
                       <div id="anNewsletters"></div>
+                      <button class="admin-link rc-go" type="button" data-an-go="newsletter" hidden>Open Newsletter</button>
                     </div>
                     <!-- TASK-492: scans of the codes made under QR codes, by page. -->
                     <div>
                       <h4 class="an-list-head">QR codes scanned</h4>
                       <div id="anQrCodes"></div>
+                      <button class="admin-link rc-go" type="button" data-an-go="qr" hidden>Open QR codes</button>
                     </div>
                   </div>
                 </section>
-
+                </div>
+                <div class="ak-part an-wide" data-akpart-body="where" role="region" aria-label="Where">
                 <section class="an-card an-wide" aria-labelledby="anWhereHead">
                   <h3 class="an-card-head" id="anWhereHead">Where they are</h3>
                   <div class="an-pair">
@@ -2915,31 +3009,31 @@
                   </div>
                   <p class="an-credit"><a href="https://db-ip.com" target="_blank" rel="noopener">IP geolocation by DB-IP</a>, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
                 </section>
-
+                </div>
+                <div class="ak-part an-wide" data-akpart-body="pages" role="region" aria-label="Pages">
                 <section class="an-card an-wide" aria-labelledby="anPagesHead">
                   <h3 class="an-card-head" id="anPagesHead">What they looked at</h3>
                   <p class="an-card-note">Time is only while the page was on screen. Scroll is how far down people read, on average.</p>
                   <div id="anPages"></div>
                 </section>
-
+                </div>
+                <div class="ak-part" data-akpart-body="clicks" role="region" aria-label="Clicks">
                 <section class="an-card" aria-labelledby="anClicksHead">
                   <h3 class="an-card-head" id="anClicksHead">What they clicked</h3>
                   <div id="anClickKinds"></div>
                   <h4 class="an-list-head">Each button and link</h4>
                   <div id="anClicks"></div>
                 </section>
-
+                </div>
+                <div class="ak-part" data-akpart-body="devices" role="region" aria-label="Devices">
                 <section class="an-card" aria-labelledby="anUsedHead">
                   <h3 class="an-card-head" id="anUsedHead">What they used</h3>
                   <div id="anDevices"></div>
                   <h4 class="an-list-head">Browsers</h4>
                   <div id="anBrowsers"></div>
                 </section>
-
-                <section class="an-card an-now-card" aria-labelledby="anNowHead">
-                  <h3 class="an-card-head" id="anNowHead">Right now</h3>
-                  <div id="anNow" aria-live="polite"></div>
-                </section>
+                </div>
+              </div>
               </div>
             </section>
 

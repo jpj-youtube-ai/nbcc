@@ -4,3 +4,68 @@
  * Only what the kit does not already give these screens. The kit's house rules hold here too: no
  * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
  * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+
+/* ---- Audit: tiles, the filters card, the lines and the foot ---- */
+#view-audit .rc-filters { margin: 0 0 22px; }
+#view-audit .rc-filter-foot { margin: 14px 0 0; justify-content: space-between; }
+#view-audit .rc-list { min-width: 0; }
+#view-audit .rc-lines { margin: 8px 0 16px; }
+#view-audit .rc-sentence { font-family: inherit; font-weight: 600; font-size: 1rem; line-height: 1.35; }
+#view-audit .rc-kept { margin: 0; font-size: 0.82rem; line-height: 1.45; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-audit .rc-foot { display: grid; gap: 8px; margin: 18px 0 0; }
+#view-audit .rc-count { margin: 0; color: var(--ov-soft); font-size: 0.92rem; }
+#view-audit .rc-foot[hidden] { display: none; }
+
+/* ---- Email audit ---- */
+/* A failure stands out in the list, as it does in the band. */
+#view-email-audit .ty-pill-blocked { color: var(--ov-crimson); background: var(--ov-blush); }
+#view-email-audit .rc-time { color: var(--ov-soft); }
+#view-email-audit .rc-to { min-height: 44px; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; text-align: left; text-decoration: underline; overflow-wrap: anywhere; cursor: pointer; }
+#view-email-audit .rc-foot { display: grid; gap: 6px; justify-items: start; margin: 18px 0 0; }
+#view-email-audit .ty-controls { flex-wrap: wrap; align-items: end; }
+#view-email-audit .ty-inline { display: grid; gap: 4px; min-width: 0; }
+#view-email-audit .ty-inline :where(input, select) { width: 100%; min-width: 0; }
+
+/* ---- Analytics ---- */
+#view-analytics .rc-summary { margin: 0 0 14px; max-width: 70ch; font-size: 1.05rem; line-height: 1.5; color: var(--ov-ink); text-wrap: pretty; }
+#view-analytics .rc-summary:empty { display: none; }
+#view-analytics .rc-an-download { margin: 0 0 18px; }
+#view-analytics .rc-fig-says { margin: 6px 0 0; font-size: 0.8rem; line-height: 1.35; color: var(--ov-soft); }
+#view-analytics .an-more { min-height: 44px; }
+#view-analytics .rc-go { display: inline-flex; align-items: center; margin: 6px 0 0; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+#view-analytics .rc-go[hidden] { display: none; }
+/* On a laptop every part shows, one after another, and the bar is not needed. */
+@media (min-width: 861px) {
+  #view-analytics .ak-parts { display: none; }
+  #view-analytics .ak-part[hidden] { display: block; }
+}
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  /* admin.css pins three columns to 400px for a laptop; on a phone each email is a card. */
+  #view-email-audit .email-audit-table th, #view-email-audit .email-audit-table td { width: auto; }
+  #view-email-audit .ty-inline { flex: 1 1 100%; }
+  /* Analytics took its phone layout from 700px; the kit's phone starts at 860px. */
+  #view-analytics .an-pair { grid-template-columns: minmax(0, 1fr); }
+  #view-analytics .an-card { padding: 16px 16px 18px; }
+  #view-analytics .an-pages, #view-analytics .an-pages tbody, #view-analytics .an-pages tr, #view-analytics .an-pages td { display: block; width: auto; }
+  #view-analytics .an-pages thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #view-analytics .an-pages tr { padding: 10px 0; border-bottom: 1px solid var(--ov-rule); }
+  #view-analytics .an-pages td { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: 10px; padding: 3px 0; border-bottom: 0; text-align: left; }
+  #view-analytics .an-pages td::before { content: attr(data-label); font-size: 0.78rem; color: var(--ov-soft); }
+  #view-analytics .an-pages td.an-page { display: block; padding-bottom: 6px; }
+  #view-analytics .an-pages td.an-page::before { content: none; }
+  #view-analytics .an-part { scroll-margin-top: 76px; }
+}
+
+/* ---- Notifications ---- */
+#view-notifications .rc-phone-on { gap: 12px; }
+#view-notifications .rc-phone-on > div { display: grid; gap: 6px; justify-items: start; }
+#view-notifications .rc-tick { display: grid; align-content: start; min-width: 0; }
+#view-notifications .rc-tick-said { margin: 0 0 6px; font-size: 0.88rem; }
+#view-notifications .rc-tick-said:empty { display: none; }
+#view-notifications .rc-quiet-said { margin: 8px 0 14px; font-weight: 600; color: var(--ov-ink); }
+#view-notifications .admin-claim-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+#view-notifications .np-quiet input { min-width: 0; }
+/* The kit draws a field's label in the heading face; a tick box's words are ordinary words. */
+#view-notifications .admin-field label.admin-check { display: flex; align-items: center; margin: 0; font-family: inherit; font-weight: 400; font-size: 0.95rem; }

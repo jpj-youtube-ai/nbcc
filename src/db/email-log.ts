@@ -116,7 +116,7 @@ export interface EmailLogRow {
 
 export interface EmailLogQuery {
   kind?: string; // exact kind filter
-  status?: string; // 'sent' | 'failed' | 'delivered' | 'bounced' | 'complained'
+  status?: string; // 'sent' | 'failed' | 'delivered' | 'bounced' | 'complained' | 'problems'
   q?: string; // substring across recipient, name and subject
   limit: number;
   offset: number;
@@ -196,6 +196,9 @@ export async function listEmailLog(query: EmailLogQuery): Promise<{ rows: EmailL
   if (query.kind) where.push(`kind = ${arg(query.kind)}`);
   if (query.status === "failed" || query.status === "sent") {
     where.push(`status = ${arg(query.status)}`);
+  } else if (query.status === "problems") {
+    // Every kind of problem at once, by the band's own rule (the Email audit's Problems tile).
+    where.push("(status = 'failed' OR delivery_status IN ('bounced', 'complained'))");
   } else if (query.status === "delivered" || query.status === "bounced" || query.status === "complained") {
     where.push(`delivery_status = ${arg(query.status)}`);
   }

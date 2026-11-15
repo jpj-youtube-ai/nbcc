@@ -350,3 +350,14 @@ describe("emailLogPruneCutoff", () => {
     expect(emailLogPruneCutoff(new Date(Date.UTC(2026, 3, 4))).getUTCFullYear()).toBe(2019);
   });
 });
+
+// The admin refresh (2026-11-14): the Email audit's Problems tile reads every kind of problem at
+// once: our attempt failed, or the mailbox bounced it or marked it as spam. The same rule as the band.
+describe("listEmailLog: the Problems filter", () => {
+  it("reads failed, bounced and marked as spam together, in the count and the page", async () => {
+    await listEmailLog({ status: "problems", limit: 50, offset: 0 });
+    expect(flat(sqlOf(/select count/i))).toMatch(/where \(status = 'failed' or delivery_status in \('bounced', 'complained'\)\)/i);
+    expect(flat(sqlOf(/select id, kind/i))).toMatch(/where \(status = 'failed' or delivery_status in \('bounced', 'complained'\)\)/i);
+    expect(paramsOf(/select count/i)).not.toContain("problems");
+  });
+});

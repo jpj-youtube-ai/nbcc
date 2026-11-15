@@ -13260,12 +13260,19 @@
           return;
         }
         status.className = "ty-status is-error";
-        if (r.body.emailed === false) {
-          var kept =
-            r.body.recorded === false
-              ? "Nothing was recorded" + (forDonor ? ", so " + forDonor.name + " has not been marked as thanked" : "") + ". "
-              : "Check Letters sent before you try again. ";
-          status.textContent = "The email to " + payload.recipientEmail + " did not go. " + kept + "Please try again in a few minutes.";
+        if (r.body.emailed === true) {
+          // The email went but no record was kept. The letter is cleared, so there is nothing to
+          // send a second time, and the second-press guard keeps this message where it is.
+          tyBlankLetter();
+          tyJustThanked = { donorId: null, unrecorded: true };
+          status.className = "ty-status is-error";
+          status.textContent = "The email went, but we could not keep a record of it. Do not send it again; check the donor's inbox with them if unsure.";
+          loadThankYouSent(false);
+          loadThankYouEligible();
+        } else if (r.body.emailed === false) {
+          status.textContent =
+            "The email to " + payload.recipientEmail + " did not go. Nothing was recorded" +
+            (forDonor ? ", so " + forDonor.name + " has not been marked as thanked" : "") + ". Please try again in a few minutes.";
         } else if (r.code === 403) {
           status.textContent = "You can read letters here, but not send them.";
         } else if (r.code >= 400 && r.code < 500) {
@@ -13283,7 +13290,7 @@
   }
   // After a letter has gone, and the list has been read again: who is waiting next.
   function tyRenderNext() {
-    if (!tyJustThanked) return;
+    if (!tyJustThanked || tyJustThanked.unrecorded) return;
     var next = null;
     tyRows.some(function (r) {
       if (tyState(r) !== "ready" || r.donorId === tyJustThanked.donorId) return false;

@@ -204,6 +204,35 @@ describe("fault: it said Sent when the email had failed", () => {
   });
 });
 
+describe("the email went but no record was kept", () => {
+  beforeEach(async () => {
+    eligible = [donor(7, "Rowan Example"), donor(8, "Sam Example", { maxGiftPence: 120000 })];
+    await openScreen();
+    await write(7);
+    sendAnswer = () => ({ status: 500, body: { error: "The email went, but no record was kept.", emailed: true, recorded: false } });
+    await pressSend();
+  });
+
+  it("says the email went and not to send it again", () => {
+    const status = el("tyStatus");
+    expect(status.classList.contains("is-error")).toBe(true);
+    expect(text(status)).toContain("The email went, but we could not keep a record of it. Do not send it again; check the donor's inbox with them if unsure.");
+    expect(text(status)).not.toContain("try again");
+  });
+
+  it("offers no easy way to send it again: the form is cleared and a second press sends nothing", async () => {
+    expect(input("tyName").value).toBe("");
+    expect(input("tyEmail").value).toBe("");
+    expect(input("tyDonorId").value).toBe("");
+    el("tySend").click();
+    await settle();
+    expect(el("tyAsk").hidden).toBe(true);
+    expect(posts().length).toBe(1);
+    expect(text(el("tyStatus"))).toContain("Do not send it again");
+    expect(text(el("tyNext"))).toBe("");
+  });
+});
+
 describe("fault: a second press sent the same letter again", () => {
   beforeEach(async () => {
     eligible = [donor(7, "Rowan Example"), donor(8, "Sam Example", { maxGiftPence: 120000 })];

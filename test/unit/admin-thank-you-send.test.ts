@@ -120,6 +120,37 @@ describe("POST /api/admin/thank-you/send", () => {
     expect(res.body.id).toBeUndefined();
   });
 
+  it("counts a mail call that has not answered in 15 seconds as an email that did not go, and lets go of the record", async () => {
+    vi.useFakeTimers();
+    try {
+      sendMock.mockImplementation(() => new Promise(() => undefined)); // the mail service never answers
+      const pending = send(letter());
+      await vi.advanceTimersByTimeAsync(14_999);
+      let settled = false;
+      pending.then(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const res = await pending;
+      expect(res.statusCode).toBe(502);
+      expect(res.body).toMatchObject({ emailed: false, recorded: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says the email went but was not recorded when keeping the record fails after the send", async () => {
+    recordMock.mockImplementation(async (_input: unknown, emailIt?: (id: number) => Promise<void>) => {
+      if (emailIt) await emailIt(41);
+      throw new Error("the commit failed"); // the audit insert or COMMIT, after the email has gone
+    });
+    const res = await send(letter());
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({ emailed: true, recorded: false });
+    expect(String(res.body.error)).toContain("The email went");
+  });
+
   it("does not blame the email when it was the database that failed", async () => {
     recordMock.mockRejectedValue(new Error("connection refused"));
     const res = await send(letter());

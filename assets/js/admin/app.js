@@ -300,6 +300,8 @@
       // Manual add-subscriber + test-send are edit actions → hidden for read-only (Viewer) users.
       var subCard = el("nlSubscriberCard");
       if (subCard) subCard.hidden = !canEdit("newsletter");
+      // 2026-11-14: and say why, rather than leave someone who may only look an empty panel.
+      if (el("nlAudienceViewerNote")) el("nlAudienceViewerNote").hidden = canEdit("newsletter");
       var testBtn0 = el("newsletterTest");
       if (testBtn0) testBtn0.hidden = !canEdit("newsletter");
       var tmplBtn0 = el("newsletterTemplate");
@@ -8127,8 +8129,8 @@
     if (!subs.length) { host.innerHTML = '<p class="admin-empty">No subscribers found.</p>'; return; }
     var rows = subs.map(function (s) {
       return '<tr><td>' + H.escapeHtml(s.email) + "</td><td>" + H.escapeHtml(s.name || "") +
-        '</td><td><button class="admin-link nl-sub-remove" type="button" data-remove-sub="' + H.escapeHtml(s.email) +
-        '">Remove</button></td></tr>';
+        '</td><td><button class="admin-link admin-link-danger nl-sub-remove" type="button" data-remove-sub="' + H.escapeHtml(s.email) +
+        '">Stop their emails</button></td></tr>';
     }).join("");
     host.innerHTML = '<p class="nl-sub-count">' + subs.length + ' subscriber' + (subs.length === 1 ? "" : "s") + '</p>' +
       '<table class="admin-table"><thead><tr><th>Email</th><th>Name</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
@@ -8148,14 +8150,21 @@
   }
   function nlRemoveSubscriber(email) {
     if (!canEdit("newsletter")) return;
+    // 2026-11-14: this stopped ALL of a donor's emails at one press, without asking. It asks now, and
+    // says exactly what it does (the mirror of "Someone asked us to email them again").
+    if (!window.confirm(
+      "Stop all our emails to " + email + "?\n\nThis switches off all our emails to them, receipts and appeals too, " +
+      "not just the newsletter, and takes them off Donors and Newsletter. Only do this if they have asked. " +
+      "If they ask to hear from us again, use “Someone asked us to email them again”.",
+    )) return;
     authFetch("/api/admin/newsletters/subscribers/remove", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email }),
     })
       .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
-      .then(function () { nlLoadSubscribers(); })
-      .catch(function () { el("subMsg").textContent = "Could not remove " + email + "."; });
+      .then(function () { nlSay("subMsg", "Stopped all our emails to " + email + ".", "ok"); nlLoadSubscribers(); })
+      .catch(function () { nlSay("subMsg", "Could not stop the emails to " + email + ".", "error"); });
   }
   if (el("subManage")) {
     var subLoaded = false;
@@ -8175,7 +8184,8 @@
         // a dozen people and exporting handed you the whole list.
         var q = (el("subSearch") && el("subSearch").value ? el("subSearch").value : "").trim();
         authFetch("/api/admin/newsletters/subscribers.csv" + (q ? "?q=" + encodeURIComponent(q) : ""))
-          .then(function (res) { return res.text(); })
+          // 2026-11-14: a failed download handed over a file holding the error. Only a good answer is a file.
+          .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.text(); })
           .then(function (csv) {
             var blob = new Blob([csv], { type: "text/csv" });
             var url = URL.createObjectURL(blob);
@@ -8187,7 +8197,7 @@
             doc.body.removeChild(a);
             URL.revokeObjectURL(url);
           })
-          .catch(function () { el("subMsg").textContent = "Could not export subscribers."; });
+          .catch(function () { nlSay("subMsg", "Could not download the list just now. Please try again.", "error"); });
       });
     }
   }
@@ -8556,37 +8566,102 @@
       .catch(function () { /* the archive box is a convenience — never block the tab */ });
   }
 
+  // Who is on the audience being looked at, kept so the search, Show more and the download work on
+  // what is already in hand (2026-11-14). The members call returns everyone on the audience.
+  var nlPeople = { list: [], shown: NL_PAGE, q: "", audience: null };
+
+  // TASK-278: the full provenance of a membership: when they joined, how consent arrived, and which
+  // of us added them. 2026-11-14: every way in has words (the Elf Detective School sign up was shown
+  // as the raw word "elf"), and "by not recorded" is left out: a blank means we did not record it.
+  var NL_HOW_JOINED = {
+    footer: "Signed up on the website",
+    import: "Imported",
+    admin: "Added by staff",
+    fundraise: "Signed up while fundraising",
+    elf: "Signed up through Elf Detective School",
+  };
+  function nlSelfSignup(m) { return m.consentSource === "footer" || m.consentSource === "fundraise" || m.consentSource === "elf"; }
+  function nlHowJoined(m) { return NL_HOW_JOINED[m.consentSource] || "Joined another way"; }
+  function nlAddedBy(m) { return m.addedBy ? m.addedBy : nlSelfSignup(m) ? "themselves" : ""; }
+
+  /** Joined in this calendar month. */
+  function nlThisMonth(iso) {
+    if (!iso) return false;
+    var d = new Date(iso);
+    var now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+
   function nlRenderAudienceMembers(members) {
     var host = el("audienceMembers");
     if (!host) return;
+    var a = el("audiencePick") ? nlAudienceById(el("audiencePick").value) : null;
+    nlPeople = { list: members, shown: NL_PAGE, q: "", audience: a };
+    if (el("nlPeopleSearch")) el("nlPeopleSearch").value = "";
+    nlSay("nlPeopleMsg", "");
+    nlDrawPeople();
+  }
+
+  function nlPeopleMatches() {
+    var q = nlPeople.q.trim().toLowerCase();
+    if (!q) return nlPeople.list;
+    return nlPeople.list.filter(function (m) {
+      return [m.name, m.email, m.phone].some(function (v) { return String(v || "").toLowerCase().indexOf(q) !== -1; });
+    });
+  }
+
+  function nlDrawPeople() {
+    var host = el("audienceMembers");
+    var a = nlPeople.audience;
+    var members = nlPeople.list;
+    var head = el("nlPeopleHead");
+    var more = el("nlPeopleMore");
+    var count = el("nlPeopleCount");
+    if (head) head.hidden = !members.length;
+    if (more) more.hidden = true;
     if (!members.length) {
-      host.innerHTML = '<p class="admin-loading">No one on this audience yet.</p>';
+      if (count) count.textContent = "";
+      // Donors is never kept here: it is every donor who agreed to email, read live. It used to show
+      // its count and then "No one on this audience yet." Say where those people are instead.
+      if (a && a.kind === "donors") {
+        host.innerHTML =
+          '<div class="ak-notice nl-donors-note"><p>Donors is ' +
+          (typeof a.memberCount === "number" ? nlCount(a.memberCount, "donor", "donors") : "the donors") +
+          " who agreed to email when they gave. Nobody is added here by hand, so they are kept under Manage subscribers, where you can find one or stop their emails.</p>" +
+          '<p><button type="button" class="admin-btn ak-btn--plain" id="nlSeeDonors" data-nl-go="donors">See the donors who get our emails</button></p></div>';
+        return;
+      }
+      host.innerHTML = '<p class="admin-empty">No one on this audience yet.</p>';
       return;
     }
+    var found = nlPeopleMatches();
+    var joined = members.filter(function (m) { return nlThisMonth(m.consentedAt); }).length;
+    if (count) {
+      count.textContent =
+        nlCount(members.length, "person", "people") + (a && a.kind === "everyone" ? " on its own sign-up list" : "") +
+        ", " + joined + " joined this month" +
+        (nlPeople.q.trim() ? ". " + (found.length ? nlShowingText(Math.min(found.length, nlPeople.shown), found.length, true) : "No one matches that.") : "");
+    }
+    if (!found.length) {
+      host.innerHTML = '<p class="admin-empty">No one matches that.</p>';
+      return;
+    }
+    var page = found.slice(0, nlPeople.shown);
+    if (more) more.hidden = found.length <= nlPeople.shown;
     var canWrite = canEdit("newsletter");
-    // TASK-278: the full provenance of a membership — when they joined, how consent arrived, and
-    // which of us added them. "Who put this person on the list?" is the first question asked when an
-    // address turns out to be wrong, or when someone says they never signed up.
-    var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff", fundraise: "Signed up while fundraising" };
-    var selfSignup = function (m) { return m.consentSource === "footer" || m.consentSource === "fundraise"; };
-    // TASK-287: three columns, not seven. Seven never fitted the card, and .admin-table sets
-    // white-space:nowrap on every cell, so the table grew to its longest email address and the card
-    // scrolled sideways with Remove pushed off the edge. Nothing is lost — the same six facts are
-    // here, grouped as the two questions people actually ask: "who is this?" and "how did they get
-    // here?".
-    var html = '<table class="admin-table nl-people"><thead><tr><th>Person</th><th>Added</th>' +
-      "<th></th></tr></thead><tbody>";
-    members.forEach(function (m) {
+    // TASK-287: three columns, grouped as the two questions people ask: "who is this?" and "how did
+    // they get here?". 2026-11-14: a card each on a phone (.ak-cards).
+    var html = '<table class="admin-table nl-people ak-cards"><thead><tr><th>Person</th><th>Added</th>' +
+      '<th><span class="sr-only">What you can do</span></th></tr></thead><tbody>';
+    page.forEach(function (m) {
       var contact = [m.email, m.phone].filter(Boolean).map(H.escapeHtml).join(" · ");
-      var by = m.addedBy
-        ? H.escapeHtml(m.addedBy)
-        : selfSignup(m) ? "themselves" : "not recorded";
-      var how = [H.escapeHtml(howLabel[m.consentSource] || m.consentSource), "by " + by].join(" · ");
+      var by = nlAddedBy(m);
+      var how = [H.escapeHtml(nlHowJoined(m))].concat(by ? ["by " + H.escapeHtml(by)] : []).join(" · ");
       html +=
-        '<tr><td><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
+        '<tr><td class="ak-cards__lead"><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
         '</span><span class="nl-meta">' + contact + "</span></td>" +
-        '<td><span class="nl-person-nm">' + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") +
-        rowNewPill("newsletter", selfSignup(m) ? m.consentedAt : null) +
+        '<td data-label="Added"><span class="nl-person-nm">' + (m.consentedAt ? H.escapeHtml(nlWhen(m.consentedAt)) : "Not known") +
+        rowNewPill("newsletter", nlSelfSignup(m) ? m.consentedAt : null) +
         '</span><span class="nl-meta">' + how + "</span></td>" +
         '<td class="nl-r">' +
         (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +
@@ -8604,6 +8679,29 @@
           })
           .catch(function () { nlAudienceMsg("Could not remove them."); });
       });
+    });
+  }
+
+  if (el("nlPeopleSearch")) {
+    el("nlPeopleSearch").addEventListener("input", function () {
+      nlPeople.q = el("nlPeopleSearch").value || "";
+      nlPeople.shown = NL_PAGE;
+      nlDrawPeople();
+    });
+  }
+  if (el("nlPeopleMore")) {
+    el("nlPeopleMore").addEventListener("click", function () {
+      nlPeople.shown += NL_PAGE;
+      nlDrawPeople();
+    });
+  }
+  if (el("nlPeopleDownload")) {
+    el("nlPeopleDownload").addEventListener("click", function () {
+      var a = nlPeople.audience;
+      nlDownload(nlFileName("audience", a ? a.name : ""),
+        [["Name", "Email", "Phone", "Joined", "How they joined", "Added by"]].concat(nlPeopleMatches().map(function (m) {
+          return [m.name || "", m.email, m.phone || "", m.consentedAt ? nlWhen(m.consentedAt) : "", nlHowJoined(m), nlAddedBy(m)];
+        })), "nlPeopleMsg");
     });
   }
 
@@ -8730,6 +8828,31 @@
     if (!names.length) return "";
     if (names.length === 1) return names[0];
     return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  // "See the rows before importing" (2026-11-14): every row of the sheet and what will happen to it.
+  // The preview already returned the rows; only the counts were ever shown.
+  function nlPaintImportRows(b) {
+    var fold = el("importRows");
+    var body = el("importRowsBody");
+    if (!fold || !body) return;
+    var rows = (b && b.rows) || [];
+    fold.hidden = !rows.length;
+    fold.open = false;
+    var sum = fold.querySelector("summary");
+    if (sum) sum.textContent = "See the rows before importing (" + rows.length + ")";
+    var lower = function (list) { return (list || []).map(function (e) { return String(e).toLowerCase(); }); };
+    var every = lower(b && b.alreadyOnEvery);
+    var gone = lower(b && b.previouslyUnsubscribed);
+    body.innerHTML =
+      '<table class="admin-table nl-import-table ak-cards"><thead><tr><th>Name</th><th>Email</th><th>What will happen</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var e = String(r.email || "").toLowerCase();
+        var what = gone.indexOf(e) !== -1 ? "Asked us to stop, so will not be added"
+          : every.indexOf(e) !== -1 ? "Already on every audience you picked" : "Will be added";
+        return '<tr><td class="ak-cards__lead">' + (H.escapeHtml(r.name || "") || '<span class="admin-muted">No name</span>') +
+          '</td><td data-label="Email">' + H.escapeHtml(r.email || "") + '</td><td data-label="What will happen">' + what + "</td></tr>";
+      }).join("") + "</tbody></table>";
   }
 
   function nlInvalidateImportPreview() {
@@ -9389,6 +9512,7 @@
                 bits.push(r.b.previouslyUnsubscribed.length + " previously opted out (they will NOT be re-added)");
               }
               el("importSummary").textContent = bits.join(" · ");
+              nlPaintImportRows(r.b);
               var issues = el("importIssues");
               issues.innerHTML = "";
               (r.b.issues || []).forEach(function (i) {

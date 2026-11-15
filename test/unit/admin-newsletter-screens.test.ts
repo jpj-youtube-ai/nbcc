@@ -779,3 +779,150 @@ describe("the section's own stylesheet keeps the kit's house rules", () => {
     expect(phone).toContain("#view-newsletter .nl-preview-wrap { height: auto; overflow: visible; }");
   });
 });
+
+describe("Audiences & people", () => {
+  const member = (i: number, over: Record<string, unknown> = {}) => ({
+    id: i, name: "Person Example " + i, email: "person" + i + "@example.com", phone: null, consentSource: "admin",
+    consentedAt: ago(40 + i), addedBy: "fern@example.com", ...over,
+  });
+  async function audience(id: string, members: unknown[], as = "admin") {
+    served["/api/admin/subscriber-lists/" + id + "/members"] = members;
+    await open(as);
+    await go("nlPanelAudience");
+    (el("audiencePick") as HTMLSelectElement).value = id;
+    el("audiencePick").dispatchEvent(new Event("change"));
+    await settle();
+  }
+  const rows = () => qa("#audienceMembers tbody tr");
+
+  it("puts Add a person above the list of people", async () => {
+    await audience("3", [member(1)]);
+    const add = el("nlAddPerson");
+    const list = el("audienceMembers");
+    expect(add.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("says where the donors are rather than that nobody is on Donors, and takes you there", async () => {
+    await audience("2", []);
+    expect(text(el("audienceMembers"))).not.toContain("No one on this audience yet.");
+    expect(text(el("audienceMembers"))).toContain("80 donors");
+    const go2 = el("nlSeeDonors");
+    go2.click();
+    await settle();
+    expect((el("subManage") as HTMLDetailsElement).open).toBe(true);
+    expect(got("GET", "/api/admin/newsletters/subscribers").length).toBeGreaterThan(0);
+  });
+
+  it("still says nobody is on an audience of your own when nobody is", async () => {
+    await audience("3", []);
+    expect(text(el("audienceMembers"))).toContain("No one on this audience yet.");
+  });
+
+  it("says how someone joined in plain words, and leaves out who added them when we never recorded it", async () => {
+    await audience("3", [member(1, { consentSource: "elf", addedBy: null }), member(2, { consentSource: "import", addedBy: null })]);
+    expect(text(el("audienceMembers"))).toContain("Signed up through Elf Detective School");
+    expect(text(el("audienceMembers"))).not.toMatch(/\belf\b/);
+    expect(text(el("audienceMembers"))).not.toContain("not recorded");
+  });
+
+  it("shows the first fifty, with Show more, and finds one person by name or address", async () => {
+    await audience("3", Array.from({ length: 120 }, (_, i) => member(i + 1)));
+    expect(rows().length).toBe(50);
+    el("nlPeopleMore").click();
+    expect(rows().length).toBe(100);
+    type("nlPeopleSearch", "person11");
+    expect(rows().length).toBe(11);
+    type("nlPeopleSearch", "Person Example 7");
+    expect(rows().length).toBeGreaterThan(0);
+    expect(rows().every((r) => text(r).includes("Person Example 7"))).toBe(true);
+  });
+
+  it("names each cell for the phone's card, with the person leading it", async () => {
+    await audience("3", [member(1)]);
+    const table = q("#audienceMembers table") as HTMLElement;
+    expect(table.classList.contains("ak-cards")).toBe(true);
+    expect((rows()[0].children[0] as HTMLElement).classList.contains("ak-cards__lead")).toBe(true);
+    expect((rows()[0].children[1] as HTMLElement).getAttribute("data-label")).toBe("Added");
+  });
+
+  it("says how many joined this month on an audience of your own", async () => {
+    await audience("3", [member(1, { consentedAt: new Date().toISOString() }), member(2), member(3)]);
+    expect(text(el("nlPeopleCount"))).toContain("3 people");
+    expect(text(el("nlPeopleCount"))).toContain("1 joined this month");
+  });
+
+  it("downloads the audience you are looking at", async () => {
+    await audience("3", [member(1), member(2, { phone: "07700 900123" })]);
+    el("nlPeopleDownload").click();
+    expect(downloads.length).toBe(1);
+    expect(downloads[0].name).toBe("audience-volunteers.csv");
+    expect(downloads[0].rows[0]).toEqual(["Name", "Email", "Phone", "Joined", "How they joined", "Added by"]);
+    expect(downloads[0].rows.length).toBe(3);
+    expect(downloads[0].rows[2][2]).toBe("07700 900123");
+  });
+
+  it("asks before stopping a donor's emails, says what it does, and does nothing if you say no", async () => {
+    served["/api/admin/newsletters/subscribers"] = { count: 1, subscribers: [{ email: "giver@example.com", name: "Giver Example" }] };
+    await open();
+    await go("nlPanelAudience");
+    (el("subManage") as HTMLDetailsElement).open = true;
+    el("subManage").dispatchEvent(new Event("toggle"));
+    await settle();
+    const btn = q("#subList [data-remove-sub]") as HTMLElement;
+    expect(text(btn)).toBe("Stop their emails");
+    let asked = "";
+    window.confirm = (m?: string) => { asked = String(m); return false; };
+    btn.click();
+    await settle();
+    expect(asked).toContain("giver@example.com");
+    expect(asked).toContain("all our emails");
+    expect(got("POST", "/api/admin/newsletters/subscribers/remove").length).toBe(0);
+    window.confirm = () => true;
+    btn.click();
+    await settle();
+    expect(got("POST", "/api/admin/newsletters/subscribers/remove").length).toBe(1);
+    expect(text(el("subMsg"))).toContain("giver@example.com");
+  });
+
+  it("does not hand over a broken file when the donors list could not be downloaded", async () => {
+    failing["/api/admin/newsletters/subscribers.csv"] = { status: 500 };
+    await open();
+    await go("nlPanelAudience");
+    el("subExport").click();
+    await settle();
+    expect(text(el("subMsg"))).toBe("Could not download the list just now. Please try again.");
+    expect(el("subMsg").classList.contains("is-error")).toBe(true);
+  });
+
+  it("tells someone who may only look why there is nothing to change here", async () => {
+    await open("viewer");
+    await go("nlPanelAudience");
+    expect(el("nlAudienceViewerNote").hidden).toBe(false);
+    expect(text(el("nlAudienceViewerNote"))).toContain("someone who can edit");
+  });
+
+  it("shows every row of the sheet before importing, and what will happen to each", async () => {
+    served["POST /api/admin/subscriber-list-import/preview"] = {
+      rows: [{ name: "Ready Example", email: "ready@example.com" }, { name: "", email: "there@example.com" }, { name: "Gone Example", email: "gone@example.com" }],
+      issues: [], readyCount: 1, audiences: [{ listId: 3, listName: "Volunteers", alreadyOnList: 1 }],
+      alreadyOnEvery: ["there@example.com"], previouslyUnsubscribed: ["gone@example.com"],
+    };
+    await open();
+    await go("nlPanelAudience");
+    const tick = el("importAudiences").querySelector('input[value="3"]') as HTMLInputElement;
+    tick.checked = true;
+    tick.dispatchEvent(new Event("change", { bubbles: true }));
+    const file = new File(["name,email"], "people.csv", { type: "text/csv" });
+    Object.defineProperty(el("importFile"), "files", { value: [file], configurable: true });
+    el("importPreviewBtn").click();
+    await wait(50);
+    await settle();
+    const fold = el("importRows") as HTMLDetailsElement;
+    expect(fold.hidden).toBe(false);
+    expect(text(fold.querySelector("summary"))).toBe("See the rows before importing (3)");
+    const cells = qa("#importRows tbody tr").map(text);
+    expect(cells[0]).toContain("Will be added");
+    expect(cells[1]).toContain("Already on every audience you picked");
+    expect(cells[2]).toContain("Asked us to stop, so will not be added");
+  });
+});

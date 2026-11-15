@@ -735,6 +735,9 @@
               <!-- Stage 1. Editor+ only; app.js hides this whole card in read mode, which is why the
                    audience picker and member list live inside it (they carry Remove controls). -->
               <div class="nl-panel" id="nlPanelAudience" hidden>
+              <!-- 2026-11-14: the card below is for people who can edit, so someone who may only look saw an
+                   empty panel. This says why (app.js shows it, beside hiding the card). -->
+              <p class="ak-notice" id="nlAudienceViewerNote" hidden>Adding and taking people off audiences, and seeing who is on them, needs someone who can edit the newsletter. Ask one of them, or an admin, if you need a change made.</p>
               <div class="nl-subscriber-card" id="nlSubscriberCard">
                 <h3 class="nl-stage-head" id="nlStageAudience"><span class="nl-stage-num">1</span> Audiences &amp; people</h3>
                 <p class="admin-help">
@@ -759,8 +762,6 @@
                 <!-- What the selected audience MEANS, in its own words — a live audience explains why
                      it has no Add form, an archived one explains why it cannot be sent to. -->
                 <p class="nl-audience-kind" id="audienceKindNote" aria-live="polite"></p>
-                <div id="audienceMembers" aria-live="polite"></div>
-
                 <!-- ONE way to add a person, and it names the audience it is adding to. There used to
                      be two forms twenty lines apart writing to different tables: "Add a subscriber"
                      (a donors row, no audience choice) and "Add to audience". -->
@@ -816,6 +817,8 @@
                   <div id="importPreview" hidden>
                     <p id="importSummary" class="nl-import-summary"></p>
                     <ul id="importIssues" class="nl-import-issues"></ul>
+                    <!-- 2026-11-14: every row of the sheet and what will happen to it; the preview already returned them. -->
+                    <details class="nl-manage nl-import-rows" id="importRows" hidden><summary>See the rows before importing</summary><div class="nl-manage-body" id="importRowsBody"></div></details>
                     <label class="nl-import-attest">
                       <input type="checkbox" id="importAttest" />
                       <span>These people have agreed to hear from NBCC (for example they signed up at an event or asked to be added).</span>
@@ -825,6 +828,20 @@
                   <p id="importMsg" class="nl-sub-msg" aria-live="polite"></p>
                 </div>
                 </div>
+
+                <!-- 2026-11-14: who is on the audience, found by a search and shown fifty at a time (app.js,
+                     nlRenderAudienceMembers), with how many joined this month and a download of it. Add a person and
+                     the import sit above it: on a phone they were 3,476px down, under the whole list. -->
+                <div class="nl-people-head" id="nlPeopleHead" hidden>
+                  <label class="ak-field nl-list-search"><span>Find someone on this audience</span>
+                    <input type="search" id="nlPeopleSearch" placeholder="Part of a name or an email address" autocomplete="off" /></label>
+                  <button type="button" class="admin-btn ak-btn--plain" id="nlPeopleDownload">Download this audience</button>
+                </div>
+                <p class="nl-list-count" id="nlPeopleCount" aria-live="polite"></p>
+                <p class="admin-action-status" id="nlPeopleMsg" role="status"></p>
+                <div id="audienceMembers" aria-live="polite"></div>
+                <button type="button" class="admin-btn ak-btn--plain nl-more" id="nlPeopleMore" hidden>Show more</button>
+
 
                 <!-- Switching someone's emails back ON is its own deliberate action, behind a summary
                      and a confirm. It used to be a silent SIDE EFFECT of the plain "add a subscriber"
@@ -853,9 +870,10 @@
                 <details class="nl-manage" id="subManage">
                   <summary>Manage subscribers</summary>
                   <div class="nl-manage-body">
+                    <p class="admin-help">The donors who agreed to email: the people on <b>Donors</b>, and part of <b>Newsletter</b>. They join by ticking the box when they give, so nobody adds them here. <b>Stop their emails</b> switches off all our emails to that person.</p>
                     <div class="nl-manage-tools">
                       <input type="search" id="subSearch" placeholder="Search email or name…" aria-label="Search subscribers" />
-                      <button type="button" class="nl-item-add" id="subExport"><span>Export CSV</span></button>
+                      <button type="button" class="nl-item-add" id="subExport"><span>Download as a spreadsheet</span></button>
                     </div>
                     <div id="subList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
                   </div>

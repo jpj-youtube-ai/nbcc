@@ -209,3 +209,20 @@
   /* The preview shows whole, in the page, rather than scrolling inside its own box. */
   #view-newsletter .nl-preview-wrap { height: auto; overflow: visible; }
 }
+
+/* ---- Audiences & people: the search, the count and Show more over the list (2026-11-14) ---- */
+#view-newsletter .nl-people-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 22px 0 6px; }
+#view-newsletter .nl-people-head[hidden] { display: none; }
+#view-newsletter .nl-donors-note p { margin: 0; }
+#view-newsletter .nl-people-tools { margin: 18px 0 8px; }
+#view-newsletter .nl-import-rows { margin: 10px 0; }
+#view-newsletter .nl-import-rows[hidden] { display: none; }
+#view-newsletter .nl-import-table td { overflow-wrap: anywhere; }
+
+/* A subject is read whole, not cut to "A very long invented subject line about...", and the list never
+   becomes a box that scrolls sideways (admin.css gave #nlRecentSends overflow-x: auto). */
+#view-newsletter #nlRecentSends { overflow: visible; overflow: clip; }
+#view-newsletter .nl-sends .nl-subj, #view-newsletter .nl-sends .nl-meta { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* With 44px controls a block's head holds them on a second line on a phone, rather than past the edge. */
+#view-newsletter .nl-block-head { flex-wrap: wrap; }
+#view-newsletter .nl-block-ctrls { flex-wrap: wrap; justify-content: flex-end; }

@@ -360,6 +360,10 @@ export interface BusinessFulfilmentListRow {
   donor_id: number;
   donor_name: string;
   business_name: string | null;
+  /** The donor's email, for the open card's link (TASK-644). */
+  donor_email: string | null;
+  /** Their latest paid monthly amount, or null if they have never paid one (TASK-644). */
+  monthly_pence: number | null;
   band: SupporterBand;
   /** When the thank-you letter went, or null if this supporter has not been thanked yet. */
   thank_you_sent_at: string | null;
@@ -406,6 +410,9 @@ export interface BusinessFulfilmentListRow {
 export async function listBusinessFulfilments(): Promise<BusinessFulfilmentListRow[]> {
   const res = await pool.query<BusinessFulfilmentListRow>(
     `SELECT f.id, f.donor_id, dn.full_name AS donor_name, dn.business_name,
+            -- TASK-644: the open card gives their email and what they give a month; neither was sent.
+            dn.email AS donor_email,
+            gift.monthly_pence AS monthly_pence,
             f.band,
             f.credit_name, f.website, f.socials, f.list_on_supporters, f.want_social,
             f.want_badge, f.want_certificate, f.certificate_delivery, f.certificate_address,
@@ -448,7 +455,9 @@ export async function listBusinessFulfilments(): Promise<BusinessFulfilmentListR
        LEFT JOIN LATERAL (
               SELECT min(d.created_at) AS first_paid_at,
                      (array_agg(d.stripe_subscription_id ORDER BY d.created_at DESC, d.id DESC))[1]
-                       AS latest_subscription_id
+                       AS latest_subscription_id,
+                     -- What they give now: their latest paid monthly amount, as listDunning reads it.
+                     (array_agg(d.amount_pence ORDER BY d.created_at DESC, d.id DESC))[1] AS monthly_pence
                 FROM donations d
                WHERE d.donor_id = f.donor_id AND d.mode = 'monthly' AND d.payment_status = 'paid'
             ) gift ON true

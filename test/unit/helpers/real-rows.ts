@@ -207,3 +207,42 @@ export function donorRows(): Rule[] {
     ]],
   ];
 }
+
+/** Business supporters, Monthly givers and Invoices: business_supporter_fulfilment, donations, donation_invoices. */
+export function supporterRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  // An invoice as COLUMNS gives it: dates as YYYY-MM-DD text, moments as to_char ISO text.
+  const invoice = (id: number, over: Record<string, unknown>) => ({
+    id, payer_kind: "business", contact_name: "Robin Contact", org_name: "Pretend Bakery Ltd", email: "accounts@example.com",
+    address: "1 Pretend Street, Testtown", postcode: "KA1 1AA", consideration_given: false, description: "Donation to NBCC",
+    note: null, amount_pence: 25000, issued_on: "2026-11-01", due_on: "2099-12-01", status: "waiting", paid_on: null, paid_by: null,
+    donation_id: null, cancelled_at: null, paid_twice_at: null, gift_aid: null, gift_aid_at: null, send_count: 1,
+    last_sent_at: "2026-11-01T10:00:00Z", created_by: "admin:fern@example.com", created_at: "2026-11-01T10:00:00Z", ...over,
+  });
+  return [
+    // listBusinessFulfilments.
+    ["FROM business_supporter_fulfilment f", [{
+      id: 3, donor_id: 81, donor_name: "Robin Contact", business_name: "Pretend Bakery Ltd", band: "silver",
+      credit_name: "Pretend Bakery", website: "https://bakery.example.com", socials: null, list_on_supporters: true, want_social: true,
+      want_badge: true, want_certificate: false, certificate_delivery: null, certificate_address: null, consent_featured: true,
+      captured_at: at("2026-06-03T10:00:00Z"), certificate_sent: false, certificate_posted: false, badge_sent: true, social_done: false,
+      added_to_supporters: true, created_at: at("2026-06-01T10:00:00Z"), perks_sent_at: at("2026-06-03T10:05:00Z"),
+      invited_at: at("2026-06-01T10:01:00Z"), thank_you_sent_at: at("2026-06-04T08:00:00Z"), thank_you_sent_by: "automatic",
+      phone: "01234 000000", last_called_at: null, last_called_by: null, last_call_note: null, supporting: true,
+      supporting_since: at("2026-06-01T10:00:00Z"),
+      donor_email: "accounts@example.com", monthly_pence: 5000,
+    }]],
+    // listMonthlySupporters.
+    ["agg.first_paid_at, agg.most_recent_paid_at", [
+      { donor_id: 71, full_name: "Kirsty Imaginary", email: "kirsty@example.com", monthly_pence: 1500, gift_aid: true, first_paid_at: at("2025-02-01T09:00:00Z"), most_recent_paid_at: at("2026-11-01T09:00:00Z"), payment_count: 22, total_pence: 31000, state: "active", cancelled_at: null, lapsed_at: null, failed_attempts: 0, thanked_at: at("2025-02-03T09:00:00Z") },
+      { donor_id: 72, full_name: "Struan Unreal", email: null, monthly_pence: 500, gift_aid: false, first_paid_at: at("2024-01-01T09:00:00Z"), most_recent_paid_at: at("2026-08-01T09:00:00Z"), payment_count: 31, total_pence: 15500, state: "active", cancelled_at: at("2026-08-20T09:00:00Z"), lapsed_at: null, failed_attempts: 0, thanked_at: null },
+    ]],
+    // listInvoices and getInvoiceSettings.
+    ["FROM donation_invoices ORDER BY id DESC", [
+      invoice(12, {}),
+      invoice(11, { payer_kind: "person", contact_name: "Ailsa Sample", org_name: null, email: "ailsa@example.com", amount_pence: 4000, due_on: "2026-10-01", issued_on: "2026-09-01" }),
+      invoice(10, { status: "paid", paid_on: "2026-10-15", paid_by: "transfer", donation_id: 700, amount_pence: 10000 }),
+    ]],
+    ["FROM donation_invoice_settings", [{ account_name: "NBCC Pretend Account", sort_code: "00-00-00", account_number: "00000000" }]],
+  ];
+}

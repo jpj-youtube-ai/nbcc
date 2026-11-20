@@ -31,6 +31,7 @@ export const CONFIG = {
   STRIPE_SECRET_KEY: "sk_test_placeholder",
   STRIPE_WEBHOOK_SECRET: "whsec_contract",
   PUBLIC_BASE_URL: "https://nbcc.scot",
+  PORTAL_BASE_URL: "https://nbcc.scot",
 };
 
 type Rows = Record<string, unknown>[];

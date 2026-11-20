@@ -27,6 +27,11 @@ export interface TodoBusiness {
   businessName: string;
   contactEmail: string | null;
   contactPhone: string | null;
+  /**
+   * When somebody recorded that the number was checked against the Telephone Preference Service
+   * register. Until then the number is not shown, here or anywhere else on the screen.
+   */
+  ctpsCheckedAt?: string | null;
   owner: string | null;
   ownerEmail: string | null;
   sentAt: string | null;
@@ -44,7 +49,7 @@ export interface Todo {
   kind: TodoKind;
   /** Why this business is on the list, in a volunteer's words. */
   reason: string;
-  /** What to do about it. Carries the phone number where there is one. */
+  /** What to do about it. Carries the phone number once it has been checked against the register. */
   action: string;
   /** How late we are. Drives the order within a kind, and reads as urgency on screen. */
   daysOverdue: number;
@@ -126,7 +131,14 @@ export function whatIsNeeded(b: TodoBusiness, now: Date): Todo | null {
       return todo(
         "call",
         "They were interested and nothing has happened since.",
-        b.contactPhone ? `Call ${b.contactPhone}` : "Follow it up",
+        // The business page hides a number until somebody says they have checked it against the
+        // register, because ringing one that is on it is against the law. This list follows the
+        // same rule: it used to print the number regardless.
+        !b.contactPhone
+          ? "Follow it up"
+          : b.ctpsCheckedAt
+            ? `Call ${b.contactPhone}`
+            : "Check their number against the register, then call",
         since - CALL_AFTER_DAYS,
       );
     }

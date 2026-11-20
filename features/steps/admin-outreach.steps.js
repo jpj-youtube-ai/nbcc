@@ -444,3 +444,85 @@ Then("the preview should contain {string}", function (text) {
     `expected the preview to contain ${JSON.stringify(text)}`,
   );
 });
+
+// --- changing details, and the list past its first page (admin refresh, 2026-11-14) --------------
+
+async function changeDetails(ctx, body, actor, password) {
+  const token = await login(actor, password);
+  await call(ctx, `/api/admin/outreach/${ctx.outId}`, { method: "PATCH", token, body });
+}
+
+When(
+  "I change the business email to {string} as {string} with password {string}",
+  async function (email, actor, password) {
+    await changeDetails(this, { contactEmail: email }, actor, password);
+  },
+);
+
+When(
+  "I change the business phone to {string} as {string} with password {string}",
+  async function (phone, actor, password) {
+    await changeDetails(this, { contactPhone: phone }, actor, password);
+  },
+);
+
+When(
+  "I change the business name to {string} as {string} with password {string}",
+  async function (name, actor, password) {
+    await changeDetails(this, { businessName: name }, actor, password);
+  },
+);
+
+When(
+  "I change the business name to {string} acknowledging the matches as {string} with password {string}",
+  async function (name, actor, password) {
+    await changeDetails(this, { businessName: name, acknowledgedMatches: true }, actor, password);
+  },
+);
+
+Given("the business phone number {string} has been checked against the register", async function (phone) {
+  await pool.query(
+    `UPDATE business_outreach
+        SET contact_phone = $2, ctps_checked_at = now(), ctps_checked_by = 'bdd@example.com'
+      WHERE id = $1`,
+    [this.outId, phone],
+  );
+});
+
+When(
+  "I ask for {int} business(es) from the outreach list as {string} with password {string}",
+  async function (limit, actor, password) {
+    const token = await login(actor, password);
+    await call(this, `/api/admin/outreach?limit=${limit}&offset=0`, { token });
+  },
+);
+
+Then("the outreach business email should be {string}", async function (email) {
+  const row = await pool.query("SELECT contact_email FROM business_outreach WHERE id = $1", [this.outId]);
+  assert.equal(row.rows[0].contact_email, email);
+});
+
+Then("the outreach business should have no email address", async function () {
+  const row = await pool.query("SELECT contact_email FROM business_outreach WHERE id = $1", [this.outId]);
+  assert.equal(row.rows[0].contact_email, null);
+});
+
+Then("the outreach business should have no TPS check", async function () {
+  const row = await pool.query(
+    "SELECT ctps_checked_at, ctps_checked_by FROM business_outreach WHERE id = $1",
+    [this.outId],
+  );
+  assert.equal(row.rows[0].ctps_checked_at, null);
+  assert.equal(row.rows[0].ctps_checked_by, null);
+});
+
+Then("the outreach list should hold {int} business(es)", function (n) {
+  assert.equal((this.outBody.results || []).length, n);
+});
+
+// "At least", because the shared database may hold other businesses; the two this scenario added
+// are both counted even though only one of them was asked for.
+Then("the outreach list should count at least {int} businesses altogether", function (n) {
+  assert.ok(this.outBody.total >= n, `expected a total of at least ${n}, got ${this.outBody.total}`);
+  assert.ok(this.outBody.counts && this.outBody.counts.total === this.outBody.total, "counts.total should match total");
+});

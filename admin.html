@@ -2680,226 +2680,326 @@
                  follows view-donor's shape: a Back control and a region the JS fills. Everything
                  known about one firm in one place, because piecing a history together from a
                  list row is how a volunteer ends up asking twice. -->
-            <section class="admin-view" id="view-business" aria-labelledby="business-heading" hidden>
-              <button class="admin-back" id="businessBack" type="button">&larr; Back to the list</button>
-              <h2 id="business-heading">Business</h2>
-              <div id="businessDetail" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
-
-              <h3 class="admin-subhead">What happened?</h3>
-              <p class="admin-help">Pick one and press save. This is what puts them on, or takes them off, the list of people who need chasing.</p>
-              <form class="ty-panel" id="businessOutcomeForm" autocomplete="off">
-                <div id="businessOutcomes" class="out-outcomes"></div>
-                <!-- Only for a sign-up (TASK-413). Linking the donor is what turns "how much has
-                     this raised?" from a name guess into a fact. -->
-                <div class="ty-field" id="businessDonorField" hidden>
-                  <label for="businessDonor">Which supporter did they become?</label>
-                  <select id="businessDonor"></select>
-                  <span class="ty-hint">Pick them and their giving counts towards what this whole effort has raised. Leave it if you are not sure; you can come back.</span>
+            <!-- One business (TASK-404), in the kit's look (admin refresh, 2026-11-14): what to do next
+                 first, then four parts. Wired in app.js (openBusiness); styles in admin-outreach.css. -->
+            <section class="admin-view ak" id="view-business" aria-labelledby="business-heading" hidden>
+              <div class="biz-top">
+                <button class="admin-back" id="businessBack" type="button">&larr; Back to the list</button>
+                <div class="biz-step" id="businessStep" role="group" aria-label="Other businesses in the list you came from" hidden>
+                  <button class="admin-btn ak-btn--plain" type="button" id="businessPrev">Previous</button>
+                  <span class="biz-place" id="businessPlace"></span>
+                  <button class="admin-btn ak-btn--plain" type="button" id="businessNext">Next</button>
                 </div>
-                <div class="ty-field" id="businessAskAgainField" hidden>
-                  <label for="businessAskAgain">When should we ask again?</label>
-                  <input id="businessAskAgain" type="date" />
-                  <span class="ty-hint">They will appear on your list again on this date. Without one, &ldquo;not this year&rdquo; is the same as a no.</span>
-                </div>
-                <p class="ty-controls">
-                  <button class="btn btn-primary" type="submit" id="businessOutcomeSave">Save what happened</button>
-                  <span class="ty-status" id="businessOutcomeStatus" role="status" aria-live="polite"></span>
-                </p>
-              </form>
-
-              <!-- The one follow-up (TASK-414). Shown only where one is actually due; the server
-                   refuses a second however this button is reached. -->
-              <div id="businessNudge" hidden>
-                <h3 class="admin-subhead">Send the one follow-up</h3>
-                <p class="admin-help">A short note saying it is the last they will hear from us, with an easy way to say no. It can only be sent once, and after it this business drops off the chasing list for good.</p>
-                <p class="ty-controls">
-                  <button class="btn btn-primary" type="button" id="businessNudgeSend">Send the follow-up</button>
-                  <span class="ty-status" id="businessNudgeStatus" role="status" aria-live="polite"></span>
-                </p>
               </div>
+              <h2 id="business-heading">Business</h2>
+              <p class="admin-view-intro">Everything we know about this business, before you ring or write: where it stands, what happened, and the notes for the next person.</p>
 
-              <h3 class="admin-subhead">If they ask what we hold</h3>
-              <p class="admin-help">Everything about this business, in plain English and including the private notes below, ready to paste into a reply. A sole trader can ask for this by law, and answering plainly is easier than working out whether they are entitled to.</p>
-              <p class="ty-controls">
-                <button class="admin-btn" type="button" id="businessDisclose">Show everything we hold</button>
-                <button class="admin-btn" type="button" id="businessDiscloseCopy" hidden>Copy it</button>
-                <span class="ty-status" id="businessDiscloseStatus" role="status" aria-live="polite"></span>
-              </p>
-              <pre class="out-disclosure" id="businessDisclosure" hidden></pre>
+              <div class="ak-card biz-next" id="businessTodo" aria-live="polite" hidden></div>
 
-              <h3 class="admin-subhead">Notes</h3>
-              <p class="admin-help">Anything worth the next volunteer knowing. Notes cannot be edited or deleted once saved, and the business can ask to see them, so write them as though they will.</p>
-              <form class="ty-panel" id="businessNoteForm" autocomplete="off">
-                <div class="ty-field">
-                  <label for="businessNote">Add a note</label>
-                  <textarea id="businessNote" rows="3" maxlength="2000" spellcheck="true" lang="en-GB" placeholder="e.g. Rang and spoke to Jim. Asked us to try again after their year end in April."></textarea>
+              <div id="businessParts">
+                <div class="ak-parts" role="group" aria-label="Which part to show">
+                  <button type="button" class="ak-part-btn" data-akpart="glance" aria-pressed="true">At a glance</button>
+                  <button type="button" class="ak-part-btn" data-akpart="notes" aria-pressed="false">Notes<span id="businessNoteCount"></span></button>
+                  <button type="button" class="ak-part-btn" data-akpart="details" aria-pressed="false">Their details</button>
+                  <button type="button" class="ak-part-btn" data-akpart="hold" aria-pressed="false">If they ask what we hold</button>
                 </div>
-                <p class="ty-controls">
-                  <button class="btn btn-primary" type="submit" id="businessNoteAdd">Add this note</button>
-                  <span class="ty-status" id="businessNoteStatus" role="status" aria-live="polite"></span>
-                </p>
-              </form>
-              <div id="businessNotes" aria-live="polite"></div>
+
+                <div class="ak-part" data-akpart-body="glance" role="region" aria-label="At a glance">
+                  <p class="ak-part-intro">Where they stand, how to reach them, and what happened.</p>
+                  <div id="businessDetail" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+                  <p class="ty-status" id="businessContactStatus" role="status" aria-live="polite"></p>
+
+                  <div id="businessOutcomeBlock">
+                    <h3 class="admin-subhead">What happened?</h3>
+                    <p class="admin-help">Pick one and press save. This is what puts them on, or takes them off, the list of people who need chasing.</p>
+                    <form class="ak-panel" id="businessOutcomeForm" autocomplete="off">
+                      <div id="businessOutcomes" class="out-outcomes"></div>
+                      <!-- Only for a sign-up (TASK-413). Linking the donor is what turns "how much has
+                           this raised?" from a name guess into a fact. -->
+                      <div class="ty-field" id="businessDonorField" hidden>
+                        <label for="businessDonor">Which supporter did they become?</label>
+                        <select id="businessDonor"></select>
+                        <span class="ty-hint">Pick them and their giving counts towards what this whole effort has raised. Leave it if you are not sure; you can come back.</span>
+                      </div>
+                      <div class="ty-field" id="businessAskAgainField" hidden>
+                        <label for="businessAskAgain">When should we ask again?</label>
+                        <input id="businessAskAgain" type="date" />
+                        <span class="ty-hint">They will appear on your list again on this date. Without one, &ldquo;not this year&rdquo; is the same as a no.</span>
+                      </div>
+                      <p class="ty-controls">
+                        <button class="btn btn-primary" type="submit" id="businessOutcomeSave">Save what happened</button>
+                        <span class="ty-status" id="businessOutcomeStatus" role="status" aria-live="polite"></span>
+                      </p>
+                    </form>
+                  </div>
+
+                  <!-- The one follow-up (TASK-414). Shown only where one is actually due; the server
+                       refuses a second however this button is reached. -->
+                  <div id="businessNudge" hidden>
+                    <h3 class="admin-subhead">Send the one follow-up</h3>
+                    <p class="admin-help">A short note saying it is the last they will hear from us, with an easy way to say no. It can only be sent once, and after it this business drops off the chasing list for good.</p>
+                    <div class="ak-panel">
+                      <div class="ty-field">
+                        <label for="businessSigner">From</label>
+                        <select id="businessSigner"></select>
+                      </div>
+                      <p class="ty-controls">
+                        <button class="btn btn-primary" type="button" id="businessNudgeSend">Send the follow-up</button>
+                        <span class="ty-status" id="businessNudgeStatus" role="status" aria-live="polite"></span>
+                      </p>
+                      <small class="ak-says">It goes straight to their inbox, signed by whoever is chosen above. You are asked first, because it cannot be sent again.</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ak-part" data-akpart-body="notes" role="region" aria-label="Notes" hidden>
+                  <p class="ak-part-intro">What everyone has written about this business, newest first.</p>
+                  <h3 class="admin-subhead">Notes</h3>
+                  <p class="admin-help">Anything worth the next volunteer knowing. Notes cannot be edited or deleted once saved, and the business can ask to see them, so write them as though they will.</p>
+                  <form class="ak-panel" id="businessNoteForm" autocomplete="off">
+                    <div class="ty-field">
+                      <label for="businessNote">Add a note</label>
+                      <textarea id="businessNote" rows="3" maxlength="2000" spellcheck="true" lang="en-GB" placeholder="e.g. Rang and spoke to Jim. Asked us to try again after their year end in April."></textarea>
+                    </div>
+                    <p class="ty-controls">
+                      <button class="btn btn-primary" type="submit" id="businessNoteAdd">Add this note</button>
+                      <span class="ty-status" id="businessNoteStatus" role="status" aria-live="polite"></span>
+                    </p>
+                  </form>
+                  <div id="businessNotes" aria-live="polite"></div>
+                </div>
+
+                <div class="ak-part" data-akpart-body="details" role="region" aria-label="Their details" hidden>
+                  <p class="ak-part-intro">The rest of what was recorded when they were added.</p>
+                  <div id="businessMore" aria-live="polite"></div>
+                </div>
+
+                <div class="ak-part" data-akpart-body="hold" role="region" aria-label="If they ask what we hold" hidden>
+                  <p class="ak-part-intro">For a business that asks what we know about them.</p>
+                  <h3 class="admin-subhead">If they ask what we hold</h3>
+                  <p class="admin-help">Everything about this business, in plain English and including the private notes below, ready to paste into a reply. A sole trader can ask for this by law, and answering plainly is easier than working out whether they are entitled to.</p>
+                  <p class="ty-controls">
+                    <button class="admin-btn" type="button" id="businessDisclose">Show everything we hold</button>
+                    <button class="admin-btn ak-btn--plain" type="button" id="businessDiscloseCopy" hidden>Copy it</button>
+                    <span class="ty-status" id="businessDiscloseStatus" role="status" aria-live="polite"></span>
+                  </p>
+                  <pre class="out-disclosure" id="businessDisclosure" hidden></pre>
+                </div>
+              </div>
             </section>
 
             <!-- Contact businesses (TASK-401): cold outreach asking local firms to become monthly
-                 supporters. Follows the Thank you page's shape - a form on the left, the real
-                 email previewed live on the right - because that is the pattern staff already
-                 know. Wired in app.js (loadOutreach); styles are the .out-* rules. -->
-            <section class="admin-view" id="view-outreach" aria-labelledby="outreach-heading" hidden>
+                 supporters. In the kit's look since the admin refresh (2026-11-14): one line of
+                 progress, then five parts in the order the work is done. Wired in app.js
+                 (loadOutreach); styles are the .out-* rules and admin-outreach.css. -->
+            <section class="admin-view ak" id="view-outreach" aria-labelledby="outreach-heading" hidden>
               <h2 id="outreach-heading">Contact businesses</h2>
               <p class="admin-view-intro">Ask a local business to become a monthly supporter. Add them, check nobody has approached them already, write a line of your own, and send. One business at a time, always by a person.</p>
+              <p class="out-progress" id="outProgress" aria-live="polite"></p>
 
-              <!-- Needs you today (TASK-405). One list, not three: a separate nudge, call and
-                   ask-again list would be three places to forget instead of one. Above the
-                   forms because it is the reason to open this screen at all. -->
-              <h3 class="admin-subhead">Needs you today</h3>
-              <p class="ty-controls out-scope" id="outTodoScope" role="group" aria-label="Whose list to show">
-                <button class="admin-btn is-active" type="button" data-out-scope="mine" aria-pressed="true">Mine and unassigned</button>
-                <button class="admin-btn" type="button" data-out-scope="all" aria-pressed="false">Everyone&rsquo;s</button>
-                <span class="ty-status" id="outTodoCount" role="status" aria-live="polite"></span>
-              </p>
-              <div id="outTodo" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              <div id="outParts">
+                <div class="ak-parts" role="group" aria-label="Which part to show">
+                  <button type="button" class="ak-part-btn" data-akpart="todo" aria-pressed="true">To do<span class="ak-part-dot" id="outTodoDot" hidden></span></button>
+                  <button type="button" class="ak-part-btn" data-akpart="add" aria-pressed="false">Add a business</button>
+                  <button type="button" class="ak-part-btn" data-akpart="write" aria-pressed="false">Write and send</button>
+                  <button type="button" class="ak-part-btn" data-akpart="everyone" aria-pressed="false">Everyone</button>
+                  <button type="button" class="ak-part-btn" data-akpart="going" aria-pressed="false">How it is going</button>
+                </div>
 
-              <div class="admin-stats" id="outStats" aria-live="polite"></div>
-
-              <h3 class="admin-subhead">1. Who are we writing to?</h3>
-              <p class="admin-help">As soon as you type a name or an email we check whether anyone has already contacted them, whether they already give to us, and whether they have asked us not to write again.</p>
-              <form class="ty-panel" id="outAddForm" autocomplete="off">
-                <div class="ty-row">
-                  <div class="ty-field">
-                    <label for="outBusinessName">Business name</label>
-                    <input id="outBusinessName" type="text" maxlength="200" required />
-                  </div>
-                  <div class="ty-field">
-                    <label for="outContactName">Contact name <span class="ty-muted">(optional)</span></label>
-                    <input id="outContactName" type="text" maxlength="120" placeholder="So the email can open &ldquo;Hello Jane&rdquo;" />
-                  </div>
-                </div>
-                <div class="ty-row">
-                  <div class="ty-field">
-                    <label for="outContactEmail">Email <span class="ty-muted">(optional for now)</span></label>
-                    <input id="outContactEmail" type="email" maxlength="200" />
-                  </div>
-                  <div class="ty-field">
-                    <label for="outContactPhone">Phone <span class="ty-muted">(optional)</span></label>
-                    <input id="outContactPhone" type="tel" maxlength="40" />
-                  </div>
-                </div>
-                <div class="ty-row">
-                  <div class="ty-field">
-                    <label for="outBusinessType">What kind of business</label>
-                    <select id="outBusinessType">
-                      <option value="company">Limited company or LLP</option>
-                      <option value="sole_trader">Sole trader or partnership</option>
-                    </select>
-                  </div>
-                  <div class="ty-field">
-                    <label for="outOwner">Looked after by</label>
-                    <select id="outOwner"></select>
-                  </div>
-                </div>
-                <!-- Article 14 (TASK-403): the email tells the business where we got their
-                     details, so the volunteer has to say. A drop-down rather than one fixed
-                     sentence, because a disclosure that is WRONG is worse than one that is vague. -->
-                <div class="ty-field">
-                  <label for="outSource">Where did you get their details?</label>
-                  <select id="outSource">
-                    <option value="website_or_listing">Their website or a business listing</option>
-                    <option value="given_to_us">They gave them to us</option>
-                    <option value="referred">Someone we know passed them on</option>
-                    <option value="social">Their social media page</option>
-                  </select>
-                  <span class="ty-hint">The email says this back to them, so pick the one that is actually true.</span>
-                </div>
-                <!-- Shown only for a sole trader (TASK-403). PECR treats them as a person rather
-                     than a company, so we may only email one who has already agreed to hear from
-                     us, and the send is refused on the server without this. -->
-                <div class="ty-field" id="outConsentField" hidden>
-                  <label for="outConsent">How did they agree to hear from us?</label>
-                  <input id="outConsent" type="text" maxlength="400" placeholder="e.g. Gave me her card at the Chamber breakfast and said to email" />
-                  <span class="ty-hint">A sole trader counts as a person in law, not a company, so we can only email one who has said yes. Without this you can still call them or send a letter.</span>
-                </div>
-                <div class="ty-field">
-                  <label for="outWarmIntro">Who do we know that knows them? <span class="ty-muted">(optional)</span></label>
-                  <input id="outWarmIntro" type="text" maxlength="400" placeholder="e.g. Sarah&rsquo;s husband plays golf with the owner" />
-                  <span class="ty-hint">The most useful thing on this form. An introduction from someone they know beats any email we can write.</span>
-                </div>
-                <div class="ty-field">
-                  <label for="outTags">Tags <span class="ty-muted">(optional)</span></label>
-                  <input id="outTags" type="text" maxlength="400" placeholder="e.g. chamber, supplier" />
-                  <span class="ty-hint">A few words to group them by, separated by commas. Handy later for &ldquo;show me everyone from the Chamber breakfast&rdquo;.</span>
-                </div>
-                <div class="ty-field">
-                  <label for="outNote">Why this business <span class="ty-muted">(private, never sent)</span></label>
-                  <textarea id="outNote" rows="2" maxlength="2000" spellcheck="true" lang="en-GB" placeholder="e.g. Sarah knows the owner. Sponsored the gala last year."></textarea>
-                  <span class="ty-hint">Write it as though they will read it one day. If they ever ask what we hold about them, this is part of the answer.</span>
-                </div>
-                <div id="outWarnings" aria-live="polite"></div>
-                <p class="ty-controls">
-                  <button class="btn btn-primary" type="submit" id="outAdd">Add this business</button>
-                  <span class="ty-status" id="outAddStatus" role="status" aria-live="polite"></span>
-                </p>
-              </form>
-
-              <details class="out-paste">
-                <summary>Adding several at once</summary>
-                <p class="admin-help">Paste a list, one business per line, from a spreadsheet or an email. Name, email and phone in any order. This only <strong>adds</strong> them to the list &mdash; nothing is emailed, and each one still has to be opened and sent with its own message.</p>
-                <div class="ty-field">
-                  <label for="outPasteText">Your list</label>
-                  <textarea id="outPasteText" rows="6" spellcheck="false" placeholder="Ayr Joinery Ltd, jane@ayrjoinery.co.uk, 01292 000000&#10;Kyle Motors&#10;Troon Bakery, hello@troonbakery.co.uk"></textarea>
-                </div>
-                <p class="ty-controls">
-                  <button class="admin-btn" type="button" id="outPasteCheck">Check the list</button>
-                  <button class="btn btn-primary" type="button" id="outPasteAdd" hidden>Add them</button>
-                  <span class="ty-status" id="outPasteStatus" role="status" aria-live="polite"></span>
-                </p>
-                <div id="outPastePreview" aria-live="polite"></div>
-              </details>
-
-              <h3 class="admin-subhead">2. Write and send</h3>
-              <p class="admin-help">The preview on the right is exactly what lands in their inbox. It updates as you type.</p>
-              <div class="ty-compose">
-                <form class="ty-panel" id="outSendForm" autocomplete="off">
-                  <div class="ty-field">
-                    <label for="outSendTo">Sending to</label>
-                    <select id="outSendTo"></select>
-                  </div>
-                  <div class="ty-field">
-                    <label for="outPersonal">Personal message <span class="ty-muted">(optional)</span></label>
-                    <textarea id="outPersonal" rows="4" maxlength="1000" spellcheck="true" lang="en-GB" placeholder="One line about this business. It is the difference between a letter and a mailshot."></textarea>
-                  </div>
-                  <div class="ty-field">
-                    <label for="outSigner">From</label>
-                    <select id="outSigner"></select>
-                  </div>
-                  <p class="ty-controls">
-                    <button class="btn btn-primary" type="submit" id="outSend">Send it</button>
-                    <span class="ty-status" id="outSendStatus" role="status" aria-live="polite"></span>
+                <!-- Needs you today (TASK-405). One list, not three: a separate nudge, call and
+                     ask-again list would be three places to forget instead of one. First, because it
+                     is the reason to open this screen at all. -->
+                <div class="ak-part" data-akpart-body="todo" role="region" aria-label="To do">
+                  <p class="ak-part-intro">The businesses waiting on one of us today, and what each one needs.</p>
+                  <h3 class="admin-subhead">Needs you today</h3>
+                  <p class="ty-controls out-scope" id="outTodoScope" role="group" aria-label="Whose list to show">
+                    <button class="admin-btn is-active" type="button" data-out-scope="mine" aria-pressed="true">Mine and unassigned</button>
+                    <button class="admin-btn" type="button" data-out-scope="all" aria-pressed="false">Everyone&rsquo;s</button>
+                    <span class="ty-status" id="outTodoCount" role="status" aria-live="polite"></span>
                   </p>
-                </form>
-                <div class="out-preview-wrap">
-                  <p class="out-preview-label">What they receive</p>
-                  <iframe id="outPreview" class="out-preview" title="Preview of the email"></iframe>
+                  <div id="outTodo" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+                </div>
+
+                <div class="ak-part" data-akpart-body="add" role="region" aria-label="Add a business" hidden>
+                  <p class="ak-part-intro">Put a new business on the list. Nothing is emailed here.</p>
+                  <h3 class="admin-subhead">1. Who are we writing to?</h3>
+                  <p class="admin-help">As soon as you type a name or an email we check whether anyone has already contacted them, whether they already give to us, and whether they have asked us not to write again.</p>
+                  <form class="ak-panel" id="outAddForm" autocomplete="off">
+                    <div class="ty-row">
+                      <div class="ty-field">
+                        <label for="outBusinessName">Business name</label>
+                        <input id="outBusinessName" type="text" maxlength="200" required />
+                      </div>
+                      <div class="ty-field">
+                        <label for="outContactName">Contact name <span class="ty-muted">(optional)</span></label>
+                        <input id="outContactName" type="text" maxlength="120" placeholder="So the email can open &ldquo;Hello Jane&rdquo;" />
+                      </div>
+                    </div>
+                    <div class="ty-row">
+                      <div class="ty-field">
+                        <label for="outContactEmail">Email <span class="ty-muted">(optional for now)</span></label>
+                        <input id="outContactEmail" type="email" maxlength="200" />
+                      </div>
+                      <div class="ty-field">
+                        <label for="outContactPhone">Phone <span class="ty-muted">(optional)</span></label>
+                        <input id="outContactPhone" type="tel" maxlength="40" />
+                      </div>
+                    </div>
+                    <div class="ty-row">
+                      <div class="ty-field">
+                        <label for="outBusinessType">What kind of business</label>
+                        <select id="outBusinessType">
+                          <option value="company">Limited company or LLP</option>
+                          <option value="sole_trader">Sole trader or partnership</option>
+                        </select>
+                      </div>
+                      <div class="ty-field">
+                        <label for="outOwner">Looked after by</label>
+                        <select id="outOwner"></select>
+                      </div>
+                    </div>
+                    <!-- Article 14 (TASK-403): the email tells the business where we got their
+                         details, so the volunteer has to say. A drop-down rather than one fixed
+                         sentence, because a disclosure that is WRONG is worse than one that is vague. -->
+                    <div class="ty-field">
+                      <label for="outSource">Where did you get their details?</label>
+                      <select id="outSource">
+                        <option value="website_or_listing">Their website or a business listing</option>
+                        <option value="given_to_us">They gave them to us</option>
+                        <option value="referred">Someone we know passed them on</option>
+                        <option value="social">Their social media page</option>
+                      </select>
+                      <span class="ty-hint">The email says this back to them, so pick the one that is actually true.</span>
+                    </div>
+                    <!-- Shown only for a sole trader (TASK-403). PECR treats them as a person rather
+                         than a company, so we may only email one who has already agreed to hear from
+                         us, and the send is refused on the server without this. -->
+                    <div class="ty-field" id="outConsentField" hidden>
+                      <label for="outConsent">How did they agree to hear from us?</label>
+                      <input id="outConsent" type="text" maxlength="400" placeholder="e.g. Gave me her card at the Chamber breakfast and said to email" />
+                      <span class="ty-hint">A sole trader counts as a person in law, not a company, so we can only email one who has said yes. Without this you can still call them or send a letter.</span>
+                    </div>
+                    <div class="ty-field">
+                      <label for="outWarmIntro">Who do we know that knows them? <span class="ty-muted">(optional)</span></label>
+                      <input id="outWarmIntro" type="text" maxlength="400" placeholder="e.g. Sarah&rsquo;s husband plays golf with the owner" />
+                      <span class="ty-hint">The most useful thing on this form. An introduction from someone they know beats any email we can write.</span>
+                    </div>
+                    <div class="ty-field">
+                      <label for="outTags">Tags <span class="ty-muted">(optional)</span></label>
+                      <input id="outTags" type="text" maxlength="400" placeholder="e.g. chamber, supplier" />
+                      <span class="ty-hint">A few words to group them by, separated by commas. Handy later for &ldquo;show me everyone from the Chamber breakfast&rdquo;.</span>
+                    </div>
+                    <div class="ty-field">
+                      <label for="outNote">Why this business <span class="ty-muted">(private, never sent)</span></label>
+                      <textarea id="outNote" rows="2" maxlength="2000" spellcheck="true" lang="en-GB" placeholder="e.g. Sarah knows the owner. Sponsored the gala last year."></textarea>
+                      <span class="ty-hint">Write it as though they will read it one day. If they ever ask what we hold about them, this is part of the answer.</span>
+                    </div>
+                    <div id="outWarnings" aria-live="polite"></div>
+                    <p class="ty-controls">
+                      <button class="btn btn-primary" type="submit" id="outAdd">Add this business</button>
+                      <button class="admin-btn ak-btn--plain" type="button" id="outAddWrite" hidden>Write to them</button>
+                      <span class="ty-status" id="outAddStatus" role="status" aria-live="polite"></span>
+                    </p>
+                  </form>
+
+                  <details class="out-paste ak-fold">
+                    <summary>Adding several at once</summary>
+                    <div class="ak-fold__body">
+                      <p class="admin-help">Paste a list, one business per line, from a spreadsheet or an email. Name, email and phone in any order. This only <strong>adds</strong> them to the list &mdash; nothing is emailed, and each one still has to be opened and sent with its own message.</p>
+                      <div class="ty-row">
+                        <div class="ty-field">
+                          <label for="outPasteType">What kind of businesses are they?</label>
+                          <select id="outPasteType">
+                            <option value="company">Limited company or LLP</option>
+                            <option value="sole_trader">Sole trader or partnership</option>
+                          </select>
+                        </div>
+                        <div class="ty-field">
+                          <label for="outPasteSource">Where did you get their details?</label>
+                          <select id="outPasteSource">
+                            <option value="website_or_listing">Their website or a business listing</option>
+                            <option value="given_to_us">They gave them to us</option>
+                            <option value="referred">Someone we know passed them on</option>
+                            <option value="social">Their social media page</option>
+                          </select>
+                        </div>
+                      </div>
+                      <p class="ty-hint">Every business in the list is added with these two answers. Add a business on its own if one is different.</p>
+                      <div class="ty-field">
+                        <label for="outPasteText">Your list</label>
+                        <textarea id="outPasteText" rows="6" spellcheck="false" placeholder="Ayr Joinery Ltd, jane@ayrjoinery.co.uk, 01292 000000&#10;Kyle Motors&#10;Troon Bakery, hello@troonbakery.co.uk"></textarea>
+                      </div>
+                      <p class="ty-controls">
+                        <button class="admin-btn ak-btn--plain" type="button" id="outPasteCheck">Check the list</button>
+                        <button class="btn btn-primary" type="button" id="outPasteAdd" hidden>Add them</button>
+                        <span class="ty-status" id="outPasteStatus" role="status" aria-live="polite"></span>
+                      </p>
+                      <div id="outPastePreview" aria-live="polite"></div>
+                    </div>
+                  </details>
+                </div>
+
+                <div class="ak-part" data-akpart-body="write" role="region" aria-label="Write and send" hidden>
+                  <p class="ak-part-intro">Write a line of your own and send the invitation to one business.</p>
+                  <h3 class="admin-subhead">2. Write and send</h3>
+                  <p class="admin-help">The preview is exactly what lands in their inbox. It updates as you type.</p>
+                  <div class="ty-compose out-compose">
+                    <form class="ak-panel" id="outSendForm" autocomplete="off">
+                      <div class="ty-field">
+                        <label for="outSendTo">Sending to</label>
+                        <select id="outSendTo"></select>
+                      </div>
+                      <div class="ty-field">
+                        <label for="outPersonal">Personal message <span class="ty-muted">(optional)</span></label>
+                        <textarea id="outPersonal" rows="4" maxlength="1000" spellcheck="true" lang="en-GB" placeholder="One line about this business. It is the difference between a letter and a mailshot."></textarea>
+                      </div>
+                      <div class="ty-field">
+                        <label for="outSigner">From</label>
+                        <select id="outSigner"></select>
+                      </div>
+                      <p class="ty-controls">
+                        <button class="btn btn-primary" type="submit" id="outSend">Send it</button>
+                        <span class="ty-status" id="outSendStatus" role="status" aria-live="polite"></span>
+                      </p>
+                      <small class="ak-says">Send it emails this business now. It goes straight to their inbox and cannot be taken back, so you are asked first.</small>
+                    </form>
+                    <div class="out-preview-wrap">
+                      <p class="out-preview-label">What they receive</p>
+                      <p class="out-subject" id="outSubject"></p>
+                      <iframe id="outPreview" class="out-preview" title="Preview of the email" scrolling="no"></iframe>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ak-part" data-akpart-body="everyone" role="region" aria-label="Everyone" hidden>
+                  <p class="ak-part-intro">Every business on the list. Press a count to see only those.</p>
+                  <h3 class="admin-subhead">3. Everyone we have contacted</h3>
+                  <div class="ak-tiles" id="outStats" aria-live="polite"></div>
+                  <div class="ty-controls out-find">
+                    <label class="ty-inline" for="outSearch">Search
+                      <input id="outSearch" type="search" placeholder="Name, contact or email" />
+                    </label>
+                    <label class="ty-inline" for="outTagFilter">Tag
+                      <select id="outTagFilter"><option value="">Any</option></select>
+                    </label>
+                    <a class="admin-btn ak-btn--plain" id="outExport" href="/api/admin/outreach/export" download>Download as a spreadsheet</a>
+                    <span class="ty-status" id="outSearchCount" role="status" aria-live="polite"></span>
+                  </div>
+                  <p class="ty-status" id="outListNote" role="status" aria-live="polite"></p>
+                  <div class="admin-table-wrap" id="outList" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+                  <p class="out-more">
+                    <span class="out-showing" id="outShowing"></span>
+                    <button class="admin-btn ak-btn--plain" type="button" id="outMore" hidden>Show more</button>
+                  </p>
+                </div>
+
+                <div class="ak-part" data-akpart-body="going" role="region" aria-label="How it is going" hidden>
+                  <p class="ak-part-intro">Whether writing to businesses is working, and what helps.</p>
+                  <h3 class="admin-subhead">Is it working?</h3>
+                  <p class="admin-help">Worth a look once a month. It will say very little until a few dozen businesses have been emailed.</p>
+                  <div id="outReports" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
                 </div>
               </div>
-
-              <h3 class="admin-subhead">Is it working?</h3>
-              <p class="admin-help">Worth a look once a month. It will say very little until a few dozen businesses have been emailed.</p>
-              <div id="outReports" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
-
-              <h3 class="admin-subhead">3. Everyone we have contacted</h3>
-              <p class="ty-controls">
-                <label class="ty-inline" for="outSearch">Search
-                  <input id="outSearch" type="search" placeholder="Name, contact or email" style="width:220px" />
-                </label>
-                <label class="ty-inline" for="outTagFilter">Tag
-                  <select id="outTagFilter"><option value="">Any</option></select>
-                </label>
-                <a class="admin-btn" id="outExport" href="/api/admin/outreach/export" download>Download as a spreadsheet</a>
-                <span class="ty-status" id="outSearchCount" role="status" aria-live="polite"></span>
-              </p>
-              <div class="admin-table-wrap" id="outList" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
             </section>
 
 

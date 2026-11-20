@@ -1,6 +1,125 @@
 /* NBCC admin: Content: Thank you and Contact businesses, in the kit's look (assets/css/admin-kit.css).
- * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md.
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-design.md, and for Contact businesses and
+ * one business's page, docs/superpowers/specs/2026-11-14-admin-refresh-outreach.md.
  *
  * Only what the kit does not already give these screens. The kit's house rules hold here too: no
  * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
- * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+ * moving only transform and opacity; 44px for anything pressed. A phone is below 860px.
+ * Every rule is named through #view-outreach or #view-business (pinned by
+ * test/unit/admin-outreach-refresh.test.ts). The borrowed .ty- rules in admin.css are left alone. */
+
+/* ---- Contact businesses ---- */
+
+/* Progress in one line, under the title. */
+#view-outreach .out-progress { margin: -10px 0 20px; font-family: var(--ov-head); font-weight: 700; font-size: 1.1rem; line-height: 1.3; color: var(--ov-maroon); }
+#view-outreach .out-progress:empty { display: none; }
+
+/* Whose list: two pills, the chosen one pressed in. */
+#view-outreach .out-scope .admin-btn { min-height: 44px; border: var(--ov-thin); border-radius: 999px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); }
+#view-outreach .out-scope .admin-btn:hover { background: var(--ov-hover); color: var(--ov-ink); }
+#view-outreach .out-scope .admin-btn.is-active { background: var(--ov-maroon); color: var(--ov-on-dark); box-shadow: var(--ov-pressed); transform: translate(1px, 2px); }
+
+/* The to do rows: cards that press in, with no side stripe. */
+#view-outreach .out-todo { gap: 12px; }
+#view-outreach .out-todo-row { display: grid; gap: 8px; justify-items: start; }
+#view-outreach .out-todo-open { min-height: 48px; padding: 12px 16px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); color: var(--ov-text); }
+#view-outreach .out-todo-open:hover { border-color: var(--ov-ink); background: var(--ov-hover); box-shadow: var(--ov-pop); }
+#view-outreach .out-todo-open:active { transform: translate(2px, 3px); box-shadow: var(--ov-pressed); }
+#view-outreach .out-todo-row--ask-again .out-todo-open, #view-outreach .out-todo-row--call .out-todo-open, #view-outreach .out-todo-row--send .out-todo-open { border-color: var(--ov-ink); }
+#view-outreach .out-todo-kind { font-size: 0.74rem; color: var(--ov-soft); }
+#view-outreach .out-todo-name { font-family: var(--ov-head); font-size: 1.05rem; font-weight: 700; color: var(--ov-ink); }
+#view-outreach .out-todo-why { color: var(--ov-text); }
+#view-outreach .out-todo-do { color: var(--ov-maroon); }
+#view-outreach .out-todo-who { color: var(--ov-soft); font-size: 0.84rem; }
+#view-outreach .out-todo-late { color: var(--ov-crimson); }
+
+/* Forms: two boxes side by side on a laptop, one above the other on a phone. */
+#view-outreach .ty-row { gap: 0 16px; }
+#view-outreach .ty-field input, #view-outreach .ty-field select, #view-outreach .ty-field textarea { width: 100%; min-width: 0; }
+#view-outreach .ty-hint { font-size: 0.84rem; color: var(--ov-soft); }
+#view-outreach .out-warn, #view-outreach .out-warn--stop { border: var(--ov-thin); border-radius: 14px; background: var(--ov-gold-soft); color: var(--ov-ink); }
+#view-outreach .out-warn--stop { background: var(--ov-blush); }
+#view-outreach .out-ack label { min-height: 44px; align-items: center; color: var(--ov-crimson); }
+#view-outreach .out-paste { margin: 18px 0 0; padding: 0; }
+#view-outreach .out-paste > * { margin-left: 0; margin-right: 0; }
+#view-outreach .out-paste textarea { width: 100%; font-size: 1rem; }
+
+/* Write and send: the subject line above an email as tall as itself. */
+#view-outreach .out-preview-wrap { position: static; min-width: 0; }
+#view-outreach .out-preview-label { color: var(--ov-maroon); }
+#view-outreach .out-subject { margin: 0 0 10px; font-weight: 700; color: var(--ov-ink); overflow-wrap: anywhere; }
+#view-outreach .out-subject:empty { display: none; }
+#view-outreach .out-preview { display: block; width: 100%; height: auto; min-height: 420px; border: var(--ov-line); border-radius: 18px; box-shadow: var(--ov-pop); background: #fff; }
+
+/* Everyone. */
+#view-outreach .out-find input[type="search"] { width: 16rem; max-width: 100%; }
+#view-outreach .out-find .ty-inline { flex-wrap: wrap; }
+#view-outreach .out-list td { vertical-align: top; }
+#view-outreach .out-list .admin-linkish { display: inline-flex; align-items: center; min-height: 44px; font-family: var(--ov-head); font-size: 1rem; font-weight: 700; color: var(--ov-maroon); text-align: left; overflow-wrap: anywhere; }
+#view-outreach .out-email { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; overflow-wrap: anywhere; }
+#view-outreach .out-email a, #view-outreach .out-cell a[href^="tel:"] { display: inline-flex; align-items: center; min-height: 44px; color: var(--ov-maroon); font-weight: 600; }
+#view-outreach .out-cell { display: grid; gap: 2px; min-width: 0; }
+#view-outreach .out-copy { min-height: 44px; padding: 4px 12px; font-size: 0.86rem; box-shadow: 2px 3px 0 var(--ov-ink); }
+#view-outreach .out-copied { margin: 0; font-size: 0.86rem; }
+#view-outreach .out-sub { display: block; font-size: 0.84rem; }
+#view-outreach .out-note-line { display: block; overflow-wrap: anywhere; }
+#view-outreach .out-tps-hidden { display: block; color: var(--ov-soft); font-style: italic; }
+#view-outreach .out-more { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 16px 0 0; }
+#view-outreach .out-showing { color: var(--ov-soft); }
+#view-outreach .out-showing:empty { display: none; }
+#view-outreach .out-report-line strong { color: var(--ov-maroon); }
+
+/* ---- One business ---- */
+
+#view-business .biz-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
+#view-business .biz-top .admin-back { margin: 0; }
+#view-business .biz-step { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+#view-business .biz-step[hidden] { display: none; }
+#view-business .biz-place { min-width: 4.5rem; color: var(--ov-soft); font-weight: 600; text-align: center; }
+
+/* What to do next: the first thing read. */
+#view-business .biz-next { margin: 0 0 18px; background: var(--ov-gold-soft); }
+#view-business .biz-next[hidden] { display: none; }
+#view-business .biz-next .ak-h3 { margin: 0 0 8px; }
+#view-business .biz-next p { margin: 0 0 6px; }
+#view-business .biz-next-kind { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ov-soft); }
+#view-business .biz-next-why { color: var(--ov-text); }
+#view-business .biz-next-do { font-weight: 700; color: var(--ov-maroon); }
+#view-business .biz-next .ak-actions { margin: 12px 0 0; }
+
+#view-business .out-facts { padding: 16px 18px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+#view-business .out-fact dt { color: var(--ov-soft); }
+#view-business .out-fact dd { color: var(--ov-text); }
+#view-business .out-fact dd a { color: var(--ov-maroon); }
+#view-business .biz-line a { display: inline-flex; align-items: center; min-height: 44px; }
+#view-business .biz-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; overflow-wrap: anywhere; }
+#view-business .biz-copy, #view-business .biz-giving { min-height: 44px; padding: 4px 12px; font-size: 0.86rem; box-shadow: 2px 3px 0 var(--ov-ink); }
+#view-business .biz-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+#view-business .out-tps-hidden { display: block; color: var(--ov-soft); font-style: italic; }
+#view-business .out-tps-why { display: block; font-size: 0.86rem; color: var(--ov-soft); }
+#view-business .out-tps-ok { display: block; font-size: 0.84rem; color: var(--ov-holly); }
+#view-business .out-tps-btn { min-height: 44px; margin-top: 8px; font-size: 0.9rem; }
+
+#view-business .out-outcome { min-height: 44px; padding: 10px 14px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-card); }
+#view-business .out-outcome:hover { background: var(--ov-hover); border-color: var(--ov-ink); }
+#view-business .out-outcome:has(input:checked) { background: var(--ov-warm); border-color: var(--ov-maroon); box-shadow: 2px 3px 0 var(--ov-maroon); }
+#view-business .out-outcome-why { color: var(--ov-soft); }
+#view-business .ty-field input, #view-business .ty-field select, #view-business .ty-field textarea { width: 100%; min-width: 0; }
+#view-business .ty-hint { font-size: 0.84rem; color: var(--ov-soft); }
+
+/* Notes: cards with no side stripe. */
+#view-business .out-note { padding: 12px 16px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-card); }
+#view-business .out-note-meta { color: var(--ov-soft); }
+
+/* What we hold runs to its full length: it used to scroll inside a box 60% of the screen tall. */
+#view-business .out-disclosure { max-height: none; overflow: visible; padding: 16px 18px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-card); font-size: 0.86rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---- a phone ---- */
+@media (max-width: 860px) {
+  #view-outreach .ty-row { grid-template-columns: minmax(0, 1fr); }
+  #view-outreach .out-find input[type="search"] { width: 100%; }
+  #view-outreach .out-find .ty-inline { display: grid; width: 100%; }
+  #view-outreach .out-preview { min-height: 300px; }
+  #view-business .biz-top { align-items: stretch; }
+  #view-business .out-facts { grid-template-columns: minmax(0, 1fr); }
+}

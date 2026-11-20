@@ -211,11 +211,11 @@ describe("one part at a time on a phone", () => {
     const names = Array.from(document.querySelectorAll("#view-analytics [data-akpart]")).map((b) => (b.textContent || "").trim());
     expect(names).toEqual(["At a glance", "Where from", "Where", "Pages", "Clicks", "Devices"]);
     for (const k of keys) expect(document.querySelector('#view-analytics [data-akpart-body="' + k + '"]')).not.toBeNull();
-    expect((document.querySelector('[data-akpart-body="glance"]') as HTMLElement).hidden).toBe(false);
-    expect((document.querySelector('[data-akpart-body="pages"]') as HTMLElement).hidden).toBe(true);
-    (document.querySelector('[data-akpart="pages"]') as HTMLElement).click();
-    expect((document.querySelector('[data-akpart-body="pages"]') as HTMLElement).hidden).toBe(false);
-    expect((document.querySelector('[data-akpart-body="glance"]') as HTMLElement).hidden).toBe(true);
+    expect((document.querySelector('#view-analytics [data-akpart-body="glance"]') as HTMLElement).hidden).toBe(false);
+    expect((document.querySelector('#view-analytics [data-akpart-body="pages"]') as HTMLElement).hidden).toBe(true);
+    (document.querySelector('#view-analytics [data-akpart="pages"]') as HTMLElement).click();
+    expect((document.querySelector('#view-analytics [data-akpart-body="pages"]') as HTMLElement).hidden).toBe(false);
+    expect((document.querySelector('#view-analytics [data-akpart-body="glance"]') as HTMLElement).hidden).toBe(true);
   });
 });
 

@@ -4919,6 +4919,7 @@
     "invoice_settings.updated": "changed the invoice bank details",
     "newsletter.deleted": "deleted the newsletter {subject} | deleted a newsletter",
     "outreach.note_added": "added a note on {businessName} | added a note on a business",
+    "outreach.details_changed": "changed a business's details on Contact businesses",
     "outreach.nudge_sent": "sent {businessName} a reminder | sent a business a reminder",
     "outreach.outcome_recorded": "recorded how it went with {businessName} | recorded how it went with a business",
     "outreach.tps_checked": "checked {businessName} against the do not call list | checked a business against the do not call list",
@@ -14304,10 +14305,123 @@
     no_reply: "No reply",
   };
 
+  // Admin refresh (2026-11-14): the screen in five parts, the whole list rather than the newest 200,
+  // the server's true counts, tiles that filter the list, and thirty cards at a time.
+  var outParts = null; // AdminKit.wireParts on #outParts
+  var outCounts = null; // the server's counts over every business (src/outreach/list-counts.ts)
+  var outTotal = 0;
+  var outListFilter = "all";
+  var outShownIds = []; // the ids of the list as filtered now, for next and previous
+  var outTodoIds = []; // the to do list's ids, in its order
+  var outShowCount = 30;
+  var outWantSend = null; // a business to choose in Sending to once the list has it
+  var OUT_PAGE = 200;
+  var OUT_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  // "3 November 2026", as people say it.
+  function outLongDate(value) {
+    if (!value) return "";
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return "";
+    return d.getUTCDate() + " " + OUT_MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear();
+  }
+  // "today", "yesterday", "12 days ago".
+  function outDaysAgo(value) {
+    var days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
+    if (!(days > 0)) return "today";
+    if (days === 1) return "yesterday";
+    return days + " days ago";
+  }
+
   function outStatusOf(r) {
     if (r.outcome) return OUT_OUTCOMES[r.outcome] || r.outcome;
-    if (r.sentAt) return "Emailed " + H.fmtDate(r.sentAt);
+    if (r.sentAt) return "Emailed " + outDaysAgo(r.sentAt);
     return "Not emailed yet";
+  }
+
+  // KEEP IN SYNC with inListFilter in src/outreach/list-counts.ts: the server counts each tile by
+  // that rule, and this filters the rows already here by the same one.
+  var OUT_WARM = ["interested", "asked_for_info", "passed_on"];
+  function outMyEmail() {
+    return ((el("userEmail") && el("userEmail").textContent) || "").trim().toLowerCase();
+  }
+  function outInFilter(r, f) {
+    if (f === "waiting") return !r.sentAt && !r.outcome;
+    if (f === "noAnswer") return !!r.sentAt && !r.outcome;
+    if (f === "interested") return !!r.outcome && OUT_WARM.indexOf(r.outcome) !== -1;
+    if (f === "signedUp") return r.outcome === "signed_up";
+    if (f === "saidNo") return r.outcome === "declined";
+    if (f === "mine") return !!outMyEmail() && !!r.ownerEmail && r.ownerEmail.toLowerCase() === outMyEmail();
+    return true;
+  }
+  function outCountsFromRows() {
+    var c = { total: outRows.length, emailed: 0, replied: 0 };
+    ["waiting", "noAnswer", "interested", "signedUp", "saidNo", "mine"].forEach(function (f) {
+      c[f] = outRows.filter(function (r) { return outInFilter(r, f); }).length;
+    });
+    outRows.forEach(function (r) {
+      if (r.sentAt) c.emailed += 1;
+      if (r.sentAt && r.outcome && r.outcome !== "no_reply") c.replied += 1;
+    });
+    return c;
+  }
+  var OUT_TILES = [
+    ["all", "On the list", "Every business we know about"],
+    ["waiting", "Waiting to be emailed", "Not written to yet"],
+    ["noAnswer", "Emailed and no answer", "Nothing recorded since"],
+    ["interested", "Interested", "Warm, nothing agreed"],
+    ["signedUp", "Signed up", "Giving, or promised to"],
+    ["saidNo", "Said no", "Never asked again"],
+    ["mine", "Mine", "Looked after by you"],
+  ];
+  function outRenderTiles() {
+    var c = outCounts || outCountsFromRows();
+    el("outStats").innerHTML = OUT_TILES.map(function (t) {
+      var n = t[0] === "all" ? c.total : c[t[0]] || 0;
+      var on = outListFilter === t[0];
+      return '<button type="button" class="ak-tile' + (on ? " is-active" : "") + (n === 0 ? " is-none" : "") +
+        '" data-out-filter="' + t[0] + '" aria-pressed="' + (on ? "true" : "false") + '">' +
+        '<span class="ak-tile__n">' + n + '</span><span class="ak-tile__name">' + t[1] + "</span>" +
+        '<span class="ak-tile__says">' + t[2] + "</span></button>";
+    }).join("");
+    var p = el("outProgress");
+    p.textContent = c.total
+      ? c.emailed + " of " + c.total + " emailed, " + c.replied + " replied, " + c.signedUp + " signed up"
+      : "No businesses on the list yet.";
+  }
+
+  // The phone number follows the business page's rule (businessPhoneCell): shown only once somebody
+  // has recorded that it was checked against the Telephone Preference Service register.
+  // One wrapper per cell, so a cell of several lines stays one item in the phone card layout.
+  function outCell(html) {
+    return '<span class="out-cell">' + html + "</span>";
+  }
+  function outPhoneCell(r) {
+    if (!r.contactPhone) return "";
+    if (!r.ctpsCheckedAt) return '<span class="out-tps-hidden">Number hidden until checked</span>';
+    return '<a href="tel:' + H.escapeHtml(r.contactPhone.replace(/\s/g, "")) + '">' + H.escapeHtml(r.contactPhone) + "</a>";
+  }
+
+  // Opens Write and send with this business chosen (from a Ready to send row, straight after adding
+  // one, or from the business's own page).
+  function outWriteTo(id) {
+    outWantSend = String(id);
+    if (outParts) outParts.show("write", true);
+    var sel = el("outSendTo");
+    if (Array.prototype.some.call(sel.options, function (o) { return o.value === outWantSend; })) {
+      sel.value = outWantSend;
+      outPreview();
+    }
+  }
+
+  function outCopyEmail(btn) {
+    var r = outRows.filter(function (x) { return String(x.id) === btn.getAttribute("data-out-copy"); })[0];
+    var said = btn.parentNode.querySelector(".out-copied");
+    if (!r || !said) return;
+    window.AdminKit.copyText(r.contactEmail).then(function (ok) {
+      said.className = "out-copied ty-status " + (ok ? "is-ok" : "is-error");
+      said.textContent = ok ? "Copied." : "Could not copy. Select it and copy by hand.";
+    });
   }
   function outSay(id, msg, cls) {
     var e = el(id);
@@ -14409,7 +14523,14 @@
           if (res.body.matches) outRenderWarnings(res.body);
           return;
         }
-        outSay("outAddStatus", "Added. They are in the list below, not emailed yet.", "is-ok");
+        var added = res.body.business || {};
+        outSay("outAddStatus", added.contactEmail
+          ? "Added. They are under Everyone, not emailed yet."
+          : "Added. They are under Everyone, with no email address yet.", "is-ok");
+        // Straight on to writing to them, when there is an address to write to.
+        var write = el("outAddWrite");
+        write.hidden = !added.contactEmail;
+        write.setAttribute("data-out-write", added.id || "");
         el("outAddForm").reset();
         outToggleConsent();
         el("outWarnings").innerHTML = "";
@@ -14442,8 +14563,19 @@
       }),
     })
       .then(function (x) { return x.json(); })
-      .then(function (b) { if (b.html) frame.srcdoc = b.html; })
+      .then(function (b) {
+        if (b.subject) el("outSubject").textContent = "Subject: " + b.subject;
+        if (b.html) frame.srcdoc = b.html;
+      })
       .catch(function () { /* leave the last good preview on screen */ });
+  }
+  // The frame is as tall as the email, so the email never scrolls inside a box (admin refresh).
+  function outFitPreview() {
+    var frame = el("outPreview");
+    var d = frame && frame.contentDocument;
+    if (!d || !d.documentElement) return;
+    var h = Math.max(d.documentElement.scrollHeight || 0, (d.body && d.body.scrollHeight) || 0);
+    if (h > 0) frame.style.height = h + "px";
   }
   function outPreviewSoon() {
     if (outPreviewTimer) clearTimeout(outPreviewTimer);
@@ -14494,34 +14626,51 @@
   function outRenderList() {
     var wrap = el("outList");
     if (!wrap) return;
-    var shown = outRows.filter(outMatches);
-    el("outSearchCount").textContent = outSearchTerm
+    var shown = outRows.filter(outMatches).filter(function (r) { return outInFilter(r, outListFilter); });
+    outShownIds = shown.map(function (r) { return r.id; });
+    el("outSearchCount").textContent = outSearchTerm || outTagFilter || outListFilter !== "all"
       ? shown.length + " of " + outRows.length + " businesses"
       : "";
+    var drawn = shown.slice(0, outShowCount);
     if (!shown.length) {
       wrap.innerHTML = outSearchTerm
         ? '<p class="admin-empty">Nothing matches that. Try part of the name, or the email address.</p>'
-        : '<p class="admin-empty">No businesses yet. Add the first one above.</p>';
+        : outListFilter !== "all" || outTagFilter
+          ? '<p class="admin-empty">Nobody here yet. Press On the list to see everyone.</p>'
+          : '<p class="admin-empty">No businesses yet. Add the first one under Add a business.</p>';
     } else {
       wrap.innerHTML =
-        '<table class="admin-table"><thead><tr><th>Business</th><th>Contact</th>' +
-        "<th>Where it stands</th><th>Looked after by</th><th>Added</th></tr></thead><tbody>" +
-        shown
+        '<table class="admin-table ak-cards out-list"><thead><tr><th>Business</th><th>Where it stands</th><th>Contact</th>' +
+        "<th>Looked after by</th><th>Latest note</th><th>Added</th></tr></thead><tbody>" +
+        drawn
           .map(function (r) {
-            var contact = [r.contactName, r.contactEmail, r.contactPhone]
-              .filter(Boolean)
-              .map(H.escapeHtml)
-              .join("<br />");
+            var email = r.contactEmail
+              ? '<span class="out-email"><a href="mailto:' + H.escapeHtml(r.contactEmail) + '">' + H.escapeHtml(r.contactEmail) + "</a>" +
+                ' <button class="admin-btn ak-btn--plain out-copy" type="button" data-out-copy="' + r.id + '" aria-label="Copy the email address of ' +
+                H.escapeHtml(r.businessName) + '">Copy</button> <span class="out-copied" role="status"></span></span>'
+              : "";
+            var contact = [r.contactName ? H.escapeHtml(r.contactName) : "", email, outPhoneCell(r)].filter(Boolean).join("");
+            var stands = r.outcome && r.sentAt
+              ? H.escapeHtml(outStatusOf(r)) + '<span class="ty-muted out-sub">Emailed ' + outDaysAgo(r.sentAt) + "</span>"
+              : H.escapeHtml(outStatusOf(r));
+            var note = r.latestNote
+              ? '<span class="out-note-line">' + H.escapeHtml(r.latestNote.body) + '</span><span class="ty-muted out-sub">' +
+                H.escapeHtml(r.latestNote.author) + ", " + outLongDate(r.latestNote.createdAt) + "</span>"
+              : "";
             // The name is the way in. Everything about this firm is one click away.
-            return '<tr><td><button class="admin-linkish" type="button" data-out-open="' + r.id +
-              '">' + H.escapeHtml(r.businessName) + "</button></td><td>" +
-              (contact || "&mdash;") + "</td><td>" + H.escapeHtml(outStatusOf(r)) +
-              "</td><td>" + H.escapeHtml(r.owner || "") + "</td><td>" +
-              H.fmtDate(r.createdAt) + "</td></tr>";
+            return '<tr><td class="ak-cards__lead"><button class="admin-linkish" type="button" data-out-open="' + r.id +
+              '">' + H.escapeHtml(r.businessName) + "</button></td><td>" + outCell(stands) + "</td><td>" +
+              outCell(contact || "&mdash;") + "</td><td>" + (r.owner ? H.escapeHtml(r.owner) : "Nobody yet") + "</td><td>" + (note ? outCell(note) : "") +
+              "</td><td>" + outLongDate(r.createdAt) + "</td></tr>";
           })
           .join("") +
         "</tbody></table>";
+      if (window.AdminKit) window.AdminKit.labelCells(wrap.querySelector("table"));
     }
+    el("outShowing").textContent = shown.length > drawn.length
+      ? "Showing " + drawn.length + " of " + shown.length
+      : shown.length > 30 ? "Showing all " + shown.length : "";
+    el("outMore").hidden = shown.length <= drawn.length;
 
     // Only businesses with an email address and nothing sent yet can be picked. Anything else in
     // this list would be a send that is going to fail, or a business emailed twice.
@@ -14537,6 +14686,11 @@
           .join("")
       : '<option value="">Nobody is waiting to be emailed</option>';
     if (keep && sendable.some(function (r) { return String(r.id) === keep; })) sel.value = keep;
+    // A business somebody asked to write to before the list had it (straight after adding one).
+    if (outWantSend && sendable.some(function (r) { return String(r.id) === outWantSend; })) {
+      sel.value = outWantSend;
+      outWantSend = null;
+    }
 
     // Built from the tags in use, so it never offers one that would find nothing.
     var tagSel = el("outTagFilter");
@@ -14549,38 +14703,81 @@
       }).join("");
     if (keepTag && tags[keepTag]) tagSel.value = keepTag;
 
-    var sent = outRows.filter(function (r) { return r.sentAt; }).length;
-    var signed = outRows.filter(function (r) { return r.outcome === "signed_up"; }).length;
-    el("outStats").innerHTML =
-      statCard(outRows.length, "On the list") +
-      statCard(outRows.length - sent, "Waiting to be emailed") +
-      statCard(sent, "Emailed") +
-      statCard(signed, "Signed up");
+    // The tiles and the progress line, from the server's counts over every business.
+    outRenderTiles();
   }
 
+  // The whole list, a page at a time (it used to stop at the newest 200, and its counts with it).
+  // Drawn as soon as the first page is here; a later page that fails says so beside the list.
+  var outLoadSeq = 0;
   function loadOutreachList() {
-    authFetch("/api/admin/outreach")
-      .then(okJson)
-      .then(function (b) {
-        outRows = b.results || [];
-        outRenderList();
-        outPreview();
-      })
-      .catch(function () {
-        el("outList").innerHTML = '<p class="admin-empty">Could not load the list.</p>';
-        // The totals above it are counted from the same list: none rather than 0 (TASK-476).
-        el("outStats").innerHTML = "";
-        el("outSearchCount").textContent = "";
-      });
+    var seq = ++outLoadSeq;
+    var rows = [];
+    el("outListNote").textContent = "";
+    el("outListNote").className = "ty-status";
+    function page(offset) {
+      return authFetch("/api/admin/outreach?limit=" + OUT_PAGE + "&offset=" + offset)
+        .then(okJson)
+        .then(function (b) {
+          if (seq !== outLoadSeq) return;
+          var got = b.results || [];
+          rows = rows.concat(got);
+          outRows = rows;
+          outCounts = b.counts || null;
+          outTotal = typeof b.total === "number" ? b.total : rows.length;
+          outRenderList();
+          if (offset === 0) outPreview();
+          if (got.length === OUT_PAGE && rows.length < outTotal) {
+            return page(offset + OUT_PAGE).catch(function () {
+              if (seq !== outLoadSeq) return;
+              el("outListNote").className = "ty-status is-error";
+              el("outListNote").textContent = "Could not load the whole list. The first " + rows.length + " of " + outTotal + " are here.";
+            });
+          }
+        });
+    }
+    page(0).catch(function () {
+      if (seq !== outLoadSeq) return;
+      el("outList").innerHTML = '<p class="admin-empty">Could not load the list.</p>';
+      // The totals above it are counted from the same list: none rather than 0 (TASK-476).
+      el("outStats").innerHTML = "";
+      el("outProgress").textContent = "";
+      el("outSearchCount").textContent = "";
+      el("outShowing").textContent = "";
+      el("outMore").hidden = true;
+    });
   }
 
   function outWire() {
     if (outWired) return;
     outWired = true;
+    outParts = window.AdminKit ? window.AdminKit.wireParts(el("outParts"), { start: "todo" }) : null;
     el("outList").addEventListener("click", function (e) {
+      var copy = e.target.closest && e.target.closest("[data-out-copy]");
+      if (copy) return outCopyEmail(copy);
       var b = e.target.closest && e.target.closest("[data-out-open]");
+      // Next and previous on the business page walk the list as it was filtered here.
+      if (b) businessNavIds = outShownIds.slice();
       if (b) openBusiness(Number(b.getAttribute("data-out-open")));
     });
+    el("outStats").addEventListener("click", function (e) {
+      var t = e.target.closest && e.target.closest("[data-out-filter]");
+      if (!t) return;
+      var f = t.getAttribute("data-out-filter");
+      // Pressed again, a tile lets go and everyone shows.
+      outListFilter = outListFilter === f ? "all" : f;
+      outShowCount = 30;
+      outRenderList();
+    });
+    bindClick("outMore", function () {
+      outShowCount += 30;
+      outRenderList();
+    });
+    bindClick("outAddWrite", function () {
+      outWriteTo(el("outAddWrite").getAttribute("data-out-write"));
+    });
+    el("outPreview").addEventListener("load", outFitPreview);
+    window.addEventListener("resize", outFitPreview);
     var writable = canEdit("outreach");
     el("outAdd").hidden = !writable;
     // A plain download link sends no Authorization header, so the file is fetched with
@@ -14613,16 +14810,20 @@
     });
     el("outTodo").addEventListener("click", function (e) {
       var b = e.target.closest && e.target.closest("[data-out-open]");
-      if (b) openBusiness(Number(b.getAttribute("data-out-open")));
+      if (b) { businessNavIds = outTodoIds.slice(); openBusiness(Number(b.getAttribute("data-out-open"))); }
+      var w = e.target.closest && e.target.closest("[data-out-write]");
+      if (w) outWriteTo(w.getAttribute("data-out-write"));
     });
     tyBindInput("outSearch", function () {
       outSearchTerm = (el("outSearch").value || "").trim().toLowerCase();
+      outShowCount = 30;
       outRenderList();
     });
     bindClick("outPasteCheck", outCheckPaste);
     bindClick("outPasteAdd", outAddPasted);
     el("outTagFilter").addEventListener("change", function () {
       outTagFilter = el("outTagFilter").value;
+      outShowCount = 30;
       outRenderList();
     });
     el("outAddForm").addEventListener("submit", outAdd);
@@ -14679,6 +14880,9 @@
     var wrap = el("outTodo");
     if (!wrap) return;
     var todos = d.todos || [];
+    outTodoIds = todos.map(function (t) { return t.id; });
+    // A dot on To do while anything is waiting, so it is seen from any part of the screen.
+    el("outTodoDot").hidden = !todos.length;
 
     el("outTodoCount").textContent =
       outTodoScope === "mine" && d.totalEverywhere > todos.length
@@ -14712,7 +14916,13 @@
             '<span class="out-todo-why">' + H.escapeHtml(t.reason) + "</span>" +
             '<span class="out-todo-do">' + H.escapeHtml(t.action) + "</span>" +
             '<span class="out-todo-who">' + who + " " + late + "</span>" +
-            "</button></li>"
+            "</button>" +
+            // Ready to send: straight to Write and send with this business chosen, rather than to
+            // its page, which cannot send a first email.
+            (t.kind === "send" && canEdit("outreach")
+              ? '<button class="admin-btn out-todo-write" type="button" data-out-write="' + t.id + '">Write to them</button>'
+              : "") +
+            "</li>"
           );
         })
         .join("") +
@@ -14725,6 +14935,7 @@
       .then(outRenderTodo)
       .catch(function () {
         el("outTodo").innerHTML = '<p class="admin-empty">Could not load this list.</p>';
+        el("outTodoDot").hidden = true;
       });
   }
 
@@ -14804,16 +15015,16 @@
           html +=
             '<p class="out-paste-count">' + outPasteRows.length +
             (outPasteRows.length === 1 ? " business" : " businesses") + " ready to add:</p>" +
-            '<table class="admin-table"><thead><tr><th>Business</th><th>Email</th><th>Phone</th>' +
+            '<div class="admin-table-wrap"><table class="admin-table ak-cards"><thead><tr><th>Business</th><th>Email</th><th>Phone</th>' +
             "</tr></thead><tbody>" +
             outPasteRows
               .map(function (r) {
-                return "<tr><td>" + H.escapeHtml(r.businessName) + "</td><td>" +
+                return '<tr><td class="ak-cards__lead">' + H.escapeHtml(r.businessName) + "</td><td>" +
                   H.escapeHtml(r.contactEmail || "—") + "</td><td>" +
                   H.escapeHtml(r.contactPhone || "—") + "</td></tr>";
               })
               .join("") +
-            "</tbody></table>";
+            "</tbody></table></div>";
         }
         // Named, with their line number, so somebody can go and fix the paste rather than
         // guessing which of forty lines was wrong.
@@ -14837,6 +15048,7 @@
             '</ul><p class="admin-help">They will each be added once per line. Take the extras out above if that is not what you want.</p></div>';
         }
         el("outPastePreview").innerHTML = html;
+        if (window.AdminKit) window.AdminKit.labelCells(el("outPastePreview").querySelector("table"));
         el("outPasteAdd").hidden = !(outPasteRows.length && canEdit("outreach"));
         outPasteSay("");
       })
@@ -14876,8 +15088,9 @@
           businessName: r.businessName,
           contactEmail: r.contactEmail,
           contactPhone: r.contactPhone,
-          businessType: "company",
-          detailsSource: el("outSource").value,
+          // Asked inside the fold itself, not borrowed from the form above (admin refresh).
+          businessType: el("outPasteType").value,
+          detailsSource: el("outPasteSource").value,
         }),
       })
         .then(function (x) {
@@ -14987,6 +15200,14 @@
   var businessWired = false;
   var businessId = null;
   var businessRow = null;
+  // Admin refresh (2026-11-14). Every fetch for a business carries the number of the opening it
+  // belongs to, and an answer for an opening that has since been replaced is thrown away: before
+  // this, the supporter list of the last business opened could land on the next one, and saving
+  // "Signed up" there linked the wrong donor.
+  var businessSeq = 0;
+  var businessNavIds = []; // the list you came from, for next and previous
+  var businessParts = null;
+  var businessNudgeJustSent = false;
 
   // KEEP IN SYNC with OUTCOME_MEANINGS in src/outreach/outcomes.ts. The meanings are here rather
   // than fetched because they never change between one business and the next, and a volunteer
@@ -15036,7 +15257,7 @@
         H.escapeHtml(r.contactPhone) + "</a>" +
         '<span class="out-tps-ok">Checked against the register' +
         (r.ctpsCheckedBy ? " by " + H.escapeHtml(r.ctpsCheckedBy) : "") +
-        ", " + H.fmtDate(r.ctpsCheckedAt) + "</span>";
+        ", " + outLongDate(r.ctpsCheckedAt) + "</span>";
     }
     return (
       '<span class="out-tps-hidden">Number hidden until checked</span>' +
@@ -15048,43 +15269,105 @@
     );
   }
 
-  function renderBusiness(r, notes) {
+  // What to do next, in the to do list's own words: the server works it out with the rule that fills
+  // that list (whatIsNeeded), so the page and the list never disagree (admin refresh, 2026-11-14).
+  function businessRenderTodo(r, todo) {
+    var card = el("businessTodo");
+    var body;
+    if (todo) {
+      var late = todo.daysOverdue > 0
+        ? ' <span class="out-todo-late">' + todo.daysOverdue + (todo.daysOverdue === 1 ? " day over" : " days over") + "</span>"
+        : "";
+      body = '<p class="biz-next-kind">' + H.escapeHtml(OUT_TODO_WORDS[todo.kind] || todo.kind) + late + "</p>" +
+        '<p class="biz-next-why">' + H.escapeHtml(todo.reason) + "</p>" +
+        '<p class="biz-next-do">' + H.escapeHtml(todo.action) + "</p>";
+    } else if (r.outcome === "declined") {
+      body = '<p class="biz-next-why">Nothing. They said no, and will not be contacted again.</p>';
+    } else if (r.outcome === "signed_up") {
+      body = '<p class="biz-next-why">Nothing. They signed up.</p>';
+    } else {
+      body = '<p class="biz-next-why">Nothing just now. They will come back onto the to do list when something is due.</p>';
+    }
+    // The first email is written in Write and send, where the preview is; this goes there with this
+    // business chosen.
+    var canWrite = canEdit("outreach") && !!r.contactEmail && !r.sentAt && r.outcome !== "declined";
+    card.innerHTML = '<h3 class="ak-h3">What to do next</h3>' + body +
+      (canWrite ? '<p class="ak-actions"><button class="admin-btn" type="button" data-biz-go="write">Write their first email</button></p>' : "");
+    card.hidden = false;
+  }
+
+  function businessRenderSteps() {
+    var at = businessNavIds.indexOf(businessId);
+    var show = at !== -1 && businessNavIds.length > 1;
+    el("businessStep").hidden = !show;
+    if (!show) return;
+    el("businessPlace").textContent = (at + 1) + " of " + businessNavIds.length;
+    el("businessPrev").disabled = at === 0;
+    el("businessNext").disabled = at === businessNavIds.length - 1;
+  }
+
+  function renderBusiness(r, notes, d) {
+    d = d || {};
     businessRow = r;
     el("business-heading").textContent = r.businessName;
+    businessRenderTodo(r, d.todo || null);
+    businessRenderSteps();
 
+    // Copy for the email, and for the number only once it has been checked against the register.
+    var copy = function (what, label) {
+      return ' <button class="admin-btn ak-btn--plain biz-copy" type="button" data-biz-copy="' + what + '" aria-label="' + label + '">Copy</button>';
+    };
     var contact = [
       r.contactName ? H.escapeHtml(r.contactName) : "",
-      r.contactEmail ? '<a href="mailto:' + H.escapeHtml(r.contactEmail) + '">' + H.escapeHtml(r.contactEmail) + "</a>" : "",
-      businessPhoneCell(r),
+      r.contactEmail ? '<span class="biz-line"><a href="mailto:' + H.escapeHtml(r.contactEmail) + '">' + H.escapeHtml(r.contactEmail) + "</a>" +
+        copy("email", "Copy their email address") + "</span>" : "",
+      r.contactPhone && r.ctpsCheckedAt
+        ? '<span class="biz-line">' + businessPhoneCell(r).replace("</a>", "</a>" + copy("phone", "Copy their number")) + "</span>"
+        : businessPhoneCell(r),
     ].filter(Boolean).join("<br />");
 
     var stands = r.outcome
       ? H.escapeHtml(OUT_OUTCOMES[r.outcome] || r.outcome) +
-        (r.outcomeAt ? ' <span class="ty-muted">on ' + H.fmtDate(r.outcomeAt) + "</span>" : "")
+        (r.outcomeAt ? ' <span class="ty-muted">on ' + outLongDate(r.outcomeAt) + "</span>" : "")
       : r.sentAt
-        ? "Emailed " + H.fmtDate(r.sentAt) + (r.sentBy ? ' <span class="ty-muted">by ' + H.escapeHtml(r.sentBy) + "</span>" : "")
+        ? "Emailed " + outLongDate(r.sentAt) + (r.sentBy ? ' <span class="ty-muted">by ' + H.escapeHtml(r.sentBy) + "</span>" : "")
         : "Not emailed yet";
+
+    var supporter = d.supporter
+      ? H.escapeHtml(d.supporter.name) + (canView("donations")
+        ? ' <button class="admin-btn ak-btn--plain biz-giving" type="button" data-biz-go="giving" data-donor="' + Number(d.supporter.id) + '">See their giving</button>'
+        : "")
+      : "";
+    var tags = (r.tags || []).length
+      ? '<span class="biz-tags">' + r.tags.map(function (t) { return '<span class="ak-mark biz-tag">' + H.escapeHtml(t) + "</span>"; }).join(" ") + "</span>"
+      : "";
 
     el("businessDetail").innerHTML =
       '<dl class="out-facts">' +
       factRow("Where it stands", stands) +
       factRow("Contact", contact) +
-      factRow("Kind of business", r.businessType === "sole_trader" ? "Sole trader or partnership" : "Limited company or LLP") +
+      factRow("The supporter they became", supporter) +
+      factRow("Tags", tags) +
+      factRow("Looked after by", r.owner ? H.escapeHtml(r.owner) : "Nobody yet") +
       // The reason this business is worth a call rather than another email.
       factRow("Who knows them", r.warmIntro ? H.escapeHtml(r.warmIntro) : "") +
-      factRow("Looked after by", r.owner ? H.escapeHtml(r.owner) : "Nobody yet") +
+      factRow("Ask again", r.askAgainOn ? outLongDate(r.askAgainOn) : "") +
+      factRow("Follow-up sent", r.nudgeSentAt
+        ? outLongDate(r.nudgeSentAt) + (r.nudgeSentBy ? ' <span class="ty-muted">by ' + H.escapeHtml(r.nudgeSentBy) + "</span>" : "")
+        : "") +
+      "</dl>";
+
+    el("businessMore").innerHTML =
+      '<dl class="out-facts">' +
+      factRow("Kind of business", r.businessType === "sole_trader" ? "Sole trader or partnership" : "Limited company or LLP") +
       factRow("Where the details came from", H.escapeHtml(OUT_SOURCE_WORDS[r.detailsSource] || r.detailsSource)) +
       // Shown back rather than hidden: whoever emails a sole trader should be able to see why
       // they are allowed to.
       factRow("They agreed to hear from us", r.consentBasis
         ? H.escapeHtml(r.consentBasis) + (r.consentBasisRecordedBy ? ' <span class="ty-muted">recorded by ' + H.escapeHtml(r.consentBasisRecordedBy) + "</span>" : "")
         : "") +
-      factRow("Ask again", r.askAgainOn ? H.fmtDate(r.askAgainOn) : "") +
-      factRow("Follow-up sent", r.nudgeSentAt
-        ? H.fmtDate(r.nudgeSentAt) + (r.nudgeSentBy ? ' <span class="ty-muted">by ' + H.escapeHtml(r.nudgeSentBy) + "</span>" : "")
-        : "") +
       factRow("Why this business", r.note ? H.escapeHtml(r.note) : "") +
-      factRow("Added", H.fmtDate(r.createdAt)) +
+      factRow("Added", outLongDate(r.createdAt)) +
       "</dl>";
 
     // The outcome list. Each option carries its meaning, so nobody has to guess which of two
@@ -15100,7 +15383,9 @@
     // The server refuses a second whatever this decides, but offering a button that will be
     // refused is its own small unkindness.
     var nudgeDue = !!r.sentAt && !r.nudgeSentAt && !r.outcome && !!r.contactEmail;
-    el("businessNudge").hidden = !(nudgeDue && canEdit("outreach"));
+    // Just sent: the block stays, without its button, so "Sent." is still there to read.
+    el("businessNudge").hidden = !((nudgeDue || businessNudgeJustSent) && canEdit("outreach"));
+    el("businessNudgeSend").hidden = !nudgeDue;
 
     if (r.askAgainOn) el("businessAskAgain").value = String(r.askAgainOn).slice(0, 10);
     businessToggleAskAgain();
@@ -15110,13 +15395,14 @@
   function renderBusinessNotes(notes) {
     var wrap = el("businessNotes");
     if (!wrap) return;
+    el("businessNoteCount").textContent = notes && notes.length ? " (" + notes.length + ")" : "";
     if (!notes || !notes.length) {
       wrap.innerHTML = '<p class="admin-empty">No notes yet. The first one is usually the most useful.</p>';
       return;
     }
     wrap.innerHTML = '<ol class="out-notes">' + notes.map(function (n) {
       return '<li class="out-note"><p class="out-note-meta">' + H.escapeHtml(n.author) + " &middot; " +
-        H.fmtDate(n.createdAt) + '</p><p class="out-note-body">' + H.escapeHtml(n.body) + "</p></li>";
+        outLongDate(n.createdAt) + '</p><p class="out-note-body">' + H.escapeHtml(n.body) + "</p></li>";
     }).join("") + "</ol>";
   }
 
@@ -15141,10 +15427,13 @@
   // nobody has to scroll a list of every business that has ever given.
   function businessLoadDonors() {
     var sel = el("businessDonor");
+    var seq = businessSeq;
     sel.innerHTML = '<option value="">Not sure yet</option>';
     authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/donors")
       .then(j)
       .then(function (d) {
+        // Another business has been opened since: this list is not its list.
+        if (seq !== businessSeq) return;
         (d.donors || []).forEach(function (v) {
           var o = doc.createElement("option");
           o.value = v.id;
@@ -15186,7 +15475,7 @@
           return;
         }
         businessSay("businessOutcomeStatus", "Saved.", "is-ok");
-        openBusiness(businessId);
+        businessReload();
         loadOutreachTodo();
         loadOutreachReports();
       })
@@ -15234,6 +15523,25 @@
     var writable = canEdit("outreach");
     el("businessOutcomeForm").hidden = !writable;
     el("businessNoteForm").hidden = !writable;
+    // Someone who may only look sees no "What happened?" heading with nothing under it.
+    el("businessOutcomeBlock").hidden = !writable;
+    fillSignerSelect(el("businessSigner"));
+    businessParts = window.AdminKit ? window.AdminKit.wireParts(el("businessParts"), { start: "glance" }) : null;
+    bindClick("businessPrev", function () { businessStep(-1); });
+    bindClick("businessNext", function () { businessStep(1); });
+    // What to do next, and See their giving: buttons drawn with the business, bound by delegation.
+    el("view-business").addEventListener("click", function (e) {
+      var go = e.target.closest && e.target.closest("[data-biz-go]");
+      if (!go) return;
+      var where = go.getAttribute("data-biz-go");
+      if (where === "write") {
+        var id = businessId;
+        selectView("outreach");
+        outWriteTo(id);
+      } else if (where === "giving") {
+        openDonor(Number(go.getAttribute("data-donor")));
+      }
+    });
     el("businessOutcomeForm").addEventListener("submit", businessSaveOutcome);
     el("businessNoteForm").addEventListener("submit", businessAddNote);
     el("businessOutcomes").addEventListener("change", businessToggleAskAgain);
@@ -15245,6 +15553,8 @@
     el("businessDetail").addEventListener("click", function (e) {
       var b = e.target.closest && e.target.closest("#businessCtps");
       if (b) businessConfirmCtps();
+      var c = e.target.closest && e.target.closest("[data-biz-copy]");
+      if (c) businessCopy(c.getAttribute("data-biz-copy"));
     });
     bindClick("businessBack", function () { selectView("outreach"); });
   }
@@ -15253,7 +15563,8 @@
     var who = businessRow ? businessRow.businessName : "this business";
     // The email promises to be the last one, so the pause says so too.
     if (!window.confirm("Send the one follow-up to " + who + "? It says it is the last they will hear from us, and it cannot be sent again.")) return;
-    var opt = el("outSigner").selectedOptions[0];
+    // Signed by whoever is chosen here, on this page (it used to be a choice on another screen).
+    var opt = el("businessSigner").selectedOptions[0];
     var btn = el("businessNudgeSend");
     btn.disabled = true;
     businessSay("businessNudgeStatus", "Sending…");
@@ -15273,7 +15584,8 @@
           return;
         }
         businessSay("businessNudgeStatus", "Sent. They will not be chased again.", "is-ok");
-        openBusiness(businessId);
+        businessNudgeJustSent = true;
+        businessReload();
         loadOutreachTodo();
       })
       .catch(function () {
@@ -15314,15 +15626,68 @@
     if (!window.confirm("Confirm you have checked this number against the TPS register? Your name and today's date are kept with it.")) return;
     authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/ctps", { method: "POST" })
       .then(function (x) { if (!x.ok) throw new Error(); return x.json(); })
-      .then(function () { openBusiness(businessId); })
+      .then(function () { businessReload(); })
       .catch(function () {
-        businessSay("businessOutcomeStatus", "Could not record that check.", "is-error");
+        // Beside the facts the button sits in, not under a form further down.
+        businessSay("businessContactStatus", "Could not record that check.", "is-error");
+      });
+  }
+
+  function businessCopy(what) {
+    var r = businessRow || {};
+    var value = what === "phone" ? r.contactPhone : r.contactEmail;
+    var words = what === "phone" ? "their number" : "their email address";
+    window.AdminKit.copyText(value || "").then(function (ok) {
+      businessSay("businessContactStatus", ok ? "Copied " + words + "." : "Could not copy. Select it and copy by hand.", ok ? "is-ok" : "is-error");
+    });
+  }
+
+  // Next and previous through the list you came from.
+  function businessStep(by) {
+    var at = businessNavIds.indexOf(businessId);
+    var next = businessNavIds[at + by];
+    if (at === -1 || next === undefined) return;
+    openBusiness(next);
+  }
+
+  // The same business again, after a save: the messages beside the buttons stay, and so does the
+  // part you are looking at.
+  function businessReload() {
+    var seq = businessSeq;
+    authFetch("/api/admin/outreach/" + encodeURIComponent(businessId))
+      .then(okJson)
+      .then(function (d) {
+        if (seq !== businessSeq) return;
+        renderBusiness(d.business, d.notes || [], d);
+      })
+      .catch(function () {
+        if (seq !== businessSeq) return;
+        el("businessDetail").innerHTML = '<p class="admin-empty">Could not load that business.</p>';
       });
   }
 
   function openBusiness(id) {
     businessWire();
     businessId = id;
+    businessSeq += 1;
+    var seq = businessSeq;
+    // Nothing of the last business opened may survive into this one. The supporter list above all:
+    // left filled, it offered the last business's donors, with its supporter chosen, and saving
+    // "Signed up" here would link the wrong one.
+    el("businessDonor").innerHTML = '<option value="">Not sure yet</option>';
+    el("businessDonorField").hidden = true;
+    el("businessAskAgain").value = "";
+    el("businessAskAgainField").hidden = true;
+    el("businessNote").value = "";
+    el("businessOutcomes").innerHTML = "";
+    el("businessMore").innerHTML = "";
+    el("businessTodo").hidden = true;
+    el("businessNoteCount").textContent = "";
+    businessRow = null;
+    businessNudgeJustSent = false;
+    businessSay("businessContactStatus", "");
+    if (businessParts) businessParts.show("glance");
+    businessRenderSteps();
     showOnly("view-business");
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
@@ -15338,8 +15703,13 @@
     businessSay("businessDiscloseStatus", "");
     authFetch("/api/admin/outreach/" + encodeURIComponent(id))
       .then(okJson)
-      .then(function (d) { renderBusiness(d.business, d.notes || []); })
+      .then(function (d) {
+        // Another business has been opened since: this answer is not for the page on screen.
+        if (seq !== businessSeq) return;
+        renderBusiness(d.business, d.notes || [], d);
+      })
       .catch(function () {
+        if (seq !== businessSeq) return;
         el("businessDetail").innerHTML = '<p class="admin-empty">Could not load that business.</p>';
       });
   }

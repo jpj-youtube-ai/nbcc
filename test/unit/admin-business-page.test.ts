@@ -194,7 +194,8 @@ describe("notes", () => {
 
     expect(app).toContain("H.escapeHtml(n.author)");
 
-    expect(app).toContain("H.fmtDate(n.createdAt)");
+    // Admin refresh (2026-11-14): the date as people say it, "3 November 2026".
+    expect(app).toContain("outLongDate(n.createdAt)");
 
   });
 

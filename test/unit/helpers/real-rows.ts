@@ -307,3 +307,29 @@ export function thankYouRows(): Rule[] {
     ["COUNT(*)::int AS count FROM thank_you_sent", [{ count: 2 }]],
   ];
 }
+
+/** Stories (the stories database: archived_at decides live or archived) and Partners (supporter_ticker). */
+export function storiesRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  const story = (id: number, over: Record<string, unknown>) => ({
+    id, created_at: at("2026-10-01T10:00:00Z"), consent_captured_at: at("2026-10-01T10:00:00Z"), submitter_role: "family_carer",
+    use_scope: "public", consent_share_first_name: true, consent_share_town: true, third_party_consent: false, status: "new",
+    short_quote: "They made Christmas happen for us.", story_text: "A made-up story, long enough to read as one.",
+    contact_for_more: true, submitter_first_name: "Ailsa", submitter_email: "ailsa@example.com", submitter_phone: null,
+    submitter_town: "Testtown", age_band: null, gender: null, recipient_type: null, heard_about: null, admin_tags: null,
+    admin_notes: null, archived_at: null, confirmed_over_16: true, ...over,
+  });
+  const live = [story(5, {}), story(4, { status: "used", short_quote: null, use_scope: "internal_only", created_at: at("2026-09-01T10:00:00Z") })];
+  const archived = [story(2, { status: "withdrawn", archived_at: at("2026-08-01T10:00:00Z"), created_at: at("2026-05-01T10:00:00Z") })];
+  const listCols = ({ id, created_at, consent_captured_at, submitter_role, use_scope, consent_share_first_name, consent_share_town, third_party_consent, status, short_quote }: Record<string, unknown>) =>
+    ({ id, created_at, consent_captured_at, submitter_role, use_scope, consent_share_first_name, consent_share_town, third_party_consent, status, short_quote });
+  return [
+    [/FROM stories WHERE archived_at IS NOT NULL/, archived.map(listCols)],
+    [/FROM stories WHERE archived_at IS NULL/, live.map(listCols)],
+    ["SELECT * FROM stories WHERE id = $1", (p) => [...live, ...archived].filter((s) => s.id === Number(p[0]))],
+    ["FROM supporter_ticker ORDER BY", [
+      { id: 3, name: "Pretend Bakery Ltd", active: true, sort_order: 0, created_at: at("2026-06-01T10:00:00Z") },
+      { id: 4, name: "Madeup Garage", active: false, sort_order: 0, created_at: at("2026-07-01T10:00:00Z") },
+    ]],
+  ];
+}

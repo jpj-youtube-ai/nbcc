@@ -2168,11 +2168,30 @@ adminRouter.get("/api/admin/thank-you/eligible", getThankYouEligible);
 
 // POST /api/admin/thank-you/send (REQ-069 · TASK-163). The compose form in the admin "Thank you"
 // view posts the letter fields here. `sentBy` is taken from the authed admin (never trusted from the
-// client), then the whole shape is validated by the shared thankYouInputSchema. We record the row +
-// its audit entry atomically (recordThankYouSent), then BEST-EFFORT email the donor the branded
-// letter — a failed send is logged, not fatal, so the letter is still recorded and the donor marked
-// thanked. `signedByRole` and `letterDate` are presentation-only (not stored): the role is the
+// client), then the whole shape is validated by the shared thankYouInputSchema. The row, its audit
+// entry and the email stand or fall together (recordThankYouSent runs the send inside its
+// transaction): a letter is kept only when its email went. It used to be recorded first and emailed
+// afterwards with a failed send swallowed, so the reply was a 201 either way, the screen said "Sent"
+// and the donor was marked thanked for a letter that never left (admin refresh, 2026-11-14). The
+// reply now says which: 201 with emailed: true, or 502 with emailed: false and recorded: false.
+// The email holds a pool connection and an open transaction while it goes, so it is given 15
+// seconds (THANK_YOU_SEND_LIMIT_MS); longer counts as the email failing. And if the email went but
+// the audit entry or the commit then failed, the reply is 500 with emailed: true and recorded:
+// false, so the screen says not to send it again rather than inviting a second letter.
+// `signedByRole` and `letterDate` are presentation-only (not stored): the role is the
 // signer's title on the letter, the date defaults to today. Editor+ (a send is an outbound write).
+// How long a thank-you email may take before it counts as failed. It is sent inside the
+// transaction that records it, so a hung mail call would otherwise hold one of the pool's five
+// connections, with a transaction open, for as long as it hangs.
+export const THANK_YOU_SEND_LIMIT_MS = 15_000;
+function withTimeLimit<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("the email took longer than " + ms / 1000 + " seconds")), ms);
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
 export async function postAdminThankYouSend(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "thank-you", "edit");
   if (!claims) return;
@@ -2194,15 +2213,21 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
     return res.status(400).json({ error: "Invalid CC email address" });
   }
   const cc = ccRaw || undefined;
+  // Set only when it was the email that failed, so the catch below can say so and not blame it for
+  // a database that would not answer.
+  let emailFailed = false;
+  // Set once the email has gone, so a failure after it (the audit entry, the commit) is not
+  // reported as "could not send", which would invite a second letter to the donor.
+  let emailSent = false;
   try {
     // TASK-444: the cc is part of the record now. It used to be used to address the email and then
     // thrown away, so "was anybody copied on that?" was unanswerable for a letter about a donor's
     // own money.
-    const id = await recordThankYouSent({ ...input, ccEmail: cc ?? null });
-    try {
+    const id = await recordThankYouSent({ ...input, ccEmail: cc ?? null }, async (letterId) => {
       // A tokenised link to the public print-your-letter page (the donor prints/saves a PDF there —
-      // a link, not an attachment, so deliverability stays clean).
-      const printUrl = `${config.PORTAL_BASE_URL}/thank-you/letter/${signThankYouLetterToken(id, config.ADMIN_SESSION_SECRET)}`;
+      // a link, not an attachment, so deliverability stays clean). Signed from the id of the row
+      // just written, which is why the row is written before the email and not after it.
+      const printUrl = `${config.PORTAL_BASE_URL}/thank-you/letter/${signThankYouLetterToken(letterId, config.ADMIN_SESSION_SECRET)}`;
       const view = {
         thankYouName: input.thankYouName,
         addressedTo: input.addressedTo,
@@ -2216,21 +2241,39 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
         letterDate,
         printUrl,
       };
-      await sendThankYou({
-        email: input.recipientEmail,
-        cc,
-        from: config.GIVING_FROM_EMAIL,
-        replyTo: config.GIVING_FROM_EMAIL,
-        subject: thankYouSubject(input),
-        html: buildThankYouEmailHtml(view),
-        text: buildThankYouEmailText(view),
-      });
-    } catch (err) {
-      // Best-effort: the row is recorded and the donor is marked thanked regardless of the send.
-      console.error(`thank-you email to ${input.recipientEmail} failed`, err);
-    }
-    return res.status(201).json({ id, giftSummary: giftSummary(input) });
+      try {
+        await withTimeLimit(sendThankYou({
+          email: input.recipientEmail,
+          cc,
+          from: config.GIVING_FROM_EMAIL,
+          replyTo: config.GIVING_FROM_EMAIL,
+          subject: thankYouSubject(input),
+          html: buildThankYouEmailHtml(view),
+          text: buildThankYouEmailText(view),
+        }), THANK_YOU_SEND_LIMIT_MS);
+        emailSent = true;
+      } catch (err) {
+        emailFailed = true;
+        throw err; // recordThankYouSent rolls the row back: nothing is kept for a letter that did not go
+      }
+    });
+    return res.status(201).json({ id, giftSummary: giftSummary(input), emailed: true });
   } catch (err) {
+    if (emailFailed) {
+      // The address is the donor's own, so it stays out of the log line; the email log has the attempt.
+      console.error("admin thank-you email failed:", err instanceof Error ? err.message : err);
+      return res
+        .status(502)
+        .json({ error: "The email could not be sent. Nothing has been recorded.", emailed: false, recorded: false });
+    }
+    if (emailSent) {
+      console.error("admin thank-you: emailed but not recorded:", err instanceof Error ? err.message : err);
+      return res.status(500).json({
+        error: "The email went, but we could not keep a record of it. Do not send it again.",
+        emailed: true,
+        recorded: false,
+      });
+    }
     console.error("admin thank-you send failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
   }

@@ -29,6 +29,7 @@
     <link rel="stylesheet" href="/assets/css/admin-records.css" />
     <link rel="stylesheet" href="/assets/css/admin-content.css" />
     <link rel="stylesheet" href="/assets/css/admin-outreach.css" />
+    <link rel="stylesheet" href="/assets/css/admin-thanks.css" />
     <link rel="stylesheet" href="/assets/css/admin-settings.css" />
     <link rel="stylesheet" href="/assets/css/admin-newsletter.css" />
     <link rel="stylesheet" href="/assets/css/admin-newsletter-blocks.css" />
@@ -1379,144 +1380,202 @@
             <!-- Thank you: pick a donor over the threshold, personalise the letter, watch it update
                  live, and send it (Editor+). Every send is recorded and audited; a sent-letter
                  history sits below. Wired in app.js (loadThankYou); styles are the .ty-* rules. -->
-            <section class="admin-view" id="view-thank-you" aria-labelledby="thankyou-heading" hidden>
+            <!-- Thank you letters, in the kit's look and in three parts (2026-11-14,
+                 docs/superpowers/specs/2026-11-14-admin-refresh-thanks.md). One part shows at a time behind
+                 the bar (AdminKit.wireParts, from loadThankYou in app.js), which draws the tiles, the donor
+                 cards and the letters sent. Its own styles are in assets/css/admin-thanks.css, every one
+                 named through #view-thank-you: the ty- classes are borrowed by other screens. -->
+            <section class="admin-view ak" id="view-thank-you" aria-labelledby="thankyou-heading" hidden>
               <h2 id="thankyou-heading">Thank you letters</h2>
-              <p class="admin-view-intro">Pick a donor over the threshold (or start a fresh one), personalise the letter and watch it update live before you send. It goes to the donor as a branded email from the NBCC giving inbox, and every send is logged to the Audit trail.</p>
+              <p class="admin-view-intro">Write a personal thank you letter to someone who gave a big gift, email it to them, and look back at every letter sent.</p>
 
-              <h3 class="admin-subhead">1. Donors to thank</h3>
-              <p class="admin-help">Donors whose largest single paid donation crosses the threshold, most generous first. “Write” prefills the letter below.</p>
-              <div class="ty-controls">
-                <label class="ty-inline">Single donation over £<input type="text" id="tyThreshold" value="1000" inputmode="decimal" aria-label="Threshold amount in pounds" /></label>
-                <button class="admin-btn" type="button" id="tyRefresh">Refresh</button>
-                <span class="ty-count" id="tyEligibleCount" aria-live="polite"></span>
-                <span class="ty-spacer"></span>
-                <button class="btn btn-primary" type="button" id="tyNew">+ New thank-you</button>
-              </div>
-              <div class="admin-table-wrap" id="tyEligibleTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div id="tyParts">
+                <div class="ak-parts" role="group" aria-label="Which part to show">
+                  <button type="button" class="ak-part-btn" data-akpart="who" aria-pressed="true">Who to thank<span class="ak-part-dot" id="tyWhoDot" role="img" aria-label="someone is waiting" hidden></span></button>
+                  <button type="button" class="ak-part-btn" data-akpart="write" aria-pressed="false">Write the letter</button>
+                  <button type="button" class="ak-part-btn" data-akpart="sent" aria-pressed="false">Letters sent</button>
+                </div>
 
-              <h3 class="admin-subhead">2. Compose &amp; send</h3>
-              <p class="admin-help">The preview on the right is the letter the donor receives. It updates as you type.</p>
-              <div class="ty-compose">
-                <form class="ty-panel" id="tyForm" autocomplete="off">
-                  <div class="ty-field">
-                    <label for="tyName">Thank-you name <span class="ty-muted">(person or organisation)</span></label>
-                    <input id="tyName" type="text" value="friend" spellcheck="true" lang="en-GB" />
-                    <span class="ty-hint">Appears as “Thank you, &lt;name&gt;.” For a company, use the organisation name.</span>
+                <div class="ak-part" data-akpart-body="who" role="region" aria-label="Who to thank">
+                  <p class="ak-part-intro">Everyone whose largest single donation is over the amount you set, biggest first. Press Write on someone to start their letter.</p>
+                  <ul class="ak-tiles" id="tyTiles" aria-label="Show only">
+                    <li><button type="button" class="ak-tile is-none" data-ty-filter="ready" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Ready to thank</span><span class="ak-tile__says">Not thanked yet, and we can email them</span></button></li>
+                    <li><button type="button" class="ak-tile is-none" data-ty-filter="thanked" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Thanked</span><span class="ak-tile__says">Already sent a letter</span></button></li>
+                    <li><button type="button" class="ak-tile is-none" data-ty-filter="blocked" aria-pressed="false"><span class="ak-tile__n"></span><span class="ak-tile__name">Cannot be emailed</span><span class="ak-tile__says">No address, or they said no to emails</span></button></li>
+                  </ul>
+                  <div class="ty-controls">
+                    <label class="ty-inline" for="tyThreshold">Single donation over £<input type="text" id="tyThreshold" value="1000" inputmode="decimal" /></label>
+                    <button class="admin-btn ak-btn--plain" type="button" id="tyRefresh">Refresh</button>
+                    <span class="ty-count" id="tyEligibleCount" aria-live="polite"></span>
+                    <span class="ty-spacer"></span>
+                    <button class="btn btn-primary" type="button" id="tyNew">+ New thank-you</button>
                   </div>
-                  <div class="ty-field">
-                    <label for="tyDear">Addressed to</label>
-                    <input id="tyDear" type="text" value="friend" spellcheck="true" lang="en-GB" />
-                    <span class="ty-hint">Appears as “Dear &lt;name&gt;,”. For an organisation, name the contact person.</span>
+                  <small class="ak-says">The amount is remembered on this phone or computer. New thank-you starts a letter from nothing, for a gift in kind or for someone who is not on this list.</small>
+                  <div class="tyr-showing">
+                    <p id="tyShowing" aria-live="polite"></p>
+                    <button class="admin-link" type="button" id="tyShowAll" hidden>Show everyone</button>
                   </div>
-                  <div class="ty-field">
-                    <label>Type of gift</label>
-                    <div class="ty-seg" role="group" aria-label="Gift type">
-                      <button id="tyGtMoney" type="button" aria-pressed="true">Monetary</button>
-                      <button id="tyGtKind" type="button" aria-pressed="false">Gift in kind</button>
-                    </div>
-                  </div>
-                  <div class="ty-field" id="tyWrapAmount">
-                    <label for="tyAmount">Amount (£)</label>
-                    <input id="tyAmount" type="text" value="1000" inputmode="decimal" />
-                    <label class="ty-check"><input id="tyGiftAid" type="checkbox" checked /> <span>Gift Aided (show the 25% uplift line)</span></label>
-                  </div>
-                  <div class="ty-field" id="tyWrapInKind" hidden>
-                    <label for="tyInKind">What was given</label>
-                    <textarea id="tyInKind" rows="2" spellcheck="true" lang="en-GB"></textarea>
-                  </div>
-                  <div class="ty-field">
-                    <label for="tyPersonal">Personal message <span class="ty-muted">(optional)</span></label>
-                    <textarea id="tyPersonal" rows="3" spellcheck="true" lang="en-GB"></textarea>
-                  </div>
-                  <div class="ty-row">
-                    <div class="ty-field">
-                      <label for="tySigner">Signed by</label>
-                      <!-- Populated from AdminHelpers.SIGNERS (TASK-251) — the ONE list of who can
-                           sign for NBCC, shared with the newsletter's sign-off block so adding or
-                           removing a signer updates both. Do not hardcode <option>s here again. -->
-                      <select id="tySigner"></select>
-                    </div>
-                    <div class="ty-field">
-                      <label for="tyDate">Letter date</label>
-                      <input id="tyDate" type="text" />
-                    </div>
-                  </div>
-                  <div class="ty-field">
-                    <label for="tyEmail">Recipient email</label>
-                    <input id="tyEmail" type="email" />
-                  </div>
-                  <div class="ty-field">
-                    <label for="tyCc">CC <span class="ty-muted">(optional)</span></label>
-                    <select id="tyCc">
-                      <option value="">No CC</option>
-                      <option value="jodie@nbcc.scot">jodie@nbcc.scot</option>
-                      <option value="isabel@nbcc.scot">isabel@nbcc.scot</option>
-                      <option value="jaimie@nbcc.scot">jaimie@nbcc.scot</option>
-                      <option value="jon@nbcc.scot">jon@nbcc.scot</option>
-                    </select>
-                    <span class="ty-hint">Copies this person on the email the donor receives.</span>
-                  </div>
-                  <input type="hidden" id="tyDonorId" />
-                  <div class="ty-actions">
-                    <button class="btn btn-primary" type="submit" id="tySend">Send thank you</button>
-                  </div>
-                  <p class="ty-status" id="tyStatus" role="status" aria-live="polite"></p>
-                </form>
+                  <div id="tyEligibleTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+                </div>
 
-                <div class="ty-preview">
-                  <div class="ty-preview-bar">
-                    <span class="admin-eyebrow">Live preview</span>
-                    <small class="ty-live"><span class="ty-dot"></span> updates as you type</small>
+                <div class="ak-part" data-akpart-body="write" role="region" aria-label="Write the letter" hidden>
+                  <p class="ak-part-intro">Fill in the letter and read it through, then send it. It goes to them as an email in NBCC's colours from the giving inbox, with a button to open and print the letter. Every letter sent is recorded in Audit.</p>
+                  <div class="ak-notice" id="tyFor">
+                    <span id="tyForText"></span>
+                    <button class="admin-link" type="button" id="tyForNew" hidden>Start a new letter instead</button>
                   </div>
-                  <div class="ty-paper-wrap" id="tyPaperWrap">
-                    <div class="ty-paper" id="tyPaper">
-                      <div class="ty-page"><div class="ty-sheet">
-                        <div class="ty-sheet-body">
-                          <div class="ty-letter-head">
-                            <address class="ty-sender">The Elves' Workshop<br />Annbank Village Hall<br />Weston Avenue<br />Annbank<br />KA6 5EE</address>
-                            <div class="ty-logo">
-                              <img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" />
-                              <div class="ty-tagline">Here all year</div>
+                  <div class="ty-compose">
+                    <form class="ty-panel ak-panel" id="tyForm" autocomplete="off" novalidate>
+                      <div class="ty-field">
+                        <label for="tyName">Thank-you name <span class="ty-muted">(person or organisation)</span></label>
+                        <input id="tyName" type="text" value="" spellcheck="true" lang="en-GB" />
+                        <span class="ty-hint">Appears as “Thank you, &lt;name&gt;.” For a company, use the organisation name.</span>
+                      </div>
+                      <div class="ty-field">
+                        <label for="tyDear">Addressed to</label>
+                        <input id="tyDear" type="text" value="" spellcheck="true" lang="en-GB" />
+                        <span class="ty-hint">Appears as “Dear &lt;name&gt;,”. For an organisation, name the contact person.</span>
+                      </div>
+                      <div class="ty-field">
+                        <span class="tyr-label" id="tyGiftTypeLabel">Type of gift</span>
+                        <div class="admin-segmented" role="group" aria-labelledby="tyGiftTypeLabel">
+                          <button class="admin-seg" id="tyGtMoney" type="button" aria-pressed="true">Money</button>
+                          <button class="admin-seg" id="tyGtKind" type="button" aria-pressed="false">Gift in kind</button>
+                        </div>
+                        <span class="ty-hint">A gift in kind is something other than money: goods, a venue, someone's time.</span>
+                      </div>
+                      <div id="tyWrapAmount">
+                        <div class="ty-field">
+                          <label for="tyAmount">Amount (£)</label>
+                          <input id="tyAmount" type="text" value="" inputmode="decimal" />
+                        </div>
+                        <label class="admin-check tyr-check"><input id="tyGiftAid" type="checkbox" /> <span>Gift Aided (the letter says HMRC adds 25%)</span></label>
+                      </div>
+                      <div class="ty-field" id="tyWrapInKind" hidden>
+                        <label for="tyInKind">What was given</label>
+                        <textarea id="tyInKind" rows="2" spellcheck="true" lang="en-GB"></textarea>
+                      </div>
+                      <div class="ty-field">
+                        <label for="tyPersonal">Personal message <span class="ty-muted">(optional)</span></label>
+                        <textarea id="tyPersonal" rows="3" spellcheck="true" lang="en-GB"></textarea>
+                      </div>
+                      <div class="ty-row">
+                        <div class="ty-field">
+                          <label for="tySigner">Signed by</label>
+                          <!-- Populated from AdminHelpers.SIGNERS (TASK-251) — the ONE list of who can
+                               sign for NBCC, shared with the newsletter's sign-off block so adding or
+                               removing a signer updates both. Do not hardcode <option>s here again. -->
+                          <select id="tySigner"></select>
+                        </div>
+                        <div class="ty-field">
+                          <label for="tyDate">Letter date</label>
+                          <input id="tyDate" type="text" />
+                        </div>
+                      </div>
+                      <div class="ty-field">
+                        <label for="tyEmail">Their email address</label>
+                        <input id="tyEmail" type="email" />
+                      </div>
+                      <div class="ty-field">
+                        <label for="tyCc">Copy in <span class="ty-muted">(optional)</span></label>
+                        <select id="tyCc">
+                          <option value="">Nobody</option>
+                          <option value="jodie@nbcc.scot">jodie@nbcc.scot</option>
+                          <option value="isabel@nbcc.scot">isabel@nbcc.scot</option>
+                          <option value="jaimie@nbcc.scot">jaimie@nbcc.scot</option>
+                          <option value="jon@nbcc.scot">jon@nbcc.scot</option>
+                        </select>
+                        <span class="ty-hint">Copies this person on the email the donor receives.</span>
+                      </div>
+                      <input type="hidden" id="tyDonorId" />
+                    </form>
+
+                    <div class="ty-preview">
+                      <div class="ty-preview-bar">
+                        <span class="admin-eyebrow">Live preview</span>
+                        <small class="ty-live"><span class="ty-dot"></span> updates as you type</small>
+                      </div>
+                      <p class="ak-hint">This is the letter they can open and print from the email. The email says the same in its own words.</p>
+                      <div class="ak-actions tyr-view">
+                        <button class="admin-btn ak-btn--plain admin-btn--small" type="button" id="tyViewToggle">Read it at normal size</button>
+                      </div>
+                      <div class="ty-paper-wrap" id="tyPaperWrap" data-view="page">
+                        <div class="ty-paper" id="tyPaper">
+                          <div class="ty-page"><div class="ty-sheet">
+                            <div class="ty-sheet-body">
+                              <div class="ty-letter-head">
+                                <address class="ty-sender">The Elves' Workshop<br />Annbank Village Hall<br />Weston Avenue<br />Annbank<br />KA6 5EE</address>
+                                <div class="ty-logo">
+                                  <img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" />
+                                  <div class="ty-tagline">Here all year</div>
+                                </div>
+                              </div>
+                              <div class="ty-letter-meta"><span class="ty-ldate" id="tyPDate"></span></div>
+                              <h1 class="ty-letter-title" id="tyPTitle">Thank you, friend.</h1>
+                              <p class="ty-salutation" id="tyPSalutation">Dear friend,</p>
+                              <div class="ty-letter-body">
+                                <p>On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.</p>
+                                <div class="ty-callout" id="tyPCallout"></div>
+                                <p class="ty-personal" id="tyPPersonal" hidden></p>
+                                <p>Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
+                                <p>We are volunteer led and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
+                              </div>
+                              <div class="ty-signoff">
+                                <p>With warmest thanks,</p>
+                                <div class="ty-signame" id="tyPSigName">Jodie McFarlane</div>
+                                <div class="ty-sigrole" id="tyPSigRole">Head Elf (Trustee), Night Before Christmas Campaign</div>
+                              </div>
+                              <p class="ty-pullquote">&ldquo;How do we change the world?<br />One random act of kindness at a time.&rdquo;</p>
+                              <div class="ty-donate">
+                                <span class="ty-donate-eyebrow">How you can donate</span>
+                                <span class="ty-donate-go">Go to <b>nbcc.scot/donate</b></span>
+                              </div>
                             </div>
-                          </div>
-                          <div class="ty-letter-meta"><span class="ty-ldate" id="tyPDate"></span></div>
-                          <h1 class="ty-letter-title" id="tyPTitle">Thank you, friend.</h1>
-                          <p class="ty-salutation" id="tyPSalutation">Dear friend,</p>
-                          <div class="ty-letter-body">
-                            <p>On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.</p>
-                            <div class="ty-callout" id="tyPCallout"></div>
-                            <p class="ty-personal" id="tyPPersonal" hidden></p>
-                            <p>Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
-                            <p>We are volunteer led and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
-                          </div>
-                          <div class="ty-signoff">
-                            <p>With warmest thanks,</p>
-                            <div class="ty-signame" id="tyPSigName">Jodie McFarlane</div>
-                            <div class="ty-sigrole" id="tyPSigRole">Head Elf (Trustee), Night Before Christmas Campaign</div>
-                          </div>
-                          <p class="ty-pullquote">&ldquo;How do we change the world?<br />One random act of kindness at a time.&rdquo;</p>
-                          <div class="ty-donate">
-                            <span class="ty-donate-eyebrow">How you can donate</span>
-                            <span class="ty-donate-go">Go to <b>nbcc.scot/donate</b></span>
-                          </div>
+                            <div class="ty-letter-foot">
+                              <div class="ty-foot-row">
+                                <span class="ty-cell"><span class="ty-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><path d="M4 4h4l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z"/></svg></span>01292 811 015</span>
+                                <span class="ty-cell"><span class="ty-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></svg></span>giving@nbcc.scot</span>
+                                <span class="ty-cell"><span class="ty-ic ty-ic-pair"><span><svg width="11" height="11" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></span><span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></span></span>nbcc.scot</span>
+                              </div>
+                              <div class="ty-foot-legal">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
+                            </div>
+                          </div></div>
                         </div>
-                        <div class="ty-letter-foot">
-                          <div class="ty-foot-row">
-                            <span class="ty-cell"><span class="ty-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><path d="M4 4h4l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z"/></svg></span>01292 811 015</span>
-                            <span class="ty-cell"><span class="ty-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></svg></span>giving@nbcc.scot</span>
-                            <span class="ty-cell"><span class="ty-ic ty-ic-pair"><span><svg width="11" height="11" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></span><span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></span></span>nbcc.scot</span>
-                          </div>
-                          <div class="ty-foot-legal">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
+                      </div>
+                    </div>
+
+                    <!-- After the letter in the page, so on a phone it is read before it is sent; beside
+                         the form, under it, on a laptop (admin-thanks.css). Send asks first, here. -->
+                    <div class="tyr-send ak-card">
+                      <div class="ak-notice ak-notice--bad" id="tyAgain" role="status" hidden></div>
+                      <div class="ty-actions">
+                        <button class="btn btn-primary" type="button" id="tySend">Send thank you</button>
+                      </div>
+                      <small class="ak-says" id="tySays"></small>
+                      <div class="ak-notice" id="tyAsk" hidden>
+                        <p id="tyAskText"></p>
+                        <div class="ak-actions">
+                          <button class="admin-btn" type="button" id="tyAskYes">Yes, email it now</button>
+                          <button class="admin-btn ak-btn--plain" type="button" id="tyAskNo">Not yet</button>
                         </div>
-                      </div></div>
+                      </div>
+                      <p class="ty-status" id="tyStatus" role="status" aria-live="polite"></p>
+                      <div class="tyr-next" id="tyNext" aria-live="polite"></div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <h3 class="admin-subhead">3. Sent history</h3>
-              <p class="admin-help">Every thank-you letter sent, most recent first.</p>
-              <div class="admin-table-wrap" id="tySentTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+                <div class="ak-part" data-akpart-body="sent" role="region" aria-label="Letters sent" hidden>
+                  <p class="ak-part-intro">Every thank-you letter sent, most recent first. Letters the website sends to business supporters by itself are here too. Press one to open it.</p>
+                  <label class="ak-field tyr-find" for="tySentSearch"><span>Find a letter</span><input type="search" id="tySentSearch" placeholder="Name, email or what was given" autocomplete="off" /></label>
+                  <p class="tyr-count" id="tySentCount" aria-live="polite"></p>
+                  <div id="tySentTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+                  <div class="tyr-more">
+                    <button class="admin-btn ak-btn--plain" type="button" id="tySentMore" hidden>Show more</button>
+                    <p class="ty-status" id="tySentSaid" role="status" aria-live="polite"></p>
+                  </div>
+                </div>
+              </div>
             </section>
 
             <!-- Partners: the admin-curated list shown scrolling under the site nav (labelled

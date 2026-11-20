@@ -173,7 +173,7 @@ const panels: Panel[] = [
   { name: "Newsletters", view: "newsletter", path: "/api/admin/newsletters", target: "newsletterList",
     unavailable: "Newsletters are unavailable.", okBody: [], okText: "No newsletters yet." },
   { name: "Thank you: eligible", view: "thank-you", path: "/api/admin/thank-you/eligible", target: "tyEligibleTable",
-    unavailable: "Could not load donors.", okText: "No donors over the threshold yet." },
+    unavailable: "Could not load donors.", okText: "Nobody has given that much in one gift yet." },
   { name: "Thank you: sent", view: "thank-you", path: "/api/admin/thank-you/sent", target: "tySentTable",
     unavailable: "Could not load the sent history.", okText: "No thank-you letters sent yet." },
   { name: "Outreach: needs you", view: "outreach", path: "/api/admin/outreach/todo", target: "outTodo",

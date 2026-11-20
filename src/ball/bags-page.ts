@@ -13,6 +13,8 @@ import { londonDate } from "./sales-report";
 //
 // The look is NBCC's (Jaimie, 2 November 2026: "use the NBCC design stuff to keep everything in
 // line"): the cream page, the red NBCC logo on cream, Playfair Display and Poppins, the brand colours.
+// Since TASK-586 it wears the new site's look, the home page's family: the quilted maroon band with
+// the gold ribbon, bow and hanging gift tags, ending in the wave into cream (see BOW, RIBBON, WAVE).
 // The bag is ONE baked picture (assets/img/ball-bag-hero.webp): a red gift bag with a gold bow,
 // presents peeking out of the top and a small "Packed with love" tag, drawn once and baked so the
 // phone needs no handwriting font. The same picture, small, is each bag in the row and on the thank
@@ -191,8 +193,31 @@ function frame(o: { title: string; description: string; body: string; bodyClass:
   );
 }
 
-/** The top of every screen: NBCC's logo on cream, and the Ball. */
-const TOP = `<header class="bb-top">${LOGO}<p class="bb-eyebrow">Festive Ball</p></header>`;
+/** The top of every screen: NBCC's logo, on cream (it never sits on the maroon band). */
+const TOP = `<header class="bb-top">${LOGO}</header>`;
+
+/** The Ball, in gold over the band, as on the table card. */
+const EYEBROW = '<p class="bb-eyebrow">Festive Ball</p>';
+
+// The new site's look (TASK-586): the home page's quilted maroon band (assets/css/home-top.css
+// .home-lane), its gold ribbon and bow, gift tags hanging from the ribbon, and the wave the band ends
+// in. The same family as the table card (tools/ball-bags/card.mjs). The bow and wave are the home
+// page's own drawings (index.html), unchanged.
+const BOW =
+  '<svg class="bb-bow" viewBox="0 0 120 70" aria-hidden="true" focusable="false"><g fill="#D9A93E">' +
+  '<path d="M52 36L30 68l14-2 6 10 12-36zM68 36l22 32-14-2-6 10-12-36z"/>' +
+  '<path d="M60 32C46 8 8 2 8 26s38 22 52 6zM60 32c14-24 52-30 52-6s-38 22-52 6z"/></g>' +
+  '<path fill="#B8862B" d="M60 32C50 18 28 14 26 26c10-2 24 0 34 6zM60 32c10-14 32-18 34-6-10-2-24 0-34 6z"/>' +
+  '<rect fill="#B8862B" x="50" y="22" width="20" height="20" rx="6"/></svg>';
+const RIBBON = `<div class="bb-ribbon" aria-hidden="true">${BOW}</div>`;
+const WAVE =
+  '<svg class="bb-wave" viewBox="0 0 1440 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
+  '<path fill="currentColor" d="M0 62c90-34 170-44 262-20s150 44 252 26 176-58 292-44 168 54 276 50 170-40 358-34v60H0z"/></svg>';
+
+/** A heading's last word in italic, the home page's way ("You know us at <em>Christmas.</em>"). */
+function lastWordItalic(text: string): string {
+  return text.replace(/(\S+)$/, "<em>$1</em>");
+}
 
 // The Ball donate page's own (src/ball/donate-page.ts), so a guest is asked exactly the same.
 const POSTCODE_PATTERN = "[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}";
@@ -201,12 +226,15 @@ const POSTCODE_PATTERN = "[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}";
 const MINUS_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M6 12h12"/></svg>';
 const PLUS_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M6 12h12M12 6v12"/></svg>';
 
-/** What is in a bag: the words, Fill a Red Bag's drawing for each, and the tint of its circle. */
-const INSIDE: readonly { words: string; art: string; tone: string }[] = [
-  { words: "A cosy blanket and pyjamas", art: "blanket", tone: "tan" },
-  { words: "Hat, gloves and socks", art: "hat-gloves", tone: "holly" },
-  { words: "A toy and a book", art: "toy", tone: "gold" },
-  { words: "A few treats to unwrap", art: "present", tone: "crimson" },
+/**
+ * What is in a bag: the words, Fill a Red Bag's drawing for each, the tint of its circle, and the
+ * colour of the gift tag it hangs on (the home page's four: card, crimson, holly, tan).
+ */
+const INSIDE: readonly { words: string; art: string; tone: string; tag: string }[] = [
+  { words: "A cosy blanket and pyjamas", art: "blanket", tone: "tan", tag: "card" },
+  { words: "Hat, gloves and socks", art: "hat-gloves", tone: "holly", tag: "crimson" },
+  { words: "A toy and a book", art: "toy", tone: "gold", tag: "holly" },
+  { words: "A few treats to unwrap", art: "present", tone: "crimson", tag: "tan" },
 ];
 
 function field(id: string, label: string, attrs: string, message: string): string {
@@ -222,28 +250,50 @@ export function renderBallBagsPage(): string {
   const one = BALL_BAG_PENCE;
   const welcome =
     '<section class="bb-screen bb-welcome" id="bbWelcome" aria-labelledby="bbWelcomeTitle">' +
+    // The quilted maroon band: the welcome, the bag with its gold £50 seal, and what is in a bag
+    // as four gift tags hanging from the gold ribbon; it ends in the wave into cream.
+    '<div class="bb-band bb-band--welcome">' +
+    '<div class="bb-wrap bb-intro">' +
+    '<div class="bb-intro__words">' +
+    EYEBROW +
+    '<h1 class="bb-title" id="bbWelcomeTitle" tabindex="-1">Thank you for being here <em>tonight.</em></h1>' +
+    '<p class="bb-lede">£50 could fill a full red bag for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open.</p>' +
+    "</div>" +
     '<div class="bb-hero">' +
     `<img class="bb-hero__bag" src="${HERO_SRC}" width="280" height="308" alt="${HERO_ALT}" fetchpriority="high" decoding="async" />` +
-    `<span class="bb-price" aria-hidden="true"><span>${pounds(one)}</span></span>` +
+    `<span class="bb-price" aria-hidden="true"><b>${pounds(one)}</b><span>a bag</span></span>` +
     twinkles() +
     "</div>" +
-    '<h1 class="bb-title" id="bbWelcomeTitle" tabindex="-1">Thank you for being here tonight</h1>' +
-    '<p class="bb-lede">£50 could fill a full red bag for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open.</p>' +
+    "</div>" +
+    RIBBON +
+    '<div class="bb-wrap">' +
     '<ul class="bb-inside">' +
     INSIDE.map(
       (x, i) =>
-        `<li style="--i:${i}"><span class="bb-inside__art bb-tone--${x.tone}" aria-hidden="true">${drawing(x.art)}</span>` +
-        `<span class="bb-inside__words">${x.words}</span></li>`,
+        `<li class="bb-gift bb-gift--${x.tag}" style="--i:${i}"><span class="bb-gift__face">` +
+        `<span class="bb-inside__art bb-tone--${x.tone}" aria-hidden="true">${drawing(x.art)}</span>` +
+        `<span class="bb-inside__words">${x.words}</span></span></li>`,
     ).join("") +
     "</ul>" +
+    "</div>" +
+    WAVE +
+    "</div>" +
+    '<div class="bb-wrap bb-go">' +
     '<button class="bb-btn" id="bbStart" type="button">Fill a bag</button>' +
     '<noscript><p class="bb-note">Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p></noscript>' +
+    "</div>" +
     "</section>";
 
   const howMany =
     '<section class="bb-screen bb-howmany" id="bbHowMany" aria-labelledby="bbHowManyTitle" hidden>' +
+    '<div class="bb-wrap">' +
     '<button class="bb-back" id="bbBack" type="button">Back</button>' +
-    '<h2 class="bb-title" id="bbHowManyTitle" tabindex="-1">How many bags?</h2>' +
+    '<h2 class="bb-title" id="bbHowManyTitle" tabindex="-1">How many <em>bags?</em></h2>' +
+    "</div>" +
+    // The tally hangs on a white gift tag from the gold ribbon and bow, as the table card's QR does.
+    RIBBON +
+    '<div class="bb-wrap">' +
+    '<div class="bb-tag">' +
     '<div class="bb-card bb-card--count">' +
     '<div class="bb-counter">' +
     `<button class="bb-step" id="bbLess" type="button" aria-label="One bag fewer" aria-controls="bbTally">${MINUS_ICON}</button>` +
@@ -254,6 +304,7 @@ export function renderBallBagsPage(): string {
     '<div class="bb-tally" id="bbTally" aria-live="polite" aria-atomic="true">' +
     '<p class="bb-tally__words" id="bbWords">1 full red bag</p>' +
     `<p class="bb-tally__total" id="bbTotal">${pounds(one)}</p>` +
+    "</div>" +
     "</div>" +
     "</div>" +
     // The template every new bag in the row is copied from.
@@ -296,6 +347,7 @@ export function renderBallBagsPage(): string {
     '<p class="bb-note">Secure payment by Stripe.</p>' +
     "</div>" +
     "</form>" +
+    "</div>" +
     "</section>";
 
   return frame({
@@ -328,10 +380,14 @@ export function renderBallBagsThanks(bags: number): string {
     `<main class="bb-main" id="main" data-bb-thanks data-bags="${known ? bags : 0}">` +
     TOP +
     '<section class="bb-screen bb-thanks" aria-labelledby="bbThanksTitle">' +
+    // A celebration on the quilted maroon band, ending in the wave into cream.
+    '<div class="bb-band bb-band--thanks"><div class="bb-wrap">' +
+    EYEBROW +
     `<div class="bb-celebrate">${bagRow(known ? bags : 1)}${twinkles()}</div>` +
-    `<h1 class="bb-title" id="bbThanksTitle" tabindex="-1">${heading}</h1>` +
+    `<h1 class="bb-title" id="bbThanksTitle" tabindex="-1">${lastWordItalic(heading)}</h1>` +
     `<p class="bb-lede">${lede}</p>` +
-    `<p class="bb-again"><a href="${BALL_BAGS_PATH}">Fill another</a></p>` +
+    `</div>${WAVE}</div>` +
+    `<div class="bb-wrap"><p class="bb-again"><a href="${BALL_BAGS_PATH}">Fill another</a></p></div>` +
     "</section></main>";
   return frame({
     title: "Thank you | NBCC Festive Ball",

@@ -4387,6 +4387,7 @@
     "fundraising.touch_wording_approved": "approved the wording of an automatic fundraiser email",
     "fundraising.touch_wording_withdrawn": "withdrew the wording of an automatic fundraiser email",
     "gasds.claimed": "marked a small donation claimed under GASDS (the small donations scheme)",
+    "gasds.unclaimed": "undid a small donation's claimed mark under GASDS, so it is back in the list",
     "ignored.dunning_noop": "found nothing to change on a monthly gift",
     "ignored.duplicate_charge": "skipped a payment it had already recorded",
     "ignored.duplicate_invoice": "skipped a monthly payment it had already recorded",

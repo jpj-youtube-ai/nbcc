@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 vi.setConfig({ testTimeout: 20_000 });
 import { readFileSync } from "node:fs";
@@ -216,6 +216,52 @@ describe("one part at a time on a phone", () => {
     (document.querySelector('#view-analytics [data-akpart="pages"]') as HTMLElement).click();
     expect((document.querySelector('#view-analytics [data-akpart-body="pages"]') as HTMLElement).hidden).toBe(false);
     expect((document.querySelector('#view-analytics [data-akpart-body="glance"]') as HTMLElement).hidden).toBe(true);
+  });
+});
+
+// TASK-643: on a laptop the bar is not shown, so every part must be. styles.css hides [hidden] with
+// !important, so no stylesheet can bring a hidden part back: the script takes the attribute off.
+describe("every part down the page on a laptop", () => {
+  type Listener = () => void;
+  function laptop(wide: boolean) {
+    const mq = { matches: wide, media: "(min-width: 861px)", listeners: [] as Listener[] };
+    const api = {
+      get matches() { return mq.matches; },
+      media: mq.media,
+      addEventListener: (_: string, fn: Listener) => mq.listeners.push(fn),
+      removeEventListener: () => undefined,
+      addListener: (fn: Listener) => mq.listeners.push(fn),
+      removeListener: () => undefined,
+    };
+    (window as unknown as { matchMedia: unknown }).matchMedia = (q: string) =>
+      q.includes("861px") ? api : { matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} };
+    return { set(w: boolean) { mq.matches = w; mq.listeners.forEach((fn) => fn()); } };
+  }
+  const shown = () =>
+    Array.from(document.querySelectorAll("#view-analytics [data-akpart-body]"))
+      .filter((p) => !(p as HTMLElement).hidden)
+      .map((p) => p.getAttribute("data-akpart-body"));
+
+  it("shows all six parts, none of them hidden, on a laptop", async () => {
+    laptop(true);
+    await openAnalytics();
+    expect(shown()).toEqual(["glance", "from", "where", "pages", "clicks", "devices"]);
+    expect((document.querySelector('#view-analytics [data-an-go="qr"]') as HTMLElement).closest("[hidden]")).toBeNull();
+  });
+
+  it("goes back to one part at a time when the window narrows to a phone's, and all again when it widens", async () => {
+    const screen = laptop(true);
+    await openAnalytics();
+    screen.set(false);
+    expect(shown()).toEqual(["glance"]);
+    (document.querySelector('[data-akpart="pages"]') as HTMLElement).click();
+    expect(shown()).toEqual(["pages"]);
+    screen.set(true);
+    expect(shown()).toHaveLength(6);
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { matchMedia?: unknown }).matchMedia;
   });
 });
 

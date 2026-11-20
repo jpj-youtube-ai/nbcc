@@ -7100,6 +7100,35 @@ its screen (`comingUp` in `src/admin/overview-coming-up.ts`). Each source carrie
 The card is hidden when nothing this person may see is coming up, and a source that fails is named
 in "Could not check" like the rest.
 
+## Analytics and QR codes fixed, and screens tested against the real server (TASK-643, 2026-11-20)
+
+Two faults from the 15 November refresh that the jsdom tests could not see, because jsdom never applies
+a stylesheet:
+
+- **Analytics on a laptop** showed only "At a glance": the bar of parts is hidden there, and the rule
+  meant to show every part (`#view-analytics .ak-part[hidden] { display: block }`) could never win over
+  `[hidden]{display:none !important}` in `assets/css/styles.css`. Where from, Where, Pages, Clicks and
+  Devices (and the links through to QR codes and Newsletter) could not be reached. Now `app.js` takes the
+  hidden attribute off every part when the window is laptop width (`anFitParts`, `(min-width: 861px)`)
+  and goes back to one part at a time when it narrows. The summary also says "The home page" again: the
+  server always names "/" as "Home page", so the old check for a missing name never ran.
+- **QR codes**: "Hidden codes (1)" had lost its open-and-close triangle (its `summary` was laid out as
+  flex), so it read as a heading. It is a list item again.
+
+`test/unit/admin-css-what-the-browser-does.test.ts` now fails any admin sheet that tries to show a
+`[hidden]` element, or lays out a `<summary>` as flex or grid without drawing its own marker.
+
+**Contract tests.** `test/unit/admin-analytics-contract.test.ts` and `admin-qr-contract.test.ts` (which
+also covers Site pages' "Make a QR code") feed the real `admin.html` and `app.js` in jsdom the answer the
+REAL route handler gives, with only the database stubbed: `test/unit/helpers/real-server.ts` stands in
+for the pool (rules of SQL fragment to rows) and calls a handler as a signed-in person (`callRoute`);
+`test/unit/helpers/real-rows.ts` holds invented rows in each table's own shape. A change to what a
+handler sends that the screen does not expect (or the other way round) now fails a test, which the
+hand-written answers in the other screen tests never could. To do the same for another screen: add its
+tables' rows to `real-rows.ts` (read the SQL its `src/db/` functions run), collect the replies in a
+`beforeAll` with `db.answer(rows)` and `callRoute(handler, { query, params, body })`, and mount the admin
+with `replyWith(replies)` from the shared harness.
+
 ## Admin refresh: Site pages, QR codes, Team, Manage access and My account (2026-11-14)
 
 The five screens of the Admin area in the kit's look (the class `ak`, `assets/css/admin-kit.css`), with

@@ -57,7 +57,8 @@
 #view-qr .set-qr-which { margin: 0; }
 #view-qr .set-qr-share, #view-qr .set-qr-change { margin: 2px 0 0; }
 #view-qr .qr-count b { color: var(--ov-holly); }
-#view-qr .qr-hidden summary { display: flex; align-items: center; min-height: 44px; }
+/* A list item, so the browser keeps its open-and-close triangle: as flex it read as a heading (TASK-643). */
+#view-qr .qr-hidden summary { display: list-item; min-height: 44px; padding: 11px 0; }
 #view-qr .set-sort { margin: 0 0 14px; }
 #view-qr .set-sort[hidden] { display: none; }
 #view-qr .set-quick { margin-top: 26px; }

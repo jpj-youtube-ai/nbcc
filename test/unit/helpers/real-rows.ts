@@ -376,3 +376,32 @@ export function teamRows(): Rule[] {
     ]],
   ];
 }
+
+/** Newsletter: newsletters with their event counts, one send's stats, and the audiences. count() comes back as a string. */
+export function newsletterRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  return [
+    // listNewsletters (the two counts from the events join are count(DISTINCT), so strings or null).
+    ["ev.delivered_count, ev.clicked_count", [
+      { id: 42, subject: "Spring appeal", body_html: "<p>Draft</p>", status: "draft", sent_at: null, recipient_count: null, sent_count: null, failed_count: null, failed_emails: null, redacted_at: null, audience: null, sent_by_email: null, delivered_count: null, clicked_count: null },
+      { id: 41, subject: "Our winter news", body_html: "<p>Hello</p>", status: "sent", sent_at: at("2026-11-02T10:00:00Z"), recipient_count: 120, sent_count: 118, failed_count: 2, failed_emails: ["typo@example.con"], redacted_at: null, audience: "Newsletter", sent_by_email: "fern@example.com", delivered_count: "110", clicked_count: "25" },
+    ]],
+    // getNewsletter.
+    ["WHERE n.id = $1", (p) => (Number(p[0]) === 41 ? [{ id: 41, subject: "Our winter news", body_html: "<p>Hello</p>", body_json: null, status: "sent", sent_at: at("2026-11-02T10:00:00Z"), recipient_count: 120, sent_count: 118, failed_count: 2, failed_emails: ["typo@example.con"], redacted_at: null, audience: "Newsletter", sent_by_email: "fern@example.com" }] : [])],
+    // getNewsletterStats.
+    ["AS sends FROM newsletter_sends", [{ sends: "118" }]],
+    ["CASE WHEN event_type = 'bounced'", [
+      { event_type: "delivered", n: "110", emails: null },
+      { event_type: "bounced", n: "2", emails: ["gone@example.com", "old@example.com"] },
+      { event_type: "clicked", n: "25", emails: null },
+      { event_type: "unsubscribed", n: "1", emails: null },
+    ]],
+    ["SELECT link_url, count(DISTINCT email) AS unique_clicks", [{ link_url: "https://nbcc.scot/donate", unique_clicks: "20", total_clicks: "31" }]],
+    // listSubscriberLists.
+    ["FROM subscriber_lists l WHERE l.archived_at IS NULL", [
+      { id: 1, slug: "newsletter", name: "Newsletter", kind: "everyone", visibility: "public", member_count: "300" },
+      { id: 2, slug: "donors", name: "Donors", kind: "donors", visibility: "private", member_count: "250" },
+      { id: 3, slug: "volunteers", name: "Volunteers", kind: "manual", visibility: "private", member_count: "12" },
+    ]],
+  ];
+}

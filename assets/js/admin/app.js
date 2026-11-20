@@ -4413,6 +4413,7 @@
     "invoice_settings.updated": "changed the invoice bank details",
     "newsletter.deleted": "deleted the newsletter {subject} | deleted a newsletter",
     "outreach.note_added": "added a note on {businessName} | added a note on a business",
+    "outreach.details_changed": "changed a business's details on Contact businesses",
     "outreach.nudge_sent": "sent {businessName} a reminder | sent a business a reminder",
     "outreach.outcome_recorded": "recorded how it went with {businessName} | recorded how it went with a business",
     "outreach.tps_checked": "checked {businessName} against the do not call list | checked a business against the do not call list",

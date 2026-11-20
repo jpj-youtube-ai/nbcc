@@ -285,3 +285,25 @@ export function outreachRows(): Rule[] {
     ["SELECT full_name, email FROM users", [{ full_name: "Fern Example", email: "fern@example.com" }]],
   ];
 }
+
+/** Admin > Thank you: donors with their largest paid gift, and thank_you_sent. SUM and COUNT come back as strings. */
+export function thankYouRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  const donor = (id: number, over: Record<string, unknown>) => ({
+    donor_id: id, full_name: "Rowan Example", business_name: null, donor_type: "individual", email: "rowan@example.com",
+    thankyou_consent: true, anonymous: false, max_amount: 150000, gift_aided: true, last_thanked_at: null,
+    since_thanked_pence: "0", since_thanked_gifts: "0", ...over,
+  });
+  return [
+    ["AS since_thanked_pence", [
+      donor(91, { full_name: "Robin Contact", business_name: "Pretend Bakery Ltd", donor_type: "company", email: "accounts@example.com", max_amount: 500000, gift_aided: false }),
+      donor(92, { last_thanked_at: at("2026-03-01T10:00:00Z"), since_thanked_pence: "25000", since_thanked_gifts: "2" }),
+      donor(93, { full_name: "Skye Pretend", email: null, max_amount: 120000 }),
+    ]],
+    [/FROM thank_you_sent\s+ORDER BY id DESC/, [
+      { id: 40, donor_id: 92, thank_you_name: "Rowan", addressed_to: "Rowan Example", recipient_email: "rowan@example.com", gift_type: "money", gift_amount_pence: 150000, gift_in_kind: null, gift_aided: true, personal_message: "Thank you so much.", signed_by_name: "Fern Example", signed_by_role: "Chair", sent_by: "fern@example.com", cc_email: null, sent_at: at("2026-03-01T10:00:00Z") },
+      { id: 39, donor_id: null, thank_you_name: "Friends at Madeup Garage", addressed_to: "Madeup Garage", recipient_email: "garage@example.com", gift_type: "in_kind", gift_amount_pence: null, gift_in_kind: "Two hampers for the raffle", gift_aided: false, personal_message: null, signed_by_name: "Fern Example", signed_by_role: "Chair", sent_by: "fern@example.com", cc_email: null, sent_at: at("2026-02-01T10:00:00Z") },
+    ]],
+    ["COUNT(*)::int AS count FROM thank_you_sent", [{ count: 2 }]],
+  ];
+}

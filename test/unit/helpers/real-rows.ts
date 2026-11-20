@@ -363,3 +363,16 @@ export function auditRows(): Rule[] {
     ["FROM admin_push_subscriptions WHERE user_id", [{ id: 1, userId: 1, endpoint: "https://push.example.com/a", p256dh: "k", auth: "a" }, { id: 2, userId: 1, endpoint: "https://push.example.com/b", p256dh: "k", auth: "a" }]],
   ];
 }
+
+/** Team and Manage access: the users table (permissions is jsonb: an object, or null for the role's usual access). */
+export function teamRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  return [
+    ["FROM users ORDER BY id DESC", [
+      { id: 6, email: "new.helper@example.com", full_name: "Sam Pretend", role: "viewer", status: "invited", invited_at: at("2026-11-18T10:00:00Z"), last_login_at: null, permissions: null },
+      { id: 4, email: "robin@example.com", full_name: "Robin Madeup", role: "editor", status: "active", invited_at: at("2026-01-05T10:00:00Z"), last_login_at: at("2026-11-19T08:30:00Z"), permissions: { stories: "edit", donations: "none" } },
+      { id: 3, email: "fern@example.com", full_name: "Fern Example", role: "admin", status: "active", invited_at: at("2025-06-01T10:00:00Z"), last_login_at: at("2026-11-20T09:00:00Z"), permissions: null },
+      { id: 2, email: "gone@example.com", full_name: "Morven Unreal", role: "editor", status: "disabled", invited_at: at("2025-03-01T10:00:00Z"), last_login_at: at("2025-09-01T10:00:00Z"), permissions: null },
+    ]],
+  ];
+}

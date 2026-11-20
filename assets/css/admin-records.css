@@ -34,10 +34,11 @@
 #view-analytics .an-more { min-height: 44px; }
 #view-analytics .rc-go { display: inline-flex; align-items: center; margin: 6px 0 0; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 #view-analytics .rc-go[hidden] { display: none; }
-/* On a laptop every part shows, one after another, and the bar is not needed. */
+/* On a laptop every part shows, one after another, and the bar is not needed. The parts are shown
+   by app.js taking their hidden attribute off (anFitParts): styles.css hides [hidden] with
+   !important, so a rule here could never show one (TASK-643). */
 @media (min-width: 861px) {
   #view-analytics .ak-parts { display: none; }
-  #view-analytics .ak-part[hidden] { display: block; }
 }
 
 /* ---- a phone ---- */

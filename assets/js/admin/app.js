@@ -24711,6 +24711,17 @@
   var AN_DAYS_KEY = "nbccAdminAnDays";
   var anDays = 30;
   var anParts = null;
+  // TASK-643: on a laptop every part shows, one after another, and the bar is not shown
+  // (admin-records.css). styles.css hides [hidden] with !important, so no stylesheet can bring a
+  // part back: the attribute itself comes off, and goes back on (one part at a time) on a phone.
+  var AN_LAPTOP = "(min-width: 861px)";
+  var anLaptop = null;
+  function anFitParts() {
+    if (!anLaptop || !anLaptop.matches) return;
+    Array.prototype.forEach.call(el("anParts").querySelectorAll("[data-akpart-body]"), function (p) {
+      p.hidden = false;
+    });
+  }
   var anSettings = null;
   var anReport = null;
   var anFailed = false;
@@ -24793,7 +24804,16 @@
     });
     el("anSwitchBtn").addEventListener("click", anFlipSwitch);
     el("anDownload").addEventListener("click", anDownload);
-    if (window.AdminKit && window.AdminKit.wireParts) anParts = window.AdminKit.wireParts(el("anParts"));
+    anLaptop = window.matchMedia ? window.matchMedia(AN_LAPTOP) : null;
+    if (window.AdminKit && window.AdminKit.wireParts) anParts = window.AdminKit.wireParts(el("anParts"), { onShow: anFitParts });
+    if (anLaptop) {
+      var onWidth = function () {
+        if (anLaptop.matches) anFitParts();
+        else if (anParts) anParts.show(anParts.current(), false);
+      };
+      if (anLaptop.addEventListener) anLaptop.addEventListener("change", onWidth);
+      else if (anLaptop.addListener) anLaptop.addListener(onWidth);
+    }
     // The days chosen last time in this visit (sessionStorage), else 30.
     try {
       var remembered = Number(sessionStorage.getItem(AN_DAYS_KEY));
@@ -25048,7 +25068,8 @@
       if (!best || r.views > best.views) best = r;
     });
     if (best && best.views) {
-      var name = best.path === "/" && !best.title ? "The home page" : anPage(best.path, best.title);
+      // The server always names "/" ("Home page", src/analytics/report.ts), so this is by its path.
+      var name = best.path === "/" ? "The home page" : anPage(best.path, best.title);
       said += " " + name + " was looked at most, with " + anNum(best.views) + (best.views === 1 ? " view." : " views.");
     }
     box.textContent = said;

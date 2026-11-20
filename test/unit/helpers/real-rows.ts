@@ -160,3 +160,50 @@ export function givingRows(): Rule[] {
     ]],
   ];
 }
+
+/** One donor's page (donor 7) and Search: donors, declarations, donations, subscription_dunning, audit_log. */
+export function donorRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  return [
+    // getDonorPortalSnapshot: EXISTS comes back a boolean.
+    ["AS subscription_plan", (p) => (Number(p[0]) === 7 ? [{
+      full_name: "Rowan Example", email: "rowan@example.com", email_consent: true, anonymous: false, hidden_from_supporters: false,
+      subscription_plan: "silver", subscription_id: "sub_pretend7", gift_aid: true,
+    }] : [])],
+    // getDonorAddress.
+    ["dn.billing_address, dn.billing_postcode", [{ donor_type: "individual", billing_address: null, billing_postcode: null, house_name_number: "12", address: "Pretend Row, Testtown", postcode: "KA1 1AA" }]],
+    // getActiveDeclarationForDonor.
+    ["WHERE donor_id = $1 AND revoked_at IS NULL", [{ id: 31, title: "Mx", first_name: "Rowan", last_name: "Example", house_name_number: "12", address: "Pretend Row, Testtown", postcode: "KA1 1AA", non_uk: false, scope: "all_donations", confirmed_taxpayer: true }]],
+    // getDonorGiving: the figures, then the gifts.
+    ["AS paid_count", [{ paid_count: 2, all_count: 3, total_pence: 5500, first_at: at("2025-12-24T18:00:00Z"), latest_at: at("2026-11-02T09:30:00Z") }]],
+    [/paid_in_by_organiser\s+ORDER BY/, [
+      { id: 90, donor_id: 7, created_at: at("2026-11-02T09:30:00Z"), amount_pence: 1000, refunded_amount_pence: 0, mode: "monthly", plan: "silver", gift_aid: true, payment_status: "paid", source: null, invoice_id: null },
+      { id: 89, donor_id: 7, created_at: at("2026-10-02T09:30:00Z"), amount_pence: 1000, refunded_amount_pence: 0, mode: "monthly", plan: "silver", gift_aid: true, payment_status: "failed", source: null, invoice_id: null },
+      { id: 40, donor_id: 4, created_at: at("2025-12-24T18:00:00Z"), amount_pence: 5000, refunded_amount_pence: 500, mode: "once", plan: null, gift_aid: false, payment_status: "paid", source: "red_bag", invoice_id: null },
+    ]],
+    // getDonorMonthlyGift.
+    ["WHERE stripe_subscription_id = $1", [{ status: "active", cancelled_at: null, lapsed_at: null, failed_attempts: 0 }]],
+    ["WHERE donor_id = $1 AND stripe_subscription_id = $2", [
+      { amount_pence: 1000, created_at: at("2026-11-02T09:30:00Z") },
+      { amount_pence: 1000, created_at: at("2026-05-02T09:30:00Z") },
+    ]],
+    // listDonorAuditTrail.
+    ["entity IN ('donor', 'subscription')", [
+      { id: 9, actor: "admin:fern@example.com", action: "donor.updated", data: { fields: ["fullName", "email"] }, created_at: at("2026-11-10T16:05:00Z") },
+      { id: 8, actor: "donor", action: "declaration.created", data: { token: "pretend-secret-never-shown" }, created_at: at("2025-12-24T18:01:00Z") },
+    ]],
+    // Search (searchDonors, searchDeclarations, searchDonations).
+    ["dn.business_name, dn.email, dn.anonymous", [
+      { id: 7, donor_type: "individual", full_name: "Rowan Example", business_name: null, email: "rowan@example.com", anonymous: false },
+      { id: 12, donor_type: "company", full_name: "Robin Contact", business_name: "Pretend Bakery Ltd", email: null, anonymous: true },
+    ]],
+    ["SELECT id, donor_id, first_name, last_name, postcode, scope, revoked_at", [
+      { id: 31, donor_id: 7, first_name: "Rowan", last_name: "Example", postcode: "KA1 1AA", scope: "all_donations", revoked_at: null, created_at: at("2025-12-24T18:01:00Z") },
+      { id: 22, donor_id: 7, first_name: "Rowan", last_name: "Example", postcode: null, scope: "this_donation", revoked_at: at("2025-06-01T10:00:00Z"), created_at: at("2025-01-10T10:00:00Z") },
+    ]],
+    ["d.stripe_session_id ILIKE", [
+      { id: 90, donor_id: 7, donor_name: "Rowan Example", donor_email: "rowan@example.com", mode: "monthly", plan: "silver", amount_pence: 1000, currency: "gbp", gift_aid: true, claim_status: "eligible", payment_status: "paid", refunded_amount_pence: 0, payment_channel: "online", created_at: at("2026-11-02T09:30:00Z"), source: null, invoice_id: null },
+      { id: 40, donor_id: 4, donor_name: "Rowan Example", donor_email: "rowan@example.com", mode: "once", plan: null, amount_pence: 5000, currency: "gbp", gift_aid: false, claim_status: "not_eligible", payment_status: "paid", refunded_amount_pence: 500, payment_channel: "online", created_at: at("2025-12-24T18:00:00Z"), source: "red_bag", invoice_id: null },
+    ]],
+  ];
+}

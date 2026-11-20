@@ -333,3 +333,33 @@ export function storiesRows(): Rule[] {
     ]],
   ];
 }
+
+/** Audit (audit_log), Email audit (email_log: count(*) comes back as a string) and Notifications (admin_notify_prefs: time columns come back as "HH:MM:SS" text). */
+export function auditRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  const recent = (hoursAgo: number) => new Date(Date.now() - hoursAgo * 3_600_000);
+  const email = (id: number, over: Record<string, unknown>) => ({
+    id, kind: "receipt", recipient: "rowan@example.com", recipient_name: "Rowan Example", subject: "Thank you for your gift",
+    status: "sent", error: null, delivery_status: "delivered", delivery_at: recent(5), delivery_detail: null, created_at: recent(6),
+    removed_at: null, removed_by: null, removed_kind: null, ...over,
+  });
+  const bounced = email(31, { recipient: "gone@example.com", recipient_name: null, subject: "Our winter news", kind: "newsletter", delivery_status: "bounced", delivery_detail: "Mailbox does not exist", delivery_at: recent(2), created_at: recent(3) });
+  return [
+    // listAuditLog: the count, the page, the counts by entity, the people.
+    ["SELECT count(*)::int AS count FROM audit_log a", [{ count: 3 }]],
+    ["AS about_email", [
+      { id: 12, actor: "admin:fern@example.com", action: "donor.updated", entity: "donor", entity_id: 7, data: { fields: ["email"] }, created_at: at("2026-11-10T16:05:00Z"), actor_name: "Fern Example", about_name: null, about_email: null },
+      { id: 11, actor: "admin:fern@example.com", action: "user.invited", entity: "user", entity_id: 4, data: {}, created_at: at("2026-11-09T09:00:00Z"), actor_name: "Fern Example", about_name: "Sam Pretend", about_email: "sam@example.com" },
+      { id: 10, actor: "stripe", action: "subscription.payment_failed", entity: "subscription", entity_id: 7, data: {}, created_at: at("2026-11-01T03:00:00Z"), actor_name: null, about_name: null, about_email: null },
+    ]],
+    ["GROUP BY a.entity", [{ entity: "donor", count: 1 }, { entity: "user", count: 1 }, { entity: "subscription", count: 1 }]],
+    ["FROM (SELECT DISTINCT", [{ email: "fern@example.com", name: "Fern Example" }]],
+    // listEmailLog and listRecentEmailFailures.
+    ["SELECT count(*) AS n FROM email_log", [{ n: "3" }]],
+    [/removed_kind\s+FROM email_log l/, [bounced, email(30, {}), email(29, { kind: "sign_in", recipient: "fern@example.com", recipient_name: null, subject: "Your sign in code", status: "failed", error: "Provider refused the send", delivery_status: null, delivery_at: null, created_at: recent(30) })]],
+    ["now() - ($1 || ' days')", [bounced]],
+    // Notifications: this person's settings and phones.
+    ["FROM admin_notify_prefs WHERE user_id", [{ bundle: true, quiet_from: "22:00:00", quiet_to: "07:30:00", areas_off: ["newsletter"] }]],
+    ["FROM admin_push_subscriptions WHERE user_id", [{ id: 1, userId: 1, endpoint: "https://push.example.com/a", p256dh: "k", auth: "a" }, { id: 2, userId: 1, endpoint: "https://push.example.com/b", p256dh: "k", auth: "a" }]],
+  ];
+}

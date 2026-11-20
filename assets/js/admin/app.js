@@ -978,7 +978,9 @@
       el("pushPhoneCount").hidden = true;
     });
 
-    authFetch("/api/admin/push/prefs").then(j).then(function (prefs) {
+    // TASK-644: only a good answer is their settings. A failure read as settings drew everything off
+    // and every area ticked, and the next tick saved that over what they had chosen.
+    authFetch("/api/admin/push/prefs").then(okJson).then(function (prefs) {
       el("pushBundle").checked = !!prefs.bundle;
       el("pushQuietFrom").value = (prefs.quietFrom || "").slice(0, 5);
       el("pushQuietTo").value = (prefs.quietTo || "").slice(0, 5);

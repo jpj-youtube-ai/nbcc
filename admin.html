@@ -316,19 +316,39 @@
             </section>
 
             <!-- The individuals giving every month (TASK-447). -->
-            <section class="admin-view" id="view-monthly" aria-labelledby="monthly-heading" hidden>
+            <section class="admin-view ak" id="view-monthly" aria-labelledby="monthly-heading" hidden>
               <h2 id="monthly-heading">Monthly givers</h2>
-              <p class="fx-hint" style="padding-left:0">The people giving every month. Businesses have
-                their own tab; this is everybody else.</p>
-              <label class="admin-inline-filter" for="monthlyStateFilter">Show
-                <select id="monthlyStateFilter">
-                  <option value="giving">Still giving</option>
-                  <option value="attention">Needs attention</option>
-                  <option value="">Everyone</option>
-                </select>
-              </label>
+              <p class="admin-view-intro">The people giving every month: who is still giving, whose card is failing, who has not been thanked yet and who has no Gift Aid. Businesses have their own tab; this is everybody else.</p>
+              <!-- Tiles that count and filter (app.js, drawMonthlyTiles). Hidden until a list has come. -->
+              <ul class="ak-tiles" id="monthlyTiles" aria-label="Which givers to show" hidden></ul>
+              <div class="mg-tools">
+                <label class="ak-field" for="monthlyStateFilter"><span>Show</span>
+                  <select id="monthlyStateFilter">
+                    <option value="giving">Still giving</option>
+                    <option value="attention">Needs attention</option>
+                    <option value="thanks">Not thanked yet</option>
+                    <option value="giftaid">No Gift Aid</option>
+                    <option value="">Everyone</option>
+                  </select></label>
+                <label class="ak-field" for="monthlySearch"><span>Find a giver</span>
+                  <input type="search" id="monthlySearch" autocomplete="off" placeholder="Name or email" /></label>
+                <label class="ak-field" for="monthlySort"><span>Order</span>
+                  <select id="monthlySort">
+                    <option value="">Latest payment first</option>
+                    <option value="amount">Biggest monthly gift first</option>
+                    <option value="longest">Giving longest first</option>
+                    <option value="total">Given most first</option>
+                  </select></label>
+              </div>
               <p class="admin-action-status" id="monthlySummary" role="status" aria-live="polite"></p>
+              <p class="ak-hint mg-worth" id="monthlyWorth"></p>
               <div class="admin-table-wrap" id="monthlyTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div class="ak-actions mg-export">
+                <button class="admin-btn ak-btn--plain" type="button" id="monthlyCopyEmails">Copy everyone's email</button>
+                <button class="admin-btn ak-btn--plain" type="button" id="monthlyDownload">Download the spreadsheet</button>
+              </div>
+              <small class="ak-says">Both take the givers showing above, so choose a tile or search first to narrow them down.</small>
+              <p class="admin-action-status" id="monthlyToolsStatus" role="status" aria-live="polite"></p>
             </section>
 
             <!-- Fill a Red Bag: the list on the public page /fill (red-bag:view to look,
@@ -609,22 +629,42 @@
             <!-- Business supporters (TASK-208): fulfilment records for monthly business donations, and the
                  Editor+ mark buttons that record each recognition step as done. Reads/writes the
                  charity DB's business_supporter_fulfilment table via /api/admin/fulfilments (TASK-207). -->
-            <section class="admin-view" id="view-fulfilments" aria-labelledby="fulfilments-heading" hidden>
+            <section class="admin-view ak" id="view-fulfilments" aria-labelledby="fulfilments-heading" hidden>
               <h2 id="fulfilments-heading">Business supporters</h2>
-              <p class="admin-view-intro">Businesses giving monthly earn a recognition band and pick how they would like to be thanked. This is where the team fulfils that: check what each supporter asked for, then mark each step done once it is sorted. Every mark is logged to the Audit trail.</p>
-              <!-- Catch up invites (TASK-214): email the thank-you invite to any business supporters who
-                   signed up before invites were automatic and so never got their link. Safe to click more
-                   than once: it only emails supporters who have not been invited yet, so a second run
-                   sends none. POSTs /api/admin/business-supporters/backfill-invites. -->
-              <div class="admin-claim-actions" id="fulfilmentBackfillActions">
-                <button class="admin-btn" type="button" id="backfillInvitesBtn">Send catch up invites</button>
-                <span class="admin-action-status" id="backfillInvitesStatus" role="status" aria-live="polite"></span>
-              </div>
+              <p class="admin-view-intro">Look after the businesses that give every month: who is due a thank you call, what each one asked for, and what is still to do for them. Whatever you mark here is kept against your name in the Audit trail.</p>
               <!-- TASK-491: how many businesses are due a thank you call. Hidden while the list is
                    loading or could not load, so it never says "No calls due" when it does not know. -->
               <p class="fx-call-count" id="fulfilmentCallCount" role="status" aria-live="polite" hidden></p>
-              <div class="admin-table-wrap" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <p class="admin-action-status" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
+              <!-- Tiles that count and filter, and the search: drawn by app.js once the list has come, and
+                   hidden until then (and when it could not load), so nothing is ever counted from no list. -->
+              <ul class="ak-tiles" id="fulfilmentTiles" aria-label="Which businesses to show" hidden></ul>
+              <div class="sup-tools" id="fulfilmentTools" hidden>
+                <label class="ak-field" for="fulfilmentSearch"><span>Find a business</span>
+                  <input type="search" id="fulfilmentSearch" autocomplete="off" /></label>
+              </div>
+              <!-- A card per business that opens where it is (app.js, fulfilmentsList). Not a table in a
+                   box any more: nothing here can scroll sideways. -->
+              <div class="sup-list" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <!-- What just happened is said beside the button that was pressed, inside the open card.
+                   This line says the same words to a screen reader from one place that is never redrawn. -->
+              <p class="sr-only" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
+              <!-- Catch up invites (TASK-214): email the thank you invite to any business that has never
+                   been sent one. Safe to press more than once: nobody who has had it is emailed again.
+                   POSTs /api/admin/business-supporters/backfill-invites. It says under the button how
+                   many it will email, and asks first. -->
+              <div class="ak-card sup-catchup" id="fulfilmentBackfillActions">
+                <h3 class="ak-h3">Invites that never went</h3>
+                <button class="admin-btn ak-btn--plain" type="button" id="backfillInvitesBtn">Send catch up invites</button>
+                <small class="ak-says" id="backfillInvitesSays">This emails the thank you invite to every business that has not been sent one: a private link to a short form asking how they would like to be thanked. Nobody who has had it is emailed again.</small>
+                <div class="ak-notice sup-ask" id="backfillInvitesConfirm" hidden>
+                  <p id="backfillInvitesQuestion"></p>
+                  <div class="ak-actions">
+                    <button class="admin-btn" type="button" id="backfillInvitesYes">Yes, send them</button>
+                    <button class="admin-btn ak-btn--plain" type="button" id="backfillInvitesNo">Not now</button>
+                  </div>
+                </div>
+                <p class="admin-action-status" id="backfillInvitesStatus" role="status" aria-live="polite"></p>
+              </div>
             </section>
 
             <!-- TASK-619: phone notifications, per person and per phone. The warning sits ABOVE the
@@ -3145,11 +3185,18 @@
             <!-- Invoices for donations (docs/superpowers/specs/2026-11-05-donation-invoices-design.md). Anyone
                  who can view Donations sees the list; the form, the bank details and every button that
                  changes something are for Donations edit only. -->
-            <section class="admin-view" id="view-invoices" aria-labelledby="invoices-heading" hidden>
+            <section class="admin-view ak" id="view-invoices" aria-labelledby="invoices-heading" hidden>
               <h2 id="invoices-heading">Invoices</h2>
               <p class="admin-view-intro">Send an invoice to a person, a business or a group. They pay it by card from the link in their email, or by bank transfer, and once it is paid it comes through into Donations by itself, labelled with its invoice number. When a bank transfer arrives, press <b>Mark paid</b>.</p>
 
-              <form id="invNewForm" class="inv-new" autocomplete="off" novalidate hidden>
+              <!-- Tiles that count, total and filter (app.js, invDrawTiles). Each carries data-inv-filter, as the
+                   All / Waiting / Paid / Cancelled buttons did; Overdue has one of its own now. -->
+              <ul class="ak-tiles" id="invTiles" aria-label="Which invoices to show"></ul>
+              <!-- On a phone the list comes first: the form waits behind this one big button (editors only). On a
+                   laptop the button is hidden and the form always shows. -->
+              <button class="admin-btn inv-new-open" type="button" id="invNewOpen" aria-expanded="false" aria-controls="invNewWrap" hidden>Send an invoice</button>
+              <div class="inv-new-wrap" id="invNewWrap">
+              <form id="invNewForm" class="inv-new ak-panel" autocomplete="off" novalidate hidden>
                 <h3 class="inv-new-title">Send an invoice</h3>
                 <fieldset class="inv-kind">
                   <legend class="inv-field">Who is it for?</legend>
@@ -3227,10 +3274,11 @@
                 <p class="inv-actions"><button class="btn btn-primary" type="submit" id="invNewBtn">Send invoice</button></p>
                 <p class="ty-status" id="invNewStatus" role="status" aria-live="polite"></p>
               </form>
+              </div>
 
-              <details id="invBank" class="inv-bank" hidden>
+              <details id="invBank" class="inv-bank ak-fold" hidden>
                 <summary>Bank details on invoices <span id="invBankState" class="inv-bank-state"></span></summary>
-                <form id="invBankForm" class="inv-bank-form" autocomplete="off" novalidate>
+                <form id="invBankForm" class="inv-bank-form ak-fold__body" autocomplete="off" novalidate>
                   <p class="admin-help">Printed on every invoice that is still waiting, so people can pay by bank transfer. Until these are filled in, invoices offer card only.</p>
                   <label class="inv-field" for="invBankName">Account name</label>
                   <input id="invBankName" type="text" maxlength="70" />
@@ -3239,21 +3287,26 @@
                   <label class="inv-field" for="invBankNumber">Account number</label>
                   <input id="invBankNumber" type="text" inputmode="numeric" maxlength="10" />
                   <p class="inv-actions"><button class="btn btn-primary" type="submit">Save bank details</button>
-                    <button class="inv-quiet" type="button" id="invBankClear">Remove them</button></p>
+                    <button class="btn ak-btn--danger" type="button" id="invBankClear">Remove them</button></p>
+                  <small class="ak-says">Remove them takes the bank details off every invoice still waiting, so people can only pay by card. It asks first.</small>
+                  <div class="ak-notice inv-ask" id="invBankClearAsk" hidden>
+                    <p>Remove the bank details? Invoices still waiting will offer card only until you add them again.</p>
+                    <p class="inv-actions"><button class="btn ak-btn--danger" type="button" id="invBankClearYes">Yes, remove them</button>
+                      <button class="btn" type="button" id="invBankClearNo">Keep them</button></p>
+                  </div>
                   <p class="ty-status" id="invBankStatus" role="status" aria-live="polite"></p>
                 </form>
               </details>
 
               <div class="inv-head">
                 <h3 class="admin-subhead">Your invoices</h3>
-                <div class="admin-segmented inv-filter" role="group" aria-label="Show">
-                  <button type="button" class="admin-seg is-active" data-inv-filter="all" aria-pressed="true">All</button>
-                  <button type="button" class="admin-seg" data-inv-filter="waiting" aria-pressed="false">Waiting</button>
-                  <button type="button" class="admin-seg" data-inv-filter="paid" aria-pressed="false">Paid</button>
-                  <button type="button" class="admin-seg" data-inv-filter="cancelled" aria-pressed="false">Cancelled</button>
-                </div>
+                <label class="ak-field inv-search" for="invSearch"><span>Find an invoice</span>
+                  <input type="search" id="invSearch" autocomplete="off" placeholder="Name, email or number" /></label>
               </div>
               <div id="invList" class="inv-list" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              <div class="ak-actions inv-export"><button class="admin-btn ak-btn--plain" type="button" id="invDownload">Download the spreadsheet</button></div>
+              <small class="ak-says">The invoices showing above, for the treasurer: choose a tile or search first to narrow them down.</small>
+              <p class="admin-action-status" id="invToolsStatus" role="status" aria-live="polite"></p>
             </section>
 
             <section class="admin-view ak" id="view-qr" aria-labelledby="qr-heading" hidden>

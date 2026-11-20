@@ -558,7 +558,10 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     (document.querySelector('.admin-nav-link[data-view="fulfilments"]') as HTMLElement).click();
     await flush();
     await flush();
-    expect(document.querySelector("#fulfilmentsTable table")).not.toBeNull();
+    // A card per business that opens where it is, since the admin refresh of 2026-11-14: the table
+    // it used to be could not fit a phone (this line used to require "#fulfilmentsTable table").
+    expect(document.querySelector("#fulfilmentsTable table")).toBeNull();
+    expect(document.querySelectorAll("#fulfilmentsTable .ak-item")).toHaveLength(2);
 
     // The collapsed list answers the question the page is opened to ask: who still needs something?
     const listText = el("fulfilmentsTable").textContent || "";
@@ -609,16 +612,27 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     const markCalls = () =>
       fetchMock.mock.calls.filter((c) => /\/api\/admin\/fulfilments\/1\/mark$/.test(String(c[0])));
 
-    // Marking cannot be undone, so it asks first — and saying no writes nothing at all.
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    // Marking cannot be undone, so it asks first, and saying no writes nothing at all. The question
+    // is asked in the page, under the job, since the admin refresh (it was the browser's own box,
+    // which is never used now): Mark done only opens it, and its Yes is what writes.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     markBtn.click();
     await flush();
     expect(markCalls()).toHaveLength(0);
+    const ask = markBtn.closest(".fx-task")!.querySelector("[data-fx-ask]") as HTMLElement;
+    expect(ask.hidden).toBe(false);
+    expect(ask.textContent).toContain("Certificate posted");
+    expect(ask.textContent).toContain("Acme Ltd");
+    (ask.querySelector("[data-fx-ask-no]") as HTMLElement).click();
+    await flush();
+    expect(markCalls()).toHaveLength(0);
 
-    confirmSpy.mockReturnValue(true);
     markBtn.click();
+    (ask.querySelector("[data-fulfil-mark-yes]") as HTMLElement).click();
     await flush();
     await flush();
+    await flush();
+    expect(confirmSpy).not.toHaveBeenCalled();
 
     const markCall = markCalls()[0];
     expect(markCall).toBeTruthy();
@@ -2881,6 +2895,136 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         url: "/api/admin/invoices/bank",
         method: "PUT",
         body: { accountName: "Example Account", sortCode: "12-34-56", accountNumber: "12345678" },
+      });
+    });
+
+    // The admin refresh (2026-11-14, docs/superpowers/specs/2026-11-14-admin-refresh-supporters.md).
+    describe("in the kit's look", () => {
+      const tileN = (key: string) => (view().querySelector(`.ak-tile[data-inv-filter="${key}"] .ak-tile__n`) as HTMLElement).textContent;
+      const tileSays = (key: string) => (view().querySelector(`.ak-tile[data-inv-filter="${key}"] .ak-tile__says`) as HTMLElement).textContent;
+      const shown = () => [...view().querySelectorAll("[data-inv-id]")].map((c) => c.getAttribute("data-inv-id"));
+      const several = () => [
+        INV({ id: 1, number: "INV-0001", amountPence: 10000 }),
+        INV({ id: 2, number: "INV-0002", state: "overdue", dueOn: "2026-10-24", amountPence: 32050, orgName: "Exampletown Primary School", payerKind: "group" }),
+        INV({ id: 3, number: "INV-0003", status: "paid", state: "paid", paidOn: "2026-11-03", paidBy: "card", donationId: 321, amountPence: 5000 }),
+        INV({ id: 4, number: "INV-0004", status: "cancelled", state: "cancelled", amountPence: 2000 }),
+      ];
+
+      it("takes the kit's look", () => {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        expect(doc.getElementById("view-invoices")!.classList.contains("ak")).toBe(true);
+      });
+
+      it("counts, totals and filters with tiles, Overdue among them", async () => {
+        loginToken = tokenFor("admin");
+        list(several());
+        await open();
+        expect(tileN("waiting")).toBe("2");
+        expect(tileSays("waiting")).toContain("£420.50");
+        expect(tileN("overdue")).toBe("1");
+        expect(tileSays("overdue")).toContain("£320.50");
+        expect(tileN("paid")).toBe("1");
+        expect(tileSays("paid")).toContain("£50");
+        expect(tileN("cancelled")).toBe("1");
+        expect(tileN("all")).toBe("4");
+        (view().querySelector('[data-inv-filter="overdue"]') as HTMLElement).click();
+        expect(shown()).toEqual(["2"]);
+        expect(view().querySelector('[data-inv-filter="overdue"]')!.getAttribute("aria-pressed")).toBe("true");
+      });
+
+      it("finds an invoice by name or number", async () => {
+        loginToken = tokenFor("admin");
+        list(several());
+        await open();
+        const box = el("invSearch") as HTMLInputElement;
+        box.value = "school";
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        expect(shown()).toEqual(["2"]);
+        box.value = "inv-0003";
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        expect(shown()).toEqual(["3"]);
+        box.value = "nobody at all";
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        expect(el("invList").textContent).toContain("No invoice matches");
+      });
+
+      it("says more on each card: where it went, how often, how overdue, the note, and who made it", async () => {
+        loginToken = tokenFor("admin");
+        list([INV({ id: 2, state: "overdue", dueOn: "2026-10-24", note: "Thank you for your jumper day", sendCount: 2, lastSentAt: "2026-11-03T10:00:00Z", createdBy: "admin:fern@example.com" })]);
+        await open();
+        const text = (view().querySelector('[data-inv-id="2"]') as HTMLElement).textContent || "";
+        expect(text).toContain("sam@example.com");
+        expect(text).toContain("Emailed twice, last on 3 November");
+        expect(text).toContain("12 days overdue");
+        expect(text).toContain("Thank you for your jumper day");
+        expect(text).toContain("fern@example.com");
+        expect(text).not.toContain("admin:");
+      });
+
+      it("fills the form from an old invoice with Send another like this", async () => {
+        loginToken = tokenFor("admin");
+        list([INV({ id: 7, number: "INV-0007", payerKind: "group", orgName: "Example Church", contactName: "Rev Sample", email: "office@church.example.com", address: "1 Kirk Lane", postcode: "KA1 2BB", amountPence: 15050, description: "Carol service collection", note: "With thanks" })]);
+        await open();
+        (view().querySelector('[data-inv-again="7"]') as HTMLElement).click();
+        expect((view().querySelector('input[name="invKind"][value="group"]') as HTMLInputElement).checked).toBe(true);
+        expect((el("invOrgName") as HTMLInputElement).value).toBe("Example Church");
+        expect((el("invContactName") as HTMLInputElement).value).toBe("Rev Sample");
+        expect((el("invEmail") as HTMLInputElement).value).toBe("office@church.example.com");
+        expect((el("invAddress") as HTMLTextAreaElement).value).toBe("1 Kirk Lane");
+        expect((el("invAmount") as HTMLInputElement).value).toBe("150.50");
+        expect((el("invDescription") as HTMLInputElement).value).toBe("Carol service collection");
+        expect((el("invNote") as HTMLTextAreaElement).value).toBe("With thanks");
+        expect(el("invNewWrap").classList.contains("is-open")).toBe(true);
+        expect(el("invNewStatus").textContent).toContain("Filled in from INV-0007");
+        expect(invCalls).toEqual([]);
+      });
+
+      it("says what Mark paid does before it is done", async () => {
+        loginToken = tokenFor("admin");
+        list([INV()]);
+        await open();
+        (view().querySelector('[data-inv-markpaid="12"]') as HTMLElement).click();
+        expect((view().querySelector('[data-inv-paid-form="12"]') as HTMLElement).textContent).toContain("This puts it in Donations and emails their receipt.");
+      });
+
+      it("asks before removing the bank details, and says what stops", async () => {
+        loginToken = tokenFor("admin");
+        list([], { accountName: "Example Account", sortCode: "12-34-56", accountNumber: "12345678" });
+        await open();
+        expect(el("invBank").textContent).toContain("card only");
+        el("invBankClear").click();
+        await settle();
+        expect(invCalls).toEqual([]);
+        expect(el("invBankClearAsk").hidden).toBe(false);
+        (el("invBankClearYes") as HTMLElement).click();
+        await settle();
+        expect(invCalls).toEqual([{ url: "/api/admin/invoices/bank", method: "PUT", body: { clear: true } }]);
+      });
+
+      it("takes a paid invoice to its gift in Donations", async () => {
+        loginToken = tokenFor("admin");
+        list([INV({ id: 3, status: "paid", state: "paid", paidOn: "2026-11-03", paidBy: "card", donationId: 321 })]);
+        await open();
+        (view().querySelector('[data-inv-gift="3"]') as HTMLElement).click();
+        await settle();
+        expect(el("view-donations").hidden).toBe(false);
+        expect((el("donationsInvoiceFilter") as HTMLInputElement).checked).toBe(true);
+        expect((el("donationsSearch") as HTMLInputElement).value).toBe("sam@example.com");
+      });
+
+      it("downloads a spreadsheet of the invoices showing", async () => {
+        loginToken = tokenFor("admin");
+        const made: { name: string; rows: unknown[][] }[] = [];
+        (window as unknown as { AdminKit: unknown }).AdminKit = { downloadCsv: (name: string, rows: unknown[][]) => (made.push({ name, rows }), true) };
+        list(several());
+        await open();
+        (view().querySelector('[data-inv-filter="paid"]') as HTMLElement).click();
+        el("invDownload").click();
+        expect(made[0].name).toMatch(/^invoices-\d{4}-\d{2}-\d{2}\.csv$/);
+        expect(made[0].rows).toHaveLength(2);
+        expect(made[0].rows[1]).toContain("INV-0003");
+        expect(el("invToolsStatus").textContent).toBe("Downloaded 1 invoice.");
+        delete (window as unknown as { AdminKit?: unknown }).AdminKit;
       });
     });
 

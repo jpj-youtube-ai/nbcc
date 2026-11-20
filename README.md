@@ -6685,6 +6685,24 @@ one. The long text on that screen lives in the detail panel below.
 Verified by measuring where the first line of text starts in every cell of a row: all at 14px from
 the row top, against a name that wraps to two lines and a gift description that does not.
 
+## Admin refresh: Business supporters, Monthly givers, Invoices (2026-11-14)
+
+The three Giving screens in the kit's look (class `ak`; their own rules in `assets/css/admin-supporters.css`, pinned by
+`test/unit/admin-supporters-styles.test.ts`). Design: `docs/superpowers/specs/2026-11-14-admin-refresh-supporters.md`.
+
+- **Business supporters**: tiles that count and filter (Time to call, Things to do, Waiting for their form, Invite
+  not sent, All done, Everyone), whoever needs something first, Find a business, and a card per business that opens
+  in place in three parts (What to do, What they asked for, History) with Copy buttons, See their giving (Donations
+  view only), Next call and Stopped giving. Mark done, Mark as called and Send catch up invites ask in the page and
+  answer beside the button; catch up invites says how many it will email. No `window.confirm` left on the screen.
+  Tests: `admin-business-supporters-screen.test.ts`.
+- **Monthly givers**: the email on its own line, five tiles, Find a giver and Order, a next step with an Email them
+  link on anyone needing attention, Thank them, last paid and cancelled on, a year's worth (Gift Aid only as
+  "about"), Copy everyone's email and a spreadsheet of what is showing. Tests: `admin-monthly-givers-screen.test.ts`.
+- **Invoices**: tiles that count, total and filter (Overdue has its own), the form behind one button on a phone,
+  more on each card, Send another like this, a line under Mark paid and Remove them (which asks first), Find an
+  invoice, See it in Donations and a spreadsheet. Tests: the Invoices block of `admin-app.test.ts`.
+
 ## Monthly givers (TASK-447)
 
 Businesses have had a screen of their own since TASK-208. The people quietly paying £10 a month had

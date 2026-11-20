@@ -4,3 +4,184 @@
  * Only what the kit does not already give these screens. The kit's house rules hold here too: no
  * !important; nothing scrolls inside a box or sideways; motion only for someone happy with it,
  * moving only transform and opacity; 44px for anything pressed. A phone is below 860px. */
+
+/* ==== Business supporters, Monthly givers, Invoices (2026-11-14) ====
+ * Design: docs/superpowers/specs/2026-11-14-admin-refresh-supporters.md. House rules pinned by
+ * test/unit/admin-supporters-styles.test.ts: every rule is named through its own screen. The .fx-
+ * classes are shared with Get involved, so they are only ever restyled here through #view-fulfilments. */
+
+/* ---- all three: a tile fills its square, whatever it holds ---- */
+#view-fulfilments .ak-tiles > li, #view-monthly .ak-tiles > li, #view-invoices .ak-tiles > li { display: grid; min-width: 0; }
+
+/* ---- Business supporters ---- */
+#view-fulfilments .fx-call-count { margin: 0 0 14px; font-size: 1rem; font-weight: 700; color: var(--ov-soft); }
+#view-fulfilments .fx-call-count.is-due { color: var(--ov-crimson); }
+#view-fulfilments .sup-tools { display: grid; grid-template-columns: minmax(0, 24rem); margin: 0 0 18px; }
+#view-fulfilments .sup-tools[hidden] { display: none; }
+#view-fulfilments .sup-list { display: grid; gap: 12px; min-width: 0; }
+#view-fulfilments .fx-hint { margin: 0; padding: 0; font-size: 0.9rem; line-height: 1.5; color: var(--ov-soft); }
+#view-fulfilments .ak-group { margin: 6px 0 0; }
+/* The closed card: the name, then who and what they give, then where they are up to. */
+#view-fulfilments .admin-fulfil-biz { display: block; font-weight: 700; color: var(--ov-ink); }
+#view-fulfilments .admin-fulfil-sub { display: inline; font-size: inherit; color: var(--ov-soft); }
+#view-fulfilments .fx-call-pill { margin: 0; color: var(--ov-crimson); background: var(--ov-blush); }
+#view-fulfilments .sup-where { gap: 2px 14px; }
+#view-fulfilments .fx-state { font-size: 0.9rem; font-weight: 700; }
+#view-fulfilments .fx-state--todo { color: var(--ov-crimson); }
+#view-fulfilments .fx-state--waiting { color: var(--ov-gold-ink); }
+#view-fulfilments .fx-state--done { color: var(--ov-holly); }
+/* The open card: who they are, the bar of three parts, then one part's panels. */
+#view-fulfilments .sup-about { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; font-size: 0.95rem; font-weight: 600; color: var(--ov-ink); }
+#view-fulfilments .sup-email { display: inline-flex; align-items: center; min-height: 44px; color: var(--ov-maroon); font-weight: 600; text-underline-offset: 4px; overflow-wrap: anywhere; }
+#view-fulfilments .sup-email:hover { color: var(--ov-crimson); }
+/* The bar sits inside the card, so it is never pinned to the top of the screen. */
+#view-fulfilments .sup-parts { position: static; margin: 0; padding: 0 0 14px; background: none; border-bottom: 2px dashed var(--ov-rule); }
+#view-fulfilments .sup-part { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
+#view-fulfilments .sup-part[hidden] { display: none; }
+#view-fulfilments .sup-part > .fx-call, #view-fulfilments .sup-part > .fx-panel:only-child { grid-column: 1 / -1; }
+#view-fulfilments .fx-panel { min-width: 0; padding: 14px 16px 16px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-card); }
+#view-fulfilments .fx-panel h4 { margin: 0 0 10px; font-family: var(--ov-head); font-size: 1.08rem; font-weight: 700; letter-spacing: 0; line-height: 1.2; text-transform: none; color: var(--ov-ink); }
+#view-fulfilments .fx-letter { margin: 0 0 8px; font-size: 0.95rem; line-height: 1.5; }
+#view-fulfilments .fx-help, #view-fulfilments .fx-empty { font-size: 0.9rem; line-height: 1.5; color: var(--ov-soft); }
+/* A link inside a sentence stays the height of its line. */
+#view-fulfilments .fx-help .admin-link { min-height: 0; padding: 0; font-size: inherit; }
+#view-fulfilments .sup-go { margin: 0 0 10px; }
+#view-fulfilments .fx-row dt { font-size: 0.86rem; color: var(--ov-soft); }
+#view-fulfilments .fx-row dd { font-size: 0.95rem; color: var(--ov-text); }
+#view-fulfilments .fx-tel { display: inline-flex; align-items: center; min-height: 44px; color: var(--ov-maroon); text-underline-offset: 4px; }
+#view-fulfilments .fx-warn { color: var(--ov-crimson); }
+#view-fulfilments .sup-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; }
+/* The jobs: the words, then the button; the question it asks opens across the full width under both. */
+#view-fulfilments .fx-task { flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--ov-rule); }
+#view-fulfilments .fx-task:last-child { border-bottom: 0; }
+#view-fulfilments .fx-task-text { flex: 1 1 14rem; }
+#view-fulfilments .fx-task-label { font-size: 0.98rem; color: var(--ov-ink); }
+#view-fulfilments .fx-task-help { font-size: 0.86rem; line-height: 1.45; color: var(--ov-soft); }
+#view-fulfilments .fx-task-done { font-size: 0.9rem; color: var(--ov-holly); }
+#view-fulfilments .sup-ask { flex-basis: 100%; margin: 6px 0 0; }
+#view-fulfilments .sup-ask p { margin: 0; }
+#view-fulfilments .sup-ask p:first-child { font-weight: 700; }
+/* The call panel's two forms, and what each says once it is pressed. */
+#view-fulfilments .fx-call-forms { border-top: 2px dashed var(--ov-rule); }
+#view-fulfilments .fx-call-label { font-family: var(--ov-head); font-size: 0.98rem; font-weight: 700; color: var(--ov-ink); }
+#view-fulfilments textarea.fx-call-input { min-height: 88px; }
+#view-fulfilments .fx-call-status { margin: 4px 0 0; font-size: 0.92rem; font-weight: 600; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-fulfilments .fx-call-status.is-ok { color: var(--ov-holly); }
+#view-fulfilments .fx-call-status.is-error { color: var(--ov-crimson); font-weight: 700; }
+#view-fulfilments .fx-hist-what { color: var(--ov-ink); }
+#view-fulfilments .fx-hist-who, #view-fulfilments .fx-auto-detail { font-size: 0.84rem; color: var(--ov-soft); }
+#view-fulfilments .fx-auto-label { font-size: 0.95rem; color: var(--ov-ink); }
+/* The invites that never went: one button, what it does said under it, and its question. */
+#view-fulfilments .sup-catchup { max-width: 46rem; margin: 30px 0 0; }
+#view-fulfilments .sup-catchup .ak-h3 { margin: 0 0 12px; font-size: 1.15rem; }
+#view-fulfilments .sup-catchup .sup-ask { margin: 12px 0 0; }
+
+@media (max-width: 860px) {
+  #view-fulfilments .sup-part { grid-template-columns: minmax(0, 1fr); }
+  /* Three parts fit three across, even on the narrowest phone. */
+  #view-fulfilments .sup-parts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #view-fulfilments .fx-panel { padding: 12px 14px 14px; }
+  /* The job's words above its button here (admin.css stacks them): only as tall as the words. */
+  #view-fulfilments .fx-task-text { flex: 0 1 auto; }
+}
+
+/* ---- Monthly givers ---- */
+#view-monthly .mg-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 15rem)); gap: 12px 16px; margin: 0 0 14px; }
+#view-monthly .mg-tools select, #view-monthly .mg-tools input { width: 100%; }
+#view-monthly .mg-worth { margin: 0 0 16px; }
+#view-monthly .mg-worth:empty { display: none; }
+#view-monthly .mg-name { display: block; font-weight: 700; color: var(--ov-ink); overflow-wrap: anywhere; }
+/* The email is its own line under the name, a link to write to them (it ran on from the name). */
+#view-monthly .mg-email { display: inline-flex; align-items: center; min-height: 44px; font-size: 0.88rem; font-weight: 500; color: var(--ov-maroon); text-underline-offset: 4px; overflow-wrap: anywhere; word-break: break-word; }
+#view-monthly .mg-sub, #view-monthly .mg-when { display: block; font-size: 0.84rem; color: var(--ov-soft); }
+#view-monthly .mg-none { display: block; font-size: 0.86rem; color: var(--ov-soft); }
+#view-monthly .mg-cell { display: grid; justify-items: start; gap: 6px; }
+#view-monthly .mg-next { display: block; max-width: 34ch; font-size: 0.86rem; line-height: 1.45; color: var(--ov-text); }
+#view-monthly .mg-todo { font-weight: 600; color: var(--ov-gold-ink); }
+#view-monthly .fx-yes { font-weight: 600; color: var(--ov-holly); }
+#view-monthly .fx-no { color: var(--ov-soft); }
+#view-monthly .fx-state { font-weight: 700; }
+#view-monthly .fx-state--todo { color: var(--ov-crimson); }
+#view-monthly .fx-state--waiting { color: var(--ov-soft); }
+#view-monthly .fx-state--done { color: var(--ov-holly); }
+#view-monthly .mg-table td { vertical-align: top; }
+#view-monthly .mg-export { margin: 20px 0 0; }
+
+@media (max-width: 860px) {
+  #view-monthly .mg-tools { grid-template-columns: minmax(0, 1fr); }
+  #view-monthly .mg-next { max-width: none; }
+}
+#view-monthly .mg-table th:first-child { width: 19%; }
+#view-monthly .mg-table th:nth-child(8) { width: 20%; }
+#view-monthly .mg-table th:last-child { width: 5.5rem; }
+#view-monthly .ak-cards__lead .mg-email { font-family: var(--font-body, inherit); font-weight: 500; }
+#view-monthly .ak-cards__lead .mg-none { font-family: var(--font-body, inherit); font-weight: 400; }
+
+/* ---- Invoices ----
+ * admin.css draws this screen through #view-invoices; each rule here is as specific, and loaded later,
+ * so the kit's look wins without !important. */
+#view-invoices .inv-new { display: grid; gap: 4px; max-width: 680px; margin: 0 0 22px; padding: clamp(16px, 2.4vw, 26px); border: var(--ov-line); border-radius: 22px; background: var(--ov-card); box-shadow: var(--ov-pop-lg); }
+#view-invoices .inv-new[hidden] { display: none; }
+#view-invoices .inv-new-title { margin: 0 0 6px; font-family: var(--ov-head); font-size: 1.3rem; font-weight: 800; color: var(--ov-maroon); }
+#view-invoices .inv-field { font-family: var(--ov-head); font-size: 0.98rem; font-weight: 700; color: var(--ov-ink); }
+#view-invoices .inv-hint, #view-invoices .inv-optional { font-family: var(--font-body, sans-serif); font-size: 0.86rem; font-weight: 400; color: var(--ov-soft); }
+#view-invoices .inv-kind label { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 1rem; }
+#view-invoices .inv-kind input { width: 22px; height: 22px; accent-color: var(--ov-maroon); }
+#view-invoices .inv-new input[type="text"], #view-invoices .inv-new input[type="email"], #view-invoices .inv-new input[type="date"], #view-invoices .inv-new textarea,
+#view-invoices .inv-bank-form input, #view-invoices .inv-confirm input { min-height: 46px; padding: 8px 12px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); box-shadow: inset 2px 3px 0 rgba(58, 11, 11, 0.08); color: var(--ov-text); font-size: 1rem; }
+#view-invoices .inv-new input:focus, #view-invoices .inv-new textarea:focus, #view-invoices .inv-bank-form input:focus, #view-invoices .inv-confirm input:focus { border-color: var(--ov-ink); outline: 3px solid var(--ov-gold-ink); outline-offset: 2px; }
+#view-invoices .inv-money { color: var(--ov-maroon); }
+/* The button that opens the form, on a phone only; on a laptop the form always shows. */
+#view-invoices .inv-new-open { width: 100%; margin: 0 0 16px; min-height: 52px; font-size: 1.05rem; }
+#view-invoices .inv-new-open[hidden] { display: none; }
+#view-invoices .inv-bank { max-width: 680px; margin: 0 0 22px; padding: 0; border: var(--ov-thin); border-radius: 16px; background: var(--ov-card); }
+#view-invoices .inv-bank summary { min-height: 48px; padding: 10px 16px; color: var(--ov-ink); }
+#view-invoices .inv-bank-state { font-family: var(--font-body, sans-serif); font-size: 0.88rem; font-weight: 400; color: var(--ov-soft); }
+#view-invoices .inv-bank-form { max-width: 420px; padding: 14px 16px 16px; }
+#view-invoices .inv-ask { margin: 10px 0 0; }
+#view-invoices .inv-ask p { margin: 0; }
+#view-invoices .inv-head { align-items: end; margin: 26px 0 0; }
+#view-invoices .inv-search { width: min(100%, 22rem); }
+#view-invoices .inv-list { gap: 16px; margin: 14px 0 22px; }
+#view-invoices .inv-card { gap: 8px; padding: 16px 18px; border: var(--ov-line); border-radius: 18px; background: var(--ov-card); box-shadow: var(--ov-pop); }
+#view-invoices .inv-card.is-cancelled { background: var(--ov-warm); box-shadow: none; }
+#view-invoices .inv-num { color: var(--ov-soft); }
+#view-invoices .inv-pill { padding: 1px 9px; border: 2px solid currentColor; border-radius: 999px; background: var(--ov-gold-soft); color: var(--ov-gold-ink); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+#view-invoices .inv-pill--overdue { background: var(--ov-blush); color: var(--ov-crimson); }
+#view-invoices .inv-pill--paid { background: var(--ov-holly-soft); color: var(--ov-holly); }
+#view-invoices .inv-pill--paid-after-cancel { background: var(--ov-blush); color: var(--ov-crimson); }
+#view-invoices .inv-pill--cancelled { background: var(--ov-card); color: var(--ov-soft); }
+#view-invoices .inv-who { font-family: var(--ov-head); font-size: 1.15rem; color: var(--ov-ink); }
+#view-invoices .inv-sub, #view-invoices .inv-dates { color: var(--ov-soft); }
+#view-invoices .inv-amount { color: var(--ov-text); }
+#view-invoices .inv-amount b { font-family: var(--ov-head); color: var(--ov-ink); }
+#view-invoices .inv-warn { padding: 6px 10px; border: var(--ov-thin); border-radius: 10px; background: var(--ov-blush); color: var(--ov-ink); }
+#view-invoices .inv-facts { gap: 2px 12px; margin: 2px 0 0; padding: 10px 0 0; border-top: 2px dashed var(--ov-rule); }
+#view-invoices .inv-facts dt, #view-invoices .inv-facts dd { font-size: 0.88rem; }
+#view-invoices .inv-facts dt { align-self: center; }
+#view-invoices .inv-mail { display: inline-flex; align-items: center; min-height: 44px; color: var(--ov-maroon); text-underline-offset: 4px; overflow-wrap: anywhere; }
+#view-invoices .inv-note { white-space: pre-line; }
+/* The card's buttons are the kit's: admin.css drew them as thin outlines and underlined words. */
+#view-invoices .inv-card .admin-btn { min-height: 44px; border: var(--ov-thin); box-shadow: 2px 3px 0 var(--ov-ink); background: var(--ov-holly); color: var(--ov-on-dark); }
+#view-invoices .inv-card .admin-btn:hover { background: var(--ov-holly-dark); border-color: var(--ov-ink); }
+#view-invoices .inv-card .ak-btn--plain { background: var(--ov-card); color: var(--ov-ink); }
+#view-invoices .inv-card .ak-btn--plain:hover { background: var(--ov-hover); }
+#view-invoices .inv-card .ak-btn--danger { background: var(--ov-card); color: var(--ov-crimson); }
+#view-invoices .inv-card .ak-btn--danger:hover { background: var(--ov-blush); }
+#view-invoices .inv-quiet-row { gap: 10px; margin: 2px 0 0; }
+#view-invoices .inv-quiet { padding: 6px 14px; font-size: 0.88rem; text-decoration: none; }
+#view-invoices .inv-confirm { gap: 8px; padding: 12px 14px; border: var(--ov-thin); border-radius: 14px; background: var(--ov-gold-soft); }
+#view-invoices .inv-confirm p { font-size: 0.95rem; }
+#view-invoices .inv-confirm .ak-says { margin: 0; }
+#view-invoices .inv-export { margin: 4px 0 0; }
+
+@media (min-width: 861px) {
+  #view-invoices .inv-new-open { display: none; }
+}
+@media (max-width: 860px) {
+  /* The form waits behind its button, so the list comes first. */
+  #view-invoices .inv-new-wrap:not(.is-open) .inv-new { display: none; }
+  #view-invoices .inv-list { grid-template-columns: minmax(0, 1fr); }
+  #view-invoices .inv-facts { grid-template-columns: minmax(0, 1fr); }
+  #view-invoices .inv-facts dd { margin: 0 0 6px; }
+}

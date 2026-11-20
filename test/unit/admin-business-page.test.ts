@@ -296,8 +296,9 @@ describe("the thank-you letter, on the supporter's own panel", () => {
     expect(app2).toContain("fulfilmentLetter(r)");
   });
 
+  // In words ("6 March 2026") since the admin refresh of 2026-11-14; it was H.fmtDate's 06/03/2026.
   it("says when it went, not just that it did", () => {
-    expect(app2).toContain("H.fmtDate(r.thank_you_sent_at)");
+    expect(app2).toContain("fxDate(r.thank_you_sent_at)");
   });
 
   // "Did a person do that, or did the system?" is the question somebody will actually ask.

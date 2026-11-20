@@ -122,6 +122,17 @@ async function openRow(id: number) {
 }
 const pillFor = (id: number) =>
   document.querySelector(`[data-fulfil-toggle="${id}"] .fx-call-pill`) as HTMLElement | null;
+// Mark as called asks first, in the page, since the admin refresh (2026-11-14): submitting the form
+// opens the question under the button, and only its Yes button records the call.
+const callForm = (id: number) => document.querySelector(`[data-call-panel="${id}"] form[data-call-form]`) as HTMLFormElement;
+function pressMarkAsCalled(id: number) {
+  callForm(id).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+}
+async function markAsCalled(id: number) {
+  pressMarkAsCalled(id);
+  (callForm(id).querySelector("[data-call-yes]") as HTMLElement).click();
+  await settle();
+}
 
 beforeEach(() => {
   rows = [];
@@ -135,7 +146,9 @@ beforeEach(() => {
   window.localStorage.clear();
   document.body.innerHTML = bodyHtml;
   (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
-  window.confirm = () => true;
+  // The screen asks its questions in the page now. If it ever went back to the browser's own box,
+  // this answers no, and the tests that record a call would fail.
+  window.confirm = () => false;
   window.prompt = () => "";
   window.alert = () => undefined;
   (window as unknown as { formatReceived: (s: string) => string }).formatReceived = (s) => String(s);
@@ -228,10 +241,11 @@ describe("the Call panel", () => {
     await openSupporters();
     await openRow(1);
     const text = (document.querySelector('[data-call-panel="1"]') as HTMLElement).textContent || "";
-    expect(text).toContain("15/09/2026");
+    // Dates as people say them, since the admin refresh (they were 15/09/2026 and 15/12/2026).
+    expect(text).toContain("15 September 2026");
     expect(text).toContain("fern@example.com");
     expect(text).toContain("Asked about the ball");
-    expect(text).toContain("15/12/2026");
+    expect(text).toContain("15 December 2026");
   });
 
   it("shows the UK day of the call the server gives, not the UTC one", async () => {
@@ -239,8 +253,8 @@ describe("the Call panel", () => {
     await openSupporters();
     await openRow(1);
     const text = (document.querySelector('[data-call-panel="1"]') as HTMLElement).textContent || "";
-    expect(text).toContain("01/07/2026");
-    expect(text).not.toContain("30/06/2026");
+    expect(text).toContain("1 July 2026");
+    expect(text).not.toContain("30 June 2026");
   });
 
   it("says they have not been called yet", async () => {
@@ -274,16 +288,13 @@ describe("the Call panel", () => {
     await openSupporters();
     await openRow(1);
     (document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value = "  Very happy  ";
-    (document.querySelector('[data-call-panel="1"] form[data-call-form]') as HTMLFormElement).dispatchEvent(
-      new Event("submit", { cancelable: true, bubbles: true }),
-    );
-    await settle();
+    await markAsCalled(1);
     expect(posted).toEqual([{ url: "/api/admin/fulfilments/1/calls", method: "POST", body: { note: "Very happy" } }]);
     expect(pillFor(1)).toBeNull();
     expect(countLine().textContent).toBe("No calls due");
     const text = (document.querySelector('[data-call-panel="1"]') as HTMLElement).textContent || "";
     expect(text).toContain("Very happy");
-    expect(text).toContain("02/01/2027");
+    expect(text).toContain("2 January 2027");
     expect(text).toMatch(/call recorded/i);
   });
 
@@ -291,23 +302,39 @@ describe("the Call panel", () => {
     rows = [row(1, { callDue: true })];
     await openSupporters();
     await openRow(1);
-    (document.querySelector('[data-call-panel="1"] form[data-call-form]') as HTMLFormElement).dispatchEvent(
-      new Event("submit", { cancelable: true, bubbles: true }),
-    );
-    await settle();
+    await markAsCalled(1);
     expect(posted[0].body).toEqual({});
   });
 
-  it("does nothing if the confirm is cancelled", async () => {
-    window.confirm = () => false;
+  // It used to ask through the browser's own box. Now the question opens under the button, naming
+  // the business, and nothing is recorded until its Yes is pressed.
+  it("asks first in the page, naming the business, and records nothing until yes", async () => {
     rows = [row(1, { callDue: true })];
     await openSupporters();
     await openRow(1);
-    (document.querySelector('[data-call-panel="1"] form[data-call-form]') as HTMLFormElement).dispatchEvent(
-      new Event("submit", { cancelable: true, bubbles: true }),
-    );
+    const ask = callForm(1).querySelector("[data-call-ask]") as HTMLElement;
+    expect(ask.hidden).toBe(true);
+    pressMarkAsCalled(1);
+    await settle();
+    expect(ask.hidden).toBe(false);
+    expect(ask.textContent).toContain("Record a call to Business 1 today?");
+    expect(ask.textContent).toContain("This is recorded against your name and clears the reminder for 3 months.");
+    expect(posted).toEqual([]);
+  });
+
+  it("does nothing if the answer is Not yet, and keeps the note", async () => {
+    rows = [row(1, { callDue: true })];
+    await openSupporters();
+    await openRow(1);
+    const note = document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement;
+    note.value = "Half a thought";
+    pressMarkAsCalled(1);
+    (callForm(1).querySelector("[data-call-no]") as HTMLElement).click();
     await settle();
     expect(posted).toEqual([]);
+    expect((callForm(1).querySelector("[data-call-ask]") as HTMLElement).hidden).toBe(true);
+    expect((callForm(1).querySelector("[data-call-go]") as HTMLElement).hidden).toBe(false);
+    expect(note.value).toBe("Half a thought");
   });
 
   it("keeps the pill and the note, and says so, when the call could not be recorded", async () => {
@@ -317,10 +344,7 @@ describe("the Call panel", () => {
     await openRow(1);
     const note = document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement;
     note.value = "Left a message";
-    (document.querySelector('[data-call-panel="1"] form[data-call-form]') as HTMLFormElement).dispatchEvent(
-      new Event("submit", { cancelable: true, bubbles: true }),
-    );
-    await settle();
+    await markAsCalled(1);
     expect(pillFor(1)?.textContent).toBe("Time to call");
     expect(note.value).toBe("Left a message");
     expect((document.querySelector('[data-call-panel="1"] [data-call-status]') as HTMLElement).textContent).toMatch(
@@ -352,10 +376,7 @@ describe("the Call panel", () => {
     await openRow(1);
     (document.querySelector('[data-call-panel="1"] input[name="phone"]') as HTMLInputElement).value = "0131 496 0002";
     (document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value = "Rang them";
-    (document.querySelector('[data-call-panel="1"] form[data-call-form]') as HTMLFormElement).dispatchEvent(
-      new Event("submit", { cancelable: true, bubbles: true }),
-    );
-    await settle();
+    await markAsCalled(1);
     expect(pillFor(1)).toBeNull();
     expect((document.querySelector('[data-call-panel="1"] input[name="phone"]') as HTMLInputElement).value).toBe(
       "0131 496 0002",

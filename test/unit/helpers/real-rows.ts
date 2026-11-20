@@ -246,3 +246,42 @@ export function supporterRows(): Rule[] {
     ["FROM donation_invoice_settings", [{ account_name: "NBCC Pretend Account", sort_code: "00-00-00", account_number: "00000000" }]],
   ];
 }
+
+/**
+ * Contact businesses and one business's page: business_outreach, business_outreach_notes, donors.
+ * pg hands back a `date` column (ask_again_on) as a Date at local midnight, and timestamptz columns
+ * as Dates, whatever OutreachRow's types say.
+ */
+export function outreachRows(): Rule[] {
+  const at = (s: string) => new Date(s);
+  const business = (id: number, over: Record<string, unknown>) => ({
+    id, business_name: "Pretend Bakery Ltd", contact_name: "Robin Contact", contact_email: "hello@bakery.example.com",
+    contact_phone: "01234 000000", business_type: "company", note: null, owner: "Fern Example", sent_by: null, sent_at: null,
+    outcome: null, outcome_at: null, ask_again_on: null, last_engagement_at: null, created_at: at("2026-09-01T10:00:00Z"),
+    owner_email: "fern@example.com", warm_intro: null, ctps_checked_at: null, ctps_checked_by: null, donor_id: null,
+    sent_with_personal_message: null, nudge_sent_at: null, nudge_sent_by: null, tags: ["high street"],
+    details_source: "website_or_listing", consent_basis: null, consent_basis_recorded_by: null, consent_basis_recorded_at: null,
+    ...over,
+  });
+  const rows = [
+    business(23, { business_name: "Madeup Garage", contact_email: "garage@example.com", contact_phone: null, created_at: at("2026-10-20T10:00:00Z") }),
+    // Told us "not this year", and to ask again on a day now past: on the to do list as Ask again.
+    business(22, {
+      business_name: "Imaginary Florist", contact_email: "flowers@example.com", sent_by: "fern@example.com", sent_at: at("2026-03-01T10:00:00Z"),
+      outcome: "not_this_year", outcome_at: at("2026-03-10T10:00:00Z"), ask_again_on: new Date(2026, 9, 1), created_at: at("2026-02-20T10:00:00Z"),
+    }),
+    // Signed up, linked to the donor it became.
+    business(21, { sent_by: "fern@example.com", sent_at: at("2026-06-01T10:00:00Z"), outcome: "signed_up", outcome_at: at("2026-06-10T10:00:00Z"), donor_id: 81, sent_with_personal_message: true }),
+  ];
+  return [
+    ["FROM business_outreach ORDER BY created_at DESC", rows],
+    ["SELECT outcome, sent_at, owner_email FROM business_outreach", rows.map((r) => ({ outcome: r.outcome, sent_at: r.sent_at, owner_email: r.owner_email }))],
+    ["DISTINCT ON (outreach_id)", [{ outreach_id: 22, author: "fern@example.com", body: "Said to try again in the autumn.", created_at: at("2026-03-10T10:05:00Z") }]],
+    ["FROM business_outreach WHERE id = $1", (p) => rows.filter((r) => r.id === Number(p[0]))],
+    ["SELECT id, author, body, created_at FROM business_outreach_notes", (p) => (Number(p[0]) === 22 ? [{ id: 5, author: "fern@example.com", body: "Said to try again in the autumn.", created_at: at("2026-03-10T10:05:00Z") }] : [])],
+    ["AS name FROM donors WHERE id = $1", [{ id: 81, name: "Pretend Bakery Ltd" }]],
+    ["WHERE outcome IS NULL OR outcome NOT IN", rows.filter((r) => r.outcome !== "signed_up")],
+    ["AS raised_pence", rows.map((r) => ({ outcome: r.outcome, sent_at: r.sent_at, owner: r.owner, sent_with_personal_message: r.sent_with_personal_message, raised_pence: r.donor_id ? "15000" : "0" }))],
+    ["SELECT full_name, email FROM users", [{ full_name: "Fern Example", email: "fern@example.com" }]],
+  ];
+}

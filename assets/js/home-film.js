@@ -57,7 +57,32 @@
       if (cc) cc.setAttribute("aria-pressed", on ? "true" : "false");
     }
 
-    function start(withSound, fromStart) {
+    // Focus moves only for someone using the film, and never scrolls the page: someone reading further
+    // down while the silent film plays is left where they are. After a press, focus may already have
+    // dropped to the page because the pressed button has just hidden itself; that still counts.
+    function focusOn(el, afterPress) {
+      var a = doc.activeElement;
+      var using = root.contains(a) || (afterPress && (!a || a === doc.body));
+      if (!el || !using) return;
+      try {
+        el.focus({ preventScroll: true });
+      } catch (e) {
+        el.focus();
+      }
+    }
+
+    // Each start has a number. A refusal from an older one (a play cancelled by pressing Pause, say)
+    // must not undo what has happened since.
+    var run = 0;
+    function refused(mine, pressed) {
+      if (mine !== run) return;
+      set("idle");
+      if (pressed) focusOn(play, true);
+    }
+
+    function start(withSound, fromStart, pressed) {
+      run += 1;
+      var mine = run;
       if (fromStart) {
         try {
           video.currentTime = 0;
@@ -67,17 +92,19 @@
       }
       video.muted = !withSound;
       set(withSound ? "playing" : "muted");
+      // The button pressed has just hidden itself: keep the keyboard in the film, on Pause.
+      if (pressed) focusOn(pause, true);
       var p;
       try {
         p = video.play();
       } catch (e) {
         p = null;
-        set("idle");
+        refused(mine, pressed);
       }
       // A phone that will not play it (low power mode, say): its still and the big play button.
       if (p && typeof p.then === "function") {
         p.then(null, function () {
-          set("idle");
+          refused(mine, pressed);
         });
       }
     }
@@ -117,20 +144,21 @@
 
     if (sound) {
       sound.addEventListener("click", function () {
-        start(true, true);
+        start(true, true, true);
       });
     }
     if (pause) {
       pause.addEventListener("click", function () {
+        run += 1; // any play still starting is cancelled by this
         video.pause();
         set("paused");
-        if (play) play.focus();
+        focusOn(play, true);
       });
     }
     if (play) {
       play.addEventListener("click", function () {
-        if (state === "idle") return start(true, true);
-        start(!video.muted, false);
+        if (state === "idle") return start(true, true, true);
+        start(!video.muted, false, true);
       });
     }
     if (cc) {
@@ -140,12 +168,21 @@
     }
     if (again) {
       again.addEventListener("click", function () {
-        start(true, true);
+        start(true, true, true);
       });
     }
     video.addEventListener("ended", function () {
       set("ended");
-      if (fill) fill.focus();
+      focusOn(fill);
+    });
+    // The phone or browser pausing or playing it itself (another app, the lock screen, headphones
+    // out, a media key): the buttons follow. Browsers fire a pause just before the end; that is not one.
+    video.addEventListener("pause", function () {
+      if (video.ended || state === "idle" || state === "ended") return;
+      set("paused");
+    });
+    video.addEventListener("play", function () {
+      set(video.muted ? "muted" : "playing");
     });
 
     captions(true);

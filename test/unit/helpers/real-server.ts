@@ -31,6 +31,7 @@ export const CONFIG = {
   STRIPE_SECRET_KEY: "sk_test_placeholder",
   STRIPE_WEBHOOK_SECRET: "whsec_contract",
   PUBLIC_BASE_URL: "https://nbcc.scot",
+  PORTAL_BASE_URL: "https://nbcc.scot",
 };
 
 type Rows = Record<string, unknown>[];
@@ -39,17 +40,22 @@ export type Rule = [string | RegExp, Rows | ((params: unknown[]) => Rows)];
 
 const USERS_SQL = "FROM users WHERE id = $1";
 
-export type Who = { role?: "admin" | "editor" | "viewer"; permissions?: Record<string, string> | null; email?: string };
+export type Who = { role?: "admin" | "editor" | "viewer"; permissions?: Record<string, string> | null; email?: string; fullName?: string };
 
 let rules: Rule[] = [];
-let who: Required<Who> = { role: "admin", permissions: null, email: "pretend.admin@example.com" };
+const WHO: Required<Who> = { role: "admin", permissions: null, email: "pretend.admin@example.com", fullName: "Pretend Admin" };
+let who: Required<Who> = { ...WHO };
 /** Every query the handler ran, in order, for a test that wants to see them. */
 export const ran: { sql: string; params: unknown[] }[] = [];
 
 function answer(sql: string, params: unknown[] = []): { rows: Rows; rowCount: number } {
   ran.push({ sql, params });
   if (sql.includes(USERS_SQL)) {
-    const rows = [{ id: Number(params[0]), email: who.email, status: "active", role: who.role, permissions: who.permissions }];
+    // The users row as getUserAuthRow and getManagedUser (My account) read it.
+    const rows = [{
+      id: Number(params[0]), email: who.email, full_name: who.fullName, status: "active", role: who.role, permissions: who.permissions,
+      invited_at: null, last_login_at: null,
+    }];
     return { rows, rowCount: 1 };
   }
   for (const [match, out] of rules) {
@@ -76,7 +82,7 @@ export const db = {
   /** Sets the rows the database holds for this test (and who is signed in). */
   answer(next: Rule[], as: Who = {}) {
     rules = next;
-    who = { role: "admin", permissions: null, email: "pretend.admin@example.com", ...as };
+    who = { ...WHO, ...as };
     ran.length = 0;
   },
 };

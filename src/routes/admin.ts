@@ -240,6 +240,28 @@ import { sendTransferCancelled } from "../ball/transfer-send";
 // role-gated admin actions that consume it are TASK-106. Mounted in src/app.ts (after express.json).
 export const adminRouter = Router();
 
+// TASK-644: a handler on this router that throws answers 500, as its neighbours with their own
+// try/catch do. Express 4 does not catch a rejected async handler, and nothing in src catches an
+// unhandled rejection, so a database blip on one of the newsletter reads (which have no try/catch)
+// stopped the whole server instead of telling the screen. A handler that answers as before is
+// untouched; an error handler (four arguments) is passed through as it is.
+type AdminHandler = (req: Request, res: Response, next: (err?: unknown) => void) => unknown;
+function answersFailure(handler: AdminHandler): AdminHandler {
+  return (req, res, next) =>
+    Promise.resolve()
+      .then(() => handler(req, res, next))
+      .catch((err: unknown) => {
+        console.error(`admin ${req.method} ${req.path} failed:`, err instanceof Error ? err.message : err);
+        if (!res.headersSent) res.status(500).json({ error: "Admin is temporarily unavailable" });
+        else if (!res.writableEnded) res.end();
+      });
+}
+for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+  const add = adminRouter[method].bind(adminRouter) as (path: string, ...handlers: unknown[]) => unknown;
+  (adminRouter as unknown as Record<string, unknown>)[method] = (path: string, ...handlers: unknown[]) =>
+    add(path, ...handlers.map((h) => (typeof h === "function" && h.length < 4 ? answersFailure(h as AdminHandler) : h)));
+}
+
 // A dummy scrypt hash to verify against when the email is unknown, so an unknown-email request does
 // the same scrypt work as a known one — no user enumeration via response timing.
 const DUMMY_HASH =

@@ -54,6 +54,21 @@ const ROW_COLUMNS = `id, business_name, contact_name, contact_email, contact_pho
                      consent_basis,
                      consent_basis_recorded_by, consent_basis_recorded_at`;
 
+/**
+ * A `date` column as YYYY-MM-DD (TASK-644). pg hands one back as a Date at local midnight, not as
+ * text, and the to do rule reads it as text: a Date there broke the to do list and the business's
+ * page for every business with an ask again date. Read with the local getters, as pg built it.
+ */
+function dateOnly(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return null;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+  }
+  return String(v).slice(0, 10);
+}
+
 function toRow(r: Record<string, unknown>): OutreachRow {
   return {
     id: r.id as number,
@@ -83,7 +98,7 @@ function toRow(r: Record<string, unknown>): OutreachRow {
     sentAt: (r.sent_at as string) ?? null,
     outcome: (r.outcome as string) ?? null,
     outcomeAt: (r.outcome_at as string) ?? null,
-    askAgainOn: (r.ask_again_on as string) ?? null,
+    askAgainOn: dateOnly(r.ask_again_on),
     lastEngagementAt: (r.last_engagement_at as string) ?? null,
     createdAt: r.created_at as string,
   };

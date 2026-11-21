@@ -7129,6 +7129,31 @@ tables' rows to `real-rows.ts` (read the SQL its `src/db/` functions run), colle
 `beforeAll` with `db.answer(rows)` and `callRoute(handler, { query, params, body })`, and mount the admin
 with `replyWith(replies)` from the shared harness.
 
+**Contract tests for every refreshed screen (TASK-644).** One `test/unit/admin-*-contract.test.ts` per
+area: `giving` (Claims, GASDS, monthly gifts that need attention; mounted with `helpers/giving-screen.ts`),
+`donor` (one donor's page and Search), `supporters` (Business supporters, Monthly givers, Invoices),
+`outreach` (Contact businesses and one business's page), `thank-you`, `stories` (Stories and Partners;
+the stories database is stubbed the same way), `audit` (Audit, Email audit, Notifications), `team` (Team,
+Manage access, My account) and `newsletter` (Overview, All newsletters, Results, Audiences). Each checks
+the names, amounts, dates, counts and statuses the screen draws from the real handler's answer, and what
+it says when the read fails. `real-rows.ts` gained a rows function per area and a `down(sql)` rule for a
+query that fails; `real-server.ts` gives the signed-in person a name (My account reads it) and
+`PORTAL_BASE_URL`. What they found, now fixed:
+
+- **Business supporters**: an open card never showed the business's email or "Gives £50 a month". The
+  screen read `donor_email` and `monthly_pence`, which the list route never sent;
+  `listBusinessFulfilments` now selects both (the latest paid monthly amount).
+- **Contact businesses**: pg hands back `ask_again_on` (a `date` column) as a Date, and the to do rule
+  read it as text. Once any business had an ask again date, the to do list said "Could not load this
+  list." and that business's page "Could not load that business." `toRow` now makes it `YYYY-MM-DD`.
+- **Notifications**: a failed read of the person's settings was drawn as their settings (bundling off,
+  no quiet time, every area ticked), and the next tick saved that over what they had chosen. It now says
+  "Could not load your settings."
+- **Newsletter** (and any other admin route without its own try/catch): a database error in a handler
+  rejected a promise nothing caught, which stops the server (Express 4; src has no
+  `unhandledRejection` handler). `adminRouter` now wraps every handler so one that throws answers 500
+  "Admin is temporarily unavailable".
+
 ## Admin refresh: Site pages, QR codes, Team, Manage access and My account (2026-11-14)
 
 The five screens of the Admin area in the kit's look (the class `ak`, `assets/css/admin-kit.css`), with

@@ -437,6 +437,19 @@ When("I preview the current block document", async function () {
   this.previewHtml = r.json.html || "";
 });
 
+// TASK-645: the composer's preview for a typed name, with preview text, reading the subject both ways.
+When("I preview the current block document as {string} with preview text {string} and subject {string}", async function (name, preheader, subject) {
+  const bodyJson = { ...SAMPLE_DOC, preheader };
+  const r = await authFetch("/api/admin/newsletters/preview", "POST", { bodyJson, firstName: name, subject }, this.token);
+  this.previewStatus = r.status;
+  this.previewHtml = r.json.html || "";
+  this.previewSubjects = r.json.subjects || {};
+});
+
+Then("the preview subject for someone with no name should be {string}", function (expected) {
+  assert.strictEqual(this.previewSubjects.unnamed, expected);
+});
+
 // TASK-469: a text block's paragraphs and line breaks reach the preview (and so the email).
 When("I preview a block document whose text reads:", async function (text) {
   const bodyJson = { blocks: [{ type: "text", variant: 0, data: { text } }] };

@@ -557,8 +557,14 @@ describe("newsletters: nothing reads a failure as all clear (TASK-476)", () => {
     served["/api/admin/newsletters"] = [draft];
     served["/api/admin/newsletters/1"] = draft;
     failing["POST /api/admin/newsletters/preflight"] = SERVER_DOWN;
+    served["/api/admin/subscriber-lists"] = [audience];
     await signIn();
     await open("newsletter");
+    // TASK-645: Send goes only to an audience chosen on the Who step.
+    (document.querySelector('.nl-cp-step[data-nl-panel="nlPanelWho"]') as HTMLElement).click();
+    await settle();
+    (document.querySelector('[data-aud-card="' + audience.id + '"]') as HTMLElement).click();
+    await settle();
     el("newsletterSend").click();
     await settle();
     const preflight = document.querySelector(".nl-modal .nl-preflight") as HTMLElement;

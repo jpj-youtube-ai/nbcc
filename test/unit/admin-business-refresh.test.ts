@@ -742,3 +742,154 @@ describe("nothing on the page was lost", () => {
     }
   });
 });
+
+// TASK-647: change a business's details from its own page. The route (TASK-633) refuses a changed
+// email address, so the form shows the address and never offers to edit it.
+describe("changing a business's details from its page", () => {
+  const field = (id: string) => el(id) as HTMLInputElement;
+  const patches = () => sent("PATCH", "/api/admin/outreach/1");
+  beforeEach(() => {
+    businesses = [
+      biz(1, {
+        businessName: "First Firm", contactName: "Robin Example", contactEmail: "robin@example.com", contactPhone: "01234 000000",
+        warmIntro: "Sarah knows the owner", owner: "Fern Example", ownerEmail: ME, tags: ["chamber", "supplier"],
+      }),
+      biz(2, { businessName: "Second Firm" }),
+    ];
+  });
+  async function openEdit(id = 1) {
+    await signIn();
+    await openFromList(id);
+    await press(partBtn("details"));
+  }
+
+  it("shows the form to someone who may edit, filled in, with the email as text only", async () => {
+    await openEdit();
+    expect(el("businessEditFold").hidden).toBe(false);
+    expect(field("businessEditName").value).toBe("First Firm");
+    expect(field("businessEditContact").value).toBe("Robin Example");
+    expect(field("businessEditPhone").value).toBe("01234 000000");
+    expect(field("businessEditIntro").value).toBe("Sarah knows the owner");
+    expect(field("businessEditTags").value).toBe("chamber, supplier");
+    expect((el("businessEditOwner") as HTMLSelectElement).value).toBe(ME);
+    expect(text(el("businessEditEmail"))).toBe("robin@example.com");
+    expect(el("businessEditForm").querySelector('input[type="email"]')).toBeNull();
+    expect(text(el("businessEditForm"))).toContain("The email address cannot be changed here, because what they agreed to is recorded against it. To use a new address, add them again.");
+    expect(text(el("businessEditForm"))).toContain("A new phone number has to be checked against the Telephone Preference Service again before anyone rings it.");
+  });
+
+  it("does not show it to someone who may only look", async () => {
+    onlyLooks();
+    await openEdit();
+    expect(el("businessEditFold").hidden).toBe(true);
+    expect(text(partBody("details"))).toContain("Kind of business");
+  });
+
+  it("sends only what changed", async () => {
+    await openEdit();
+    field("businessEditPhone").value = " 01234 111111 ";
+    await submit("businessEditForm");
+    expect(patches()).toHaveLength(1);
+    expect(patches()[0].body).toEqual({ contactPhone: "01234 111111" });
+  });
+
+  it("sends an emptied box as empty, to clear it, and the carer's name and address together", async () => {
+    await openEdit();
+    field("businessEditIntro").value = "";
+    const owner = el("businessEditOwner") as HTMLSelectElement;
+    owner.value = "rowan@example.com";
+    await submit("businessEditForm");
+    expect(patches()[0].body).toEqual({ warmIntro: "", owner: "Rowan Example", ownerEmail: "rowan@example.com" });
+  });
+
+  it("never sends the email address, even if the page is tampered with", async () => {
+    await openEdit();
+    field("businessEditName").value = "First Firm Ltd";
+    await submit("businessEditForm");
+    expect(patches()[0].body).not.toHaveProperty("contactEmail");
+  });
+
+  it("sends nothing when nothing changed, and says so", async () => {
+    await openEdit();
+    await submit("businessEditForm");
+    expect(patches()).toHaveLength(0);
+    expect(text(el("businessEditStatus"))).toBe("Nothing has changed yet.");
+  });
+
+  it("says it is saved beside Save, and reads the business again", async () => {
+    await openEdit();
+    field("businessEditName").value = "First Firm Ltd";
+    const readsBefore = sent("GET", "/api/admin/outreach/1").length;
+    await submit("businessEditForm");
+    expect(text(el("businessEditStatus"))).toBe("Saved.");
+    expect(el("businessEditStatus").className).toContain("is-ok");
+    expect(el("businessEditStatus").className).not.toContain("err ");
+    expect(sent("GET", "/api/admin/outreach/1").length).toBe(readsBefore + 1);
+    expect(text(el("business-heading"))).toBe("First Firm Ltd");
+    expect(field("businessEditName").value).toBe("First Firm Ltd");
+  });
+
+  for (const [status, words] of [[400, "That email address does not look right"], [500, "Admin is temporarily unavailable"]] as const) {
+    it("shows the server's words beside Save for a " + status, async () => {
+      await openEdit();
+      patchAnswer = { status, body: { error: words } };
+      field("businessEditName").value = "Changed";
+      await submit("businessEditForm");
+      expect(text(el("businessEditStatus"))).toBe(words);
+      expect(el("businessEditStatus").className).toContain("is-error");
+      expect(el("businessEditStatus").className).not.toMatch(/(^| )err( |$)/);
+    });
+  }
+
+  it("shows a 409 with the businesses that said no, and saves anyway only once it is ticked", async () => {
+    await openEdit();
+    patchAnswer = { status: 409, body: { error: "This business has told us not to contact them again", matches: [{ id: 9, confidence: "high", businessName: "Said No Ltd", reason: "Same name" }] } };
+    field("businessEditName").value = "Said No Ltd";
+    await submit("businessEditForm");
+    expect(text(el("businessEditStatus"))).toBe("This business has told us not to contact them again");
+    expect(text(el("businessEditMatches"))).toContain("Said No Ltd");
+    expect(patches()[0].body).not.toHaveProperty("acknowledgedMatches");
+    // Not ticked: not sent again.
+    await submit("businessEditForm");
+    expect(patches()).toHaveLength(1);
+    expect(text(el("businessEditStatus"))).toContain("different business");
+    (document.getElementById("businessEditAck") as HTMLInputElement).checked = true;
+    patchAnswer = null;
+    await submit("businessEditForm");
+    expect(patches()).toHaveLength(2);
+    expect(patches()[1].body).toMatchObject({ businessName: "Said No Ltd", acknowledgedMatches: true });
+    expect(text(el("businessEditStatus"))).toBe("Saved.");
+  });
+
+  it("shows a 409 that has no matches (a business that said no keeps its name) with no offer to save anyway", async () => {
+    await openEdit();
+    patchAnswer = { status: 409, body: { error: "This business asked us not to contact them again, so its name and email address are kept as they are" } };
+    field("businessEditName").value = "Other";
+    await submit("businessEditForm");
+    expect(text(el("businessEditStatus"))).toContain("kept as they are");
+    expect(document.getElementById("businessEditAck")).toBeNull();
+  });
+
+  it("escapes what the server sends back", async () => {
+    await openEdit();
+    patchAnswer = { status: 409, body: { error: "No", matches: [{ id: 9, confidence: "high", businessName: "<img src=x onerror=alert(1)>", reason: "<b>x</b>" }] } };
+    field("businessEditName").value = "Changed";
+    await submit("businessEditForm");
+    expect(el("businessEditMatches").querySelector("img")).toBeNull();
+    expect(el("businessEditMatches").querySelector("b")).toBeNull();
+  });
+
+  it("throws away an answer that arrives after another business has been opened", async () => {
+    holdPaths = ["PATCH /api/admin/outreach/1"];
+    await openEdit();
+    field("businessEditName").value = "Changed";
+    await submit("businessEditForm");
+    await press(el("businessBack"));
+    await openFromList(2);
+    held["PATCH /api/admin/outreach/1"].release();
+    await settle();
+    expect(text(el("businessEditStatus"))).toBe("");
+    expect(text(el("business-heading"))).toBe("Second Firm");
+    expect(field("businessEditName").value).toBe("Second Firm");
+  });
+});

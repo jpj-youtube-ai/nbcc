@@ -2819,6 +2819,55 @@
                 <div class="ak-part" data-akpart-body="details" role="region" aria-label="Their details" hidden>
                   <p class="ak-part-intro">The rest of what was recorded when they were added.</p>
                   <div id="businessMore" aria-live="polite"></div>
+
+                  <!-- TASK-647: change a business's details. For someone who may edit Contact businesses
+                       only (app.js shows it). The email address is shown, never edited: what they agreed
+                       to is recorded against it. -->
+                  <details class="ak-fold" id="businessEditFold" hidden>
+                    <summary>Change their details</summary>
+                    <form class="ak-stack biz-edit-form" id="businessEditForm" autocomplete="off">
+                      <div class="ty-row">
+                        <div class="ty-field">
+                          <label for="businessEditName">Business name</label>
+                          <input id="businessEditName" type="text" maxlength="200" />
+                        </div>
+                        <div class="ty-field">
+                          <label for="businessEditContact">Contact name</label>
+                          <input id="businessEditContact" type="text" maxlength="120" />
+                        </div>
+                      </div>
+                      <div class="ty-field">
+                        <p class="biz-edit-label">Email address</p>
+                        <p id="businessEditEmail" class="biz-edit-email"></p>
+                        <span class="ty-hint">The email address cannot be changed here, because what they agreed to is recorded against it. To use a new address, add them again.</span>
+                      </div>
+                      <div class="ty-row">
+                        <div class="ty-field">
+                          <label for="businessEditPhone">Phone</label>
+                          <input id="businessEditPhone" type="tel" maxlength="40" />
+                        </div>
+                        <div class="ty-field">
+                          <label for="businessEditOwner">Looked after by</label>
+                          <select id="businessEditOwner"></select>
+                        </div>
+                      </div>
+                      <div class="ty-field">
+                        <label for="businessEditIntro">Who do we know that knows them?</label>
+                        <input id="businessEditIntro" type="text" maxlength="400" />
+                      </div>
+                      <div class="ty-field">
+                        <label for="businessEditTags">Tags</label>
+                        <input id="businessEditTags" type="text" maxlength="400" placeholder="e.g. chamber, supplier" />
+                        <span class="ty-hint">A few words, separated by commas.</span>
+                      </div>
+                      <div id="businessEditMatches" aria-live="polite"></div>
+                      <p class="ty-controls">
+                        <button class="admin-btn" type="submit" id="businessEditSave">Save the changes</button>
+                        <span class="ty-status" id="businessEditStatus" role="status" aria-live="polite"></span>
+                      </p>
+                      <span class="ak-says">Saves the changes. A new phone number has to be checked against the Telephone Preference Service again before anyone rings it.</span>
+                    </form>
+                  </details>
                 </div>
 
                 <div class="ak-part" data-akpart-body="hold" role="region" aria-label="If they ask what we hold" hidden>

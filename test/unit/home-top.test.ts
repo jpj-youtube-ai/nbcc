@@ -38,6 +38,7 @@ const mainChildren = (html: string) => {
 };
 const label = (el: Element) => {
   if (el.matches("a.ball-banner")) return "banner";
+  if (el.matches("section.hf[data-home-film]")) return "film";
   if (el.matches("section.hero")) return "hero";
   if (el.matches("section.home-lane")) return "tags";
   if (el.matches("section.ball-home-feature")) return "feature";
@@ -56,9 +57,11 @@ describe("the Ball's promotion still lands on the new home page", () => {
     expect(count(HOME, "      " + AFTER_HERO_ANCHOR)).toBe(1);
   });
 
-  it("puts the page in the order hero, the four tags, the Ball feature, then the rest", () => {
+  // Freddie's film (21 November 2026) is the first thing in the page now. The promotion only ever ran
+  // before the Ball (the home page goes out without it after), so its banner would sit above the film.
+  it("puts the page in the order film, hero, the four tags, the Ball feature, then the rest", () => {
     const order = mainChildren(renderHomePromo(HOME, { gateOpen: true })).map(label);
-    expect(order.slice(0, 6)).toEqual(["banner", "hero", "tags", "feature", "what we do", "year round"]);
+    expect(order.slice(0, 7)).toEqual(["banner", "film", "hero", "tags", "feature", "what we do", "year round"]);
   });
 
   it("draws the banner, the feature and the menu item exactly once", () => {
@@ -73,9 +76,12 @@ describe("the Ball's promotion still lands on the new home page", () => {
 
   // The promotion's own rule, ".ball-banner + .hero", stops the hero clearing the nav a second
   // time. It only applies if the hero is still a .hero sitting straight after the banner.
-  it("leaves the hero directly after the banner, so the promotion's spacing rule still applies", () => {
+  // With the film first, the film clears the nav and the hero follows it (home-film.css, ".hf + .hero").
+  it("leaves the hero directly after the film, so the hero does not clear the nav a second time", () => {
     const doc = docOf(renderHomePromo(HOME, { gateOpen: true }));
-    expect(doc.querySelector("a.ball-banner")?.nextElementSibling?.matches("section.hero")).toBe(true);
+    expect(doc.querySelector("a.ball-banner")?.nextElementSibling?.matches("section.hf")).toBe(true);
+    expect(doc.querySelector("section.hf")?.nextElementSibling?.matches("section.hero")).toBe(true);
+    expect(read("assets/css/home-film.css")).toContain(".hf + .hero{padding-top:");
     expect(renderHomePromo(HOME, { gateOpen: true })).toContain(".ball-banner + .hero{padding-top:");
   });
 
@@ -102,13 +108,13 @@ describe("the Ball's promotion still lands on the new home page", () => {
     const html = renderHomePromo(HOME, { gateOpen: false });
     expect(html).toBe(HOME);
     expect(html).not.toContain("/ball");
-    expect(mainChildren(html).map(label).slice(0, 4)).toEqual(["hero", "tags", "what we do", "year round"]);
+    expect(mainChildren(html).map(label).slice(0, 5)).toEqual(["film", "hero", "tags", "what we do", "year round"]);
   });
 
   it("renders the same with CRLF and LF line endings", () => {
     const lf = HOME.replace(/\r\n/g, "\n");
     const order = mainChildren(renderHomePromo(lf, { gateOpen: true })).map(label);
-    expect(order.slice(0, 5)).toEqual(["banner", "hero", "tags", "feature", "what we do"]);
+    expect(order.slice(0, 6)).toEqual(["banner", "film", "hero", "tags", "feature", "what we do"]);
   });
 
   it("does not change the stylesheet the promotion's banner relies on", () => {
@@ -334,8 +340,10 @@ describe("the page's weight", () => {
     "index.html",
     "assets/css/styles.css",
     "assets/css/home-top.css",
+    "assets/css/home-film.css",
     "assets/js/main.js",
     "assets/js/pulse.js",
+    "assets/js/home-film.js",
   ];
   const fonts = ["assets/fonts/playfair-var.woff2", "assets/fonts/poppins-400.woff2"];
 
@@ -349,7 +357,7 @@ describe("the page's weight", () => {
     const sheets = [...home.querySelectorAll('link[rel="stylesheet"]')].map((l) =>
       (l.getAttribute("href") ?? "").replace(/^\//, ""),
     );
-    expect(sheets.sort()).toEqual(["assets/css/home-top.css", "assets/css/styles.css"]);
+    expect(sheets.sort()).toEqual(["assets/css/home-film.css", "assets/css/home-top.css", "assets/css/styles.css"]);
   });
 
   it("adds no font file and no request for an image on first paint", () => {

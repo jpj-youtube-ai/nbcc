@@ -46,7 +46,8 @@ const PAGES = readdirSync(ROOT)
  *
  * There is no third option, and a page that is neither is a page nobody gave a container to.
  */
-const NAV_CLEARING = ["page-top", "hero", "ball-hero"];
+// "hf": Freddie's film at the top of the home page, whose band starts below the nav (home-film.css).
+const NAV_CLEARING = ["page-top", "hero", "ball-hero", "hf"];
 
 describe("every public page wears the site's page shell (TASK-402)", () => {
   it("finds the pages to check", () => {

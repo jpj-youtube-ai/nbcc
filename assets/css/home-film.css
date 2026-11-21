@@ -1,0 +1,45 @@
+/* Freddie's film at the top of the home page (21 November 2026), on that page only, so every other page's
+   first paint is untouched. index.html has the markup; assets/js/home-film.js drives it. */
+/* The band starts BELOW the fixed nav (a margin, not padding): the nav is see-through until you scroll and its
+   maroon links would vanish on a maroon band, as the Ball banner found. */
+.hf{position:relative;overflow:hidden;color:var(--cream);margin-top:var(--nav-h);padding:clamp(26px,4vw,56px) 0 clamp(34px,5vw,72px);
+background:radial-gradient(120% 85% at 50% 0%,#9e1420 0%,#800000 46%,#4a0a0e 100%)}
+.hf::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.22;
+background-image:radial-gradient(circle,#fff 1.2px,transparent 1.6px),radial-gradient(circle,#fff .8px,transparent 1.2px);
+background-size:140px 140px,90px 90px;background-position:12px 30px,60px 8px}
+.hf .wrap{position:relative}
+.hf + .hero{padding-top:clamp(34px,5vw,72px)}
+.hf-head{text-align:center;max-width:760px;margin:0 auto clamp(18px,2.6vw,30px)}
+.hf-eyebrow{display:inline-block;font-family:"Poppins",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.2em;text-transform:uppercase;color:#E8C27A}
+.hf h2{font-family:"Playfair Display",serif;font-weight:800;font-size:clamp(2.05rem,5.4vw,3.7rem);line-height:1.04;color:var(--cream);margin:.32em 0 .22em;text-wrap:balance}
+.hf-true{margin:0;font-family:"Playfair Display",serif;font-style:italic;font-size:clamp(1.08rem,2.1vw,1.4rem);color:var(--cream-90)}
+.hf-frame{position:relative;max-width:1040px;max-width:min(1040px,max(560px,calc((100svh - 360px)*16/9 + 24px)));margin:0 auto;padding:clamp(6px,1vw,12px);border-radius:24px;background:var(--cream);
+box-shadow:0 34px 80px -24px rgba(0,0,0,.6),0 0 0 1px rgba(232,194,122,.55)}
+.hf-video{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:16px;background:#2a2238 url(/assets/video/freddie-film-poster.jpg) center/cover}
+.hf-video::cue{font-family:"Poppins",sans-serif;font-size:clamp(14px,2.2vw,26px);line-height:1.35;color:#fff;background:rgba(0,0,0,.66)}
+.hf-bar{position:absolute;left:clamp(16px,2.2vw,30px);right:clamp(16px,2.2vw,30px);top:clamp(16px,2.2vw,30px);display:flex;align-items:center;gap:10px;pointer-events:none}
+.hf-bar > *{pointer-events:auto}
+.hf:not(.hf--js) .hf-bar,.hf:not(.hf--js) .hf-play{display:none}
+.hf-gap{flex:1}
+.hf-sound{display:inline-flex;white-space:nowrap;align-items:center;gap:10px;min-height:48px;padding:11px 20px 11px 16px;border:0;border-radius:999px;cursor:pointer;
+background:var(--cream);color:var(--maroon);font:600 clamp(.92rem,1.6vw,1.05rem)/1 "Poppins",sans-serif;box-shadow:0 8px 22px rgba(0,0,0,.38)}
+.hf-sound svg{flex:none}
+.hf-icon{display:grid;place-items:center;width:46px;height:46px;border:0;border-radius:50%;cursor:pointer;background:rgba(24,8,10,.62);color:#fff;
+font:700 .78rem/1 "Poppins",sans-serif;letter-spacing:.04em}
+.hf-icon[aria-pressed="false"]{opacity:.62}
+.hf-play{position:absolute;inset:clamp(6px,1vw,12px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+border:0;border-radius:16px;cursor:pointer;background:linear-gradient(180deg,rgba(40,12,14,.08),rgba(40,12,14,.46));color:#fff;
+font:600 clamp(1rem,1.9vw,1.2rem)/1.2 "Poppins",sans-serif;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+.hf-disc{display:grid;place-items:center;width:clamp(68px,9vw,98px);height:clamp(68px,9vw,98px);border-radius:50%;background:var(--cream);color:var(--maroon);
+box-shadow:0 10px 30px rgba(0,0,0,.4);transition:transform .2s ease}
+.hf-play:hover .hf-disc{transform:scale(1.06)}
+.hf-end{display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:clamp(18px,2.4vw,28px)}
+.hf-end .btn{min-height:48px}
+.hf-fill{background:var(--cream);color:var(--maroon);border-color:var(--cream)}
+.hf-fill:hover{background:#fff;color:var(--maroon)}
+.hf-again{background:transparent;color:var(--cream);border:2px solid var(--cream-82)}
+.hf-again:hover{background:var(--cream-24);color:var(--cream)}
+.hf button:focus-visible,.hf a:focus-visible{outline:3px solid #E8C27A;outline-offset:3px}
+@media (max-width:560px){.hf-sound{min-height:44px;padding:9px 16px 9px 12px}.hf-icon{width:42px;height:42px}}
+@media (max-width:360px){.hf-bar{left:12px;right:12px;top:12px;gap:8px}.hf-sound{gap:6px;padding:8px 12px 8px 10px;font-size:.86rem}.hf-sound svg{width:18px;height:18px}.hf-icon{width:40px;height:40px}}
+@media (prefers-reduced-motion:reduce){.hf-disc{transition:none}.hf-play:hover .hf-disc{transform:none}}

@@ -7,6 +7,9 @@ import { writeWithAudit } from "./donations";
 import type { ListKind } from "./subscriber-lists";
 import { suppressedAmong } from "./email-suppressions";
 import { mergeRecipients } from "../newsletter/merge-recipients";
+// TASK-646: the one change the live totals make to a sent newsletter, as a pure function.
+import { withFrozenTotals } from "../newsletter/live-blocks";
+import type { LiveNumbers } from "../newsletter/theme";
 
 // DB access for the admin newsletter (TASK-161/REQ-069). Read/write over the newsletters table plus
 // the consented-donor recipient query and the unsubscribe write. Mirrors the pool-query style of
@@ -176,6 +179,37 @@ export async function updateNewsletterDraft(
     )
   ).rows[0];
   return row ? toNewsletter(row) : null;
+}
+
+// TASK-646: freeze each Live total's number into a newsletter as its send begins, so every reader of
+// a send that runs tick after tick, sometimes over days, gets the same number, and re-opening the sent
+// newsletter shows what went out. The ONE write the live totals make, and as narrow as it can be:
+//   * only on a newsletter being sent ('sent') whose own send job (jobId) has not started yet;
+//   * only data.sent on its live total blocks (withFrozenTotals changes nothing else);
+//   * only if the stored document is still the one that was read, so nothing in between is lost.
+// updateNewsletterDraft cannot do this: it refuses a sent newsletter, as it should. Called only by the
+// send worker (no person, so no audit row: setNewsletterDeliverySummary beside it writes none either).
+// Returns whether the write landed.
+const FREEZE_GUARD = `n.status = 'sent'
+   AND EXISTS (SELECT 1 FROM newsletter_send_jobs j WHERE j.id = $2 AND j.newsletter_id = n.id AND j.started_at IS NULL)`;
+
+export async function freezeNewsletterLiveTotals(
+  newsletterId: number,
+  jobId: number,
+  values: LiveNumbers,
+  at: string,
+): Promise<boolean> {
+  const row = (
+    await pool.query<{ body_json: unknown }>(`SELECT n.body_json FROM newsletters n WHERE n.id = $1 AND ${FREEZE_GUARD}`, [newsletterId, jobId])
+  ).rows[0];
+  if (!row || row.body_json == null) return false;
+  const next = withFrozenTotals(row.body_json, values, at);
+  const { rowCount } = await pool.query(
+    `UPDATE newsletters n SET body_json = $3::jsonb
+      WHERE n.id = $1 AND ${FREEZE_GUARD} AND n.body_json = $4::jsonb`,
+    [newsletterId, jobId, JSON.stringify(next), JSON.stringify(row.body_json)],
+  );
+  return rowCount === 1;
 }
 
 // TASK-259: a recipient of a LIST send. donorId XOR subscriberId identifies them — it decides which

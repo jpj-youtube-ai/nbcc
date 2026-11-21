@@ -123,3 +123,11 @@
   #view-business .biz-top { align-items: stretch; }
   #view-business .out-facts { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* TASK-647: the form to change a business's details, inside the kit's fold. Nothing scrolls inside it. */
+#view-business .biz-edit-form { padding: 0 16px 16px; }
+#view-business .biz-edit-label { margin: 0 0 6px; font-weight: 700; }
+#view-business .biz-edit-email { margin: 0 0 6px; overflow-wrap: anywhere; }
+#view-business .biz-edit-form .admin-btn { min-height: 44px; }
+#view-business .biz-edit-form input, #view-business .biz-edit-form select { font-size: 1rem; min-height: 44px; }
+#view-business .biz-edit-form .out-ack label { display: flex; align-items: center; gap: 10px; min-height: 44px; }

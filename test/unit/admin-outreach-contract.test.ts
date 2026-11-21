@@ -13,7 +13,7 @@ import { db, callRoute, replyWith, type Reply } from "./helpers/real-server";
 import { outreachRows, down } from "./helpers/real-rows";
 import { mountAdmin, el, q, text } from "./helpers/admin-settings-harness";
 import {
-  getAdminOutreach, getAdminOutreachTodo, getAdminOutreachReports, getAdminOutreachVolunteers, getAdminOutreachOne,
+  getAdminOutreach, getAdminOutreachTodo, getAdminOutreachReports, getAdminOutreachVolunteers, getAdminOutreachOne, patchAdminOutreach,
 } from "../../src/routes/admin";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -100,5 +100,40 @@ describe("one business's page with the real server's answers", () => {
     expect(page).toContain("1 October 2026");
     expect(page).toContain("Said to try again in the autumn.");
     expect((el("businessAskAgain") as HTMLInputElement).value).toBe("2026-10-01");
+  });
+});
+
+// TASK-647: the form's two requests go to the real PATCH handler, and its answers are what the page shows.
+describe("changing a business's details with the real server", () => {
+  const rowOf = (over: Record<string, unknown>) => ({
+    ...(outreachRows()[3][1] as (p: unknown[]) => Record<string, unknown>[])([23])[0], ...over,
+  });
+  it("saves a new phone number through the real handler, and the page says so", async () => {
+    // The route reads the business, then writes it: the UPDATE hands back the row as the table has it.
+    const rules = outreachRows();
+    db.answer([
+      ["UPDATE business_outreach", [rowOf({ contact_phone: "01632 960123" })]],
+      ...rules,
+    ], { email: "fern@example.com" });
+    const saved = await callRoute(patchAdminOutreach, { params: { id: "23" }, body: { contactPhone: "01632 960123" } });
+    expect(saved.status).toBe(200);
+    expect((saved.body as { business: { contactPhone: string } }).business.contactPhone).toBe("01632 960123");
+
+    db.answer(outreachRows(), { email: "fern@example.com" });
+    const refused = await callRoute(patchAdminOutreach, { params: { id: "23" }, body: { contactEmail: "other@example.com" } });
+    expect(refused.status).toBe(400);
+
+    const admin = mountAdmin({ role: "admin" }, replyWith({ ...real, "PATCH /api/admin/outreach/23": saved }));
+    await admin.signIn();
+    await admin.open("outreach");
+    (q('#outList [data-out-open="23"]') as HTMLElement).click();
+    await admin.settle(12);
+    (q('.ak-parts [data-akpart="details"]') as HTMLElement).click();
+    const phone = el("businessEditPhone") as HTMLInputElement;
+    phone.value = "01632 960123";
+    el("businessEditForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await admin.settle(12);
+    expect(text(el("businessEditStatus"))).toBe("Saved.");
+    expect(text(el("businessEditEmail"))).toBe("garage@example.com");
   });
 });

@@ -16221,6 +16221,124 @@
     if (r.askAgainOn) el("businessAskAgain").value = String(r.askAgainOn).slice(0, 10);
     businessToggleAskAgain();
     renderBusinessNotes(notes);
+    businessRenderEdit(r);
+  }
+
+  // ---- Change their details (TASK-647) ----
+  // For someone who may edit Contact businesses. The route refuses a changed email address (what they
+  // agreed to is recorded against it), so the address is shown here and never offered for editing.
+  var businessEditPending = false; // a 409 named businesses that said no; saving again needs the tick
+
+  function businessRenderEdit(r) {
+    var fold = el("businessEditFold");
+    var writable = canEdit("outreach");
+    fold.hidden = !writable;
+    if (!writable) return;
+    el("businessEditName").value = r.businessName || "";
+    el("businessEditContact").value = r.contactName || "";
+    el("businessEditPhone").value = r.contactPhone || "";
+    el("businessEditIntro").value = r.warmIntro || "";
+    el("businessEditTags").value = (r.tags || []).join(", ");
+    el("businessEditEmail").textContent = r.contactEmail || "No email address yet";
+    // The same choices the add form offers; someone no longer on the list is kept as they are.
+    var owner = el("businessEditOwner");
+    owner.innerHTML = "";
+    var source = el("outOwner");
+    var opts = source ? Array.prototype.slice.call(source.options) : [{ value: "", textContent: "Not assigned yet" }];
+    opts.forEach(function (o) {
+      var n = doc.createElement("option");
+      n.value = o.value;
+      n.textContent = o.textContent;
+      owner.appendChild(n);
+    });
+    var initial = r.ownerEmail || "";
+    var has = Array.prototype.some.call(owner.options, function (o) { return o.value === initial; });
+    if (r.owner && !has) {
+      initial = r.ownerEmail || "keep:";
+      var k = doc.createElement("option");
+      k.value = initial;
+      k.textContent = r.owner;
+      owner.appendChild(k);
+    }
+    owner.value = initial;
+    owner.setAttribute("data-initial", initial);
+  }
+
+  function businessSaveDetails(e) {
+    e.preventDefault();
+    if (!businessRow || !canEdit("outreach")) return;
+    var r = businessRow;
+    var seq = businessSeq;
+    var id = businessId;
+    var val = function (i) { return (el(i).value || "").trim(); };
+    var body = {};
+    var fields = [
+      ["businessName", "businessEditName", r.businessName],
+      ["contactName", "businessEditContact", r.contactName],
+      ["contactPhone", "businessEditPhone", r.contactPhone],
+      ["warmIntro", "businessEditIntro", r.warmIntro],
+      ["tags", "businessEditTags", (r.tags || []).join(", ")],
+    ];
+    fields.forEach(function (f) {
+      if (val(f[1]) !== (f[2] || "")) body[f[0]] = val(f[1]);
+    });
+    var owner = el("businessEditOwner");
+    if (owner.value !== owner.getAttribute("data-initial")) {
+      var opt = owner.selectedOptions[0];
+      body.owner = owner.value && opt ? opt.textContent : "";
+      body.ownerEmail = owner.value;
+    }
+    if (!Object.keys(body).length) {
+      businessSay("businessEditStatus", "Nothing has changed yet.");
+      return;
+    }
+    if (businessEditPending) {
+      var ack = el("businessEditAck");
+      if (!ack || !ack.checked) {
+        businessSay("businessEditStatus", "Tick the box if this is a different business, then save.", "is-error");
+        return;
+      }
+      body.acknowledgedMatches = true;
+    }
+    var btn = el("businessEditSave");
+    btn.disabled = true;
+    businessSay("businessEditStatus", "Saving…");
+    authFetch("/api/admin/outreach/" + encodeURIComponent(id), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (x) { return x.json().then(function (b) { return { ok: x.ok, status: x.status, body: b || {} }; }); })
+      .then(function (res) {
+        // Another business has been opened since: this answer is not for the page on screen.
+        if (seq !== businessSeq) return;
+        btn.disabled = false;
+        if (!res.ok) {
+          businessSay("businessEditStatus", res.body.error || "Could not save those changes.", "is-error");
+          var matches = res.body.matches || [];
+          if (res.status === 409 && matches.length) {
+            businessEditPending = true;
+            el("businessEditMatches").innerHTML =
+              '<div class="out-warn out-warn--stop"><ul>' +
+              matches.map(function (m) {
+                return "<li><strong>" + H.escapeHtml(m.businessName || "") + "</strong> — " + H.escapeHtml(m.reason || "") + "</li>";
+              }).join("") +
+              '</ul><p class="out-ack"><label><input type="checkbox" id="businessEditAck" /> I have checked, and this is a different business.</label></p></div>';
+          }
+          return;
+        }
+        businessEditPending = false;
+        el("businessEditMatches").innerHTML = "";
+        businessSay("businessEditStatus", "Saved.", "is-ok");
+        businessReload();
+        loadOutreachTodo();
+        loadOutreachList();
+      })
+      .catch(function () {
+        if (seq !== businessSeq) return;
+        btn.disabled = false;
+        businessSay("businessEditStatus", "Could not save those changes. Please try again.", "is-error");
+      });
   }
 
   function renderBusinessNotes(notes) {
@@ -16375,6 +16493,7 @@
     });
     el("businessOutcomeForm").addEventListener("submit", businessSaveOutcome);
     el("businessNoteForm").addEventListener("submit", businessAddNote);
+    el("businessEditForm").addEventListener("submit", businessSaveDetails);
     el("businessOutcomes").addEventListener("change", businessToggleAskAgain);
     bindClick("businessDisclose", businessShowDisclosure);
     bindClick("businessNudgeSend", businessSendNudge);
@@ -16517,6 +16636,11 @@
     businessRow = null;
     businessNudgeJustSent = false;
     businessSay("businessContactStatus", "");
+    businessSay("businessEditStatus", "");
+    businessEditPending = false;
+    el("businessEditMatches").innerHTML = "";
+    el("businessEditSave").disabled = false;
+    el("businessEditFold").hidden = true;
     if (businessParts) businessParts.show("glance");
     businessRenderSteps();
     showOnly("view-business");

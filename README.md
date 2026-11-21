@@ -8651,14 +8651,23 @@ Design: `docs/superpowers/specs/2026-11-14-admin-refresh-outreach.md`.
   box, and an answer for a business no longer open is thrown away: the last business's supporter
   could be linked to the next one. "Saved." and "Sent." stay on the screen. What we hold no longer
   scrolls inside a box.
-- **Changing a business's details** (server only so far): `PATCH /api/admin/outreach/:id`, edit
+- **Changing a business's details** (the form is on the page since TASK-647, below): `PATCH /api/admin/outreach/:id`, edit
   guarded, audited as `outreach.details_changed` (which details, not their values). Name, contact,
   phone, who knows them, who looks after them, tags. **The email address cannot be changed here** (a
   400 that says why): how a sole trader agreed to hear from us is recorded against the address we
   have, so it waits for a form that asks again. A new name that matches a business that said no is
   refused unless the volunteer says it is a different business; a business that said no keeps its
-  name; a changed phone number clears its register check. The form on the business page is still to
-  come.
+  name; a changed phone number clears its register check.
+- **The form to change them (TASK-647).** Under **Their details**, for someone who may edit Contact
+  businesses (viewers see the details as before): a **Change their details** fold with business name,
+  contact name, phone, who looks after them (the add form's choices), who knows them, and tags. The
+  email address is shown as text with why it cannot change ("To use a new address, add them again").
+  Only boxes that changed are sent (an emptied box is sent empty, to clear it); the answer is said
+  beside **Save the changes** (`is-ok` / `is-error`), and the page is read again. A 409 that names
+  businesses that said no is shown with a "this is a different business" tick; saving again sends
+  `acknowledgedMatches`. A 409 for a business that itself said no has no such offer. An answer for a
+  business no longer open is thrown away (`businessSeq`). Tests: `admin-business-refresh.test.ts`,
+  and the real PATCH handler in `admin-outreach-contract.test.ts`.
 - **The spreadsheet** (`GET /api/admin/outreach/export`) follows the same rule for phone numbers: the
   cell is empty until the number's register check is recorded. A cell that would run as a formula in
   Excel (one starting = + - @, a tab or a return) is kept as words with a leading apostrophe.

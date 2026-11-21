@@ -119,8 +119,15 @@ export function addFillStageStyles(html: string): string {
  * The home page with the stage, between the hero and the four tags, as the page goes out: the file
  * does not change. No stage (it was left out), or no place for it: the page as it came.
  */
+// Freddie's film at the top of the home page (index.html) ends on "Fill a bag at nbcc.scot/fill".
+// The file ends it with a Donate button; while Fill a Red Bag is on (whenever the stage is), it
+// becomes Fill a bag, so no page in the file ever links to /fill, as this module's rule is.
+const FILM_DONATE = '<a class="btn hf-fill" href="/donate" data-hf-fill>Donate</a>';
+const FILM_FILL = '<a class="btn hf-fill" href="/fill" data-hf-fill>Fill a bag</a>';
+
 export function addFillStageToHome(html: string, stage: string): string {
   if (!stage) return html;
+  html = html.replace(FILM_DONATE, FILM_FILL);
   const at = html.indexOf(HOME_ANCHOR);
   if (at === -1) return html;
   return addFillStageStyles(`${html.slice(0, at)}${stage}\n\n      ${html.slice(at)}`);

@@ -279,7 +279,8 @@ export function withoutFrozenTotals<T>(doc: T): T {
     ...d,
     blocks: (d.blocks as unknown[]).map((b) => {
       if (!isRecord(b) || !isLiveTotal(b) || !("sent" in (b.data as Data))) return b;
-      const { sent: _sent, ...rest } = b.data as Data;
+      const rest: Data = { ...(b.data as Data) };
+      delete rest.sent;
       return { ...b, data: rest };
     }),
   } as unknown as T;

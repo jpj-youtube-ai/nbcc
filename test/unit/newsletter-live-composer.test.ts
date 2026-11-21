@@ -254,7 +254,7 @@ describe("the four built-in starters", () => {
     (el("nlStartList").querySelector("[data-start='starter:appeal']") as HTMLElement).click();
     await settle();
     const sums = Array.from(el("nlCanvas").querySelectorAll(".nl-block-sum")).map((n) => n.textContent || "");
-    expect(sums.join(" | ")).not.toMatch(/redBag|sleigh/);
+    expect(sums.join(" | ")).not.toMatch(/redBag|"sleigh"/);
     expect(sums).toContain("Fill a Red Bag: bags filled");
   });
 

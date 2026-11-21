@@ -12,8 +12,8 @@ const h = vi.hoisted(() => {
   const state: { doc: unknown; job: Record<string, unknown> } = { doc: null, job: {} };
   return {
     state,
-    sendNewsletter: vi.fn(async (_m: { html: string; text: string }) => undefined),
-    readLiveNumberNow: vi.fn(async (_s: string): Promise<number> => 312),
+    sendNewsletter: vi.fn(async (m: { html: string; text: string }) => void m),
+    readLiveNumberNow: vi.fn(async (s: string): Promise<number> => (s ? 312 : 0)),
     freeze: vi.fn(),
     markJobRunning: vi.fn(async () => undefined),
   };

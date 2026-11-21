@@ -1,5 +1,5 @@
 import { config } from "../config";
-import { getNewsletter, setNewsletterDeliverySummary } from "../db/newsletters";
+import { getNewsletter, setNewsletterDeliverySummary, freezeNewsletterLiveTotals } from "../db/newsletters";
 import { recordNewsletterSends } from "../db/newsletter-events";
 import {
   listRunnableJobs,
@@ -26,6 +26,10 @@ import { buildNewsletterHtml } from "../donors/newsletter";
 import { tickAllowance, TICK_SECONDS } from "./send-pacing";
 import { dispositionFor } from "./send-failure";
 import { htmlToPlainText } from "./plain-text";
+// TASK-646: the live totals are frozen on a send's first tick, and a countdown counts from the UK day.
+import { liveSourcesIn, ukToday } from "./live-blocks";
+import { readLiveNumberNow } from "./live-numbers";
+import type { LiveNumbers } from "./theme";
 
 // TASK-274: the background sender. It replaces a loop that ran inside the HTTP request, where a few
 // hundred recipients outran the ALB's 60-second timeout — the admin saw "Send failed" while sending
@@ -71,6 +75,8 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
     await finishJobIfDrained(job.id);
     return;
   }
+  // TASK-646: before the job is marked running (so exactly once per send), freeze each Live total.
+  if (!job.startedAt) await freezeLiveTotals(job, now);
   await markJobRunning(job.id);
 
   const allowance = tickAllowance(
@@ -92,6 +98,8 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
   if (!newsletter) return; // deleted mid-send; the queue rows go nowhere and the job drains
 
   const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
+  // TASK-646: a countdown counts from the day each email really goes out, in the UK.
+  const today = ukToday(now);
   const batch = await claimRecipients(job.id, allowance);
   if (batch.length === 0) {
     await finishJobIfDrained(job.id);
@@ -137,7 +145,7 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
     const firstName = firstNameOf(r.fullName);
     const html = parsedDoc.success
-      ? renderNewsletter(parsedDoc.data, { firstName, unsubscribeUrl })
+      ? renderNewsletter(parsedDoc.data, { firstName, unsubscribeUrl, today })
       : buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
 
     try {
@@ -222,6 +230,30 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
       failedCount: outcome.failed,
       failedEmails: outcome.failedEmails,
     });
+  }
+}
+
+// TASK-646: read each source the newsletter's live totals use, UNCACHED (a failure must not look like
+// zero), and write the numbers into the stored newsletter through the one narrow database function.
+// Nothing here can stop the send: a failed read freezes "no number", a failed write is logged, and in
+// both cases every reader gets the block's fallback words, never "0 bags".
+async function freezeLiveTotals(job: SendJob, now: Date): Promise<void> {
+  try {
+    const newsletter = await getNewsletter(job.newsletterId);
+    const sources = liveSourcesIn(newsletter?.bodyJson);
+    if (!sources.length) return;
+    const values: LiveNumbers = {};
+    for (const source of sources) {
+      try {
+        values[source] = await readLiveNumberNow(source);
+      } catch (err) {
+        values[source] = null;
+        console.error(`newsletter send job ${job.id}: reading the ${source} total failed:`, err instanceof Error ? err.message : err);
+      }
+    }
+    await freezeNewsletterLiveTotals(job.newsletterId, job.id, values, now.toISOString());
+  } catch (err) {
+    console.error(`newsletter send job ${job.id}: freezing the live totals failed:`, err instanceof Error ? err.message : err);
   }
 }
 

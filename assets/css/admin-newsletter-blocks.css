@@ -27,3 +27,19 @@
 #view-newsletter .nl-block .nl-check .nl-field-label { margin: 0; flex: 1 1 12rem; font-size: .9rem; }
 #view-newsletter .nl-block .nl-check .nl-field-hint { flex-basis: 100%; margin-top: 0; }
 #view-newsletter .nl-block .nl-field input[type="date"] { min-height: 44px; font-size: 16px; }
+
+/* TASK-646: a number field, a Live total's "Right now" line (its form only, never the email), and the
+ * built-in starters beside "Start from example": a label over a list and its button, wrapping on a phone. */
+#view-newsletter .nl-block .nl-field input[type="number"] { min-height: 44px; font-size: 16px; max-width: 12rem; }
+#view-newsletter .nl-block .nl-live-now {
+  margin: .1rem 0 .7rem; padding: .55rem .75rem; border-radius: 10px; background: var(--tan-soft);
+  color: var(--maroon); font-size: .9rem; line-height: 1.45;
+}
+#view-newsletter .nl-actions .nl-starter { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; min-width: 0; max-width: 100%; }
+#view-newsletter .nl-actions .nl-starter label { flex-basis: 100%; font-size: .85rem; font-weight: 600; color: var(--slate-soft); }
+#view-newsletter .nl-actions .nl-starter select {
+  flex: 1 1 11rem; min-height: 44px; min-width: 0; max-width: 20rem; font-family: var(--font-body); font-size: 16px; color: var(--slate);
+  background: var(--cream); border: 1.4px solid var(--line); border-radius: 10px; padding: 9px 11px;
+}
+/* The actions row's buttons sit level with the starter's list, not stretched to its height. */
+#view-newsletter .nl-actions { align-items: flex-end; }

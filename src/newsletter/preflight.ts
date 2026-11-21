@@ -3,6 +3,8 @@ import { renderNewsletter, type NewsletterDoc } from "./blocks";
 import { looksSendable } from "./link-safety";
 // The paper look blocks' own checks (14 November 2026) live beside their renderers' rules.
 import { paperBlockChecks, bracketNotes, BIG_EMAIL_BYTES } from "./paper-preflight";
+import { ukToday } from "./live-blocks";
+import type { LiveNumbers } from "./theme";
 
 // TASK-277 (letter P): the checks that run before a newsletter goes out.
 //
@@ -33,6 +35,10 @@ export interface PreflightContext {
   subject: string;
   // Today's date in the UK, YYYY-MM-DD. Optional: without it no check that needs a clock runs.
   today?: string;
+  // TASK-646: when the send is scheduled for (an ISO time), so a countdown can be checked against the
+  // day it will really go out; and today's live numbers, so a live total that would show nothing is said.
+  sendAt?: string;
+  live?: LiveNumbers;
 }
 
 function str(data: Record<string, unknown>, key: string): string {
@@ -62,6 +68,8 @@ export function preflightNewsletter(doc: NewsletterDoc, ctx: PreflightContext): 
   };
   collectTags(ctx.subject);
 
+  const sendAt = ctx.sendAt ? new Date(ctx.sendAt) : null;
+  const sendDay = sendAt && !Number.isNaN(sendAt.getTime()) ? ukToday(sendAt) : undefined;
   let imagesWithoutAlt = 0;
   let deadLinks = 0;
   const paperFindings: PreflightFinding[] = [];
@@ -84,7 +92,7 @@ export function preflightNewsletter(doc: NewsletterDoc, ctx: PreflightContext): 
 
     // The paper look blocks: their pictures and buttons count with the classic ones above, and they
     // have a few checks of their own. A classic block is not looked at here.
-    const paper = paperBlockChecks(block.type, block.variant, data, ctx.today);
+    const paper = paperBlockChecks(block.type, block.variant, data, ctx.today, { sendDay, live: ctx.live });
     imagesWithoutAlt += paper.imagesWithoutAlt;
     deadLinks += paper.deadLinks;
     paperFindings.push(...paper.findings);

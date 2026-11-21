@@ -221,6 +221,10 @@ import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
 import { parseScheduleAt, scheduleSummary } from "../newsletter/schedule";
 import { htmlToPlainText } from "../newsletter/plain-text";
 import { preflightNewsletter } from "../newsletter/preflight";
+// TASK-646: the live blocks: today's numbers for the preview, the test send and the checks; the UK day a
+// countdown counts from; and a frozen number taken out before a draft or a template is saved.
+import { liveSourcesIn, ukToday, withoutFrozenTotals } from "../newsletter/live-blocks";
+import { liveNumbersCached } from "../newsletter/live-numbers";
 import { recipientOutcome, OUTCOME_LABELS } from "../newsletter/recipient-outcome";
 import { runSendTick } from "../newsletter/send-worker";
 import { parseImportFile } from "../newsletter/import-parse";
@@ -521,7 +525,10 @@ function compileNewsletterBody(data: z.infer<typeof newsletterBodySchema>): {
   bodyJson: unknown | null;
 } {
   if (data.bodyJson !== undefined) {
-    return { bodyHtml: renderNewsletter(data.bodyJson, { firstName: "friend" }), bodyJson: data.bodyJson };
+    // TASK-646: a number frozen by an earlier send never comes along into a draft (the same document
+    // object when there is none, so every other newsletter is stored exactly as before).
+    const bodyJson = withoutFrozenTotals(data.bodyJson);
+    return { bodyHtml: renderNewsletter(bodyJson, { firstName: "friend" }), bodyJson };
   }
   return { bodyHtml: data.bodyHtml as string, bodyJson: null };
 }
@@ -577,7 +584,8 @@ export async function postAdminNewsletterTemplate(req: Request, res: Response): 
     return res.status(400).json({ error: "Invalid template", details: parsed.error.flatten() });
   }
   try {
-    const created = await createNewsletterTemplate(parsed.data.name, parsed.data.bodyJson, claims.sub);
+    // TASK-646: a template never keeps a number frozen by a send.
+    const created = await createNewsletterTemplate(parsed.data.name, withoutFrozenTotals(parsed.data.bodyJson), claims.sub);
     return res.status(201).json(created);
   } catch (err) {
     // A shared library makes a name clash routine, not exceptional — explain it, never 500.
@@ -1151,12 +1159,18 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
   const firstName = parsed.data.firstName ?? PREVIEW_FIRST_NAME;
   // Pass a placeholder unsubscribe URL so the preview shows the (non-functional) Unsubscribe button
   // the recipient will get — real sends substitute a signed per-recipient link.
-  const html = renderNewsletter(bodyJson, { firstName, unsubscribeUrl: "#" });
-  if (subject === undefined) return res.json({ html });
+  // TASK-646: a live total shows today's number (the public pages' cached read); the answer carries it
+  // as `live` for the block's "Right now" line. Only read, and only answered, when there is one.
+  const sources = liveSourcesIn(bodyJson);
+  const live = sources.length ? await liveNumbersCached(sources) : undefined;
+  const html = renderNewsletter(bodyJson, { firstName, unsubscribeUrl: "#", live, today: ukToday() });
+  const withLive = live ? { live } : {};
+  if (subject === undefined) return res.json({ html, ...withLive });
   const fallback = bodyJson.merge?.nameFallback ?? "";
   return res.json({
     html,
     subjects: { named: mergeSubject(subject, firstName, fallback), unnamed: mergeSubject(subject, "", fallback) },
+    ...withLive,
   });
 }
 
@@ -1503,15 +1517,22 @@ const preflightSchema = z.object({
   subject: z.string().default(""),
   bodyJson: newsletterDocSchema,
   testSent: z.boolean().default(false),
+  // TASK-646: when a scheduled send is to go out, so a countdown is checked against that day.
+  sendAt: z.string().datetime().optional(),
 });
 
 export async function postAdminNewsletterPreflight(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const parsed = preflightSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid newsletter" });
+  // TASK-646: today in the UK (for the dated checks), when it is scheduled to send, and today's live numbers.
+  const sources = liveSourcesIn(parsed.data.bodyJson);
   const findings = preflightNewsletter(parsed.data.bodyJson, {
     subject: parsed.data.subject,
     testSent: parsed.data.testSent,
+    today: ukToday(),
+    sendAt: parsed.data.sendAt,
+    live: sources.length ? await liveNumbersCached(sources) : undefined,
   });
   return res.json({ findings });
 }
@@ -1527,9 +1548,13 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
   // preview uses — not firstNameOf(claims.email), which greeted the tester as "Dear admin@nbcc.scot"
   // and, once the subject merged too, would have put an email address in the title as well. Preview,
   // test send and the real thing now agree about what personalisation looks like.
+  // TASK-646: a test shows today's live numbers, as the preview does.
+  const testSources = liveSourcesIn(parsed.data.bodyJson);
   const html = renderNewsletter(parsed.data.bodyJson, {
     firstName: PREVIEW_FIRST_NAME,
     unsubscribeUrl: `${config.PORTAL_BASE_URL}/unsubscribe/preview`,
+    live: testSources.length ? await liveNumbersCached(testSources) : undefined,
+    today: ukToday(),
   });
   // Built once and both sent and echoed back, so what the tester is told to look for is necessarily
   // what actually went out.

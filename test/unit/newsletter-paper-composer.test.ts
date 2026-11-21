@@ -120,7 +120,8 @@ describe("the composer's paper look blocks", () => {
     expect(classic.querySelector(".nl-palette-head")?.textContent).toBe("The classic blocks");
     expect(paper.querySelector(".nl-palette-head")?.textContent).toBe("The paper look (new)");
     expect(buttonsIn(classic)).toEqual(CLASSIC_LABELS);
-    expect(buttonsIn(paper)).toEqual(NEW_LABELS);
+    // TASK-646: the two live blocks join the end of the group (test/unit/newsletter-live-composer.test.ts).
+    expect(buttonsIn(paper)).toEqual([...NEW_LABELS, "Live total", "Sleeps to go"]);
   });
 
   it("gives every new block an icon and a button that says what it adds", async () => {

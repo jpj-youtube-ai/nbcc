@@ -35,6 +35,17 @@ export interface RenderCtx {
   // Per-recipient unsubscribe URL. When present, the frame footer renders a branded Unsubscribe
   // button + the PECR opt-in reason line. The live preview passes a placeholder so the button shows.
   unsubscribeUrl?: string;
+  // TASK-646: today's numbers for the Live total block (the preview and the test send read them; a
+  // real send freezes its number into the block instead), and the UK date a countdown counts from.
+  // Both optional: left out, a live total shows its fallback words and a countdown counts from today.
+  live?: LiveNumbers;
+  today?: string;
+}
+
+/** TASK-646: the live numbers a Live total can show. Bags filled; the sleigh's total in pence. */
+export interface LiveNumbers {
+  redBag?: number | null;
+  sleigh?: number | null;
 }
 
 export function escapeHtml(value: string): string {

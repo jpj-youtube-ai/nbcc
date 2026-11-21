@@ -8780,6 +8780,38 @@ handler in `test/unit/admin-newsletter-contract.test.ts`.
   optional `preheader` (no migration): the email gains a hidden first line only when it holds words, so every
   newsletter already written renders exactly as before (`newsletter-golden.test.ts` untouched).
 
+## Newsletter: a live total, a countdown, and four starters (TASK-646)
+
+Admin > Newsletter > Write. Finishes the paper look design (`docs/superpowers/specs/2026-11-14-newsletter-paper-blocks-design.md`,
+Stages 2 and 3). Renderers: `src/newsletter/live-blocks.ts`; numbers: `src/newsletter/live-numbers.ts`. Tests:
+`newsletter-live-blocks`, `newsletter-live-freeze`, `newsletter-live-freeze-db`, `newsletter-live-numbers`,
+`newsletter-live-contract` (the real route handlers) and `newsletter-live-composer`. `newsletter-golden.test.ts` is
+untouched: every newsletter already written renders byte for byte as before.
+
+- **Live total** (paper look group): bags filled through Fill a Red Bag (one for every £50, as the Workshop's sign
+  counts them), money raised by the Santa Sleigh (as /sleigh shows it), or a number typed in. Four styles: big number,
+  Workshop sign, progress towards a target, one sentence. It never prints "0 bags" or "£0": with no number, or below
+  "Only show the number from", it shows the words for when there is no number, or nothing. The block's form says
+  "Right now: 312 bags filled. It is read again when the newsletter is sent, and everyone gets that number."
+- **Frozen once per send.** On a send's first tick, before the job is marked running, the worker reads each source
+  the newsletter uses with the uncached reader (so a failure is not mistaken for zero) and writes
+  `data.sent = { value, at }` into that newsletter's stored document through `freezeNewsletterLiveTotals`
+  (`src/db/newsletters.ts`): it changes only that field, only on a newsletter being sent whose own job has not
+  started, and only if the document is unchanged since it was read. A failed read or write never stops the send:
+  everyone then gets the fallback words. A frozen number is taken out when a draft or template is saved, and when a
+  sent newsletter is used again. No migration (the document is jsonb).
+- **Sleeps to go**: counts sleeps or days to a date, in UK days from the day each email really goes out, and always
+  prints the real date ("33 sleeps until Christmas Eve (Thursday 24 December)") because emails are opened late. On
+  and after the day: its after words, or nothing.
+- **Checks before sending**: a countdown with no date or a date that is not real (block), its day already come
+  (warn), or before the time "Send later" is set for (warn); a live total with no number to show right now (warn);
+  a live total's button link that is not a link (block).
+- **Server**: `POST /api/admin/newsletters/preview` and the test send show today's numbers (the public pages' cached
+  reads, only when a live total is there); the preview answers them as `live`. `POST /api/admin/newsletters/preflight`
+  takes an optional `sendAt` (ISO time) and checks with today in the UK and today's numbers.
+- **Four starters**: Christmas appeal, Fill a Red Bag, Santa Sleigh, and Thank you for this year. On the start screen, and beside "Start from example" (unchanged, as is
+  `NL_TEMPLATE`). What to fill in is in [square brackets], which the checks point out.
+
 ## Newsletter links opened a security warning (TASK-466)
 
 Every link in a newsletter is rewritten so a click can be counted, and until this change that was to

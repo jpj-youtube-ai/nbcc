@@ -79,7 +79,7 @@ Notes on the calls made:
 - **What goes in a bag** only draws a painting whose key is one of the Red Bag paintings we hold.
 - **Festive divider** has no words, so nothing in the plain text.
 
-### Stage 2: the two live blocks (designed, NOT built in this change)
+### Stage 2: the two live blocks (built in TASK-646, `src/newsletter/live-blocks.ts`)
 
 **`countdown`, Sleeps to go.** Fields: date, label (60), unit (sleeps or days), afterText (80). Styles:
 big number on a tan card / crimson band / one sentence / holly band with a gold number. Counted in UK
@@ -103,8 +103,9 @@ one sentence.
   tick, sometimes over days. On the job's first tick (before it is marked running) the worker reads
   each source the newsletter uses with the UNCACHED reader inside try/catch, and writes
   `data.sent = { value, at }` into each live total block of that newsletter through
-  `freezeNewsletterLiveTotal` (src/db/newsletters.ts), the one new write: it sets that one field, only
-  on a block that is a live total, only on a newsletter that has a send job that has not started. A
+  `freezeNewsletterLiveTotals` (src/db/newsletters.ts), the one new write: it sets that one field, only
+  on a block that is a live total, only on a newsletter being sent whose own send job has not started,
+  and only if the stored document is still the one it read. A
   failed read freezes "no number", so every reader of that send gets the fallback words; a failed
   write is logged and the send carries on, with the fallback words. So everyone gets the same number,
   and re-opening the sent newsletter shows what went out.
@@ -114,12 +115,13 @@ one sentence.
   a throw). The preview's answer also carries `live`, which the composer uses to say, in the block's
   form, "Right now: 312 bags filled. It is read again when the newsletter is sent."
 
-### Stage 3: starting points (designed, NOT built in this change)
+### Stage 3: starting points (built in TASK-646, `NL_STARTERS` in `assets/js/admin/app.js`)
 
 Four built-in starters in code beside "Start from example" (which, with `NL_TEMPLATE`, is untouched):
-Christmas appeal, Fill a Red Bag, Santa Sleigh, Elf Detective School. A small chooser, "Start from a
-template", lists the example and the four with one line each on what it is for; choosing one asks first
-if it would replace work on the canvas. Anything Jaimie must fill in or check is in [square brackets].
+Christmas appeal, Fill a Red Bag, Santa Sleigh, and Thank you for this year. (The fourth was first planned
+for a game that is now cancelled, so Jaimie chose a general thank-you instead, 21 November 2026.)
+As built: the start screen lists the four, each with one line, before the example; beside "Start from
+example" a list of the four and "Start from this starter" (asks first when it would replace unsaved work). Anything Jaimie must fill in or check is in [square brackets].
 
 ## The checks before sending
 
@@ -129,7 +131,8 @@ working link (block), a date that has passed (warn); a partner logo with no name
 switched off (warn); a gift tag with no working link (block); a bag list button with no working link
 (block), or words that say what a gift "will buy" (warn: it must say "could"); a paper story link that
 is not a link (block); a countdown with no date or a bad one (block), on or after its day (warn); a
-live total that is hidden right now (warn).
+live total that is hidden right now (warn). TASK-646 added a countdown whose day comes before the
+time a "Send later" is set for (warn): the composer now tells the checks that time (`sendAt`).
 
 For every newsletter, as warnings only: the finished email passing 80 KB ("Gmail may cut this email
 short": Gmail clips near 102 KB and link tracking lengthens every link), and any words left in
@@ -148,7 +151,7 @@ least 44px tall and 16px, and says what it does in a line beneath where that hel
 - **Cropping photos square on upload** (photo rows look best with photos of one shape): the upload is
   shared by every block; the form says so in a hint instead.
 - **"Copy from What's on" and "Copy from the Red Bag list"**: niceties, both need new read routes.
-- **A countdown warning for "before the time this is scheduled to send"**: the checks are not told the
+- **(Since built, TASK-646.)** A countdown warning for "before the time this is scheduled to send": the checks were not told the
   schedule; the real date is always printed, which is the safeguard that matters.
 - **An appeal total**: not defined; "a number I type" covers it until it is.
 - **Outlook desktop's rounded corners and stacked columns**: tolerated, as the existing blocks are.

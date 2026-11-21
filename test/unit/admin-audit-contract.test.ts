@@ -102,5 +102,9 @@ describe("Audit, Email audit and Notifications with the real server's answers", 
   it("Notifications: says plainly when the settings could not be loaded", async () => {
     await open("notifications", broken);
     expect(text(el("pushAreas"))).toBe("Could not load your settings.");
+    // Nothing can be saved over their real settings from a screen that could not read them.
+    for (const id of ["pushBundle", "pushQuietFrom", "pushQuietTo", "pushPrefsSave"]) {
+      expect((el(id) as HTMLInputElement | HTMLButtonElement).disabled, id).toBe(true);
+    }
   });
 });

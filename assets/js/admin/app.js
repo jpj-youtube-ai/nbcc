@@ -980,7 +980,11 @@
 
     // TASK-644: only a good answer is their settings. A failure read as settings drew everything off
     // and every area ticked, and the next tick saved that over what they had chosen.
+    // Locked until their settings have been read: a screen that could not read them must not save
+    // its blank defaults over what they chose.
+    pushPrefsLock(true);
     authFetch("/api/admin/push/prefs").then(okJson).then(function (prefs) {
+      pushPrefsLock(false);
       el("pushBundle").checked = !!prefs.bundle;
       el("pushQuietFrom").value = (prefs.quietFrom || "").slice(0, 5);
       el("pushQuietTo").value = (prefs.quietTo || "").slice(0, 5);
@@ -999,7 +1003,15 @@
           '<span class="admin-action-status rc-tick-said" data-push-said="' + a[0] + '" role="status" aria-live="polite"></span></div>';
       }).join("") : '<p class="admin-empty">None of the parts of the admin you can open send notifications.</p>';
     }).catch(function () {
+      pushOffElsewhere = [];
+      pushPrefsLock(true);
       el("pushAreas").innerHTML = '<p class="admin-empty">Could not load your settings.</p>';
+    });
+  }
+
+  function pushPrefsLock(locked) {
+    ["pushBundle", "pushQuietFrom", "pushQuietTo", "pushPrefsSave"].forEach(function (id) {
+      if (el(id)) el(id).disabled = locked;
     });
   }
 

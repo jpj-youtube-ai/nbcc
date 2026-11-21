@@ -253,6 +253,7 @@ function answersFailure(handler: AdminHandler): AdminHandler {
       .catch((err: unknown) => {
         console.error(`admin ${req.method} ${req.path} failed:`, err instanceof Error ? err.message : err);
         if (!res.headersSent) res.status(500).json({ error: "Admin is temporarily unavailable" });
+        else if (!res.writableEnded) res.end();
       });
 }
 for (const method of ["get", "post", "put", "patch", "delete"] as const) {

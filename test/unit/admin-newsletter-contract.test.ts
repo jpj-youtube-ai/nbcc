@@ -15,6 +15,7 @@ import { newsletterRows, down } from "./helpers/real-rows";
 import { mountAdmin, el, q, text, press } from "./helpers/admin-settings-harness";
 import {
   adminRouter, getAdminNewsletters, getAdminNewsletterStats, getAdminNewsletterInflight, getAdminSubscriberLists,
+  postAdminNewsletterPreview,
 } from "../../src/routes/admin";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -109,5 +110,45 @@ describe("Newsletter with the real server's answers", () => {
     db.answer([down("FROM")]);
     const stats = await callRoute(routeOf("/api/admin/newsletters/:id/stats"), { params: { id: "41" } });
     expect(stats.status).toBe(500);
+  });
+});
+
+// TASK-645: the composer's preview, from the real handler. The name to preview with (or none), the
+// subject as Jane and as someone with no name, and the preview text, all as the send would make them.
+describe("the composer's preview, from the real handler", () => {
+  const doc = { blocks: [{ type: "greeting", variant: 0, data: {} }], preheader: "Hey, {{firstName}}! Invented news inside" };
+  const preview = (body: Record<string, unknown>) => {
+    db.answer([]);
+    return callRoute(postAdminNewsletterPreview, { body: { bodyJson: doc, ...body } });
+  };
+
+  it("greets as Jane when no name is asked for, as before, and gives no subject readings", async () => {
+    const r = await preview({});
+    expect(r.status).toBe(200);
+    const b = r.body as { html: string; subjects?: unknown };
+    expect(b.html).toContain("Dear Jane");
+    expect(b.html).toContain("Hey, Jane! Invented news inside");
+    expect(b.subjects).toBeUndefined();
+  });
+
+  it("previews with the name the writer typed, or with no name at all", async () => {
+    const named = (await preview({ firstName: "Morag" })).body as { html: string };
+    expect(named.html).toContain("Dear Morag");
+    const nobody = (await preview({ firstName: "" })).body as { html: string };
+    expect(nobody.html).not.toContain("Jane");
+    expect(nobody.html).toContain("Hey! Invented news inside");
+  });
+
+  it("reads the subject as the person previewed and as someone with no name, by the send's own rule", async () => {
+    const r = await preview({ firstName: "Morag", subject: "Hey, {{firstName}}! Our invented winter news" });
+    expect((r.body as { subjects: unknown }).subjects).toEqual({
+      named: "Hey, Morag! Our invented winter news",
+      unnamed: "Hey! Our invented winter news",
+    });
+  });
+
+  it("refuses a name or subject that is not words", async () => {
+    expect((await preview({ firstName: 42 })).status).toBe(400);
+    expect((await preview({ subject: { x: 1 } })).status).toBe(400);
   });
 });

@@ -1076,8 +1076,10 @@
                   </button>
                   <div class="nl-cp-title">
                     <b id="nlComposeSubject">Untitled newsletter</b>
-                    <span class="nl-cp-saved" id="nlComposeSaved"></span>
+                    <span class="nl-cp-saved" id="nlComposeSaved" aria-live="polite"></span>
                   </div>
+                  <!-- TASK-645: where a new one is looked for, at the top, rather than under the canvas. -->
+                  <button type="button" class="nl-cp-new" id="newsletterNew">New newsletter</button>
                   <nav class="nl-cp-steps" aria-label="Steps">
                     <button type="button" class="nl-cp-step" data-nl-panel="nlPanelWrite"><span class="nl-cp-n">1</span><span class="nl-cp-lbl">Write</span></button>
                     <span class="nl-cp-line" aria-hidden="true"></span>
@@ -1094,12 +1096,27 @@
                      this panel lives inside .nl-compose (display:none until composing), the tab
                      opened completely blank. -->
                 <div class="nl-panel" id="nlPanelWrite" hidden>
+                <!-- TASK-645: the start screen, for a new newsletter: blank, your latest draft, a past one,
+                     a saved template or the example. app.js fills the list and hides the rest of the
+                     step (class is-starting) until one is chosen. -->
+                <div class="nl-start" id="nlStartScreen" hidden>
+                  <h3 class="nl-stage-head">How would you like to start?</h3>
+                  <p class="admin-help">Pick one. You can change everything afterwards.</p>
+                  <div class="nl-start-list" id="nlStartList"></div>
+                </div>
                 <h3 class="nl-stage-head"><span class="nl-stage-num">2</span> Write the newsletter</h3>
                 <input type="hidden" id="newsletterId" />
                 <div class="nl-subject">
                   <label for="newsletterSubject">Subject line</label>
-                  <input type="text" id="newsletterSubject" required style="width:100%" />
+                  <input type="text" id="newsletterSubject" required style="width:100%" aria-describedby="nlSubjectHelp" />
                   <p class="nl-subject-hint">This is the first thing people see in their inbox. Use <code>{{firstName}}</code> to greet people by name.</p>
+                  <!-- TASK-645: how long it is, whether a phone cuts it, and how it reads with and without a name. -->
+                  <div class="nl-subject-help" id="nlSubjectHelp" aria-live="polite"></div>
+                </div>
+                <div class="nl-subject nl-preheader">
+                  <label for="nlPreheader">Preview text</label>
+                  <input type="text" id="nlPreheader" maxlength="150" style="width:100%" aria-describedby="nlPreheaderHint" />
+                  <p class="nl-subject-hint" id="nlPreheaderHint">The grey line an inbox shows after the subject. Leave it empty and the inbox shows the first words of the newsletter instead.</p>
                 </div>
 
                 <!-- TASK-292: not everyone on a list has a name against them - people added at an
@@ -1120,6 +1137,7 @@
                     <span class="nl-fallback-hint">A greeting always needs somebody to address, so this one is never left empty.</span>
                   </div>
                 </div>
+                <button type="button" class="nl-pv-open" id="nlPreviewOpen">Preview</button>
                 <div class="nl-builder">
                   <div class="nl-left">
                     <div class="nl-palette" id="nlPalette" aria-label="Add a block"></div>
@@ -1130,11 +1148,25 @@
                       <span class="nl-canvas-count" id="nlCanvasCount" aria-live="polite"></span>
                       <button type="button" class="nl-canvas-toggle" id="nlCollapseAll">Collapse all</button>
                       <button type="button" class="nl-canvas-toggle" id="nlExpandAll">Expand all</button>
+                      <button type="button" class="nl-canvas-toggle" id="nlUndo" disabled>Undo</button>
                     </div>
                     <ol class="nl-canvas" id="nlCanvas" aria-label="Newsletter blocks"></ol>
                   </div>
                   <div class="nl-right">
+                    <!-- TASK-645: on a phone the preview opens full screen, in the page, and closes again here. -->
+                    <button type="button" class="nl-pv-back" id="nlPreviewBack">Back to writing</button>
                     <div class="nl-preview-label">Preview</div>
+                    <div class="nl-pv-tools">
+                      <div class="admin-segmented nl-pv-size" role="group" aria-label="Preview size">
+                        <button type="button" class="admin-seg is-active" id="nlPreviewLaptop" aria-pressed="true">Laptop</button>
+                        <button type="button" class="admin-seg" id="nlPreviewPhone" aria-pressed="false">Phone</button>
+                      </div>
+                      <div class="nl-pv-name">
+                        <label for="nlPreviewName">Preview it for</label>
+                        <input type="text" id="nlPreviewName" value="Jane" maxlength="60" autocomplete="off" aria-describedby="nlPreviewNameHint" />
+                        <span class="nl-pv-hint" id="nlPreviewNameHint">Clear the name to see what someone with no name gets.</span>
+                      </div>
+                    </div>
                     <!-- Framed like a mail client rather than shown as a bare rectangle: the frame
                          is what tells you this is the email, not part of the admin. -->
                     <div class="nl-preview-frame">
@@ -1142,6 +1174,7 @@
                         <span class="nl-preview-dots" aria-hidden="true"><i></i><i></i><i></i></span>
                         <span>From NBCC &lt;newsletter@nbcc.scot&gt;</span>
                       </div>
+                      <div class="nl-pv-inbox" aria-live="polite"><b id="nlPreviewSubject"></b><span id="nlPreviewPreheader"></span></div>
                       <div class="nl-preview-wrap" id="nlPreviewWrap">
                         <iframe id="nlPreview" title="Newsletter preview" class="nl-preview" scrolling="no"></iframe>
                       </div>
@@ -1153,13 +1186,20 @@
                      used to come after Documents and the template library, so the two buttons you
                      press constantly were below two panels you rarely touch. -->
                 <div class="nl-actions">
-                  <button type="button" id="newsletterNew">New newsletter</button>
                   <!-- Loads the built-in showcase covering every block type. Renamed from "Start from
                        template" in TASK-249: once real templates can be saved, one word meant two
                        things. This one is an EXAMPLE; the saved library below holds templates. -->
                   <button type="button" id="newsletterTemplate">Start from example</button>
                   <button type="submit" id="newsletterSave">Save</button>
-                  <button type="button" id="newsletterTest">Send test to me</button>
+                </div>
+                <!-- TASK-645: a test to up to five people (the server already took "to"), yours first. -->
+                <div class="nl-card nl-test" id="nlTest">
+                  <h4>Send a test</h4>
+                  <label for="nlTestTo">Send a test to</label>
+                  <input type="text" id="nlTestTo" inputmode="email" autocomplete="off" aria-describedby="nlTestHint" />
+                  <p class="nl-subject-hint" id="nlTestHint">Up to five email addresses, with commas between them. Yours is filled in. It goes as it looks now, saved or not, with [TEST] before the subject.</p>
+                  <button type="button" id="newsletterTest">Send the test</button>
+                  <p id="nlTestMsg" class="nl-sub-msg" aria-live="polite"></p>
                 </div>
 
                 <!-- Delivery stats (TASK-256, email stats Phase 1): shown only for a SENT newsletter.
@@ -1229,7 +1269,7 @@
                      surprise. -->
                 <div class="nl-panel" id="nlPanelWho" hidden>
                 <h3 class="nl-stage-head">Who gets this?</h3>
-                <p class="admin-help">Pick one audience. Anyone who unsubscribed or bounced is left out automatically — you never have to think about it.</p>
+                <p class="admin-help">Choose one audience or more. Anyone on more than one gets it once, and anyone who unsubscribed or bounced is left out automatically.</p>
                 <div class="nl-who-grid">
                   <div>
                     <!-- TASK-285: the audiences as CARDS, not a dropdown. Who a newsletter goes to
@@ -1239,7 +1279,7 @@
                          #sendListPick stays as the hidden mirror of the chosen card, so every
                          existing code path (the send request, the confirmation, sendAudienceNote)
                          keeps working untouched. -->
-                    <div class="nl-aud-cards" id="nlAudienceCards" role="radiogroup" aria-label="Audience to send to"></div>
+                    <div class="nl-aud-cards" id="nlAudienceCards" role="group" aria-label="Audiences to send to"></div>
                     <span class="nl-send-list" id="sendListWrap" hidden>
                       <label for="sendListPick">Send to</label>
                       <select id="sendListPick" aria-label="Audience to send to"></select>
@@ -1294,7 +1334,7 @@
                   <label class="nl-dest-label" for="sendScheduleAt">Send at</label>
                   <input type="datetime-local" id="sendScheduleAt" aria-describedby="sendScheduleHint" />
                   <button type="button" id="sendScheduleClear">Send now instead</button>
-                  <span class="nl-schedule-hint" id="sendScheduleHint">Leave empty to send as soon as you confirm. Charity newsletters generally do best <b>Tuesday to Thursday, 9-11am</b> — that is general guidance, not based on your readers. Once you have sent a few, your own click figures will tell you better.</span>
+                  <span class="nl-schedule-hint" id="sendScheduleHint">Pick the day and time it should go. Charity newsletters generally do best <b>Tuesday to Thursday, 9-11am</b>. That is general guidance, not based on your readers: once you have sent a few, your own click figures will tell you better.</span>
                   <div class="nl-schedule-picks">
                     <button type="button" data-schedule-pick="2,9">Next Tuesday 9am</button>
                     <button type="button" data-schedule-pick="4,10">Next Thursday 10am</button>
@@ -1335,6 +1375,7 @@
                     <div class="nl-send-row">
                       <button type="button" id="newsletterSend" hidden>Send</button>
                     </div>
+                    <p class="nl-send-says" id="nlSendSays" aria-live="polite"></p>
                   </aside>
                 </div>
                 </div>

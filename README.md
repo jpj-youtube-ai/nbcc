@@ -8754,6 +8754,32 @@ kit's class `ak` on `<section id="view-newsletter">` (never on a panel), with th
   preview shows whole rather than scrolling in its box. Saving a draft no longer swaps the newest
   newsletter into the editor.
 
+## The newsletter composer: saving as you go, one way to choose who, and a preview for any name (TASK-645)
+
+Admin > Newsletter > Write, Who and Send. Design: `docs/superpowers/specs/2026-11-14-admin-refresh-newsletter-composer.md`.
+Tests: `test/unit/admin-newsletter-composer.test.ts`, `test/unit/newsletter-preheader.test.ts`, and the preview's real
+handler in `test/unit/admin-newsletter-contract.test.ts`.
+
+- **Saving as you go is true now.** A draft saves itself 1.5 seconds after the last change (never a sent newsletter,
+  never beside a save already on its way; a new one is created on its first save, then updated). The bar says what is
+  true: "Changes not saved yet", "Saving…", "Saved 2 minutes ago", or "Could not save. Your changes are still here:
+  press Save to try again." Close saves first; leaving the page with changes not saved makes the browser ask; opening
+  the tab again never reads a newsletter over the one being written.
+- **New newsletter** is in the composer's top bar and clears everything. A new one opens on a **start screen**: blank,
+  your latest draft, a past newsletter used again, a saved template, or the example.
+- **Who**: tick as many audiences as you like (nothing is ticked for you), and one number: the people who will get it,
+  counted once each. **Before you send** names every audience with that number.
+- **Send**: "Send later" with no time, or Send with nobody chosen, is refused beside the button with the reason (both
+  used to send). The confirmation says who, how many, when and how fast.
+- **Write**: a laptop or phone preview (the phone at true size; on a phone, a Preview button opens it in the page),
+  "Preview it for" any name or none, undo (a "Removed. Undo" line, the Undo button, Ctrl+Z outside a text box), a "+"
+  between blocks to add one there, a subject helper (length, what a phone shows, how it reads with and without a name),
+  **preview text** (the grey inbox line), and a test to up to five addresses.
+- **Server**: `POST /api/admin/newsletters/preview` takes an optional `firstName` ("" is no name) and `subject`, and
+  with a subject answers `subjects: { named, unnamed }` by the send's own rule. The newsletter document gains an
+  optional `preheader` (no migration): the email gains a hidden first line only when it holds words, so every
+  newsletter already written renders exactly as before (`newsletter-golden.test.ts` untouched).
+
 ## Newsletter links opened a security warning (TASK-466)
 
 Every link in a newsletter is rewritten so a click can be counted, and until this change that was to

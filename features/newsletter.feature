@@ -79,6 +79,15 @@ Feature: Admin newsletter (REQ-069)
     And the preview HTML should contain "Dear Jane,"
     And the preview HTML should contain "SC047995"
 
+  # TASK-645: preview as a name the writer types, with preview text, and the subject read both ways.
+  Scenario: an Editor previews a block document as another name, with preview text
+    Given a newsletter admin "editor9.newsletter.bdd@example.com" with role "editor" and password "pw-e9"
+    When I preview the current block document as "Morag" with preview text "Invented news inside" and subject "Hey, {{firstName}}!"
+    Then the preview response status should be 200
+    And the preview HTML should contain "Dear Morag,"
+    And the preview HTML should contain "Invented news inside"
+    And the preview subject for someone with no name should be "Hey!"
+
   Scenario: a text block written in two paragraphs previews as two paragraphs
     Given a newsletter admin "paste.editor.newsletter.bdd@example.com" with role "editor" and password "pw-paste"
     When I preview a block document whose text reads:

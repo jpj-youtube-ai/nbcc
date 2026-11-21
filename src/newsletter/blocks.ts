@@ -26,7 +26,7 @@ import {
 // module rather than copied here, so the two can never drift apart — if the signature changes there,
 // the newsletter follows automatically, which is what "the same signature" has to mean.
 // TASK-292: who a salutation addresses when we have no name - never nobody.
-import { greetingName } from "./name-fallback";
+import { greetingName, mergeName } from "./name-fallback";
 import { SCRIPT } from "../thank-you/letter";
 // The paper look blocks: new block types with their own renderers and helpers (./paper-blocks.ts).
 import { PAPER_RENDERERS, PAPER_NO_SIZE_STEP } from "./paper-blocks";
@@ -71,6 +71,9 @@ export interface Block {
 export interface NewsletterDoc {
   // TASK-292: optional, so every newsletter written before this renders unchanged.
   merge?: { nameFallback: string; greetingFallback: string };
+  // TASK-645: preview text, the grey line an inbox shows after the subject. Optional, so every
+  // newsletter written before it renders byte for byte as it did.
+  preheader?: string;
   blocks: Block[];
 }
 
@@ -86,6 +89,9 @@ export const newsletterDocSchema = z.object({
       greetingFallback: z.string().max(40).default(""),
     })
     .optional(),
+  // TASK-645: preview text. Optional and in the doc (jsonb, no migration); the email gains its hidden
+  // line only when this holds words.
+  preheader: z.string().max(150).optional(),
   blocks: z.array(
     z.object({
       type: z.enum(BLOCK_TYPES),
@@ -914,5 +920,22 @@ export function renderNewsletter(doc: NewsletterDoc, ctx: RenderCtx): string {
     nameFallback: ctx.nameFallback ?? doc.merge?.nameFallback ?? "",
     greetingFallback: ctx.greetingFallback ?? doc.merge?.greetingFallback ?? "",
   };
-  return renderFrame(doc.blocks.map((b) => renderBlock(b, merged)).join(""), merged.unsubscribeUrl);
+  const html = renderFrame(doc.blocks.map((b) => renderBlock(b, merged)).join(""), merged.unsubscribeUrl);
+  return withPreheader(html, doc.preheader, merged);
+}
+
+// TASK-645: the preview text, as the first thing in the body, hidden from the reader but read by the
+// inbox for the line under the subject. Added AFTER the frame is built and only when there are words,
+// so renderFrame is untouched and a newsletter without preview text is exactly what it was. It greets
+// by name by the same rule as the subject, and a <div> keeps it on its own line in the plain text.
+function withPreheader(html: string, preheader: string | undefined, ctx: RenderCtx): string {
+  const words = (preheader ?? "").trim();
+  if (!words) return html;
+  const line = escapeHtml(mergeName(words, ctx.firstName, ctx.nameFallback ?? ""));
+  const hidden =
+    '<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all">' +
+    line + "</div>";
+  // A function, not a "$1" string: words holding "$'", "$`" or "$1" must go in as written, never be
+  // read as a replacement pattern (review of #769).
+  return html.replace(/<body[^>]*>/, (body) => body + hidden);
 }

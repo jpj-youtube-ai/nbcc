@@ -99,7 +99,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   }
   if (url.includes("/api/admin/newsletters/test-send") && method === "POST") {
     testSendRequests.push({ body: parsedBody });
-    return j({ sentTo: "s@nbcc" });
+    return j({ sentTo: ["s@nbcc"], failed: [], subject: "[TEST] " + parsedBody.subject }); // the route's own shape
   }
   if (url.includes("/api/admin/newsletters/subscribers") && method === "POST") {
     subscriberRequests.push({ body: parsedBody });
@@ -198,7 +198,18 @@ const el = (id: string) => document.getElementById(id) as HTMLElement;
 let timers: ReturnType<typeof vi.spyOn> | null = null;
 beforeEach(() => {
   timers = vi.spyOn(globalThis, "setTimeout");
+  // TASK-645: "New newsletter" asks before it throws away work that is not saved, and several
+  // describes below share one page from test to test. Yes, unless a test says otherwise.
+  window.confirm = () => true;
 });
+
+/** TASK-645: Send goes only to an audience chosen on the Who step (nothing is chosen for you). */
+async function chooseAudience(id: number) {
+  (document.querySelector('.nl-cp-step[data-nl-panel="nlPanelWho"]') as HTMLElement).click();
+  await flush();
+  (document.querySelector('[data-aud-card="' + id + '"]') as HTMLElement).click();
+  await flush();
+}
 afterEach(() => {
   for (const r of timers?.mock.results ?? []) if (r.type === "return") clearTimeout(r.value as ReturnType<typeof setTimeout>);
   timers?.mockRestore();
@@ -388,8 +399,10 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     newsletterListRows = [
       { id: 41, subject: legacyNewsletter.subject, status: "draft", sentAt: null, recipientCount: null },
     ];
+    audienceRows = [{ id: 1, slug: "newsletter", name: "Newsletter", kind: "everyone", visibility: "public", memberCount: 2 }];
     await openNewsletterTab(); // auto-opens id 41; Send button is revealed for an admin on a draft
     await flush();
+    await chooseAudience(1);
   }
   const overlay = () => document.querySelector(".nl-modal-overlay");
 
@@ -510,6 +523,8 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     (el("newsletterNew") as HTMLElement).click();
     (el("newsletterSubject") as HTMLInputElement).value = "Test subject";
     clickPalette("Text");
+    // TASK-645: the box of addresses; left empty, the test goes to the person signed in, as it always did.
+    (el("nlTestTo") as HTMLInputElement).value = "";
 
     (el("newsletterTest") as HTMLElement).click();
     await flush();
@@ -518,7 +533,8 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect(testSendRequests.length).toBe(1);
     expect(testSendRequests[0].body.subject).toBe("Test subject");
     expect((testSendRequests[0].body.bodyJson as { blocks: unknown[] }).blocks.length).toBe(1);
-    expect(el("newsletterMsg").textContent).toContain("Test sent to s@nbcc");
+    // TASK-645: said beside the test's own button, not on the Send step.
+    expect(el("nlTestMsg").textContent).toContain("Test sent to s@nbcc");
     // Unsaved, so there is no id to send: the server tags its links as a draft.
     expect(testSendRequests[0].body.newsletterId).toBeUndefined();
   });
@@ -530,6 +546,7 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     (el("newsletterSubject") as HTMLInputElement).value = "Test subject";
     clickPalette("Text");
     (el("newsletterId") as HTMLInputElement).value = "41";
+    (el("nlTestTo") as HTMLInputElement).value = "";
 
     (el("newsletterTest") as HTMLElement).click();
     await flush();
@@ -596,7 +613,30 @@ describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {
 // so that is the assertion that earns its keep. The client's own exclusion list is kept honest by
 // nlCanSize being asserted against a masthead below; the server ignores a step on those types anyway,
 // so the worst case of drift is a dead button, never a wrong render.
+
+/**
+ * TASK-645: a fresh page and a fresh copy of app.js, as the describes above set up for themselves.
+ * The three describes that use it used to borrow the page the test before them left behind, which
+ * only worked while opening the tab again always read the newest newsletter over what was open.
+ */
+function freshPage() {
+  loginToken = tokenFor("editor");
+  newsletterListRows = [];
+  savedRequests.length = 0;
+  previewRequests.length = 0;
+  testSendRequests.length = 0;
+  window.sessionStorage.clear();
+  document.body.innerHTML = bodyHtml;
+  (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+  (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+    Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+  );
+  // eslint-disable-next-line no-eval
+  (0, eval)(appSrc);
+}
+
 describe("per-block text size control (TASK-248)", () => {
+  beforeEach(freshPage);
   const sizeCtrl = () => el("nlCanvas").querySelector(".nl-size");
   const sizeBtns = () =>
     Array.prototype.slice.call((sizeCtrl() as HTMLElement).querySelectorAll("button")) as HTMLButtonElement[];
@@ -677,6 +717,7 @@ describe("per-block text size control (TASK-248)", () => {
 // document, so the risk is not that they look wrong - it is that they never reach the save and
 // every nameless reader quietly gets "friend" anyway.
 describe("name fallbacks (TASK-292)", () => {
+  beforeEach(freshPage);
   const draft = {
     id: 41,
     subject: "Hey, {{firstName}}! It's the NBCC Newsletter",
@@ -755,6 +796,7 @@ describe("name fallbacks (TASK-292)", () => {
 // TASK-289: blocks collapse. Ten blocks used to mean ten fully expanded forms, so finding the one
 // you wanted meant scrolling past every field of every other one.
 describe("collapsible blocks (TASK-289)", () => {
+  beforeEach(freshPage);
   const threeBlockDraft = {
     id: 41,
     subject: "Three blocks",
@@ -1360,7 +1402,8 @@ describe("audiences (TASK-259)", () => {
   it("sends to the CHOSEN audience — the listId reaches the send request", async () => {
     await mount();
     (el("newsletterId") as HTMLInputElement).value = "41";
-    (el("sendListPick") as HTMLSelectElement).value = "2";
+    // TASK-645: chosen on the Who step's cards, the one way to choose (the select is a hidden mirror).
+    await chooseAudience(2);
     // Drive the send confirm dialog end to end, the way the admin does.
     (el("newsletterSend") as HTMLElement).hidden = false;
     (el("newsletterSend") as HTMLElement).click();

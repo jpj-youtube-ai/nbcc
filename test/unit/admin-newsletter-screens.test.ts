@@ -952,6 +952,8 @@ describe("work not saved is never thrown away without asking (review of #763)", 
 
   it("asks before Worth a look's draft replaces changes that are not saved, and keeps them if you say no", async () => {
     await editing(8);
+    // TASK-645: Close saves what is not saved, so this is a change that could not be saved.
+    failing["PUT /api/admin/newsletters/8"] = { status: 500 };
     type("newsletterSubject", "An older invented idea, changed");
     (q("#nlComposeClose") as HTMLElement).click();
     await settle();
@@ -972,6 +974,7 @@ describe("work not saved is never thrown away without asking (review of #763)", 
 
   it("asks before Use this again replaces changes that are not saved", async () => {
     await editing(8);
+    failing["PUT /api/admin/newsletters/8"] = { status: 500 }; // TASK-645: see above
     type("newsletterSubject", "An older invented idea, changed");
     (q("#nlComposeClose") as HTMLElement).click();
     await settle();
@@ -1003,6 +1006,11 @@ describe("work not saved is never thrown away without asking (review of #763)", 
       return { status: "queued", jobId: 1, recipientCount: 3, rollout: "immediate", scheduledAt: null };
     };
     expect((el("newsletterSave") as HTMLButtonElement).disabled).toBe(false);
+    // TASK-645: Send goes only to an audience chosen on the Who step.
+    (q('.nl-cp-step[data-nl-panel="nlPanelWho"]') as HTMLElement).click();
+    await settle();
+    (q('[data-aud-card="3"]') as HTMLElement).click();
+    await settle();
     el("newsletterSend").click();
     await settle();
     (q(".nl-modal-confirm") as HTMLButtonElement).click();

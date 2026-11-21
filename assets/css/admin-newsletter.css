@@ -227,3 +227,112 @@
 /* With 44px controls a block's head holds them on a second line on a phone, rather than past the edge. */
 #view-newsletter .nl-block-head { flex-wrap: wrap; }
 #view-newsletter .nl-block-ctrls { flex-wrap: wrap; justify-content: flex-end; }
+
+/* ---- the composer pass (TASK-645): start screen, subject helper, preview, undo, add here, test ---- */
+/* New newsletter, in the bar where it is looked for. */
+#view-newsletter .nl-cp-new {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: var(--ov-thin); border-radius: 12px;
+  background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+}
+#view-newsletter .nl-cp-new:hover { background: var(--ov-hover); }
+#view-newsletter .nl-cp-new[hidden] { display: none; }
+#view-newsletter .nl-cp-saved.is-error { color: var(--ov-crimson); font-weight: 600; }
+
+/* The start screen: while it shows, the rest of the Write step waits. */
+#view-newsletter #nlPanelWrite.is-starting > :not(#nlStartScreen) { display: none; }
+#view-newsletter .nl-start[hidden] { display: none; }
+#view-newsletter .nl-start-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 12px; margin: 14px 0 0; }
+#view-newsletter .nl-start-opt {
+  display: grid; align-content: start; gap: 4px; min-height: 44px; padding: 14px 16px; border: var(--ov-thin); border-radius: 16px;
+  background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere;
+}
+#view-newsletter .nl-start-opt b { font-family: var(--ov-head); font-size: 1.02rem; font-weight: 800; color: var(--ov-maroon); }
+#view-newsletter .nl-start-opt span { font-size: 0.88rem; color: var(--ov-soft); }
+#view-newsletter .nl-start-opt:hover { background: var(--ov-hover); }
+#view-newsletter .nl-start-opt:active { transform: translate(1px, 2px); box-shadow: var(--ov-pressed); }
+
+/* The subject helper and preview text. */
+#view-newsletter .nl-subject-help p { margin: 4px 0 0; font-size: 0.86rem; color: var(--ov-soft); overflow-wrap: anywhere; }
+#view-newsletter .nl-subject-help b { font-weight: 600; color: var(--ov-ink); }
+#view-newsletter .nl-preheader { margin-top: 14px; }
+
+/* The preview: whole, in the page, at every width (nothing scrolls inside its box), laptop or phone. */
+#view-newsletter .nl-right { position: static; }
+#view-newsletter .nl-builder .nl-preview-wrap { height: auto; overflow: visible; text-align: center; }
+#view-newsletter .nl-preview { margin: 0 auto; }
+#view-newsletter .nl-preview-frame.is-phone .nl-preview-wrap { padding: 12px 0; }
+#view-newsletter .nl-pv-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin: 0 0 10px; }
+#view-newsletter .nl-pv-size .admin-seg { min-height: 44px; padding: 8px 16px; }
+#view-newsletter .nl-pv-name { display: grid; gap: 4px; flex: 1 1 12rem; min-width: 0; }
+#view-newsletter .nl-pv-name label { font-size: 0.85rem; font-weight: 600; color: var(--ov-ink); }
+#view-newsletter .nl-pv-hint { font-size: 0.8rem; color: var(--ov-soft); }
+#view-newsletter .nl-pv-inbox { display: grid; gap: 2px; padding: 8px 12px; border-bottom: 1px solid var(--ov-rule); background: var(--ov-card); text-align: left; overflow-wrap: anywhere; }
+#view-newsletter .nl-pv-inbox b { font-size: 0.92rem; color: var(--ov-ink); }
+#view-newsletter .nl-pv-inbox span { font-size: 0.84rem; color: var(--ov-soft); }
+#view-newsletter .nl-pv-open, #view-newsletter .nl-pv-back { display: none; }
+
+/* Undo, and a block added where you are. */
+#view-newsletter .nl-canvas-toggle[hidden] { display: none; }
+#view-newsletter .nl-canvas-toggle:disabled { opacity: 0.5; cursor: default; }
+#view-newsletter .nl-undo-line {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 0 0 12px; padding: 8px 8px 8px 16px;
+  border: 2px dashed var(--ov-rule); border-radius: 14px; background: var(--ov-warm); color: var(--ov-ink); font-weight: 600; list-style: none;
+}
+#view-newsletter .nl-undo-btn, #view-newsletter .nl-insert-cancel {
+  min-height: 44px; padding: 0 16px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink);
+  color: var(--ov-ink); font: inherit; font-weight: 600; cursor: pointer;
+}
+#view-newsletter .nl-undo-btn:hover, #view-newsletter .nl-insert-cancel:hover { background: var(--ov-hover); }
+#view-newsletter .nl-insert { display: flex; justify-content: center; margin: 0 0 10px; list-style: none; }
+#view-newsletter .nl-insert-btn {
+  width: 44px; min-height: 44px; padding: 0; border: 2px dashed var(--ov-rule); border-radius: 50%; background: var(--ov-card);
+  color: var(--ov-maroon); font: inherit; font-size: 1.4rem; font-weight: 700; line-height: 1; cursor: pointer;
+}
+#view-newsletter .nl-insert-btn:hover { border-style: solid; border-color: var(--ov-maroon); background: var(--ov-hover); }
+#view-newsletter .nl-insert.is-open { display: block; padding: 12px; border: var(--ov-thin); border-radius: 16px; background: var(--ov-warm); }
+#view-newsletter .nl-insert-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; color: var(--ov-ink); }
+#view-newsletter .nl-insert-palette { margin: 0; }
+
+/* A test to up to five people. */
+#view-newsletter .nl-test { display: grid; gap: 8px; max-width: 40rem; margin: 0 0 16px; }
+#view-newsletter .nl-test[hidden] { display: none; }
+#view-newsletter .nl-test label { font-weight: 600; color: var(--ov-ink); }
+#view-newsletter .nl-test .nl-subject-hint { margin: 0; }
+#view-newsletter .nl-test button {
+  justify-self: start; min-height: 44px; padding: 0 18px; border: var(--ov-thin); border-radius: 12px; background: var(--ov-card);
+  box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-weight: 600; cursor: pointer;
+}
+#view-newsletter .nl-test button:hover { background: var(--ov-hover); }
+#view-newsletter .nl-test button:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
+
+/* Who: the cards are tick boxes (more than one may be chosen), so they look like tick boxes, not radio
+   dots; and the line under them states the choice, it is not a warning. */
+#view-newsletter .nl-aud-tick { border-radius: 6px; }
+#view-newsletter .nl-aud-card.is-on .nl-aud-tick::after {
+  width: 5px; height: 10px; border: solid var(--ov-crimson); border-width: 0 2.5px 2.5px 0; border-radius: 0; background: none;
+  transform: translateY(-1px) rotate(45deg);
+}
+#view-newsletter .nl-send-note { color: var(--ov-ink); }
+
+/* Why Send did nothing, beside it. */
+#view-newsletter .nl-send-says { margin: 10px 0 0; font-weight: 600; color: var(--ov-holly); }
+#view-newsletter .nl-send-says.is-error { color: var(--ov-crimson); }
+#view-newsletter .nl-send-says:empty { display: none; }
+
+
+@media (prefers-reduced-motion: no-preference) {
+  #view-newsletter .nl-start-opt, #view-newsletter .nl-cp-new { transition: transform 0.12s var(--ov-ease); }
+}
+
+@media (max-width: 860px) {
+  /* On a phone the preview is a button that opens it, whole, in the page; Back to writing closes it. */
+  #view-newsletter .nl-pv-open, #view-newsletter #nlPanelWrite.is-previewing .nl-pv-back {
+    display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin: 0 0 14px; border: var(--ov-thin);
+    border-radius: 14px; background: var(--ov-card); box-shadow: 2px 3px 0 var(--ov-ink); color: var(--ov-ink); font: inherit; font-weight: 700; cursor: pointer;
+  }
+  #view-newsletter #nlPanelWrite.is-starting .nl-pv-open { display: none; }
+  #view-newsletter #nlPanelWrite:not(.is-previewing) .nl-right { display: none; }
+  #view-newsletter #nlPanelWrite.is-previewing > :not(.nl-builder) { display: none; }
+  #view-newsletter #nlPanelWrite.is-previewing .nl-left { display: none; }
+  #view-newsletter .nl-cp-new { flex: 0 0 auto; }
+}

@@ -1134,14 +1134,29 @@ export async function postAdminNewsletter(req: Request, res: Response): Promise<
 // preview (Editor+). Stateless, no DB. Uses a sample first name so merge fields show realistically.
 export async function postAdminNewsletterPreview(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
-  const parsed = z.object({ bodyJson: newsletterDocSchema }).safeParse(req.body);
+  // TASK-645: the writer may preview as a name they type, or as someone with no name (""), and may
+  // send the subject to have it read both ways by the send's own rule (mergeSubject), so the screen
+  // never keeps a second copy of that rule. Neither given: exactly the answer it always was.
+  const parsed = z
+    .object({
+      bodyJson: newsletterDocSchema,
+      firstName: z.string().trim().max(60).optional(),
+      subject: z.string().max(300).optional(),
+    })
+    .safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
   }
+  const { bodyJson, subject } = parsed.data;
+  const firstName = parsed.data.firstName ?? PREVIEW_FIRST_NAME;
   // Pass a placeholder unsubscribe URL so the preview shows the (non-functional) Unsubscribe button
   // the recipient will get — real sends substitute a signed per-recipient link.
+  const html = renderNewsletter(bodyJson, { firstName, unsubscribeUrl: "#" });
+  if (subject === undefined) return res.json({ html });
+  const fallback = bodyJson.merge?.nameFallback ?? "";
   return res.json({
-    html: renderNewsletter(parsed.data.bodyJson, { firstName: PREVIEW_FIRST_NAME, unsubscribeUrl: "#" }),
+    html,
+    subjects: { named: mergeSubject(subject, firstName, fallback), unnamed: mergeSubject(subject, "", fallback) },
   });
 }
 

@@ -125,7 +125,9 @@
 }
 
 /* TASK-647: the form to change a business's details, inside the kit's fold. Nothing scrolls inside it. */
-#view-business .biz-edit-form { padding: 0 16px 16px; }
+#view-business .biz-edit-form { padding: 14px 16px 16px; }
+/* One box a row on a phone, so a long business name is not cut short. */
+@media (max-width: 860px) { #view-business .biz-edit-form .ty-row { grid-template-columns: minmax(0, 1fr); } }
 #view-business .biz-edit-label { margin: 0 0 6px; font-weight: 700; }
 #view-business .biz-edit-email { margin: 0 0 6px; overflow-wrap: anywhere; }
 #view-business .biz-edit-form .admin-btn { min-height: 44px; }

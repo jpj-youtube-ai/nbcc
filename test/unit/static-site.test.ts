@@ -14,6 +14,11 @@ const CSS_PATH = "assets/css/styles.css";
 // because styles.css counts towards donate.html's page-weight budget, which has almost no room left.
 const HOME_TOP_CSS_PATH = "/assets/css/home-top.css";
 const HOME_PAGE = "index.html";
+// Freddie's film at the top of the home page (21 November 2026): its own styles and script, on the home
+// page only, for the same reason.
+const HOME_FILM_CSS_PATH = "/assets/css/home-film.css";
+const HOME_FILM_JS_PATH = "/assets/js/home-film.js";
+const HOME_ONLY_CSS = [HOME_TOP_CSS_PATH, HOME_FILM_CSS_PATH];
 const JS_PATH = "assets/js/main.js";
 // TASK-479: the visit counter, the one other script every public page carries. Small, deferred and
 // separate from main.js so it can be left off the pages that are not public.
@@ -50,9 +55,9 @@ function allJsSrcs(html: string): string[] {
   return [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi)].map((m) => m[1]);
 }
 
-// Every script but the visit counter and the contact page's spam check, each checked on its own.
+// Every script but the visit counter, the contact page's spam check and the home page's film, each checked on its own.
 function jsSrcs(html: string): string[] {
-  return allJsSrcs(html).filter((src) => src !== PULSE_PATH && src !== CAPTCHA_PATH);
+  return allJsSrcs(html).filter((src) => src !== PULSE_PATH && src !== CAPTCHA_PATH && src !== HOME_FILM_JS_PATH);
 }
 
 describe("static site shared assets", () => {
@@ -88,12 +93,14 @@ for (const { file, label } of PAGES) {
 
     it("links the one shared stylesheet, and no other CSS", () => {
       expect(html).toContain(`<link rel="stylesheet" href="${CSS_PATH}"`);
-      expect(cssHrefs(html)).toEqual(file === HOME_PAGE ? [CSS_PATH, HOME_TOP_CSS_PATH] : [CSS_PATH]);
+      expect(cssHrefs(html)).toEqual(file === HOME_PAGE ? [CSS_PATH, HOME_TOP_CSS_PATH, HOME_FILM_CSS_PATH] : [CSS_PATH]);
     });
 
     it("loads the one shared script with defer, and no other JS but the visit counter", () => {
       expect(html).toContain(`<script defer src="${JS_PATH}"></script>`);
       expect(jsSrcs(html)).toEqual([JS_PATH]);
+      expect(allJsSrcs(html).filter((src) => src === HOME_FILM_JS_PATH)).toHaveLength(file === HOME_PAGE ? 1 : 0);
+      if (file === HOME_PAGE) expect(html).toContain(`<script defer src="${HOME_FILM_JS_PATH}"></script>`);
       expect(html).toContain(`<script defer src="${PULSE_PATH}"></script>`);
       expect(allJsSrcs(html).filter((src) => src === PULSE_PATH)).toHaveLength(1);
     });
@@ -129,7 +136,7 @@ describe("the five pages together", () => {
   });
 
   it("all reference the exact same single CSS path", () => {
-    const all = PAGES.flatMap(({ file }) => cssHrefs(readOrEmpty(file))).filter((href) => href !== HOME_TOP_CSS_PATH);
+    const all = PAGES.flatMap(({ file }) => cssHrefs(readOrEmpty(file))).filter((href) => !HOME_ONLY_CSS.includes(href));
     expect(all).toHaveLength(PAGES.length);
     expect(new Set(all)).toEqual(new Set([CSS_PATH]));
   });

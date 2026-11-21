@@ -763,3 +763,97 @@ describe("feature 7: controls a finger can use, and the stylesheet's house rules
     expect(css).not.toMatch(/overflow(-[xy])?:\s*(auto|scroll)/);
   });
 });
+
+// ---- review of #769 --------------------------------------------------------------------------------
+
+describe("review: Send sends what is on screen", () => {
+  it("saves the latest changes before the confirmation opens", async () => {
+    await editing(12);
+    await chooseAudiences(3);
+    await go("nlPanelSend");
+    type("newsletterSubject", "Changed a moment before Send");
+    el("newsletterSend").click();
+    await settle();
+    const puts = got("PUT", "/api/admin/newsletters/12");
+    expect(puts.length).toBe(1);
+    expect(puts[0].body.subject).toBe("Changed a moment before Send");
+    expect(q(".nl-modal-overlay")).not.toBeNull();
+  });
+
+  it("refuses beside Send when the latest changes could not be saved, so they would not be in the email", async () => {
+    await editing(12);
+    await chooseAudiences(3);
+    await go("nlPanelSend");
+    failing["PUT /api/admin/newsletters/12"] = { status: 500 };
+    type("newsletterSubject", "A change that will not save");
+    el("newsletterSend").click();
+    await settle();
+    expect(q(".nl-modal-overlay")).toBeNull();
+    expect(text(el("nlSendSays"))).toBe("Your latest changes are not saved yet, so they would not be in the email. Press Save, then Send.");
+    expect(got("POST", "/api/admin/newsletters/12/send").length).toBe(0);
+  });
+
+  it("waits for a save already on its way, then sends", async () => {
+    await editing(12);
+    await chooseAudiences(3);
+    await go("nlPanelSend");
+    slow["PUT /api/admin/newsletters/12"] = 800;
+    type("newsletterSubject", "Saving when Send is pressed");
+    await wait(AUTOSAVE);
+    el("newsletterSend").click();
+    await wait(1000);
+    await settle();
+    expect(q(".nl-modal-overlay")).not.toBeNull();
+    expect(text(el("nlSendSays"))).not.toContain("not saved");
+  });
+
+  it("checks again when Yes, send is pressed, and sends nothing if the save fails then", async () => {
+    await editing(12);
+    await chooseAudiences(3);
+    await go("nlPanelSend");
+    el("newsletterSend").click();
+    await settle();
+    failing["PUT /api/admin/newsletters/12"] = { status: 500 };
+    type("newsletterSubject", "Typed while the confirmation was open");
+    (q(".nl-modal-confirm") as HTMLElement).click();
+    await settle();
+    expect(got("POST", "/api/admin/newsletters/12/send").length).toBe(0);
+    expect(text(el("nlSendSays"))).toContain("Your latest changes are not saved yet");
+  });
+});
+
+describe("review: saving as you go when another newsletter is opened, and Close during a save", () => {
+  it("saves the newsletter now open when a change to it waited behind the last one's save", async () => {
+    await editing(12, [draft(12, "Invented Christmas thank you"), draft(14, "Another invented draft")]);
+    slow["PUT /api/admin/newsletters/12"] = 2500;
+    type("newsletterSubject", "Twelve, changed");
+    await wait(AUTOSAVE);
+    await go("nlPanelHistory");
+    (q('#newsletterList [data-edit-newsletter="14"]') as HTMLElement).click();
+    await settle();
+    expect((el("newsletterId") as HTMLInputElement).value).toBe("14");
+    type("newsletterSubject", "Fourteen, changed");
+    await wait(AUTOSAVE);
+    await wait(1000);
+    await wait(AUTOSAVE);
+    await settle();
+    const puts = got("PUT", "/api/admin/newsletters/14");
+    expect(puts.length).toBe(1);
+    expect(puts[0].body.subject).toBe("Fourteen, changed");
+    expect(text(el("nlComposeSaved"))).toBe("Saved just now");
+  }, 20_000);
+
+  it("Close waits for a save on its way rather than saying it could not be saved", async () => {
+    await editing(12);
+    slow["PUT /api/admin/newsletters/12"] = 1000;
+    type("newsletterSubject", "Closing during a save");
+    await wait(AUTOSAVE);
+    const asked: string[] = [];
+    window.confirm = (m?: string) => { asked.push(String(m)); return false; };
+    el("nlComposeClose").click();
+    await wait(1200);
+    await settle();
+    expect(asked).toEqual([]);
+    expect(panel()).toEqual(["nlPanelOverview"]);
+  });
+});

@@ -45,4 +45,17 @@ describe("preview text", () => {
     expect(newsletterDocSchema.parse({ blocks: [], preheader: "Kept" }).preheader).toBe("Kept");
     expect(newsletterDocSchema.safeParse({ blocks: [], preheader: "x".repeat(151) }).success).toBe(false);
   });
+  // Review of #769: a "$" pattern in the words must reach the email as written, never be read as a
+  // replacement pattern (which copied the rest of the email into the hidden line).
+  it("keeps dollar signs as written", () => {
+    for (const words of ["Win $' now", "$` and $1", "Save $& more $$"]) {
+      const html = renderNewsletter({ blocks, preheader: words }, ctx);
+      const expected = words.replace(/&/g, "&amp;");
+      const body = html.slice(html.indexOf("<body"));
+      const hidden = body.slice(body.indexOf(">") + 1, body.indexOf("</div>") + 6);
+      expect(hidden).toContain(">" + expected + "</div>");
+      expect(html.split("<body").length).toBe(2);
+      expect(html.length).toBeLessThan(renderNewsletter({ blocks }, ctx).length + 400);
+    }
+  });
 });

@@ -935,5 +935,7 @@ function withPreheader(html: string, preheader: string | undefined, ctx: RenderC
   const hidden =
     '<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all">' +
     line + "</div>";
-  return html.replace(/(<body[^>]*>)/, `$1${hidden}`);
+  // A function, not a "$1" string: words holding "$'", "$`" or "$1" must go in as written, never be
+  // read as a replacement pattern (review of #769).
+  return html.replace(/<body[^>]*>/, (body) => body + hidden);
 }

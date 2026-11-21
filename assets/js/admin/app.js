@@ -8539,6 +8539,7 @@
   var nlAutosaveTimer = null;
   var nlSaving = false; // a save is on its way: never start a second beside it
   var nlSaveAgain = false; // something changed while it was on its way
+  var nlSavePromise = null; // the save on its way, so Send and Close can wait for it
   var nlSaveFailed = false;
   var nlSavedAt = 0; // when it last saved, this session
   var nlSavedNote = ""; // what to say before anything has been saved ("Carrying on with your draft")
@@ -10602,12 +10603,13 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return req
+    nlSavePromise = req
       .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
       .then(function (res) {
         nlSaving = false;
         // Another newsletter was opened or started meanwhile: this answer is not about what is on screen.
-        if (seq !== nlLoadSeq) return false;
+        // A change to the one now open that waited behind it is saved now (review of #769).
+        if (seq !== nlLoadSeq) { nlSaveAgain = false; nlEditorChanged(); return false; }
         if (!res.ok) {
           nlSaveFailed = true;
           if (!opts.auto) el("newsletterMsg").textContent = (res.body && res.body.error) || "Save failed.";
@@ -10630,13 +10632,26 @@
       })
       .catch(function () {
         nlSaving = false;
-        if (seq !== nlLoadSeq) return false;
+        if (seq !== nlLoadSeq) { nlSaveAgain = false; nlEditorChanged(); return false; }
         nlSaveFailed = true;
         if (!opts.auto) el("newsletterMsg").textContent = "Save failed.";
         nlPaintSaved();
         return false;
       });
+    return nlSavePromise;
   }
+  /**
+   * Waits for a save on its way, then saves anything still not saved. Resolves true when everything on
+   * screen is saved. Send uses it because the server sends the STORED newsletter (review of #769).
+   */
+  function nlSaveAll() {
+    var waitFor = nlSaving && nlSavePromise ? nlSavePromise : Promise.resolve();
+    return waitFor.then(function () {
+      if (!nlHasUnsaved()) return true;
+      return nlSaveNow({ auto: true }).then(function () { return !nlHasUnsaved(); });
+    });
+  }
+  var NL_NOT_SAVED_FOR_SEND = "Your latest changes are not saved yet, so they would not be in the email. Press Save, then Send.";
   /** Close: save what is not saved first; ask only when it cannot be saved. */
   function nlClose() {
     if (!nlHasUnsaved()) { nlShowPanel("nlPanelOverview"); return; }
@@ -10645,8 +10660,8 @@
       : "This newsletter could not be saved yet: it needs a subject line. Close anyway? What you wrote stays here until you open or start another newsletter.";
     var ask = function () { if (window.confirm(why)) nlShowPanel("nlPanelOverview"); };
     if (!nlSubjectNow()) { ask(); return; }
-    nlSaveNow({ auto: true }).then(function (ok) {
-      if (ok || !nlHasUnsaved()) nlShowPanel("nlPanelOverview");
+    nlSaveAll().then(function (ok) {
+      if (ok) nlShowPanel("nlPanelOverview");
       else ask();
     });
   }
@@ -12917,8 +12932,14 @@
       // and says why. Either used to send at once (to the default audience, or straight away).
       var problem = nlSendProblem();
       if (problem) { nlSay(el("nlSendSays"), problem, "error"); return; }
-      nlSay(el("nlSendSays"), "");
-      nlShowSendConfirm(id, el("newsletterSend"));
+      // Review of #769: the server sends the newsletter as STORED, so what is on screen is saved first.
+      // The checks and the test send read the editor's copy, which would otherwise hide the difference.
+      if (nlHasUnsaved() || nlSaving) nlSay(el("nlSendSays"), "Saving your latest changes first\u2026");
+      nlSaveAll().then(function (saved) {
+        if (!saved) { nlSay(el("nlSendSays"), NL_NOT_SAVED_FOR_SEND, "error"); return; }
+        nlSay(el("nlSendSays"), "");
+        nlShowSendConfirm(id, el("newsletterSend"));
+      });
     });
   }
 
@@ -12928,6 +12949,14 @@
     // never "later" with no time.
     var problem = nlSendProblem();
     if (problem) { nlSay(el("nlSendSays"), problem, "error"); if (closeModal) closeModal(); return; }
+    // Review of #769: and anything changed while the confirmation was open is saved before it goes.
+    nlSaveAll().then(function (saved) {
+      if (!saved) { nlSay(el("nlSendSays"), NL_NOT_SAVED_FOR_SEND, "error"); if (closeModal) closeModal(); return; }
+      nlDoSendSaved(id, sendBtn, closeModal);
+    });
+  }
+
+  function nlDoSendSaved(id, sendBtn, closeModal) {
     sendBtn.disabled = true;
     el("newsletterMsg").textContent = "Queueing…";
     // TASK-288: every chosen audience rides along. The server resolves them into ONE

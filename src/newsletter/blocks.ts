@@ -30,6 +30,8 @@ import { greetingName, mergeName } from "./name-fallback";
 import { SCRIPT } from "../thank-you/letter";
 // The paper look blocks: new block types with their own renderers and helpers (./paper-blocks.ts).
 import { PAPER_RENDERERS, PAPER_NO_SIZE_STEP } from "./paper-blocks";
+// TASK-646: the two live blocks (a live total and a countdown), in ./live-blocks.ts.
+import { LIVE_RENDERERS } from "./live-blocks";
 
 export const BLOCK_TYPES = [
   "masthead",
@@ -59,6 +61,9 @@ export const BLOCK_TYPES = [
   "bagList",
   "trim",
   "paperStory",
+  // TASK-646: the live blocks, added after every other type.
+  "liveTotal",
+  "countdown",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -901,6 +906,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   button,
   divider,
   ...PAPER_RENDERERS,
+  ...LIVE_RENDERERS,
 };
 
 export function renderBlock(block: Block, ctx: RenderCtx): string {

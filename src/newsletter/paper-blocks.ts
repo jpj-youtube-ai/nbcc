@@ -55,19 +55,19 @@ export type StillPaperType = (typeof STILL_PAPER_TYPES)[number];
 export const EMAIL_ART = "https://nbcc.scot/assets/img/email/";
 
 // The newer pages' colours, as the site's stylesheet has them. The theme's own are imported above.
-const CARD = "#FFFDFA"; // a paper card
+export const CARD = "#FFFDFA"; // a paper card
 const WHITE = "#FFFFFF"; // a photo print's frame
 const KRAFT = TAN_SOFT; // a kraft card
-const HOLLY = "#1A531A";
-const GOLD = "#D9A93E";
+export const HOLLY = "#1A531A";
+export const GOLD = "#D9A93E";
 const TAN = "#D29C8A";
-const INK = "#5C1818"; // the sticker edge: the logo's maroon-brown outline
+export const INK = "#5C1818"; // the sticker edge: the logo's maroon-brown outline
 const MARGIN_LINE = "#E39AA3"; // a ruled pad's red margin line, as it shows on the paper
 const RULED = "#D6D5D2"; // a ruled pad's lines, as they show on the paper
 
 // The paper's hand. The pages use Caveat, which a mail client will not load, so this is the rest of
 // their stack: faces already on Windows, Macs and iPhones, ending in whatever "cursive" is.
-const HAND = "'Segoe Print','Bradley Hand','Noteworthy','Ink Free','Comic Sans MS',cursive";
+export const HAND = "'Segoe Print','Bradley Hand','Noteworthy','Ink Free','Comic Sans MS',cursive";
 
 // The pictures the renderers themselves draw with. Each is a file in assets/img/email.
 const ART_FILES = [
@@ -143,7 +143,7 @@ function ornament(name: (typeof ART_FILES)[number], width: number): string {
 }
 
 /** A full-width band of colour, as a table cell (a mail client keeps a cell's background and padding). */
-function band(bg: string, inner: string, padding: string, extra = ""): string {
+export function band(bg: string, inner: string, padding: string, extra = ""): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="${bg}" style="background:${bg};padding:${padding};text-align:center${extra}">${inner}</td></tr></table>`;
 }
 
@@ -194,7 +194,7 @@ function print(src: string, alt: string, width: number, caption: string, tape: n
  * pale crimson right border. The words' cell is padded so that it sits centred in the card (14px on
  * the left after the 20px margin, 33px on the right), which is what lines the two halves of the tape up.
  */
-function paperCard(inner: string, taped = false): string {
+export function paperCard(inner: string, taped = false): string {
   return (
     (taped ? tapeTop(112) : "") +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CARD};border:1px solid ${LINE};border-radius:3px"><tr>` +

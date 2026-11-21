@@ -6,6 +6,8 @@ import type { BlockType } from "./blocks";
 import type { PreflightFinding } from "./preflight";
 import { looksSendable } from "./link-safety";
 import { parseIsoDate } from "./paper-blocks";
+import { liveTotalShows } from "./live-blocks";
+import type { LiveNumbers } from "./theme";
 
 /** Above this, the finished email risks being cut short by Gmail (which clips near 102 KB). */
 export const BIG_EMAIL_BYTES = 80 * 1024;
@@ -28,7 +30,13 @@ const warn = (message: string): PreflightFinding => ({ level: "warn", message })
 const block = (message: string): PreflightFinding => ({ level: "block", message });
 
 /** What one block adds to the checks. Nothing at all for a classic block. */
-export function paperBlockChecks(type: BlockType, variant: number, raw: unknown, today?: string): PaperChecks {
+/** TASK-646: what the live blocks' checks may know: the UK day it is scheduled to send, today's numbers. */
+export interface LiveCheckContext {
+  sendDay?: string;
+  live?: LiveNumbers;
+}
+
+export function paperBlockChecks(type: BlockType, variant: number, raw: unknown, today?: string, extra: LiveCheckContext = {}): PaperChecks {
   const data: Data = isRecord(raw) ? raw : {};
   const out: PaperChecks = { imagesWithoutAlt: 0, deadLinks: 0, findings: [] };
 
@@ -89,6 +97,29 @@ export function paperBlockChecks(type: BlockType, variant: number, raw: unknown,
     if (variant !== 3 && noAlt(data, "imageUrl")) out.imagesWithoutAlt++;
     const href = str(data, "href").trim();
     if (href && !looksSendable(href)) out.deadLinks++;
+  }
+
+  // TASK-646: the live blocks.
+  if (type === "countdown") {
+    const raw = str(data, "date").trim();
+    if (!parseIsoDate(raw)) {
+      out.findings.push(block("A countdown has no date, or its date is not a real date, so it would show nothing."));
+    } else if (today && raw <= today) {
+      out.findings.push(warn("A countdown's day has already come, so readers would see its words for after the day, or nothing, instead of a count."));
+    } else if (extra.sendDay && raw <= extra.sendDay) {
+      out.findings.push(warn("A countdown's day comes before this is scheduled to send, so readers would not see a count."));
+    }
+  }
+
+  if (type === "liveTotal") {
+    const href = str(data, "href").trim();
+    if (href && !looksSendable(href)) out.deadLinks++;
+    // Only when the number is known: a typed one always is; a read one when today's numbers were given.
+    const source = data.source === "sleigh" || data.source === "typed" ? data.source : "redBag";
+    const known = source === "typed" || (extra.live !== undefined && source in extra.live);
+    if (known && !liveTotalShows(data, extra.live)) {
+      out.findings.push(warn("A live total has no number to show right now, so readers would see its words for when there is no number, or nothing."));
+    }
   }
 
   return out;

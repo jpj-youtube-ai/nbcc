@@ -9522,8 +9522,16 @@
     if (!wrap.clientWidth) return;
     // TASK-645: a phone is drawn at a phone's true width (375px), smaller only if the column is.
     var w = nlPreviewMode === "phone" ? NL_PHONE_W : EMAIL_W;
-    var scale = Math.min(1, wrap.clientWidth / w);
+    var shown = Math.min(w, wrap.clientWidth);
+    iframe.style.zoom = 1;
     iframe.style.width = w + "px";
+    // A phone's mail app shrinks an email that lays out wider than the screen to fit it, so measure the
+    // email's own width at the phone's and scale that down to the phone's width, as the phone would.
+    if (nlPreviewMode === "phone") {
+      var natural = Math.max(w, cdoc.documentElement.scrollWidth || 0, cdoc.body.scrollWidth || 0);
+      if (natural > w) { w = natural; iframe.style.width = w + "px"; }
+    }
+    var scale = Math.min(1, shown / w);
     iframe.style.height = "0px"; // reset so scrollHeight reflects content, not the old height
     var h = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight);
     iframe.style.height = h + "px";

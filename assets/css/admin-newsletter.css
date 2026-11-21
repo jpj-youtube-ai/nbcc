@@ -305,6 +305,15 @@
 #view-newsletter .nl-test button:hover { background: var(--ov-hover); }
 #view-newsletter .nl-test button:disabled { opacity: 0.55; box-shadow: none; cursor: default; }
 
+/* Who: the cards are tick boxes (more than one may be chosen), so they look like tick boxes, not radio
+   dots; and the line under them states the choice, it is not a warning. */
+#view-newsletter .nl-aud-tick { border-radius: 6px; }
+#view-newsletter .nl-aud-card.is-on .nl-aud-tick::after {
+  width: 5px; height: 10px; border: solid var(--ov-crimson); border-width: 0 2.5px 2.5px 0; border-radius: 0; background: none;
+  transform: translateY(-1px) rotate(45deg);
+}
+#view-newsletter .nl-send-note { color: var(--ov-ink); }
+
 /* Why Send did nothing, beside it. */
 #view-newsletter .nl-send-says { margin: 10px 0 0; font-weight: 600; color: var(--ov-holly); }
 #view-newsletter .nl-send-says.is-error { color: var(--ov-crimson); }

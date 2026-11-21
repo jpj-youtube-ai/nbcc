@@ -312,6 +312,7 @@
       if (el("nlTestTo") && !el("nlTestTo").value) el("nlTestTo").value = (el("userEmail") && el("userEmail").textContent) || "";
       var tmplBtn0 = el("newsletterTemplate");
       if (tmplBtn0) tmplBtn0.disabled = !canEdit("newsletter");
+      ["nlStarterPick", "nlStarterUse"].forEach(function (id) { if (el(id)) el(id).disabled = !canEdit("newsletter"); });
       nlRefreshAttachments();
       // TASK-249: load the shared template library here, once permissions are known (the picker's
       // buttons are gated by canEdit) and regardless of whether any newsletter exists — a brand-new
@@ -8278,6 +8279,13 @@
     alt: { k: "alt", label: "Picture description", hint: "Said by screen readers, and shown when pictures are switched off." },
     link: function (label) { return [{ k: "label", label: label || "Button words" }, { k: "href", label: "Button link", kind: "url", hint: "A full address, starting https://" }]; },
   };
+  // TASK-646: where a Live total's number comes from, and the next Christmas Eve a countdown starts at.
+  var NL_LIVE_SOURCES = [["redBag", "Fill a Red Bag: bags filled"], ["sleigh", "Santa Sleigh: money raised"], ["typed", "A number I type"]];
+  function nlNextChristmasEve() {
+    var now = new Date();
+    var y = now.getMonth() === 11 && now.getDate() > 24 ? now.getFullYear() + 1 : now.getFullYear();
+    return y + "-12-24";
+  }
   var NL_PAPER_DEFS = {
     hero: {
       label: "Picture header", icon: "hero", group: "paper",
@@ -8458,6 +8466,51 @@
         ];
       })(),
     },
+    // TASK-646: the two live blocks. Their renderers are src/newsletter/live-blocks.ts.
+    liveTotal: {
+      label: "Live total", icon: "liveTotal", group: "paper",
+      data: {
+        source: "redBag", typed: "", before: "", after: "bags filled so far this Christmas",
+        fallbackText: "Every gift helps fill a Red Bag Full of Joy.", hideBelow: "1", target: "",
+        label: "Fill a Red Bag", href: "https://nbcc.scot/fill",
+      },
+      variants: (function () {
+        var fields = [
+          { k: "source", label: "The number", kind: "choice", options: NL_LIVE_SOURCES },
+          { k: "now", label: "", kind: "livenow" },
+          { k: "typed", label: "The number you type", hint: "Only for \u201CA number I type\u201D. Put \u00A3 in front for money, for example \u00A312,000." },
+          { k: "before", label: "Words before the number" },
+          { k: "after", label: "Words after the number" },
+          { k: "fallbackText", label: "Words when there is no number", hint: "Shown instead of a zero, or if the number cannot be read when it is sent. Leave blank to show nothing." },
+          { k: "hideBelow", label: "Only show the number from", kind: "number", hint: "Below this the words above are shown instead. 1 means any number above zero." },
+        ];
+        var target = [{ k: "target", label: "The target", kind: "number", hint: "For the sleigh, in pounds. For bags, a number of bags." }];
+        return [
+          { name: "Big number", hint: "The number large, with its words under it.", fields: fields.concat(NLP.link()) },
+          { name: "Workshop sign", hint: "The number handwritten on lined paper, like the Workshop's sign.", fields: fields.concat(NLP.link()) },
+          { name: "Progress", hint: "The number, and a bar filling up towards a target.", fields: fields.concat(target, NLP.link()) },
+          { name: "One sentence", hint: "The number in a line of words.", fields: fields.concat(NLP.link()) },
+        ];
+      })(),
+    },
+    countdown: {
+      label: "Sleeps to go", icon: "countdown", group: "paper",
+      data: { date: nlNextChristmasEve(), unit: "sleeps", label: "until Christmas Eve", afterText: "" },
+      variants: (function () {
+        var fields = [
+          { k: "date", label: "Counting to", kind: "date", hint: "Counted on the day each email goes out, and the real date is always printed beside it, because emails are often opened days later." },
+          { k: "unit", label: "Count in", kind: "choice", options: [["sleeps", "Sleeps"], ["days", "Days"]] },
+          { k: "label", label: "Words after the count", hint: "For example: until Christmas Eve" },
+          { k: "afterText", label: "Words on the day and after", hint: "Shown instead of the count once the day has come. Leave blank to show nothing." },
+        ];
+        return [
+          { name: "Tan card", hint: "The count large on a tan card, the date under it.", fields: fields },
+          { name: "Crimson band", hint: "The count on a crimson band across the email.", fields: fields },
+          { name: "One sentence", hint: "The count and the date in a line of words.", fields: fields },
+          { name: "Holly band", hint: "The count in gold on a holly green band.", fields: fields },
+        ];
+      })(),
+    },
   };
   Object.keys(NL_PAPER_DEFS).forEach(function (type) { nlBlockDefs[type] = NL_PAPER_DEFS[type]; });
 
@@ -8490,6 +8543,9 @@
     bagList: '<path d="M6 8h12l-1 13H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="16.5" x2="13" y2="16.5"/>',
     trim: '<line x1="2" y1="12" x2="8.5" y2="12"/><line x1="15.5" y1="12" x2="22" y2="12"/><path d="M12 12c-2-3-5-3-5 0s3 3 5 0z"/><path d="M12 12c2-3 5-3 5 0s-3 3-5 0z"/><path d="M11 13l-1.5 4M13 13l1.5 4"/>',
     paperStory: '<path d="M4 4h16v16H4z"/><rect x="7" y="7" width="10" height="6" rx="0.5"/><line x1="10" y1="5.5" x2="14" y2="5.5"/><line x1="7" y1="16" x2="17" y2="16"/><line x1="7" y1="18.5" x2="13" y2="18.5"/>',
+    // TASK-646: a rising bar with a pound sign, and a calendar page with a moon for the sleeps.
+    liveTotal: '<line x1="4" y1="20" x2="20" y2="20"/><rect x="5" y="13" width="3.5" height="7" rx="0.5"/><rect x="10.25" y="9" width="3.5" height="11" rx="0.5"/><rect x="15.5" y="5" width="3.5" height="15" rx="0.5"/>',
+    countdown: '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><path d="M14.5 13.5a3 3 0 1 0 0 4.5 2.4 2.4 0 0 1 0-4.5z"/>',
     up: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/>',
     down: '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/>',
     dup: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
@@ -9433,6 +9489,8 @@
     if (f.kind === "image") nlImageField(host, block, f.k, f.label);
     else if (f.kind === "signer") nlSignerField(host, block, f.k, f.label, f.hint);
     else if (f.kind === "choice" || f.kind === "check" || f.kind === "date") nlPaperField(host, block.data, f);
+    else if (f.kind === "livenow") nlLiveNowLine(host, block.data);
+    else if (f.kind === "number") nlText(host, block.data, f.k, f.label, { type: "number", hint: f.hint });
     else nlText(host, block.data, f.k, f.label, {
       multiline: f.kind === "textarea",
       type: f.kind === "url" ? "url" : undefined,
@@ -9482,7 +9540,7 @@
       if (input.selectedIndex < 0) input.selectedIndex = 0;
       wrap.appendChild(input);
       if (nlReadOnly()) input.disabled = true;
-      else input.addEventListener("change", function () { obj[f.k] = input.value; nlSchedulePreview(); });
+      else input.addEventListener("change", function () { obj[f.k] = input.value; nlPaintLiveNow(); nlSchedulePreview(); });
     }
     if (f.hint) {
       var h = doc.createElement("span");
@@ -9491,6 +9549,54 @@
       wrap.appendChild(h);
     }
     host.appendChild(wrap);
+  }
+
+  // TASK-646: a Live total's "Right now" line, in its form (never in the email). Today's numbers come
+  // back with each preview (the public pages' cached numbers); the send reads them again and freezes
+  // that number for everyone. Each line keeps the data of the block it describes, and is repainted
+  // after every preview.
+  var nlLive = null; // { redBag, sleigh } from the last preview, or null before the first
+  function nlLiveNowLine(host, data) {
+    var p = doc.createElement("p");
+    p.className = "nl-field-hint nl-live-now";
+    p.setAttribute("data-nl-live-now", "");
+    p.setAttribute("aria-live", "polite");
+    p.nlLiveData = data; // the block's data, read again at each repaint
+    p.textContent = nlLiveNowWords(data);
+    host.appendChild(p);
+  }
+  function nlLiveNumber(v) {
+    var raw = String(v == null ? "" : v).trim();
+    var n = Number(raw.replace(/[£,\s]/g, ""));
+    return raw !== "" && isFinite(n) ? n : null;
+  }
+  function nlLiveNowWords(d) {
+    var again = " It is read again when the newsletter is sent, and everyone gets that number.";
+    var none = "Right now there is no number to show, so readers would see the words for when there is no number.";
+    if (d.sent && typeof d.sent === "object") {
+      return typeof d.sent.value === "number" && d.sent.value > 0
+        ? "When this was sent the number was " + (d.source === "sleigh" ? H.formatPence(d.sent.value) : d.sent.value.toLocaleString("en-GB")) + "."
+        : "When this was sent there was no number to show, so readers got the words for when there is no number.";
+    }
+    var floor = nlLiveNumber(d.hideBelow);
+    if (floor === null) floor = 1;
+    if (d.source === "typed") {
+      var t = nlLiveNumber(d.typed);
+      return t !== null && t > 0 && t >= floor
+        ? "This shows the number you type, as you typed it."
+        : "There is no number typed yet, so readers would see the words for when there is no number.";
+    }
+    var source = d.source === "sleigh" ? "sleigh" : "redBag";
+    if (!nlLive || !(source in nlLive)) return "Reading today’s number…";
+    var n = nlLive[source];
+    if (typeof n !== "number" || !(n > 0) || n < floor) return none + again;
+    if (source === "sleigh") return "Right now: " + H.formatPence(n) + " raised by the sleigh." + again;
+    return "Right now: " + n.toLocaleString("en-GB") + (n === 1 ? " bag" : " bags") + " filled." + again;
+  }
+  function nlPaintLiveNow() {
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-nl-live-now]"), function (p) {
+      if (p.nlLiveData) p.textContent = nlLiveNowWords(p.nlLiveData);
+    });
   }
 
   // Debounced live preview: renders the current nlDoc server-side and streams it into the iframe.
@@ -9565,6 +9671,9 @@
       .then(function (j2) {
         if (j2.html != null) el("nlPreview").srcdoc = j2.html;
         nlPaintSubjectHelp(j2.subjects || null);
+        // TASK-646: today's live numbers, for each Live total's "Right now" line.
+        if (j2.live) nlLive = j2.live;
+        nlPaintLiveNow();
       })
       .catch(function () {
         // The preview is a convenience; say so on it rather than leave the last one looking current.
@@ -9874,6 +9983,15 @@
     nlChecksTimer = setTimeout(nlRunChecks, 400);
   }
 
+  // TASK-646: the time "Send later" is set to, as the instant it means (as nlDoSendSaved sends it), or
+  // undefined when sending now or when the box holds no real time.
+  function nlScheduledIso() {
+    var when = nlLater && el("sendScheduleAt") && el("sendScheduleAt").value;
+    if (!when) return undefined;
+    var d = new Date(when);
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+
   function nlRunChecks() {
     var host = el("nlChecks");
     if (!host) return;
@@ -9886,6 +10004,8 @@
         // Same flag the confirmation dialog passes, so the panel and the dialog agree about
         // whether a test has gone out for THIS draft.
         testSent: nlTestSent,
+        // TASK-646: when "Send later" is chosen, so a countdown is checked against that day.
+        sendAt: nlScheduledIso(),
       }),
     })
       .then(okJson)
@@ -10861,6 +10981,7 @@
         if (el("nlTest")) el("nlTest").hidden = !canWrite;
         var tmplBtn = el("newsletterTemplate");
         if (tmplBtn) tmplBtn.disabled = !canWrite;
+        ["nlStarterPick", "nlStarterUse"].forEach(function (id) { if (el(id)) el(id).disabled = !canWrite; });
         el("newsletterMsg").textContent = sent
           ? "This newsletter has been sent and is read-only."
           : (!canWrite ? "You have read-only access to newsletters." : "");
@@ -11226,6 +11347,8 @@
     el("newsletterId").value = "";
     el("newsletterSubject").value = subject || "";
     nlDoc = fromDoc ? JSON.parse(JSON.stringify(fromDoc)) : { blocks: [] };
+    // TASK-646: a copy of a sent newsletter never keeps the number its send froze: a new send reads afresh.
+    (nlDoc.blocks || []).forEach(function (b) { if (b && b.type === "liveTotal" && b.data) delete b.data.sent; });
     nlSent = false;
     nlTestSent = false;
     nlCollapseAllOnNextRender = !!fromDoc;
@@ -11285,6 +11408,8 @@
     (nlTemplates || []).forEach(function (t) {
       html += nlStartOpt("tmpl:" + t.id, "Start from \u201C" + t.name + "\u201D", "A layout the team saved as a template.");
     });
+    // TASK-646: the four built-in starters, each ready to fill in where it says [in square brackets].
+    NL_STARTERS.forEach(function (st) { html += nlStartOpt("starter:" + st.key, st.name, st.line); });
     html += nlStartOpt("example", "The example newsletter", "Every kind of block, filled in, to see what each one can do.");
     host.innerHTML = html;
   }
@@ -11299,6 +11424,15 @@
       var t = (nlTemplates || []).filter(function (x) { return String(x.id) === parts[1]; })[0];
       if (t) nlStartFromTemplate(t);
     } else if (parts[0] === "example") nlStartFromExample();
+    else if (parts[0] === "starter") nlStartFromStarter(parts[1]);
+  }
+  /** TASK-646: a new newsletter from one of the built-in starters. */
+  function nlStartFromStarter(key) {
+    if (!canEdit("newsletter")) return;
+    var st = NL_STARTERS.filter(function (x) { return x.key === key; })[0];
+    if (!st) return;
+    nlStartNew(st.doc, st.subject, "Started from the " + st.name + " starter, not saved yet");
+    el("newsletterMsg").textContent = "Loaded the " + st.name + " starter. Fill in everything in [square brackets], then save.";
   }
   function nlStartFromExample() {
     if (!canEdit("newsletter")) return;
@@ -12406,6 +12540,114 @@
     } },
   ] };
 
+  // --- TASK-646: the four built-in starters ---------------------------------------------------------
+  // Ready-made outlines for the newsletters NBCC sends most, offered on the start screen and beside
+  // "Start from example" (which, with NL_TEMPLATE above, is unchanged). Everything Jaimie must fill in or
+  // check is in [square brackets], which the checks before sending point out. Each one starts with a
+  // picture header and ends by signing off, and uses only pictures we hold.
+  function nlStarterSignoff() { return JSON.parse(JSON.stringify(NL_TEMPLATE.blocks[NL_TEMPLATE.blocks.length - 1])); }
+  function nlStarterBag() { return JSON.parse(JSON.stringify(NL_PAPER_DEFS.bagList.data)); }
+  var NL_STARTERS = [
+    {
+      key: "appeal", name: "Christmas appeal",
+      line: "Asks for help filling Red Bags, with the number filled so far and the sleeps to Christmas Eve.",
+      subject: "A Red Bag Full of Joy this Christmas",
+      doc: { blocks: [
+        { type: "hero", variant: 2, data: {
+          imageUrl: NL_ART + "hero-workshop.jpg", alt: "The elves' Workshop, its shelves filling with red bags",
+          eyebrow: "Christmas appeal 2026", headline: "A Red Bag Full of Joy for every child who needs one", subline: "" } },
+        { type: "greeting", variant: 0, data: {} },
+        { type: "text", variant: 1, data: { text: "Christmas is close, and some children, young people and vulnerable adults near you will wake up to very little. With your help, a Red Bag Full of Joy could be waiting for them." } },
+        { type: "liveTotal", variant: 0, data: {
+          source: "redBag", typed: "", before: "", after: "bags filled so far this Christmas",
+          fallbackText: "Every gift helps fill a Red Bag Full of Joy.", hideBelow: "1", target: "", label: "", href: "" } },
+        { type: "bagList", variant: 0, data: nlStarterBag() },
+        { type: "note", variant: 1, data: { text: "[A thank-you from a family or a referrer, shared with their consent]", from: "[Who it is from]", role: "" } },
+        { type: "donationCta", variant: 1, data: { heading: "Could you help fill one more bag?", label: "Donate today", href: "https://nbcc.scot/donate" } },
+        { type: "countdown", variant: 2, data: { date: nlNextChristmasEve(), unit: "sleeps", label: "until Christmas Eve", afterText: "" } },
+        nlStarterSignoff(),
+      ] },
+    },
+    {
+      key: "fill", name: "Fill a Red Bag",
+      line: "Invites people to fill a bag in the Workshop, alone or as a team, with the bags filled so far.",
+      subject: "Come and fill a Red Bag",
+      doc: { blocks: [
+        { type: "hero", variant: 0, data: {
+          imageUrl: NL_ART + "hero-workshop.jpg", alt: "The elves' Workshop, its shelves filling with red bags",
+          eyebrow: "Fill a Red Bag", headline: "You choose what goes in", subline: "Our volunteers pack it and deliver it in time for Christmas." } },
+        { type: "greeting", variant: 0, data: {} },
+        { type: "text", variant: 0, data: { text: "The elves have opened the Workshop. Pick the things you would like to give, from warm pyjamas to a soft toy, and watch your bag fill up. Every full bag goes on the Workshop's shelves." } },
+        { type: "liveTotal", variant: 1, data: {
+          source: "redBag", typed: "", before: "", after: "bags filled so far",
+          fallbackText: "Let's fill the first bag.", hideBelow: "1", target: "", label: "", href: "" } },
+        { type: "bagList", variant: 2, data: nlStarterBag() },
+        { type: "giftTags", variant: 1, data: { items: [
+          { title: "Fill a bag yourself", body: "Choose each gift and watch your own bag fill up.", label: "Fill a bag", href: "https://nbcc.scot/fill", colour: "crimson" },
+          { title: "Fill bags as a team", body: "Ask us for a Workshop link for your workplace, club or class.", label: "Ask us", href: "mailto:info@nbcc.scot", colour: "holly" },
+        ] } },
+        { type: "note", variant: 0, data: { text: "[A thank-you note from a family or a volunteer, shared with their consent]", from: "[Who it is from]", role: "" } },
+        nlStarterSignoff(),
+      ] },
+    },
+    {
+      key: "sleigh", name: "Santa Sleigh",
+      line: "Tells people when the Kilmarnock Santa Sleigh is coming round, with what it has raised so far.",
+      subject: "The Santa Sleigh is on its way",
+      doc: { blocks: [
+        { type: "hero", variant: 2, data: {
+          imageUrl: NL_ART + "hero-sleigh.jpg", alt: "Santa's sleigh lit up on a street at night",
+          eyebrow: "Kilmarnock Santa Sleigh 2026", headline: "Listen out for the bells", subline: "" } },
+        { type: "greeting", variant: 0, data: {} },
+        { type: "text", variant: 0, data: { text: "Santa and his helpers are coming round the streets of Kilmarnock again this December, collecting for NBCC. Come to the door, give him a wave, and bring the little ones." } },
+        { type: "events", variant: 0, data: { items: [
+          { day: "[1]", month: "DEC", name: "[The first night]", location: "[The streets that night]", label: "See every night", href: "https://nbcc.scot/sleigh" },
+          { day: "[2]", month: "DEC", name: "[The second night]", location: "[The streets that night]", label: "See every night", href: "https://nbcc.scot/sleigh" },
+        ] } },
+        { type: "liveTotal", variant: 0, data: {
+          source: "sleigh", typed: "", before: "", after: "raised by the sleigh so far this year",
+          fallbackText: "Every coin in the bucket helps fill a Red Bag.", hideBelow: "1", target: "", label: "", href: "" } },
+        { type: "photoRow", variant: 3, data: { items: [
+          { url: "", alt: "", caption: "[A photo from a sleigh night, shared with consent]" },
+          { url: "", alt: "", caption: "[A second photo]" },
+          { url: "", alt: "", caption: "[A third photo]" },
+        ] } },
+        { type: "button", variant: 0, data: { label: "Give to the sleigh online", href: "https://nbcc.scot/sleigh" } },
+        { type: "logoStrip", variant: 2, data: { heading: "With the Kilmarnock Santa Sleigh team", showNames: true, items: [
+          { url: NL_ART + "logo-kilmarnock-santa-sleigh.png", name: "Kilmarnock Santa Sleigh", href: "" },
+        ] } },
+        nlStarterSignoff(),
+      ] },
+    },
+    {
+      key: "thanks", name: "Thank you for this year",
+      line: "Thanks everyone after Christmas, with what this year made possible and a story from it.",
+      subject: "Thank you for this year",
+      doc: { blocks: [
+        { type: "hero", variant: 1, data: {
+          imageUrl: NL_ART + "hero-workshop.jpg", alt: "The elves' Workshop, its shelves full of red bags",
+          eyebrow: "Christmas 2026", headline: "Thank you", subline: "What your kindness made possible this year." } },
+        { type: "greeting", variant: 0, data: {} },
+        { type: "text", variant: 1, data: { text: "Because of you, [number] children, young people and vulnerable adults woke up to a Red Bag Full of Joy this Christmas. We could not have done it without you." } },
+        { type: "stats", variant: 1, data: { items: [
+          { number: "[number]", label: "Red Bags delivered" },
+          { number: "[amount]", label: "Raised together" },
+          { number: "[number]", label: "Volunteers" },
+        ] } },
+        { type: "liveTotal", variant: 3, data: {
+          source: "redBag", typed: "", before: "Through Fill a Red Bag alone, you filled", after: "bags.",
+          fallbackText: "Thank you to everyone who filled a Red Bag.", hideBelow: "1", target: "", label: "", href: "" } },
+        { type: "paperStory", variant: 0, data: {
+          imageUrl: NL_ART + "print-workshop-2.jpg", alt: "The Workshop, its shelves half full of red bags",
+          kicker: "From this Christmas", title: "[A story from this Christmas]",
+          body: "[A few lines about one bag, one family or one volunteer, shared with their consent]", label: "", href: "" } },
+        { type: "note", variant: 1, data: { text: "[A thank-you from a family or a referrer, shared with their consent]", from: "[Who it is from]", role: "" } },
+        { type: "text", variant: 0, data: { text: "We will be back next Christmas. Until then, thank you for everything you have done for the people we support." } },
+        nlStarterSignoff(),
+      ] },
+    },
+  ];
+
   var nlForm = el("newsletterForm");
   if (nlForm) {
     // "New newsletter" is wired beside the start screen (TASK-645): it clears everything through
@@ -12417,6 +12659,19 @@
       el("newsletterTemplate").addEventListener("click", function () {
         if (!canEdit("newsletter")) return;
         if (nlMayLeave()) nlStartFromExample();
+      });
+    }
+    // TASK-646: the four built-in starters, beside the example. Asks first, like the example, when it
+    // would replace work not yet saved.
+    if (el("nlStarterPick")) {
+      el("nlStarterPick").innerHTML = NL_STARTERS.map(function (st) {
+        return '<option value="' + H.escapeHtml(st.key) + '">' + H.escapeHtml(st.name) + "</option>";
+      }).join("");
+    }
+    if (el("nlStarterUse")) {
+      el("nlStarterUse").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        if (nlMayLeave()) nlStartFromStarter(el("nlStarterPick").value);
       });
     }
 
@@ -12562,8 +12817,10 @@
     }
     // TASK-285: the two explicit "when" choices, the results back button, and a subject that keeps
     // the compose header and the pre-send checks honest as you type.
-    if (el("nlWhenNow")) el("nlWhenNow").addEventListener("click", function () { nlSetWhen(false); });
-    if (el("nlWhenLater")) el("nlWhenLater").addEventListener("click", function () { nlSetWhen(true); });
+    // TASK-646: the checks look again when the day it sends changes (a countdown may fall before it).
+    if (el("nlWhenNow")) el("nlWhenNow").addEventListener("click", function () { nlSetWhen(false); nlScheduleChecks(); });
+    if (el("nlWhenLater")) el("nlWhenLater").addEventListener("click", function () { nlSetWhen(true); nlScheduleChecks(); });
+    if (el("sendScheduleAt")) el("sendScheduleAt").addEventListener("change", nlScheduleChecks);
     if (el("nlResultsBack")) {
       // 2026-11-14: back to where you came from (nlShowResults remembers it), not always the Overview.
       el("nlResultsBack").addEventListener("click", function () { nlShowPanel(nlResultsFrom); });
@@ -13143,6 +13400,7 @@
           subject: el("newsletterSubject") ? el("newsletterSubject").value : "",
           bodyJson: nlDoc,
           testSent: nlTestSent,
+          sendAt: nlScheduledIso(), // TASK-646: a countdown is checked against the day it will go
         }),
       })
         .then(okJson)

@@ -497,6 +497,19 @@ describe("fault 6: when it goes, and the confirmation", () => {
     expect(send[0].body.rollout).toBe("gentle");
     expect(typeof send[0].body.scheduledAt).toBe("string");
   });
+
+  it("checks a later send against the day it is set for (TASK-646: a countdown's day may come first)", async () => {
+    await editing(12);
+    await chooseAudiences(3);
+    await go("nlPanelSend");
+    el("nlWhenLater").click();
+    (el("sendScheduleAt") as HTMLInputElement).value = "2030-11-26T09:00";
+    el("sendScheduleAt").dispatchEvent(new Event("input", { bubbles: true }));
+    el("newsletterSend").click();
+    await settle();
+    const checks = got("POST", "/api/admin/newsletters/preflight");
+    expect(checks[checks.length - 1].body.sendAt).toBe(new Date("2030-11-26T09:00").toISOString());
+  });
 });
 
 // ---- the features ---------------------------------------------------------------------------------
@@ -632,7 +645,9 @@ describe("feature 4: the start screen", () => {
     expect(el("nlStartScreen").hidden).toBe(false);
     expect(el("nlPanelWrite").classList.contains("is-starting")).toBe(true);
     const opts = qa("#nlStartList .nl-start-opt").map((b) => b.getAttribute("data-start"));
-    expect(opts).toEqual(["blank", "draft:12", "again:11", "again:9", "tmpl:5", "example"]);
+    expect(opts).toEqual(["blank", "draft:12", "again:11", "again:9", "tmpl:5",
+      // TASK-646: the four built-in starters, before the example.
+      "starter:appeal", "starter:fill", "starter:sleigh", "starter:thanks", "example"]);
     for (const b of qa("#nlStartList .nl-start-opt")) expect(text(b.querySelector("span"))).not.toBe("");
   });
 

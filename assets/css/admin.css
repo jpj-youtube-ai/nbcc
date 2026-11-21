@@ -794,6 +794,12 @@
   position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
   padding: 1rem; background: rgba(64, 12, 12, .5);
 }
+/* TASK-645: the send confirmation's who, how many, when and how fast. */
+.nl-modal .nl-modal-facts { display: grid; gap: 8px; margin: 12px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.nl-modal .nl-modal-facts div { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 10px; }
+.nl-modal .nl-modal-facts dt { margin: 0; color: var(--slate-soft); }
+.nl-modal .nl-modal-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 860px) { .nl-modal .nl-modal-facts div { grid-template-columns: minmax(0, 1fr); gap: 0; } }
 .nl-modal {
   width: 100%; max-width: 420px; background: var(--card); border-radius: var(--radius);
   box-shadow: var(--shadow-lg); padding: 1.5rem 1.5rem 1.25rem; text-align: center;

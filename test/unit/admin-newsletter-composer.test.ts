@@ -498,3 +498,268 @@ describe("fault 6: when it goes, and the confirmation", () => {
     expect(typeof send[0].body.scheduledAt).toBe("string");
   });
 });
+
+// ---- the features ---------------------------------------------------------------------------------
+
+const blocksDoc = () => ({
+  blocks: [
+    { type: "heading", variant: 0, data: { title: "Invented heading" } },
+    { type: "text", variant: 0, data: { text: "Invented first words." } },
+    { type: "divider", variant: 0, data: {} },
+  ],
+});
+const titles = () => qa("#nlCanvas .nl-block .nl-block-title").map((b) => text(b));
+const press = (key: string, target: EventTarget = document.body, ctrl = true) =>
+  target.dispatchEvent(new KeyboardEvent("keydown", { key, ctrlKey: ctrl, bubbles: true, cancelable: true }));
+
+describe("feature 1: the preview, laptop or phone, and for any name", () => {
+  it("switches between a laptop and a phone, saying which is on", async () => {
+    await editing(12);
+    expect(el("nlPreviewLaptop").getAttribute("aria-pressed")).toBe("true");
+    el("nlPreviewPhone").click();
+    expect(el("nlPreviewPhone").getAttribute("aria-pressed")).toBe("true");
+    expect(el("nlPreviewLaptop").getAttribute("aria-pressed")).toBe("false");
+    expect(q("#view-newsletter .nl-preview-frame")!.classList.contains("is-phone")).toBe(true);
+  });
+
+  it("asks the server for the name typed, and for nobody when the box is empty", async () => {
+    await editing(12);
+    type("nlPreviewName", "Morag");
+    await wait(400);
+    let last = got("POST", "/api/admin/newsletters/preview").pop()!;
+    expect(last.body.firstName).toBe("Morag");
+    type("nlPreviewName", "");
+    await wait(400);
+    last = got("POST", "/api/admin/newsletters/preview").pop()!;
+    expect(last.body.firstName).toBe("");
+    // A name to preview with is not a change to the newsletter: nothing to save.
+    expect(text(el("nlComposeSaved"))).not.toContain("not saved");
+  });
+
+  it("opens the preview in the page on a phone, and goes back to writing", async () => {
+    await editing(12);
+    el("nlPreviewOpen").click();
+    expect(el("nlPanelWrite").classList.contains("is-previewing")).toBe(true);
+    expect(el("nlPreviewPhone").getAttribute("aria-pressed")).toBe("true");
+    el("nlPreviewBack").click();
+    expect(el("nlPanelWrite").classList.contains("is-previewing")).toBe(false);
+  });
+
+  it("shows the preview whole, in the page, never in a box that scrolls", () => {
+    const css = readFileSync(resolve(ROOT, "assets/css/admin-newsletter.css"), "utf8");
+    expect(css).toContain("#view-newsletter .nl-preview-wrap { height: auto; overflow: visible; }");
+  });
+});
+
+describe("feature 2: undo", () => {
+  it("puts back a removed block where it was, from the line left in its place", async () => {
+    DOC = blocksDoc();
+    await editing(12);
+    (qa("#nlCanvas .nl-block")[1].querySelector('[data-nl="del"]') as HTMLElement).click();
+    expect(titles()).toEqual(["Heading", "Divider"]);
+    const line = q("#nlCanvas .nl-undo-line")!;
+    expect(text(line)).toContain("Removed Text.");
+    (line.querySelector("button") as HTMLElement).click();
+    expect(titles()).toEqual(["Heading", "Text", "Divider"]);
+    expect(q("#nlCanvas .nl-undo-line")).toBeNull();
+  });
+
+  it("undoes a move and a change of style with Ctrl+Z outside a text box, a step at a time", async () => {
+    DOC = blocksDoc();
+    await editing(12);
+    (qa("#nlCanvas .nl-block")[2].querySelector('[data-nl="up"]') as HTMLElement).click();
+    expect(titles()).toEqual(["Heading", "Divider", "Text"]);
+    const styles = qa("#nlCanvas .nl-block")[0].querySelectorAll(".nl-variants .admin-seg");
+    (styles[1] as HTMLElement).click();
+    expect(el("nlUndo").getAttribute("aria-label")).toBe("Undo changing the style of Heading");
+    press("z");
+    expect(qa("#nlCanvas .nl-block")[0].querySelectorAll(".nl-variants .admin-seg")[0].getAttribute("aria-pressed")).toBe("true");
+    press("z");
+    expect(titles()).toEqual(["Heading", "Text", "Divider"]);
+    expect((el("nlUndo") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("leaves Ctrl+Z inside a text box to the box", async () => {
+    DOC = blocksDoc();
+    await editing(12);
+    (qa("#nlCanvas .nl-block")[1].querySelector('[data-nl="del"]') as HTMLElement).click();
+    press("z", el("newsletterSubject"));
+    expect(titles()).toEqual(["Heading", "Divider"]);
+  });
+
+  it("forgets what can be undone when another newsletter is opened", async () => {
+    DOC = blocksDoc();
+    await editing(12);
+    (qa("#nlCanvas .nl-block")[1].querySelector('[data-nl="del"]') as HTMLElement).click();
+    el("newsletterNew").click();
+    await settle();
+    expect((el("nlUndo") as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("feature 3: add a block where you are", () => {
+  it("offers a + between blocks that opens the palette there, and puts the block in that gap", async () => {
+    DOC = blocksDoc();
+    await editing(12);
+    const gaps = qa("#nlCanvas .nl-insert-btn");
+    expect(gaps.length).toBe(2);
+    gaps[0].click();
+    const pal = q("#nlCanvas .nl-insert.is-open .nl-insert-palette")!;
+    expect(pal).not.toBeNull();
+    (pal.querySelector('button[aria-label="Add Button block"]') as HTMLElement).click();
+    expect(titles()).toEqual(["Heading", "Button", "Text", "Divider"]);
+    expect(q("#nlCanvas .nl-insert.is-open")).toBeNull();
+  });
+
+  it("closes the gap's palette with Cancel, adding nothing", async () => {
+    DOC = blocksDoc();
+    await editing(12);
+    qa("#nlCanvas .nl-insert-btn")[1].click();
+    (q("#nlCanvas .nl-insert-cancel") as HTMLElement).click();
+    expect(titles()).toEqual(["Heading", "Text", "Divider"]);
+  });
+});
+
+describe("feature 4: the start screen", () => {
+  const list = () => [draft(12, "Invented Christmas thank you"), sent(11, "Invented November news", 2), sent(9, "Invented October news", 30)];
+
+  it("offers blank, your latest draft, past newsletters, saved templates and the example, each with a line", async () => {
+    served["/api/admin/newsletter-templates"] = [{ id: 5, name: "Invented monthly layout", createdAt: ago(9) }];
+    served["/api/admin/newsletters"] = list();
+    await open();
+    el("newsletterNew").click();
+    await settle();
+    expect(el("nlStartScreen").hidden).toBe(false);
+    expect(el("nlPanelWrite").classList.contains("is-starting")).toBe(true);
+    const opts = qa("#nlStartList .nl-start-opt").map((b) => b.getAttribute("data-start"));
+    expect(opts).toEqual(["blank", "draft:12", "again:11", "again:9", "tmpl:5", "example"]);
+    for (const b of qa("#nlStartList .nl-start-opt")) expect(text(b.querySelector("span"))).not.toBe("");
+  });
+
+  it("a blank one goes straight to writing", async () => {
+    await open();
+    el("newsletterNew").click();
+    await settle();
+    (q('#nlStartList [data-start="blank"]') as HTMLElement).click();
+    expect(el("nlStartScreen").hidden).toBe(true);
+    expect(el("nlPanelWrite").classList.contains("is-starting")).toBe(false);
+  });
+
+  it("uses a past newsletter again as a new one, with its subject", async () => {
+    served["/api/admin/newsletters"] = list();
+    await open();
+    el("newsletterNew").click();
+    await settle();
+    (q('#nlStartList [data-start="again:11"]') as HTMLElement).click();
+    await settle();
+    expect(el("nlStartScreen").hidden).toBe(true);
+    expect((el("newsletterId") as HTMLInputElement).value).toBe("");
+    expect((el("newsletterSubject") as HTMLInputElement).value).toBe("Invented November news");
+  });
+
+  it("starts from the example", async () => {
+    await open();
+    el("newsletterNew").click();
+    await settle();
+    (q('#nlStartList [data-start="example"]') as HTMLElement).click();
+    await settle();
+    expect((el("newsletterSubject") as HTMLInputElement).value).toBe("Winter Update");
+    expect(qa("#nlCanvas .nl-block").length).toBeGreaterThan(5);
+  });
+});
+
+describe("feature 5: the subject helper and preview text", () => {
+  it("says how long the subject is, and what a phone shows of a long one", async () => {
+    await editing(12);
+    type("newsletterSubject", "Short invented subject");
+    expect(text(el("nlSubjectHelp"))).toContain("22 characters. That fits on most phones.");
+    type("newsletterSubject", "A much longer invented subject line that a phone will cut short");
+    expect(text(el("nlSubjectHelp"))).toContain("A phone shows about the first 40, so people see");
+  });
+
+  it("reads the subject for the name previewed and for someone with no name, as the server gives them", async () => {
+    served["POST /api/admin/newsletters/preview"] = (c: Call) => ({
+      html: "<p>preview</p>",
+      subjects: { named: String(c.body.subject).replace("{{firstName}}", "Jane"), unnamed: "Hey! Invented news" },
+    });
+    await editing(12);
+    type("newsletterSubject", "Hey, {{firstName}}! Invented news");
+    await wait(400);
+    await settle();
+    const help = text(el("nlSubjectHelp"));
+    expect(help).toContain("As Jane: Hey, Jane! Invented news");
+    expect(help).toContain("With no name: Hey! Invented news");
+    expect(text(el("nlPreviewSubject"))).toBe("Hey, Jane! Invented news");
+  });
+
+  it("keeps preview text on the document, saves it, and leaves it off when it is empty", async () => {
+    await editing(12);
+    type("nlPreheader", "An invented line for the inbox");
+    expect(text(el("nlPreviewPreheader"))).toBe("An invented line for the inbox");
+    await wait(AUTOSAVE);
+    await settle();
+    const put = got("PUT", "/api/admin/newsletters/12").pop()!;
+    expect((put.body.bodyJson as { preheader?: string }).preheader).toBe("An invented line for the inbox");
+    type("nlPreheader", "   ");
+    await wait(AUTOSAVE);
+    await settle();
+    const again = got("PUT", "/api/admin/newsletters/12").pop()!;
+    expect("preheader" in (again.body.bodyJson as object)).toBe(false);
+  });
+
+  it("fills the preview text box from a newsletter that has it", async () => {
+    DOC = { preheader: "Kept from last time", blocks: [] };
+    await editing(12);
+    expect((el("nlPreheader") as HTMLInputElement).value).toBe("Kept from last time");
+  });
+});
+
+describe("feature 6: a test to up to five people", () => {
+  it("starts with your own address, and sends to every address in the box", async () => {
+    await editing(12);
+    expect((el("nlTestTo") as HTMLInputElement).value).toBe("fern@example.com");
+    (el("nlTestTo") as HTMLInputElement).value = "fern@example.com, Rowan@Example.com; ash@example.org";
+    el("newsletterTest").click();
+    await settle();
+    const sentTest = got("POST", "/api/admin/newsletters/test-send");
+    expect(sentTest.length).toBe(1);
+    expect(sentTest[0].body.to).toEqual(["fern@example.com", "rowan@example.com", "ash@example.org"]);
+  });
+
+  it("names who it went to and who it did not, beside the button", async () => {
+    served["POST /api/admin/newsletters/test-send"] = { sentTo: ["fern@example.com"], failed: ["ash@example.org"], subject: "[TEST] x" };
+    await editing(12);
+    (el("nlTestTo") as HTMLInputElement).value = "fern@example.com, ash@example.org";
+    el("newsletterTest").click();
+    await settle();
+    expect(text(el("nlTestMsg"))).toBe("Test sent to fern@example.com. Could not send it to ash@example.org.");
+  });
+
+  it("checks the addresses before sending: no more than five, and each one an address", async () => {
+    await editing(12);
+    (el("nlTestTo") as HTMLInputElement).value = "a@example.com, b@example.com, c@example.com, d@example.com, e@example.com, f@example.com";
+    el("newsletterTest").click();
+    await settle();
+    expect(text(el("nlTestMsg"))).toBe("That is 6 addresses. A test goes to five at most.");
+    expect(el("nlTestMsg").classList.contains("is-error")).toBe(true);
+    (el("nlTestTo") as HTMLInputElement).value = "fern@example.com, not an address";
+    el("newsletterTest").click();
+    await settle();
+    expect(text(el("nlTestMsg"))).toContain("does not look like an email address");
+    expect(got("POST", "/api/admin/newsletters/test-send").length).toBe(0);
+  });
+});
+
+describe("feature 7: controls a finger can use, and the stylesheet's house rules", () => {
+  const css = readFileSync(resolve(ROOT, "assets/css/admin-newsletter.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  it("gives the new controls 44px and the new fields 16px words", () => {
+    for (const sel of [".nl-insert-btn", ".nl-undo-btn", ".nl-start-opt", ".nl-cp-new", ".nl-pv-open", ".nl-pv-back", ".nl-insert-cancel"]) {
+      expect(css).toContain(sel);
+    }
+    expect(css).toContain('#view-newsletter .nl-compose :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea)');
+  });
+  it("never uses !important, and never scrolls inside a box", () => {
+    expect(css).not.toContain("!important");
+    expect(css).not.toMatch(/overflow(-[xy])?:\s*(auto|scroll)/);
+  });
+});

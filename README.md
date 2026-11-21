@@ -563,6 +563,35 @@ and accessibility floor (REQ-032: alt text, keyboard-focusable CTAs). Verified b
 > italic is synthesised (only Playfair 700 normal is self-hosted). The hi-res hero
 > logo asset is REQ-034.
 
+### Freddie's film at the very top of the home page (21 November 2026)
+
+The first thing on the home page is our animated film, Freddie's story, in a maroon band: "Our new
+animated film", "Watch Freddie's story", "Based on a true story." The film is
+`assets/video/freddie-film.mp4` (1080p, about 16MB, made web-ready with `+faststart`), its still is
+`freddie-film-poster.jpg` and its captions `freddie-film.en.vtt`. The film's last picture is our own
+end slate: the NBCC logo, "Fill a bag" and "nbcc.scot/fill". The full-quality copy lives with the
+charity's own files, not in this repo.
+
+- **It plays by itself on a first visit, silently, with captions on.** No browser lets a page play
+  sound by itself, so a big "Tap for sound" button starts it again from the beginning with sound.
+  There is always a pause button. It never plays by itself for someone whose device asks for less
+  motion or to save data, nor on a later visit (one note in the visitor's own browser,
+  `nbcc-freddie-film-seen`): they see its still and a big play button. Without JavaScript it is a
+  plain player with the browser's own controls. `assets/js/home-film.js` does all of this.
+- **At the end** two buttons appear under it, and the first takes the focus. In `index.html` they are
+  Donate and Watch again. While Fill a Red Bag is on, the server turns Donate into **Fill a bag**
+  (to `/fill`) as the page goes out (`addFillStageToHome` in `src/red-bag/stage.ts`), because no
+  page file may link to `/fill` itself.
+- **The band starts below the menu bar** (a margin, as the Ball banner's did), because the menu is
+  see-through until you scroll and its maroon links would vanish on maroon. The film is sized to fit
+  a laptop screen whole.
+- **Weight.** Its styles are `assets/css/home-film.css`, on the home page only, so every other page's
+  first paint is untouched. The film loads only its first moments until it plays
+  (`preload="metadata"`). The home page's first paint is about 1KB inside its 262KB budget; anything
+  more added to the top of the home page needs room found first.
+
+`test/unit/home-film.test.ts` and `test/unit/home-film-script.test.ts` pin all of this.
+
 ### The top of the home page: the big logo and the four tags
 
 The hero (`.hero`) keeps its words and its two buttons, "Donate now" and "What we do all year". Its

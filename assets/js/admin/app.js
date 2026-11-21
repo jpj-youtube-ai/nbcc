@@ -8811,7 +8811,12 @@
   function nlBlockSummary(block) {
     var data = block && block.data;
     if (!data) return "";
-    var preferred = ["heading", "title", "headline", "label", "text", "lead", "name", "caption", "href", "src"];
+    // TASK-646: a Live total is named by where its number comes from, never by the stored word ("redBag").
+    if (block.type === "liveTotal") {
+      var src = NL_LIVE_SOURCES.filter(function (o) { return o[0] === data.source; })[0] || NL_LIVE_SOURCES[0];
+      return src[1];
+    }
+    var preferred =["heading", "title", "headline", "label", "text", "lead", "name", "caption", "href", "src"];
     for (var i = 0; i < preferred.length; i++) {
       var v = data[preferred[i]];
       if (typeof v === "string" && v.trim()) return nlTrim(v);

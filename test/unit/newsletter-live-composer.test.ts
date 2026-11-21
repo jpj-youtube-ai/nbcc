@@ -249,6 +249,15 @@ describe("the four built-in starters", () => {
     });
   }
 
+  it("names a collapsed Live total by where its number comes from, never by a raw word", async () => {
+    await openComposer();
+    (el("nlStartList").querySelector("[data-start='starter:appeal']") as HTMLElement).click();
+    await settle();
+    const sums = Array.from(el("nlCanvas").querySelectorAll(".nl-block-sum")).map((n) => n.textContent || "");
+    expect(sums.join(" | ")).not.toMatch(/redBag|sleigh/);
+    expect(sums).toContain("Fill a Red Bag: bags filled");
+  });
+
   it("each starter ends by signing off and starts with a picture header", async () => {
     await openComposer();
     for (let i = 0; i < STARTERS.length; i++) {

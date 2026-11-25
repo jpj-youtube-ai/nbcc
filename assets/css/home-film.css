@@ -1,7 +1,4 @@
-/* Freddie's film at the top of the home page (21 November 2026), on that page only, so every other page's
-   first paint is untouched. index.html has the markup; assets/js/home-film.js drives it. */
-/* The band starts BELOW the fixed nav (a margin, not padding): the nav is see-through until you scroll and its
-   maroon links would vanish on a maroon band, as the Ball banner found. */
+/* Freddie's film, home page only. Why each rule is as it is: README.md. */
 .hf{position:relative;overflow:hidden;color:var(--cream);margin-top:var(--nav-h);padding:clamp(26px,4vw,56px) 0 clamp(34px,5vw,72px);
 background:radial-gradient(120% 85% at 50% 0%,#9e1420 0%,#800000 46%,#4a0a0e 100%)}
 .hf::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.22;

@@ -30,6 +30,7 @@ Feature: Invoices for donations
     And "ann.invoices.admin.bdd@example.com" marks the new invoice paid today
     Then the invoices answer is 200
     And the new invoice has 1 donation in Donations
+    And the new invoice's donation is not dated later than now
     When "ann.invoices.admin.bdd@example.com" marks the new invoice paid today
     Then the invoices answer is 409
     And the new invoice has 1 donation in Donations

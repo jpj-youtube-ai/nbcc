@@ -208,6 +208,14 @@ Then("the page says it has been cancelled", function () {
   assert.ok(this.pageHtml.includes("This invoice has been cancelled"));
 });
 
+// Marked paid in the morning, a transfer dated noon that day was in the future, so Donations said
+// New on every refresh until noon (25 November 2026). It is never later than when it was marked.
+Then("the new invoice's donation is not dated later than now", async function () {
+  const res = await pool.query("SELECT created_at <= now() AS ok, created_at FROM donations WHERE invoice_id = $1", [this.invId]);
+  assert.equal(res.rows.length, 1);
+  assert.equal(res.rows[0].ok, true, `dated ${res.rows[0].created_at}`);
+});
+
 Then("the new invoice has {int} donation(s) in Donations", async function (count) {
   const res = await fetch(`${BASE_URL}/api/admin/donations?limit=100&source=invoice`, {
     headers: { Authorization: `Bearer ${await tokenFor(this, "ann.invoices.admin.bdd@example.com")}` },

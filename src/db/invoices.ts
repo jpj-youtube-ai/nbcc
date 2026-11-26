@@ -276,8 +276,10 @@ export async function settleInvoice(
   // The payment's own date, and where it came from, on the donation itself. A bank transfer is also
   // noted as how it was paid (the Donations gift log), and as checked, since Stripe has nothing to say
   // about it; a card payment is left for Stripe to tell, after the commit (src/invoices/webhook.ts).
+  // A transfer is dated noon that day, but never later than now: one marked paid in the morning was
+  // otherwise dated in the future, newer than every visit, and Donations said New until noon.
   await client.query(
-    `UPDATE donations SET source = 'invoice', invoice_id = $2, created_at = CASE WHEN $3 = 'transfer' THEN ($4::date + time '12:00') AT TIME ZONE 'Europe/London' ELSE created_at END,
+    `UPDATE donations SET source = 'invoice', invoice_id = $2, created_at = CASE WHEN $3 = 'transfer' THEN LEAST(($4::date + time '12:00') AT TIME ZONE 'Europe/London', now()) ELSE created_at END,
         pay_method = CASE WHEN $3 = 'transfer' THEN 'bank_transfer' ELSE pay_method END,
         pay_checked_at = CASE WHEN $3 = 'transfer' THEN now() ELSE pay_checked_at END
       WHERE id = $1`,

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
-// NBCC Elf Detective School ships switched off: while it is, every page and API answers 404.
+// NBCC Elf Detective School ships switched off: while it is, every API answers 404, and every page
+// sends its visitor to the home page instead (Jaimie, 26 November 2026, after the school was cancelled).
 
 vi.mock("../../src/db/elf", async (orig) => ({
   ...(await orig<typeof import("../../src/db/elf")>()),
@@ -21,14 +22,21 @@ describe("while the school is switched off", () => {
     expect(routes.length).toBeGreaterThanOrEqual(12);
   });
 
-  it.each(["/elf", "/elf/rules", "/elf/join", "/elf/sign-in", "/elf/hq", "/elf/welcome", "/api/elf/calendar", "/api/elf/me", "/api/elf/join", "/api/elf/look"])(
-    "%s answers 404",
+  const PAGES = ["/elf", "/elf/rules", "/elf/join", "/elf/sign-in", "/elf/hq", "/elf/welcome"];
+  it.each([...PAGES, "/api/elf/calendar", "/api/elf/me", "/api/elf/join", "/api/elf/look"])(
+    "%s is closed",
     async (path) => {
       const route = routes.find((r) => r.path === path);
       expect(route, path).toBeTruthy();
       let status = 200;
+      let location = "";
       let reached = false;
       const res = {
+        redirect(s: number, url: string) {
+          status = s;
+          location = url;
+          return res;
+        },
         locals: {},
         status(s: number) {
           status = s;
@@ -50,11 +58,14 @@ describe("while the school is switched off", () => {
       // Run the route's handlers in order, as Express would, until one answers.
       for (const layer of route!.stack) {
         let next = false;
-        await layer.handle({ headers: {}, body: {}, query: {}, params: {} }, res, () => (next = true));
+        const method = Object.keys(route!.methods)[0].toUpperCase();
+        await layer.handle({ method, path, headers: {}, body: {}, query: {}, params: {} }, res, () => (next = true));
         if (!next) break;
         if (layer === route!.stack[route!.stack.length - 1]) reached = true;
       }
-      expect(status).toBe(404);
+      const page = PAGES.includes(path) && route!.methods.get;
+      expect(status).toBe(page ? 302 : 404);
+      expect(location).toBe(page ? "/" : "");
       expect(reached).toBe(false);
     },
   );

@@ -57,6 +57,7 @@ function cookieFrom(res, name) {
 
 async function keep(world, res) {
   world.elfStatus = res.status;
+  world.elfLocation = res.headers.get("location");
   world.elfText = await res.text();
   try {
     world.elfBody = JSON.parse(world.elfText);
@@ -75,6 +76,10 @@ When("I request the elf path {string}", async function (path) {
 
 Then("the elf response status should be {int}", function (status) {
   assert.equal(this.elfStatus, status, this.elfText);
+});
+
+Then("the elf response goes to {string}", function (where) {
+  assert.equal(this.elfLocation, where);
 });
 
 Then("the elf response should contain {string}", function (words) {

@@ -86,7 +86,8 @@ async function get(path: string, cookie?: string, body: Record<string, unknown> 
   };
   for (const layer of route.stack) {
     let next = false;
-    await layer.handle({ headers: cookie ? { cookie } : {}, body, query: {}, params: {} }, res, () => (next = true));
+    const method = Object.keys(route.methods)[0].toUpperCase();
+    await layer.handle({ method, path, headers: cookie ? { cookie } : {}, body, query: {}, params: {} }, res, () => (next = true));
     if (!next) break;
   }
   return out;
@@ -149,9 +150,9 @@ describe("the private preview", () => {
     }
   });
 
-  it("is not found without the code, or with a wrong one", async () => {
-    expect((await get("/elf")).status).toBe(404);
-    expect((await get("/elf", `nbcc_elf_preview=${"d".repeat(64)}`)).status).toBe(404);
+  it("sends a browser without the code, or with a wrong one, to the home page", async () => {
+    expect((await get("/elf")).status).toBe(302);
+    expect((await get("/elf", `nbcc_elf_preview=${"d".repeat(64)}`)).status).toBe(302);
   });
 
   // TASK-613: the preview's sign up asks for a mobile number like every other way of enrolling.

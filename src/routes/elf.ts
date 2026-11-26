@@ -174,6 +174,13 @@ async function schoolOn(req: Request, res: Response, next: NextFunction): Promis
   // The cookie lets a browser see a switched off school only as a private preview, as it always has.
   const preview = !settings.schoolOn && practice;
   if (!settings.schoolOn && !preview) {
+    // Its pages send the visitor to the home page (Jaimie, 26 November 2026: the school was cancelled
+    // and old links and posters still point here). A temporary redirect, so switching it back on
+    // works at once; everything else, the API and any form posted, is still not found.
+    if (req.method === "GET" && !req.path.startsWith("/api/")) {
+      res.redirect(302, "/");
+      return;
+    }
     res.status(404).type("text/plain").send("Not found");
     return;
   }

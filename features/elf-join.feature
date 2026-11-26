@@ -3,17 +3,20 @@ Feature: Elf Detective School, wave 1: enrolling, paying, signing in and dressin
   A grown up enrols their detectives (a first name and a festive surname only) and pays what they
   can. The payment settles through Stripe's webhook, each detective gets a badge, the welcome email
   goes, and the browser that paid is signed in to Detective HQ, where each elf can be dressed. The
-  whole school ships switched off: until an admin switches it on, every page is not found.
+  whole school ships switched off: until an admin switches it on, every page sends its visitor to the
+  home page and everything else is not found.
   Every family here is invented.
 
   Background:
     Given the Elf Detective School is switched "off"
 
-  Scenario: while it is switched off, nothing is there
+  Scenario: while it is switched off, its pages send visitors to the home page
     When I request the elf path "/elf"
-    Then the elf response status should be 404
+    Then the elf response status should be 302
+    And the elf response goes to "/"
     When I request the elf path "/elf/join"
-    Then the elf response status should be 404
+    Then the elf response status should be 302
+    And the elf response goes to "/"
 
   Scenario: a grown up enrols two detectives, pays, and is signed in to Detective HQ
     Given the Elf Detective School is switched "on"

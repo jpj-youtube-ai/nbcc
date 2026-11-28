@@ -904,9 +904,11 @@ describe("the page the link to stop the emails opens", () => {
     expect(r.text).toContain(STOPPING);
   });
 
-  it("is not found while Elf Detective School is switched off, and reads no family", async () => {
+  it("sends its visitor to the home page while Elf Detective School is switched off, and reads no family", async () => {
     db.getElfSettings.mockResolvedValue({ ...ON, schoolOn: false });
-    expect((await call("GET", LINK, { cookie: null })).status).toBe(404);
+    const r = await call("GET", LINK, { cookie: null });
+    expect(r.status).toBe(302);
+    expect(r.headers.get("location")).toBe("/");
     expect(db.familyByEmailsToken).not.toHaveBeenCalled();
   });
 

@@ -4,7 +4,7 @@ Approved by Jaimie, 28 November 2026 (design in chat, then the tablet mockup).
 
 ## Why
 
-People bring things to the Elves Workshop all day: selection boxes, hats, toys. Today nobody gets a
+People bring things to the Elves' Workshop all day: selection boxes, hats, toys. Today nobody gets a
 proper thank you, and nobody joins the newsletter. A tablet left open on one page lets each person
 leave their details in a few seconds, get a thank you at once, and leaves staff a list to send
 proper thank-you letters from later.

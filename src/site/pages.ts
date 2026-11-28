@@ -134,7 +134,7 @@ export const PRIVATE_PAGES: PrivatePage[] = [
     path: "/workshop",
     title: "Workshop drop-offs",
     reach: "unlisted",
-    note: "Open all day on the tablet in the Elves Workshop: somebody who brings something in leaves their details, gets a thank you email, and can join the newsletter. Search engines are told to skip it. The list is in Admin > Giving > Workshop drop-offs.",
+    note: "Open all day on the tablet in the Elves' Workshop: somebody who brings something in leaves their details, gets a thank you email, and can join the newsletter. Search engines are told to skip it. The list is in Admin > Giving > Workshop drop-offs.",
   },
   {
     path: "/business/thank-you",
@@ -234,7 +234,7 @@ export const RESERVED_PREFIXES: string[] = [
   "/my-story",
   "/newsletter",
   "/portal/access",
-  // Workshop drop-offs: the tablet page in the Elves Workshop.
+  // Workshop drop-offs: the tablet page in the Elves' Workshop.
   "/workshop",
   "/privacy",
   "/reset",

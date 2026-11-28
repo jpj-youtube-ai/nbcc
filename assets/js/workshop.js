@@ -1,4 +1,4 @@
-// Workshop drop-offs: the form on /workshop (workshop.html), the tablet page in the Elves Workshop.
+// Workshop drop-offs: the form on /workshop (workshop.html), the tablet page in the Elves' Workshop.
 // docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md
 //
 // Each person who brings something in leaves their details. This sends them to POST /api/workshop,

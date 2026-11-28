@@ -84,9 +84,10 @@ describe("knowing how many tables to expect", () => {
   // practice door; 119 since the alerts plan added head elves' mobiles, the alerts sent and the claimed sends;
   // 122 since TASK-619 added the phones to notify, each person's notification settings, and how far
   // each has been told; 124 since Elf Detective School's grand prize added its entries and their
-  // pictures (whose rows stay out of the dump, as photos' do).
-  it("counts 124 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(124);
+  // pictures (whose rows stay out of the dump, as photos' do); 125 since workshop drop-offs added the
+  // people who left their details on the workshop tablet.
+  it("counts 125 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(125);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -189,6 +190,8 @@ describe("knowing how many tables to expect", () => {
     // wait, and the bank details printed on them.
     expect(main).toContain("donation_invoices");
     expect(main).toContain("donation_invoice_settings");
+    // Workshop drop-offs: names, emails and mobiles left on the workshop tablet.
+    expect(main).toContain("workshop_dropoffs");
     // Fill a Red Bag: companies' own Workshops, the link each one's printed QR code carries.
     expect(main).toContain("red_bag_workshops");
     // TASK-596: the monthly renewals recorded twice, taken out of donations and kept aside.
@@ -224,7 +227,7 @@ describe("knowing how many tables to expect", () => {
     for (const t of ["elf_grand_prize_entries", "elf_grand_prize_files"]) {
       expect(main).toContain(t);
     }
-    expect(main.length).toBe(121);
+    expect(main.length).toBe(122);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

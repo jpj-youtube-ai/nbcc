@@ -1477,7 +1477,7 @@ const WORKSHOP: CatalogueEmail[] = [
     id: "workshop-thanks",
     group: "workshop",
     name: "Thank you for dropping in",
-    who: "Goes straight away to somebody who brings something into the Elves Workshop and leaves their details on the tablet page at /workshop.",
+    who: "Goes straight away to somebody who brings something into the Elves' Workshop and leaves their details on the tablet page at /workshop.",
     audience: "public",
     logKinds: ["workshopThanks"],
     note: "The name and what they brought are typed by the person. The ones here are examples.",

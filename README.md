@@ -1653,7 +1653,7 @@ held to the same weight budget as the four main pages (`test/unit/perf-budget.te
 ### Workshop drop-offs (`/workshop`, Admin > Giving > Workshop drop-offs)
 
 Design: `docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md`. A page that stays open all
-day on a tablet in the Elves Workshop. Somebody bringing something in leaves their name, email, what
+day on a tablet in the Elves' Workshop. Somebody bringing something in leaves their name, email, what
 they brought, who they are with (optional: free text, with Individual, Church group and Business to
 tap) and a mobile (optional), and can tick "Send me the NBCC newsletter (a few emails a year)",
 never ticked for them. After Send the page says "Thank you, [first name]!" for about seven seconds,
@@ -1681,7 +1681,7 @@ then clears every box for the next person (Next person brings it back sooner).
   letter** (Thank you edit) opens Admin > Thank you with a new gift in kind letter filled in
   (`window.AdminThankYou.writeInKind` in `app.js`). A New pill when somebody drops something off, and
   a phone notification "Someone dropped something off at the workshop" (it names nobody). Workshop
-  newsletter sign ups count for the Newsletter pill and show as "Signed up at the Elves Workshop".
+  newsletter sign ups count for the Newsletter pill and show as "Signed up at the Elves' Workshop".
 
 Tests: `test/unit/workshop-dropoffs-db.test.ts`, `workshop-thanks-email.test.ts`,
 `workshop-route.test.ts`, `workshop-page.test.ts`, `admin-drop-offs.test.ts`,

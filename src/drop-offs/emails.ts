@@ -22,7 +22,7 @@ const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 const SUBJECT = "Thank you for dropping in";
-const EYEBROW = "The Elves Workshop";
+const EYEBROW = "The Elves' Workshop";
 const DIFFERENCE =
   "Everything that comes through the workshop door goes to children, young people and vulnerable adults across South West Scotland who need it most. Your kindness makes a real difference, and the elves are very grateful.";
 const MAILING_LIST =

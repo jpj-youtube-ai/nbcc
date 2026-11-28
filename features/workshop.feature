@@ -1,5 +1,5 @@
 Feature: Workshop drop-offs
-  Somebody bringing something into the Elves Workshop leaves their details on the tablet page at
+  Somebody bringing something into the Elves' Workshop leaves their details on the tablet page at
   /workshop, gets a thank you, and can join the newsletter. Staff see the list in the admin.
 
   Scenario: a drop-off is saved, and a ticked box joins the newsletter as a workshop sign up

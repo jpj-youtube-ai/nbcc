@@ -1,7 +1,7 @@
 import { pool } from "./pool";
 
 // Workshop drop-offs (docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md): somebody who
-// brought something into the Elves Workshop and left their details on the tablet page at /workshop.
+// brought something into the Elves' Workshop and left their details on the tablet page at /workshop.
 
 export interface DropOffInput {
   name: string;

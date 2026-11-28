@@ -1,6 +1,6 @@
 /* eslint-disable */
 // Workshop drop-offs (docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md): one row each
-// time somebody bringing something into the Elves Workshop leaves their details on the tablet page at
+// time somebody bringing something into the Elves' Workshop leaves their details on the tablet page at
 // /workshop. Staff send proper thank-you letters from the list in Admin > Giving > Workshop drop-offs.
 //
 // Additive: a new table, and the newsletter's consent check widened to take 'workshop' (older code
@@ -19,7 +19,7 @@ exports.up = (pgm) => {
       newsletter: { type: "boolean", notNull: true, default: false },
       created_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
     },
-    { comment: "Somebody who brought something into the Elves Workshop and left their details at /workshop." },
+    { comment: "Somebody who brought something into the Elves' Workshop and left their details at /workshop." },
   );
   pgm.createIndex("workshop_dropoffs", "created_at");
 

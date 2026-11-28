@@ -254,7 +254,7 @@ describe("which pages carry it", () => {
     "fundraise-logos.html",
     // Joining the mailing list.
     "newsletter.html",
-    // Workshop drop-offs: the tablet page in the Elves Workshop.
+    // Workshop drop-offs: the tablet page in the Elves' Workshop.
     "workshop.html",
   ];
   const TAG = '<script defer src="/assets/js/pulse.js"></script>';

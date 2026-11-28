@@ -12062,7 +12062,7 @@
     admin: "Added by staff",
     fundraise: "Signed up while fundraising",
     elf: "Signed up through Elf Detective School",
-    workshop: "Signed up at the Elves Workshop",
+    workshop: "Signed up at the Elves' Workshop",
   };
   function nlSelfSignup(m) { return m.consentSource === "footer" || m.consentSource === "fundraise" || m.consentSource === "elf" || m.consentSource === "workshop"; }
   function nlHowJoined(m) { return NL_HOW_JOINED[m.consentSource] || "Joined another way"; }

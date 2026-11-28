@@ -1,0 +1,25 @@
+/* Workshop drop-offs: /workshop, the tablet page in the Elves Workshop. Its own small stylesheet on
+   top of styles.css: one calm column, big boxes that are easy to tap, the suggestion buttons, the
+   newsletter tick and the thank you card. Site tokens only; nothing scrolls inside a box. */
+
+.ws-narrow{max-width:620px;margin-inline:auto}
+.ws-card{padding:clamp(22px,4vw,36px);overflow-wrap:anywhere}
+.ws-card .field{margin-bottom:18px}
+.ws-card label{font-size:1.05rem}
+.ws-opt{font-weight:400;color:var(--slate-soft);font-size:.92rem}
+.ws-card input[type=text],.ws-card input[type=email],.ws-card input[type=tel]{font-size:1.1rem;padding:14px 16px}
+.ws-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.ws-chip{font:inherit;font-size:.98rem;min-height:44px;padding:8px 18px;border-radius:999px;border:1.6px solid var(--holly);background:#fff;color:var(--holly);cursor:pointer}
+.ws-chip[aria-pressed=true]{background:var(--holly);color:var(--cream)}
+.ws-tick{display:flex;gap:12px;align-items:flex-start;background:var(--holly-soft);border-radius:14px;padding:14px 16px;margin:6px 0 22px;font-size:1.02rem;font-weight:400;cursor:pointer}
+.ws-tick input{width:24px;height:24px;margin:1px 0 0;flex:none;accent-color:var(--holly)}
+.ws-send{width:100%;justify-content:center;font-size:1.2rem;padding:18px}
+/* The message area is always on the page so a screen reader announces it. Empty, it takes no room. */
+#wsForm .form-status{display:block}
+#wsForm .form-status:empty{margin:0;padding:0;border:0}
+#wsForm .form-status:focus,.ws-done h2:focus{outline:none}
+#wsForm .field.invalid .err{display:block}
+.ws-done{text-align:center;padding-block:clamp(32px,6vw,52px)}
+.ws-done h2{font-size:clamp(1.8rem,1.4rem + 1.6vw,2.4rem);color:var(--maroon);margin:.2em 0}
+.ws-done p{color:var(--slate);line-height:1.7}
+.ws-next{margin-top:18px}

@@ -51,6 +51,8 @@ const PAGES = [
   "fundraise-logos.html",
   // Joining the mailing list.
   "newsletter.html",
+  // Workshop drop-offs: the tablet page in the Elves Workshop.
+  "workshop.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];

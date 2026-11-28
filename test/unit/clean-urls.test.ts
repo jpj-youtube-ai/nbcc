@@ -22,6 +22,7 @@ const URL_MAP = [
   { clean: "/privacy", file: "privacy.html", label: "Privacy" },
   { clean: "/my-story", file: "my-story.html", label: "Share your story" },
   { clean: "/newsletter", file: "newsletter.html", label: "Join our mailing list" },
+  { clean: "/workshop", file: "workshop.html", label: "Thank you for bringing something in" },
 ] as const;
 
 const PAGE_FILES = URL_MAP.map((m) => m.file);

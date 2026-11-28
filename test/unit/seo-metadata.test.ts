@@ -23,6 +23,7 @@ const PAGES = [
   { file: "privacy.html", label: "Privacy notice", url: `${BASE}/privacy` },
   // Joining the mailing list.
   { file: "newsletter.html", label: "Join our mailing list", url: `${BASE}/newsletter` },
+  { file: "workshop.html", label: "Thank you for bringing something in", url: `${BASE}/workshop` },
 ] as const;
 
 function read(file: string): string {

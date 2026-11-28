@@ -889,3 +889,16 @@ export async function sendInvoiceStaff(m: Omit<InvoiceEmailMessage, "email" | "n
     text: m.text,
   });
 }
+
+// Workshop drop-offs (docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md): the thank you to
+// somebody who left their details on the tablet page at /workshop, from and replying to the giving inbox.
+export async function sendWorkshopThanks(m: { email: string; name: string; subject: string; html: string; text: string }): Promise<void> {
+  await sendVerbatim("workshopThanks", m.name, {
+    email: m.email,
+    from: config.GIVING_FROM_EMAIL,
+    replyTo: config.GIVING_FROM_EMAIL,
+    subject: m.subject,
+    html: m.html,
+    text: m.text,
+  });
+}

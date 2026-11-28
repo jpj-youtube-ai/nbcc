@@ -30,6 +30,7 @@ import { doorPost, yesterdayPost } from "../elf/posts";
 import { buildMemoryReceiptEmail, buildTshirtAskEmail, greetGuardian } from "../fundraising/signup-tidy-emails";
 import { buildInMemoryApprovedEmail } from "../fundraising/memory-emails";
 import { buildSupporterThanksEmail } from "../fundraising/thanks-email";
+import { buildWorkshopThanksEmail } from "../drop-offs/emails";
 import { buildInviteEmail, buildSummaryEmail } from "../fundraising/team-emails";
 import {
   buildHandoverCodeEmail,
@@ -98,7 +99,7 @@ import { buildGroupReceiptEmail, buildInvoiceEmail, buildInvoiceStaffEmail, buil
 //
 // The order of CATALOGUE is the order on screen: by group, then the order they would be sent.
 
-export type GroupId = "signup" | "invites" | "teams" | "touch" | "finishing" | "memory" | "pledges" | "events" | "ball" | "elf" | "invoices" | "staff";
+export type GroupId = "signup" | "invites" | "teams" | "touch" | "finishing" | "memory" | "pledges" | "events" | "ball" | "elf" | "invoices" | "workshop" | "staff";
 
 export const CATALOGUE_GROUPS: ReadonlyArray<{ id: GroupId; name: string }> = [
   { id: "signup", name: "Signing up and approval" },
@@ -112,6 +113,7 @@ export const CATALOGUE_GROUPS: ReadonlyArray<{ id: GroupId; name: string }> = [
   { id: "ball", name: "The Festive Ball" },
   { id: "elf", name: "Elf Detective School" },
   { id: "invoices", name: "Invoices for donations" },
+  { id: "workshop", name: "Workshop drop-offs" },
   { id: "staff", name: "Staff notices" },
 ];
 
@@ -1469,6 +1471,23 @@ const INVOICES: CatalogueEmail[] = [
   },
 ];
 
+// Workshop drop-offs (docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md).
+const WORKSHOP: CatalogueEmail[] = [
+  {
+    id: "workshop-thanks",
+    group: "workshop",
+    name: "Thank you for dropping in",
+    who: "Goes straight away to somebody who brings something into the Elves' Workshop and leaves their details on the tablet page at /workshop.",
+    audience: "public",
+    logKinds: ["workshopThanks"],
+    note: "The name and what they brought are typed by the person. The ones here are examples.",
+    versions: [
+      v("usual", USUAL, () => buildWorkshopThanksEmail({ name: SAM.name, brought: "Two bags of selection boxes and some hats", joinedNewsletter: false })),
+      v("newsletter", "Ticked the newsletter box", () => buildWorkshopThanksEmail({ name: SAM.name, brought: "Two bags of selection boxes and some hats", joinedNewsletter: true })),
+    ],
+  },
+];
+
 const STAFF: CatalogueEmail[] = [
   staff("staff-signup", "New fundraiser", "when someone signs up.", "fundraiseStaff", [
     v("usual", "Someone raising money", signUpNotice()),
@@ -1589,7 +1608,7 @@ const STAFF: CatalogueEmail[] = [
 ];
 
 /** Every email, in the order it is shown. */
-export const CATALOGUE: ReadonlyArray<CatalogueEmail> = [...SIGNUP, ...INVITES, ...TEAMS, ...TOUCH, ...FINISHING, ...MEMORY, ...PLEDGES, ...EVENTS, ...BALL, ...ELF, ...INVOICES, ...STAFF];
+export const CATALOGUE: ReadonlyArray<CatalogueEmail> = [...SIGNUP, ...INVITES, ...TEAMS, ...TOUCH, ...FINISHING, ...MEMORY, ...PLEDGES, ...EVENTS, ...BALL, ...ELF, ...INVOICES, ...WORKSHOP, ...STAFF];
 
 // --- reading it ------------------------------------------------------------------------------------
 

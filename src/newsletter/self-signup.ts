@@ -20,7 +20,7 @@ import { config } from "../config";
 
 export async function subscribeSelf(
   person: { name: string; email: string; phone: string | null },
-  source: "footer" | "fundraise" | "elf" = "footer",
+  source: "footer" | "fundraise" | "elf" | "workshop" = "footer",
 ): Promise<AddSubscriberOutcome | "no_list"> {
   const list = await getSubscriberListBySlug("newsletter");
   if (!list) {

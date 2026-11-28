@@ -42,6 +42,7 @@ import { sesWebhookRouter } from "./routes/ses-webhook";
 import { pulseRouter } from "./routes/pulse";
 import { preferencesRouter } from "./routes/preferences";
 import { subscribeRouter } from "./routes/subscribe";
+import { workshopRouter } from "./routes/workshop";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { businessRouter } from "./routes/business";
@@ -57,6 +58,7 @@ import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
 import { qrCodesRouter } from "./routes/qr-codes";
 import { invoicesRouter } from "./routes/invoices";
+import { adminDropOffsRouter } from "./routes/admin-drop-offs";
 import { adminOverviewRouter } from "./routes/admin-overview";
 import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
@@ -223,6 +225,8 @@ export function createApp() {
   app.use(qrCodesRouter);
   // Invoices for donations: Admin > Giving > Invoices, and the private invoice page /invoice/<token>.
   app.use(invoicesRouter);
+  // Admin > Giving > Workshop drop-offs.
+  app.use(adminDropOffsRouter);
   // The admin Overview's "Needs you" (TASK-508).
   app.use(adminOverviewRouter);
   // Fill a Red Bag against the Donate page, at the top of the admin's Donations screen.
@@ -235,6 +239,8 @@ export function createApp() {
   app.use(unsubscribeRouter);
   // Public footer signup (TASK-261) — JSON POST, rate-limited + honeypotted in the route.
   app.use(subscribeRouter);
+  // Workshop drop-offs: the tablet page at /workshop posts each one here.
+  app.use(workshopRouter);
   // Public printable thank-you letter page (TASK-165/REQ-069). Also before the site catch-all so its
   // wildcard doesn't shadow /thank-you/letter/:token.
   app.use(thankYouLetterRouter);

@@ -39,8 +39,9 @@ export const WELCOME_SUBJECT = "Thanks for signing up — welcome to NBCC";
 // whole import — it would have to change this rule and the test that pins it.
 // TASK-493: the fundraising sign up's tick box is a self signup too, so it is welcomed the same way.
 // Elf Detective School: a grown up who ticks the box when enrolling already gets the school's own
-// welcome email, so one email is kinder than two: no newsletter welcome for "elf".
-export function shouldSendWelcome(source: "footer" | "import" | "admin" | "fundraise" | "elf"): boolean {
+// welcome email, so one email is kinder than two: no newsletter welcome for "elf". Nor for "workshop":
+// the drop-off thank you (src/drop-offs/emails.ts) already says they are on the mailing list.
+export function shouldSendWelcome(source: "footer" | "import" | "admin" | "fundraise" | "elf" | "workshop"): boolean {
   return source === "footer" || source === "fundraise";
 }
 

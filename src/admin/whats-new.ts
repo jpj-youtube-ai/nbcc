@@ -18,6 +18,7 @@ export type Area =
   | "fundraising"
   | "red-bag"
   | "invoices"
+  | "drop-offs"
   | "elf";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
@@ -42,6 +43,9 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "red-bag", section: "red-bag", level: "view" },
   // Invoices for donations: Admin > Giving > Invoices. New as a screen only: staff make the invoices.
   { area: "invoices", section: "donations", level: "view" },
+  // Workshop drop-offs: Admin > Giving > Workshop drop-offs. Each drop-off left on the workshop
+  // tablet is an arrival. No permission of its own, like Invoices.
+  { area: "drop-offs", section: "donations", level: "view" },
   // Elf Detective School: Head Elf HQ. A photo a family sends, waiting to be checked, is an arrival.
   { area: "elf", section: "elf", level: "view" },
 ];
@@ -80,6 +84,7 @@ export const AREA_TITLES: Record<Area, string> = {
   fundraising: "Get involved",
   "red-bag": "Fill a Red Bag",
   invoices: "Invoices",
+  "drop-offs": "Workshop drop-offs",
   elf: "Elf Detective School",
 };
 
@@ -121,6 +126,9 @@ export function arrivalLine(area: Area, fields: Record<string, unknown>): string
       return "A Festive Ball booking";
     case "newsletter":
       return "Someone joined the newsletter";
+    // Never who, nor what they brought: the line is read off a lock screen.
+    case "drop-offs":
+      return "Someone dropped something off at the workshop";
     // Whatever the query selected, never a family, a child, a detective or a place.
     case "elf":
       return "A photo is waiting to be checked";
@@ -148,6 +156,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "red-bag", added: new Date("2026-10-05T13:00:00Z"), what: "Fill a Red Bag: change the items, prices and examples on the page, preview them, and publish" },
   { area: "qr", added: new Date("2026-11-03T18:00:00Z"), what: "Named QR codes: one for each billboard or card, each counting its own scans (TASK-588)" },
   { area: "invoices", added: new Date("2026-11-05T21:00:00Z"), what: "Invoices: send an invoice that, once paid by card or bank transfer, comes through into Donations" },
+  { area: "drop-offs", added: new Date("2026-11-28T18:00:00Z"), what: "Workshop drop-offs: everyone who left their details on the workshop tablet, with a button to send each a thank you letter" },
 ];
 
 // When the pills went live. Someone who has never opened a section is counted as having seen it

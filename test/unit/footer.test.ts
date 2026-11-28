@@ -25,6 +25,8 @@ const PAGES = [
   "portal.html",
   "privacy.html",
   "newsletter.html",
+  // Workshop drop-offs: the tablet page in the Elves' Workshop.
+  "workshop.html",
   "gift-aid.html",
   "thank-you.html",
   "ball.html",

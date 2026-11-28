@@ -51,6 +51,8 @@ const PAGES = [
   "fundraise-logos.html",
   // Joining the mailing list.
   "newsletter.html",
+  // Workshop drop-offs: the tablet page in the Elves' Workshop.
+  "workshop.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 // Tabbable = what the first Tab from page load can reach, in DOM order. A

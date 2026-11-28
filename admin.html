@@ -64,6 +64,9 @@
     <!-- Santa Sleigh: its own section under Giving (assets/js/admin/sleigh.js), gated on Donations. -->
     <link rel="stylesheet" href="/assets/css/admin-sleigh.css" />
     <script defer src="/assets/js/admin/sleigh.js"></script>
+    <!-- Workshop drop-offs: its own section under Giving (assets/js/admin/drop-offs.js), gated on Donations. -->
+    <link rel="stylesheet" href="/assets/css/admin-drop-offs.css" />
+    <script defer src="/assets/js/admin/drop-offs.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -167,6 +170,8 @@
                   <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
                   <!-- Invoices for donations: no permission of its own. View of Donations sees it; edit sends. -->
                   <li><button class="admin-nav-link" type="button" data-view="invoices" data-view-gate="donations">Invoices</button></li>
+                  <!-- Workshop drop-offs: no permission of its own. View of Donations sees it; edit removes one. -->
+                  <li><button class="admin-nav-link" type="button" data-view="drop-offs" data-view-gate="donations">Workshop drop-offs</button></li>
                   <!-- Fill a Red Bag: the editor for the list on /fill. Its own permission, "red-bag". -->
                   <li><button class="admin-nav-link" type="button" data-view="red-bag">Fill a Red Bag</button></li>
                   <!-- Santa Sleigh: no permission of its own. View of Donations sees it; edit changes it. -->
@@ -2363,6 +2368,14 @@
                  "Enter the bank details under Set up first", and the email to events@ says an admin
                  "marks it paid under Festive Ball, Awaiting transfer". -->
             <!-- Santa Sleigh: drawn into #sleighAdmin by assets/js/admin/sleigh.js from /api/admin/sleigh. -->
+            <!-- Workshop drop-offs (docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md): drawn
+                 into #dropOffsAdmin by assets/js/admin/drop-offs.js from /api/admin/drop-offs. -->
+            <section class="admin-view ak" id="view-drop-offs" aria-labelledby="drop-offs-heading" hidden>
+              <h2 id="drop-offs-heading">Workshop drop-offs</h2>
+              <p class="admin-view-intro">Everyone who left their details on the tablet in the Elves' Workshop, at nbcc.scot/workshop. They have each had a thank you email already. Press <b>Write a thank you letter</b> to send a proper one.</p>
+              <div id="dropOffsAdmin"></div>
+            </section>
+
             <section class="admin-view" id="view-sleigh" aria-labelledby="sleigh-heading" hidden>
               <h2 id="sleigh-heading">Santa Sleigh</h2>
               <div id="sleighAdmin"></div>

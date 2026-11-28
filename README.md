@@ -57,6 +57,7 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/business/thank-you` | `business-thank-you.html` |
 | `/privacy` | `privacy.html` |
 | `/newsletter` | `newsletter.html` (joining the mailing list) |
+| `/workshop` | `workshop.html` (the workshop tablet: drop-offs; unlisted, noindex) |
 | `/my-story` | `my-story.html` |
 
 `/donate/thank-you` is the post-payment confirmation page Stripe returns the
@@ -1648,6 +1649,44 @@ what is sent, the signed up and error states, and its Dockerfile, clean URL and 
 the page is also in the sitewide SEO, accessibility, copy, footer, clean URL and pulse guards, is
 held to the same weight budget as the four main pages (`test/unit/perf-budget.test.ts`), and
 `features/site.feature` serves it. The privacy notice says what joining the mailing list uses.
+
+### Workshop drop-offs (`/workshop`, Admin > Giving > Workshop drop-offs)
+
+Design: `docs/superpowers/specs/2026-11-28-workshop-dropoffs-design.md`. A page that stays open all
+day on a tablet in the Elves' Workshop. Somebody bringing something in leaves their name, email, what
+they brought, who they are with (optional: free text, with Individual, Church group and Business to
+tap) and a mobile (optional), and can tick "Send me the NBCC newsletter (a few emails a year)",
+never ticked for them. After Send the page says "Thank you, [first name]!" for about seven seconds,
+then clears every box for the next person (Next person brings it back sooner).
+
+- **The page:** `workshop.html` at the clean URL `/workshop` (`_redirects`, `Dockerfile`), the site's
+  own banner and footer, `noindex`, not in the menu or the site map (listed in the admin's private
+  pages, `src/site/pages.ts`). Script `assets/js/workshop.js`, stylesheet `assets/css/workshop.css`.
+- **`POST /api/workshop`** (`src/routes/workshop.ts`): saves a row in `workshop_dropoffs`
+  (migration `1791200000500_workshop-dropoffs.js`, `src/db/workshop-dropoffs.ts`) first; then, only
+  when the box was ticked (a literal `true`), `subscribeSelf(..., "workshop")`, the newsletter's new
+  `consent_source` `workshop` (the check is widened in the same migration; no separate welcome
+  email); then the thank you email in the background. Neither failing shows the person an error.
+  A hidden `website` honeypot answers 200 and saves nothing; the limit is 60 an hour per address,
+  because one tablet sends the whole day's drop-offs. 400s say which box (`{ error, field }`).
+- **The email:** "Thank you for dropping in" (`src/drop-offs/emails.ts`, kind `workshopThanks`,
+  `sendWorkshopThanks` from and replying to the giving inbox), naming what they brought, with a line
+  about the mailing list when they joined it. Listed in Admin > All emails in its own group,
+  "Workshop drop-offs".
+- **The admin:** Admin > Giving > Workshop drop-offs (`#view-drop-offs`, drawn by
+  `assets/js/admin/drop-offs.js` from `GET /api/admin/drop-offs`, `src/routes/admin-drop-offs.ts`),
+  gated like Invoices: view of Donations sees the list, newest first, with whether an in-kind
+  thank-you letter has gone to that email since; `DELETE /api/admin/drop-offs/:id` (Donations edit,
+  audited as `workshop_dropoff.removed`) removes a test entry after asking. **Write a thank you
+  letter** (Thank you edit) opens Admin > Thank you with a new gift in kind letter filled in
+  (`window.AdminThankYou.writeInKind` in `app.js`). A New pill when somebody drops something off, and
+  a phone notification "Someone dropped something off at the workshop" (it names nobody). Workshop
+  newsletter sign ups count for the Newsletter pill and show as "Signed up at the Elves' Workshop".
+
+Tests: `test/unit/workshop-dropoffs-db.test.ts`, `workshop-thanks-email.test.ts`,
+`workshop-route.test.ts`, `workshop-page.test.ts`, `admin-drop-offs.test.ts`,
+`admin-drop-offs-js.test.ts`, the Thank you screen's own test, and `features/workshop.feature` and
+`features/admin-drop-offs.feature`. The privacy notice says what drop-off details are used for.
 
 ### Checkout contract (REQ-028)
 

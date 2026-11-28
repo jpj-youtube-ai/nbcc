@@ -42,6 +42,7 @@ import { sesWebhookRouter } from "./routes/ses-webhook";
 import { pulseRouter } from "./routes/pulse";
 import { preferencesRouter } from "./routes/preferences";
 import { subscribeRouter } from "./routes/subscribe";
+import { workshopRouter } from "./routes/workshop";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { businessRouter } from "./routes/business";
@@ -235,6 +236,8 @@ export function createApp() {
   app.use(unsubscribeRouter);
   // Public footer signup (TASK-261) — JSON POST, rate-limited + honeypotted in the route.
   app.use(subscribeRouter);
+  // Workshop drop-offs: the tablet page at /workshop posts each one here.
+  app.use(workshopRouter);
   // Public printable thank-you letter page (TASK-165/REQ-069). Also before the site catch-all so its
   // wildcard doesn't shadow /thank-you/letter/:token.
   app.use(thankYouLetterRouter);

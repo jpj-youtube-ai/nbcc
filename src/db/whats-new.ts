@@ -66,10 +66,12 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag" | "
   newsletter: {
     db: "main",
     sql: `SELECT max(consented_at) AS at FROM list_subscribers
-           WHERE consent_source IN ('footer', 'fundraise') AND unsubscribed_at IS NULL AND consented_at > $1`,
+           WHERE consent_source IN ('footer', 'fundraise', 'workshop') AND unsubscribed_at IS NULL AND consented_at > $1`,
   },
   // TASK-493: a new sign up at /fundraise, when it was made.
   fundraising: { db: "main", sql: "SELECT max(created_at) AS at FROM fundraisers WHERE created_at > $1" },
+  // Workshop drop-offs: somebody who left their details on the workshop tablet, when they did.
+  "drop-offs": { db: "main", sql: "SELECT max(created_at) AS at FROM workshop_dropoffs WHERE created_at > $1" },
   // Elf Detective School: a photo a family sent that is still waiting for a head elf, when it was
   // sent. The same condition as the photo check (src/db/elf-photos.ts photosWaiting): waiting, and
   // the family not removed. The practice door's photos (door 0) count too.
@@ -87,7 +89,7 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag" | "
 // conditions, same databases as LATEST above — deliberately, so the phone and the screen can
 // never disagree about what counts as new. When one is changed, change its twin.
 //
-// Only the nine areas that have a LATEST entry appear here. The others carry a pill when the
+// Only the ten areas that have a LATEST entry appear here. The others carry a pill when the
 // SCREEN is new and have no arrivals at all.
 const DETAILS: Record<keyof typeof LATEST, { db: "main" | "contact" | "stories"; sql: string }> = {
   contact: {
@@ -145,13 +147,19 @@ const DETAILS: Record<keyof typeof LATEST, { db: "main" | "contact" | "stories";
   newsletter: {
     db: "main",
     sql: `SELECT consented_at AS at, count(*) OVER () AS total FROM list_subscribers
-           WHERE consent_source IN ('footer', 'fundraise') AND unsubscribed_at IS NULL
+           WHERE consent_source IN ('footer', 'fundraise', 'workshop') AND unsubscribed_at IS NULL
              AND consented_at > $1::timestamptz AND consented_at <= $2
            ORDER BY consented_at LIMIT $3`,
   },
   fundraising: {
     db: "main",
     sql: `SELECT created_at AS at, count(*) OVER () AS total FROM fundraisers
+            WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
+  },
+  // Only the time: nothing that names who dropped off, or what they brought, is selected.
+  "drop-offs": {
+    db: "main",
+    sql: `SELECT created_at AS at, count(*) OVER () AS total FROM workshop_dropoffs
             WHERE created_at > $1::timestamptz AND created_at <= $2 ORDER BY created_at LIMIT $3`,
   },
   // Only the time: nothing that names a family, a child, a detective or a place is selected.

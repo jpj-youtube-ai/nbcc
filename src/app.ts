@@ -58,6 +58,7 @@ import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
 import { qrCodesRouter } from "./routes/qr-codes";
 import { invoicesRouter } from "./routes/invoices";
+import { adminDropOffsRouter } from "./routes/admin-drop-offs";
 import { adminOverviewRouter } from "./routes/admin-overview";
 import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
@@ -224,6 +225,8 @@ export function createApp() {
   app.use(qrCodesRouter);
   // Invoices for donations: Admin > Giving > Invoices, and the private invoice page /invoice/<token>.
   app.use(invoicesRouter);
+  // Admin > Giving > Workshop drop-offs.
+  app.use(adminDropOffsRouter);
   // The admin Overview's "Needs you" (TASK-508).
   app.use(adminOverviewRouter);
   // Fill a Red Bag against the Donate page, at the top of the admin's Donations screen.

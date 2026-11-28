@@ -47,8 +47,13 @@ describe("GET /api/admin/drop-offs", () => {
   it("lists them for anyone who can see Donations", async () => {
     const res = await call(getAdminDropOffs, tokenFor("viewer", { donations: "view" }));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ dropOffs: [ROW] });
+    expect(res.body).toEqual({ dropOffs: [ROW], mayRemove: false, mayWriteLetter: false });
     expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("offers Remove to an editor of Donations, and the letter to an editor of Thank you", async () => {
+    const res = await call(getAdminDropOffs, tokenFor("viewer", { donations: "edit", "thank-you": "edit" }));
+    expect(res.body).toMatchObject({ mayRemove: true, mayWriteLetter: true });
   });
 
   it("is closed to someone who cannot see Donations, and to nobody signed in", async () => {

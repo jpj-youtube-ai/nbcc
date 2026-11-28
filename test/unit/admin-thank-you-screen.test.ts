@@ -1003,3 +1003,35 @@ describe("the screen's own stylesheet keeps the house rules", () => {
     expect(noComments.slice(at, noComments.indexOf("}", at))).toContain("min-height: 44px");
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Workshop drop-offs: Write a thank you letter (assets/js/admin/drop-offs.js) opens this screen
+// ---------------------------------------------------------------------------------------------
+
+describe("a letter for somebody who dropped something off at the workshop", () => {
+  it("opens Thank you with a new gift in kind letter, filled in with them and what they brought", async () => {
+    await openScreen();
+    (q('.admin-nav-link[data-view="drop-offs"]') as HTMLElement).click();
+    await settle();
+    const bridge = (window as unknown as { AdminThankYou: { writeInKind: (p: unknown) => void } }).AdminThankYou;
+    bridge.writeInKind({ name: "Robin Example", email: "robin@example.com", brought: "Two bags of selection boxes" });
+    await settle();
+    expect(view().hidden).toBe(false);
+    expect(input("tyName").value).toBe("Robin Example");
+    expect(input("tyDear").value).toBe("Robin");
+    expect(input("tyEmail").value).toBe("robin@example.com");
+    expect(input("tyInKind").value).toBe("Two bags of selection boxes");
+    expect(el("tyGtKind").getAttribute("aria-pressed")).toBe("true");
+    expect(input("tyDonorId").value).toBe("");
+    expect(shownParts()).toContain("write");
+  });
+
+  it("does nothing for someone who cannot send letters", async () => {
+    permissions = { ...permissions, "thank-you": "view" };
+    await openScreen();
+    const bridge = (window as unknown as { AdminThankYou: { writeInKind: (p: unknown) => void } }).AdminThankYou;
+    bridge.writeInKind({ name: "Robin Example", email: "robin@example.com", brought: "Hats" });
+    await settle();
+    expect(input("tyName").value).toBe("");
+  });
+});

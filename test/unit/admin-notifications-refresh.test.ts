@@ -147,7 +147,8 @@ describe("what buzzes", () => {
     perms = { overview: "view", donations: "edit", contact: "view" };
     await openIt();
     const offered = Array.from(document.querySelectorAll("[data-push-area]")).map((b) => b.getAttribute("data-push-area"));
-    expect(offered).toEqual(["donations", "monthly", "contact"]);
+    // Workshop drop-offs is gated on Donations too, so it is offered here.
+    expect(offered).toEqual(["donations", "monthly", "contact", "drop-offs"]);
   });
 
   it("saves each tick as it is pressed, and says so beside it", async () => {

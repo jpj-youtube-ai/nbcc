@@ -825,6 +825,8 @@
     else if (name === "site") loadSite();
     else if (name === "qr") loadQr();
     else if (name === "invoices") loadInvoices();
+    // Workshop drop-offs draws itself (assets/js/admin/drop-offs.js), read afresh each time it is opened.
+    else if (name === "drop-offs") { if (window.AdminDropOffs) window.AdminDropOffs.open(); }
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
     else if (name === "notifications") loadPushSettings();
@@ -843,6 +845,7 @@
     ["donations", "Donations"], ["monthly", "Monthly givers"], ["fundraising", "Get involved"],
     ["contact", "Contact form"], ["ball", "Festive Ball"], ["fulfilments", "Business supporters"],
     ["stories", "Stories"], ["newsletter", "Newsletter"], ["elf", "Elf Detective School"],
+    ["drop-offs", "Workshop drop-offs"],
   ];
 
   function pushSupported() {
@@ -863,6 +866,7 @@
   var PUSH_AREA_SECTION = {
     donations: "donations", monthly: "donations", fundraising: "fundraising", contact: "contact", ball: "ball",
     fulfilments: "business-supporters", stories: "stories", newsletter: "newsletter", elf: "elf",
+    "drop-offs": "donations",
   };
   var pushOffElsewhere = []; // stored "off" for areas this person is not offered
   var pushEndpoint = null; // this browser's own subscription, when it has one
@@ -5031,6 +5035,7 @@
     "uniform.recorded_late": "recorded a uniform payment late",
     "uniform.refunded": "recorded a uniform payment refunded",
     "welcome.sent": "sent a newsletter welcome email to {email} | sent a newsletter welcome email",
+    "workshop_dropoff.removed": "removed a workshop drop-off",
   };
   // Every kind of record a line can be about, and the part of the admin it belongs to: the tiles.
   // test/unit/admin-audit-words.test.ts checks every entity the server writes about has a part.
@@ -5041,7 +5046,7 @@
   ];
   var AUDIT_AREAS = [
     ["donation", "donations"], ["donor", "donations"], ["declaration", "donations"], ["claim_batch", "donations"],
-    ["subscription", "donations"], ["donation_invoice", "donations"], ["donation_invoice_settings", "donations"],
+    ["subscription", "donations"], ["donation_invoice", "donations"], ["donation_invoice_settings", "donations"], ["workshop_dropoff", "donations"],
     ["uniform_payment", "donations"], ["sleigh_night", "donations"], ["sleigh_settings", "donations"],
     ["impact_example", "donations"], ["thank_you", "donations"],
     ["fundraiser", "get-involved"], ["fundraiser_invite", "get-involved"], ["fundraising_category", "get-involved"],
@@ -5513,7 +5518,7 @@
     // Sponsor pledges: the pay link and its one reminder, to a sponsor.
     ["fundraisePledgeConfirm", "Sponsor pledge: please confirm"], ["fundraisePledgePay", "Sponsor pledge: link to pay"],
     ["fundraisePledgeReminder", "Sponsor pledge: reminder"], ["fundraisePledgeStaff", "Sponsor pledge: note to events@"],
-    ["invoice", "Invoice"], ["invoiceReceipt", "Invoice paid: group receipt"], ["invoiceStaff", "Invoice paid twice: note to giving@"],
+    ["invoice", "Invoice"], ["invoiceReceipt", "Invoice paid: group receipt"], ["invoiceStaff", "Invoice paid twice: note to giving@"], ["workshopThanks", "Workshop drop-off: thank you"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -15104,6 +15109,27 @@
     });
     window.addEventListener("resize", tyFit);
   }
+  // Workshop drop-offs (assets/js/admin/drop-offs.js): Write a thank you letter opens this screen
+  // with a new letter for a gift in kind, already filled in with who they are, their email and what
+  // they brought. Not tied to a donor record: they gave things, not money.
+  function tyWriteInKind(p) {
+    if (!canEdit("thank-you")) return;
+    selectView("thank-you");
+    tyClearSaid();
+    tyBlankLetter();
+    var name = String((p && p.name) || "").trim();
+    el("tyName").value = name;
+    el("tyDear").value = name.split(/\s+/)[0] || "";
+    el("tyEmail").value = String((p && p.email) || "").trim();
+    el("tyInKind").value = String((p && p.brought) || "").trim();
+    tySetMode(true);
+    tyUpdateTitle();
+    tyUpdateDear();
+    tyUpdatePersonal();
+    tyShowPart("write", true);
+  }
+  window.AdminThankYou = { writeInKind: tyWriteInKind };
+
   function loadThankYou() {
     if (!el("tyForm")) return;
     tyWire();

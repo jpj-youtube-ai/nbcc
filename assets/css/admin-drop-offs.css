@@ -1,0 +1,15 @@
+/* NBCC admin: Workshop drop-offs (#view-drop-offs, drawn by assets/js/admin/drop-offs.js). The kit
+   (admin-kit.css) gives the cards, buttons, marks and notices; this only lays out what is inside a
+   card. Nothing scrolls inside a box or sideways; long words wrap. */
+
+#view-drop-offs .do-card { display: grid; gap: 6px; overflow-wrap: anywhere; }
+#view-drop-offs .do-card p { margin: 0; }
+#view-drop-offs .do-when { font-size: 0.85rem; color: var(--ov-soft); }
+#view-drop-offs .do-name { margin: 0; font-size: 1.15rem; line-height: 1.25; color: var(--ov-ink); }
+#view-drop-offs .do-brought { font-size: 1.02rem; line-height: 1.45; }
+#view-drop-offs .do-fact { font-size: 0.92rem; color: var(--ov-text); }
+#view-drop-offs .do-fact__label { color: var(--ov-soft); }
+#view-drop-offs .do-marks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+#view-drop-offs .ak-actions { margin-top: 8px; }
+#view-drop-offs .do-ask { margin-top: 8px; }
+#view-drop-offs .do-ask p { margin: 0 0 10px; }

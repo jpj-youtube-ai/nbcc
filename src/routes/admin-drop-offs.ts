@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { authorizeSection } from "./admin-authz";
+import { authorizeSection, loadEffectivePermissions } from "./admin-authz";
+import { can } from "../admin/permissions";
 import { listDropOffs, removeDropOff } from "../db/workshop-dropoffs";
 import { recordAudit } from "../db/donations";
 
@@ -14,10 +15,18 @@ function idOf(raw: unknown): number | null {
 }
 
 export async function getAdminDropOffs(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "donations", "view"))) return;
+  const claims = await authorizeSection(req, res, "donations", "view");
+  if (!claims) return;
   res.setHeader("Cache-Control", "no-store");
   try {
-    return res.status(200).json({ dropOffs: await listDropOffs() });
+    const [dropOffs, perms] = await Promise.all([listDropOffs(), loadEffectivePermissions(claims.sub)]);
+    // What the screen offers: Remove to editors of Donations, and the letter button to those who
+    // can send thank-you letters. The server checks each again when it is used.
+    return res.status(200).json({
+      dropOffs,
+      mayRemove: !!perms && can(perms, "donations", "edit"),
+      mayWriteLetter: !!perms && can(perms, "thank-you", "edit"),
+    });
   } catch (err) {
     console.error("admin drop-offs: listing failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "The workshop drop-offs could not load. Please try again." });

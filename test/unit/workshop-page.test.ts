@@ -153,6 +153,19 @@ describe("after Send", () => {
     expect(el("wsName").value).toBe("Robin Example");
   });
 
+  it("clears a half filled form after two minutes with nobody typing, but not before", () => {
+    type("wsName", "Robin Example");
+    type("wsPhone", "07700 900123");
+    vi.advanceTimersByTime(119000);
+    expect(el("wsName").value).toBe("Robin Example");
+    type("wsEmail", "robin@");
+    vi.advanceTimersByTime(119000);
+    expect(el("wsName").value).toBe("Robin Example");
+    vi.advanceTimersByTime(2000);
+    for (const id of ["wsName", "wsEmail", "wsPhone"]) expect(el(id).value).toBe("");
+    expect(el("wsForm").hidden).toBe(false);
+  });
+
   it("says something friendly when it cannot reach us", async () => {
     fillGood();
     fetchMock.mockRejectedValueOnce(new Error("offline"));

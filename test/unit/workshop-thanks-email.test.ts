@@ -28,6 +28,22 @@ describe("the workshop thank you email", () => {
     expect(e.html).toContain("&lt;script&gt;");
   });
 
+  it.each(["Toys, and see https://spam.example", "Visit www.spam.example", "spam.example deals", "mail me at a@b.example"])(
+    "never repeats a web address someone typed (%s)",
+    (brought) => {
+      const e = buildWorkshopThanksEmail({ name: "Robin", brought, joinedNewsletter: false });
+      expect(e.html).not.toContain("spam");
+      expect(e.text).not.toContain("spam");
+      expect(e.html).not.toContain("b.example");
+      expect(e.text).toContain("Thank you so much for what you brought in today.");
+    },
+  );
+
+  it("does not quote something very long", () => {
+    const e = buildWorkshopThanksEmail({ name: "Robin", brought: "toys ".repeat(60), joinedNewsletter: false });
+    expect(e.text).toContain("Thank you so much for what you brought in today.");
+  });
+
   it("says they are on the mailing list only when they ticked the box", () => {
     const joined = buildWorkshopThanksEmail({ name: "Robin", brought: "Hats", joinedNewsletter: true });
     const not = buildWorkshopThanksEmail({ name: "Robin", brought: "Hats", joinedNewsletter: false });

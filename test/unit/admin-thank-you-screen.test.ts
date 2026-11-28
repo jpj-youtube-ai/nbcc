@@ -1024,6 +1024,7 @@ describe("a letter for somebody who dropped something off at the workshop", () =
     expect(el("tyGtKind").getAttribute("aria-pressed")).toBe("true");
     expect(input("tyDonorId").value).toBe("");
     expect(shownParts()).toContain("write");
+    expect(text(el("tySays"))).toContain("Emails this letter to robin@example.com");
   });
 
   it("does nothing for someone who cannot send letters", async () => {

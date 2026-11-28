@@ -55,14 +55,42 @@ function overLimit(ip: string): boolean {
   return entry.count > MAX_PER_WINDOW;
 }
 
+// One email address gets at most three thank you emails an hour, whoever sends the form, so the form
+// cannot be used to fill somebody's inbox. Their drop-off is still saved.
+const EMAILS_PER_ADDRESS = 3;
+const emailed = new Map<string, number[]>();
+
+function mayEmail(address: string): boolean {
+  const now = Date.now();
+  const key = address.toLowerCase();
+  const recent = (emailed.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
+  if (recent.length >= EMAILS_PER_ADDRESS) {
+    emailed.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  emailed.set(key, recent);
+  return true;
+}
+
+// Old windows are let go now and then, so neither list grows for ever.
+function forgetOld(): void {
+  const now = Date.now();
+  for (const [ip, e] of hits) if (now - e.windowStart > WINDOW_MS) hits.delete(ip);
+  for (const [key, times] of emailed) if (times.every((t) => now - t >= WINDOW_MS)) emailed.delete(key);
+}
+let posts = 0;
+
 /** For tests: forget every address's count. */
 export function resetWorkshopRateLimit(): void {
   hits.clear();
+  emailed.clear();
 }
 
 const logError = (what: string) => (err: unknown) => console.error(`workshop ${what} failed:`, err instanceof Error ? err.message : err);
 
 workshopRouter.post("/api/workshop", async (req: Request, res: Response) => {
+  if (++posts % 100 === 0) forgetOld();
   if (overLimit(req.ip ?? "unknown")) {
     return res.status(429).json({ error: "Too many at once. Please wait a moment and try again." });
   }
@@ -92,8 +120,10 @@ workshopRouter.post("/api/workshop", async (req: Request, res: Response) => {
     }
   }
 
-  const built = buildWorkshopThanksEmail({ name: d.name, brought: d.brought, joinedNewsletter: d.newsletter });
-  void sendWorkshopThanks({ email: d.email, name: d.name, ...built }).catch(logError("thank you email"));
+  if (mayEmail(d.email)) {
+    const built = buildWorkshopThanksEmail({ name: d.name, brought: d.brought, joinedNewsletter: d.newsletter });
+    void sendWorkshopThanks({ email: d.email, name: d.name, ...built }).catch(logError("thank you email"));
+  }
 
   return res.status(201).json({ ok: true, firstName: safeFirstName(d.name) });
 });

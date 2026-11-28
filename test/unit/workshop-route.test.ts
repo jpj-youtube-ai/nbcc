@@ -89,8 +89,15 @@ describe("POST /api/workshop", () => {
     expect(insertDropOff).not.toHaveBeenCalled();
   });
 
+  it("sends one address at most three thank you emails an hour, and still saves every drop-off", async () => {
+    for (let i = 0; i < 5; i++) expect((await post({ ...GOOD, email: i % 2 ? "ROBIN@example.com" : "robin@example.com" })).status).toBe(201);
+    await tick();
+    expect(insertDropOff).toHaveBeenCalledTimes(5);
+    expect(sendWorkshopThanks).toHaveBeenCalledTimes(3);
+  });
+
   it("lets one busy tablet send 60 in an hour, and stops the 61st", async () => {
-    for (let i = 0; i < 60; i++) expect((await post(GOOD)).status).toBe(201);
+    for (let i = 0; i < 60; i++) expect((await post({ ...GOOD, email: `p${i}@example.com` })).status).toBe(201);
     expect((await post(GOOD)).status).toBe(429);
   });
 

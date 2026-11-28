@@ -29,17 +29,26 @@ const MAILING_LIST =
   "You're now on our mailing list, so we'll let you know how it all goes. It's a few emails a year, and you can unsubscribe at any time.";
 const CLOSE = "Thanks so much,";
 
+// Anything that looks like a web address or a domain (a mail program turns those into links). The
+// form is public, so what they brought is repeated only when it has none: otherwise the email thanks
+// them for what they brought in without quoting it, and can never carry somebody else's link.
+const LINKISH = /https?:|www\.|[a-z0-9-]+\.[a-z]{2,}\b|@/i;
+const MAX_QUOTED = 200;
+
 export function buildWorkshopThanksEmail(o: { name: string; brought: string; joinedNewsletter: boolean }): BuiltEmail {
   const first = safeFirstName(o.name);
   const hello = first ? `Hello ${first},` : "Hello,";
-  const brought = o.brought.trim();
-  const thanks = (what: string) => `Thank you so much for bringing in ${what} today.`;
+  const typed = o.brought.trim();
+  const quote = typed.length > 0 && typed.length <= MAX_QUOTED && !LINKISH.test(typed);
+  const brought = quote ? typed : "";
+  const thanks = (what: string) =>
+    what ? `Thank you so much for bringing in ${what} today.` : "Thank you so much for what you brought in today.";
   const html = emailShell(
     raiseOrdinals(
       eyebrow(EYEBROW) +
         heading(SUBJECT) +
         bodyP(esc(hello)) +
-        bodyP(thanks(`<b>${esc(brought)}</b>`)) +
+        bodyP(thanks(brought ? `<b>${esc(brought)}</b>` : "")) +
         bodyP(DIFFERENCE) +
         (o.joinedNewsletter ? bodyP(MAILING_LIST) : "") +
         signOff(CLOSE) +

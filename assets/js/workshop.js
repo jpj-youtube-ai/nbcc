@@ -11,6 +11,9 @@
   "use strict";
 
   var RESET_MS = 7000;
+  // Somebody who walks away part way through: after two minutes with nobody typing or tapping, the
+  // form is cleared, so the next person never sees their details.
+  var IDLE_MS = 120000;
   var MSG = {
     name: "Please tell us your name.",
     email: "Please check your email address.",
@@ -37,6 +40,7 @@
     var chips = Array.prototype.slice.call(doc.querySelectorAll("[data-ws-group]"));
     var busy = false;
     var timer = null;
+    var idle = null;
 
     function val(id) {
       var el = doc.getElementById(id);
@@ -152,6 +156,23 @@
 
     var next = doc.getElementById("wsNext");
     if (next) next.addEventListener("click", reset);
+
+    function anythingTyped() {
+      var tick = doc.getElementById("wsNewsletter");
+      return BOXES.some(function (id) {
+        return val(id) !== "";
+      }) || !!(tick && tick.checked);
+    }
+    function nudge() {
+      if (idle !== null) win.clearTimeout(idle);
+      idle = win.setTimeout(function () {
+        idle = null;
+        if (!busy && !form.hidden && anythingTyped()) reset();
+      }, IDLE_MS);
+    }
+    form.addEventListener("input", nudge);
+    form.addEventListener("change", nudge);
+    form.addEventListener("click", nudge);
 
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();

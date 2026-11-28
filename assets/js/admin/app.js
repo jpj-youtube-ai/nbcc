@@ -15126,6 +15126,8 @@
     tyUpdateTitle();
     tyUpdateDear();
     tyUpdatePersonal();
+    tyRenderFor();
+    tyRenderSays();
     tyShowPart("write", true);
   }
   window.AdminThankYou = { writeInKind: tyWriteInKind };
